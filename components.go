@@ -19,6 +19,29 @@ const (
 	DirBrowserID    = "dir-browser"
 )
 
+// termIconColors returns a gradient palette [top, bottom, mid] for a terminal command.
+func termIconColors(cmd string) (string, string, string) {
+	palettes := [][3]string{
+		{"#0d9488", "#065f46", "#047857"},
+		{"#7c3aed", "#4c1d95", "#5b21b6"},
+		{"#2563eb", "#1e3a5f", "#1d4ed8"},
+		{"#db2777", "#831843", "#9d174d"},
+		{"#d97706", "#78350f", "#92400e"},
+		{"#059669", "#064e3b", "#047857"},
+		{"#dc2626", "#7f1d1d", "#991b1b"},
+		{"#0891b2", "#164e63", "#155e75"},
+	}
+	h := 0
+	for _, c := range cmd {
+		h = ((h << 5) - h) + int(c)
+	}
+	if h < 0 {
+		h = -h
+	}
+	p := palettes[h%len(palettes)]
+	return p[0], p[1], p[2]
+}
+
 // stripID returns the DOM ID for a project's app strip
 func stripID(projectName string) string {
 	return "app-strip-" + projectName
@@ -84,7 +107,7 @@ func renderSavedAppsJS(sid, listID string) string {
 	if(!c)return;
 	var dk=document.documentElement.classList.contains('dark');
 	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
-	function termIconHtml(cmd){var ini=(cmd||'T').substring(0,2).toUpperCase();return '<span class="w-5 h-5 shrink-0 rounded-md bg-gradient-to-br from-teal-400 to-emerald-600 dark:from-teal-500 dark:to-emerald-700" style="display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;line-height:20px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(20,184,166,.35),inset 0 1px 0 rgba(255,255,255,.15)">'+ini+'</span>';}
+	function termIconHtml(cmd){var ini=(cmd||'T').substring(0,1).toUpperCase();var palettes=[['#0d9488','#065f46','#047857'],['#7c3aed','#4c1d95','#5b21b6'],['#2563eb','#1e3a5f','#1d4ed8'],['#db2777','#831843','#9d174d'],['#d97706','#78350f','#92400e'],['#059669','#064e3b','#047857'],['#dc2626','#7f1d1d','#991b1b'],['#0891b2','#164e63','#155e75']];var hash=0;for(var i=0;i<cmd.length;i++)hash=((hash<<5)-hash)+cmd.charCodeAt(i);var p=palettes[Math.abs(hash)%%palettes.length];return '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;position:relative;overflow:hidden;background:linear-gradient(145deg,'+p[0]+' 0%%,'+p[2]+' 60%%,'+p[1]+' 100%%);box-shadow:0 1px 4px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.25),inset 0 -1px 0 rgba(0,0,0,.12);font-size:15px;font-weight:800;color:#fff;letter-spacing:.04em;text-shadow:0 1px 1px rgba(0,0,0,.3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace"><span style="position:absolute;inset:0;border-radius:5px;background:linear-gradient(180deg,rgba(255,255,255,.2) 0%%,rgba(255,255,255,.05) 40%%,transparent 60%%);pointer-events:none"></span><span style="position:relative;z-index:1">'+ini+'</span></span>';}
 	c.innerHTML='';
 	apps.forEach(function(app,i){
 		var btn=document.createElement('button');
@@ -338,17 +361,20 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn)
 	} else if app.Type == AppTypeTerminal {
 		initials := strings.ToUpper(app.Command)
-		if len(initials) > 2 {
-			initials = initials[:2]
+		if len(initials) > 1 {
+			initials = initials[:1]
 		}
 		labelText := app.Command
 		if app.Name != "" {
 			labelText = app.Name
 		}
+		top, bot, mid := termIconColors(app.Command)
+		iconStyle := fmt.Sprintf(
+			"display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;position:relative;overflow:hidden;background:linear-gradient(145deg,%s 0%%,%s 60%%,%s 100%%);box-shadow:0 1px 3px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.25),inset 0 -1px 0 rgba(0,0,0,.12);font-size:15px;font-weight:800;color:#fff;letter-spacing:.04em;text-shadow:0 1px 1px rgba(0,0,0,.3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace",
+			top, mid, bot,
+		)
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1.5").Render(
-			r.Span("w-4 h-4 shrink-0 rounded-md bg-gradient-to-br from-teal-400 to-emerald-600 dark:from-teal-500 dark:to-emerald-700").
-				Attr("style", "display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;line-height:16px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(20,184,166,.35),inset 0 1px 0 rgba(255,255,255,.15)").
-				Text(initials),
+			r.Span("shrink-0").Attr("style", iconStyle).Text(initials),
 			r.Span("text-[10px] font-mono tracking-wider uppercase text-gray-600 dark:text-zinc-300 truncate").Text(labelText),
 		)
 	}
@@ -487,7 +513,7 @@ func renderSideLauncher(sid, side string) *r.Node {
 		?'absolute left-full ml-2 px-2 py-1 text-xs rounded bg-zinc-800 text-zinc-200 border border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg'
 		:'absolute left-full ml-2 px-2 py-1 text-xs rounded bg-white text-gray-800 border border-gray-200 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg';
 
-	function termIconHtml2(cmd){var ini=(cmd||'T').substring(0,2).toUpperCase();return '<span class="w-8 h-8 shrink-0 rounded-md bg-gradient-to-br from-teal-400 to-emerald-600 dark:from-teal-500 dark:to-emerald-700" style="display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;line-height:32px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(20,184,166,.35),inset 0 1px 0 rgba(255,255,255,.15)">'+ini+'</span>';}
+	function termIconHtml2(cmd){var ini=(cmd||'T').substring(0,1).toUpperCase();var palettes=[['#0d9488','#065f46','#047857'],['#7c3aed','#4c1d95','#5b21b6'],['#2563eb','#1e3a5f','#1d4ed8'],['#db2777','#831843','#9d174d'],['#d97706','#78350f','#92400e'],['#059669','#064e3b','#047857'],['#dc2626','#7f1d1d','#991b1b'],['#0891b2','#164e63','#155e75']];var hash=0;for(var i=0;i<cmd.length;i++)hash=((hash<<5)-hash)+cmd.charCodeAt(i);var p=palettes[Math.abs(hash)%%palettes.length];return '<span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;position:relative;overflow:hidden;background:linear-gradient(145deg,'+p[0]+' 0%%,'+p[2]+' 60%%,'+p[1]+' 100%%);box-shadow:0 2px 8px rgba(0,0,0,.3),0 1px 3px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.25),inset 0 -1px 0 rgba(0,0,0,.15);font-size:25px;font-weight:800;color:#fff;letter-spacing:.06em;text-shadow:0 1px 2px rgba(0,0,0,.35);font-family:ui-monospace,SFMono-Regular,Menlo,monospace"><span style="position:absolute;inset:0;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.2) 0%%,rgba(255,255,255,.05) 40%%,transparent 60%%);pointer-events:none"></span><span style="position:relative;z-index:1">'+ini+'</span></span>';}
 	apps.forEach(function(app){
 		var btn=document.createElement('button');
 		btn.className=btnCls;
