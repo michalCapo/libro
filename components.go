@@ -70,15 +70,15 @@ func renderSavedAppsJS(sid string) string {
 		var label='';
 		if(app.type==='terminal'){
 			iconHtml=termIconHtml(app.command);
-			label=app.command;
+			label=app.name||app.command;
 		}else{
 			try{
 				var u=new URL(app.url);
 				iconHtml='<img class="w-5 h-5 shrink-0 rounded-sm" src="https://www.google.com/s2/favicons?domain='+encodeURIComponent(u.hostname)+'&sz=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 text-lg shrink-0\\\'>language</i>\'">';
-				label=u.hostname.replace(/^www\./,'');
+				label=app.name||u.hostname.replace(/^www\./,'');
 			}catch(e){
 				iconHtml='<i class="material-icons-round text-gray-400 text-lg shrink-0">language</i>';
-				label=app.url;
+				label=app.name||app.url;
 			}
 		}
 		var txtCls=dk?'text-zinc-200':'text-gray-800';
@@ -116,12 +116,14 @@ func renderSavedAppsJS(sid string) string {
 						var url=document.getElementById('app-url');
 						if(url)url.value=a.url||'';
 					}
+					var nm=document.getElementById('app-name');
+					if(nm)nm.value=a.name||'';
 					var wr=document.getElementById('width-'+(a.width||'md'));
 					if(wr)wr.checked=true;
 				},100);
 				return;
 			}
-			__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'md',writable:app.writable!==false});
+			__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'md',writable:app.writable!==false,name:app.name||''});
 		};
 
 		c.appendChild(btn);
@@ -186,7 +188,8 @@ func centerSelectedJS(selectedIndex int) string {
 					var containerWidth = container.offsetWidth;
 					var stripWidth = strip.scrollWidth;
 					if (stripWidth <= containerWidth) {
-						strip.style.transform = 'translateX(0)';
+						var centerOffset = (containerWidth - stripWidth) / 2;
+						strip.style.transform = 'translateX(' + centerOffset + 'px)';
 						return;
 					}
 					var selectedLeft = selected.offsetLeft;
@@ -240,7 +243,8 @@ func navigateJS(state *AppState, sid string) string {
 			var containerWidth = container.offsetWidth;
 			var stripWidth = strip.scrollWidth;
 			if (stripWidth <= containerWidth) {
-				strip.style.transform = 'translateX(0)';
+				var centerOffset = (containerWidth - stripWidth) / 2;
+				strip.style.transform = 'translateX(' + centerOffset + 'px)';
 			} else {
 				var selectedLeft = selected.offsetLeft;
 				var selectedWidth = selected.offsetWidth;
@@ -306,11 +310,15 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		if len(initials) > 2 {
 			initials = initials[:2]
 		}
+		labelText := app.Command
+		if app.Name != "" {
+			labelText = app.Name
+		}
 		labelNode = r.Div("absolute top-1.5 left-1.5 flex items-center gap-1.5 px-2 py-0.5 bg-white/90 dark:bg-zinc-900/80 border border-gray-200 dark:border-transparent text-[10px] font-mono tracking-wider uppercase rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-75 z-30 backdrop-blur-sm").Render(
 			r.Span("w-4 h-4 shrink-0 rounded-md bg-gradient-to-br from-teal-400 to-emerald-600 dark:from-teal-500 dark:to-emerald-700").
 				Attr("style", "display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;line-height:16px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(20,184,166,.35),inset 0 1px 0 rgba(255,255,255,.15)").
 				Text(initials),
-			r.Span("text-gray-600 dark:text-zinc-300").Text(app.Command),
+			r.Span("text-gray-600 dark:text-zinc-300").Text(labelText),
 		)
 	}
 
@@ -373,22 +381,22 @@ func renderSideLauncher(sid string) *r.Node {
 		?'absolute left-full ml-2 px-2 py-1 text-xs rounded bg-zinc-800 text-zinc-200 border border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg'
 		:'absolute left-full ml-2 px-2 py-1 text-xs rounded bg-white text-gray-800 border border-gray-200 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg';
 
+	function termIconHtml2(cmd){var ini=(cmd||'T').substring(0,2).toUpperCase();return '<span class="w-5 h-5 shrink-0 rounded-md bg-gradient-to-br from-teal-400 to-emerald-600 dark:from-teal-500 dark:to-emerald-700" style="display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;line-height:20px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(20,184,166,.35),inset 0 1px 0 rgba(255,255,255,.15)">'+ini+'</span>';}
 	apps.forEach(function(app){
 		var btn=document.createElement('button');
 		btn.className=btnCls;
 		var lb='';
 		if(app.type==='terminal'){
-			var ini=(app.command||'T').substring(0,2).toUpperCase();
-			btn.innerHTML='<span class="w-5 h-5 shrink-0 rounded-md bg-gradient-to-br from-teal-400 to-emerald-600 dark:from-teal-500 dark:to-emerald-700" style="display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;line-height:20px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(20,184,166,.35),inset 0 1px 0 rgba(255,255,255,.15)">'+ini+'</span>';
-			lb=app.command;
+			btn.innerHTML=termIconHtml2(app.command);
+			lb=app.name||app.command;
 		}else{
 			try{
 				var u=new URL(app.url);
 				btn.innerHTML='<img class="w-5 h-5 rounded-sm" src="https://www.google.com/s2/favicons?domain='+encodeURIComponent(u.hostname)+'&sz=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 dark:text-zinc-500 text-lg\\\'>language</i>\'">';
-				lb=u.hostname.replace(/^www\./,'');
+				lb=app.name||u.hostname.replace(/^www\./,'');
 			}catch(e){
 				btn.innerHTML='<i class="material-icons-round text-gray-400 dark:text-zinc-500 text-lg">language</i>';
-				lb=app.url;
+				lb=app.name||app.url;
 			}
 		}
 		var tip=document.createElement('span');
@@ -396,7 +404,7 @@ func renderSideLauncher(sid string) *r.Node {
 		tip.textContent=lb+' ('+app.width+')';
 		btn.appendChild(tip);
 		btn.onclick=function(){
-			__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false});
+			__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false,name:app.name||''});
 		};
 		dock.appendChild(btn);
 	});
@@ -455,7 +463,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 		`, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab)
 	}
 
-	collectIDs := []string{"app-url", "app-command", "app-writable", "app-type", "width-md"}
+	collectIDs := []string{"app-url", "app-command", "app-writable", "app-type", "app-name", "width-md"}
 
 	inputCls := "w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-1 focus:ring-teal-500 focus:border-teal-500 outline-none transition-colors"
 
@@ -503,6 +511,13 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 								Attr("checked", "checked"),
 							r.Span("text-sm text-gray-600 dark:text-zinc-400").Text("Writable (allow input)"),
 						),
+					),
+
+					r.Div("mb-5").Render(
+						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Name (optional)"),
+						r.IText(inputCls).
+							ID("app-name").
+							Attr("placeholder", "e.g. My App"),
 					),
 
 					r.Div("mb-5").Render(

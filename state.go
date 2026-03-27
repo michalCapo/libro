@@ -20,8 +20,9 @@ type Application struct {
 	URL      string // iframe source URL (for terminal apps, this is http://localhost:<port>)
 	Command  string // original command (only for terminal apps)
 	Width    Width
-	Port     int  // ttyd port (only for terminal apps)
-	Writable bool // ttyd --writable flag (only for terminal apps)
+	Port     int    // ttyd port (only for terminal apps)
+	Writable bool   // ttyd --writable flag (only for terminal apps)
+	Name     string // optional display name
 }
 
 // AppState holds the per-session state
@@ -77,8 +78,8 @@ func (sm *StateManager) NextPort() int {
 	return sm.nextPort
 }
 
-// AddApp adds a new URL application to the session's state
-func (sm *StateManager) AddApp(sessionID, url string, width Width) {
+// addApp is the internal helper that inserts a URL app at the given position
+func (sm *StateManager) addApp(sessionID, url string, width Width, name string, prepend bool) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -92,13 +93,29 @@ func (sm *StateManager) AddApp(sessionID, url string, width Width) {
 		Type:  AppTypeURL,
 		URL:   url,
 		Width: width,
+		Name:  name,
 	}
-	s.Apps = append(s.Apps, app)
-	s.SelectedIndex = len(s.Apps) - 1
+	if prepend {
+		s.Apps = append([]Application{app}, s.Apps...)
+		s.SelectedIndex = 0
+	} else {
+		s.Apps = append(s.Apps, app)
+		s.SelectedIndex = len(s.Apps) - 1
+	}
 }
 
-// AddTerminalApp adds a new terminal (ttyd) application to the session's state
-func (sm *StateManager) AddTerminalApp(sessionID string, command string, port int, writable bool, width Width) {
+// AddApp adds a new URL application to the end of the session's app list
+func (sm *StateManager) AddApp(sessionID, url string, width Width, name string) {
+	sm.addApp(sessionID, url, width, name, false)
+}
+
+// PrependApp adds a new URL application to the beginning of the session's app list
+func (sm *StateManager) PrependApp(sessionID, url string, width Width, name string) {
+	sm.addApp(sessionID, url, width, name, true)
+}
+
+// addTerminalApp is the internal helper that inserts a terminal app at the given position
+func (sm *StateManager) addTerminalApp(sessionID string, command string, port int, writable bool, width Width, name string, prepend bool) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -115,9 +132,25 @@ func (sm *StateManager) AddTerminalApp(sessionID string, command string, port in
 		Width:    width,
 		Port:     port,
 		Writable: writable,
+		Name:     name,
 	}
-	s.Apps = append(s.Apps, app)
-	s.SelectedIndex = len(s.Apps) - 1
+	if prepend {
+		s.Apps = append([]Application{app}, s.Apps...)
+		s.SelectedIndex = 0
+	} else {
+		s.Apps = append(s.Apps, app)
+		s.SelectedIndex = len(s.Apps) - 1
+	}
+}
+
+// AddTerminalApp adds a new terminal application to the end of the session's app list
+func (sm *StateManager) AddTerminalApp(sessionID string, command string, port int, writable bool, width Width, name string) {
+	sm.addTerminalApp(sessionID, command, port, writable, width, name, false)
+}
+
+// PrependTerminalApp adds a new terminal application to the beginning of the session's app list
+func (sm *StateManager) PrependTerminalApp(sessionID string, command string, port int, writable bool, width Width, name string) {
+	sm.addTerminalApp(sessionID, command, port, writable, width, name, true)
 }
 
 // RemoveApp removes an application by index and returns it (for cleanup)

@@ -9,11 +9,11 @@ import (
 )
 
 // saveToLocalStorageJS returns JS that saves or updates an app definition in localStorage
-func saveToLocalStorageJS(appType, urlOrCmd, width string, writable bool) string {
+func saveToLocalStorageJS(appType, urlOrCmd, width, name string, writable bool) string {
 	return fmt.Sprintf(`
 (function(){
 	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
-	var entry={type:'%s',width:'%s',writable:%v};
+	var entry={type:'%s',width:'%s',writable:%v,name:'%s'};
 	if(entry.type==='terminal'){entry.command='%s';}else{entry.url='%s';}
 	var editIdx=localStorage.getItem('libro-edit-idx');
 	if(editIdx!==null){
@@ -25,7 +25,7 @@ func saveToLocalStorageJS(appType, urlOrCmd, width string, writable bool) string
 	}
 	localStorage.setItem('libro-apps',JSON.stringify(apps));
 })();
-`, appType, width, writable, urlOrCmd, urlOrCmd)
+`, appType, width, writable, name, urlOrCmd, urlOrCmd)
 }
 
 var (
@@ -72,6 +72,11 @@ func main() {
 			width = Width(val)
 		}
 
+		name := ""
+		if val, ok := data["app-name"].(string); ok {
+			name = strings.TrimSpace(val)
+		}
+
 		if appType == "terminal" {
 			// Terminal (ttyd) app
 			command, _ := data["app-command"].(string)
@@ -90,7 +95,7 @@ func main() {
 				return r.Notify("error", "Failed to start ttyd: "+err.Error())
 			}
 
-			sm.AddTerminalApp(sid, command, port, writable, width)
+			sm.AddTerminalApp(sid, command, port, writable, width, name)
 			state := sm.Get(sid)
 			// Update the ttyd app ID to match the actual app ID for process tracking
 			lastApp := &state.Apps[len(state.Apps)-1]
@@ -109,7 +114,7 @@ func main() {
 			return r.NewResponse().
 				Replace(MainAreaID, renderMainArea(state, sid)).
 				Replace(DialogID, renderAddDialog(false, sid)).
-				Add(saveToLocalStorageJS("terminal", command, string(width), writable)).
+				Add(saveToLocalStorageJS("terminal", command, string(width), name, writable)).
 				Build()
 		}
 
@@ -124,14 +129,14 @@ func main() {
 			url = "https://" + url
 		}
 
-		sm.AddApp(sid, url, width)
+		sm.AddApp(sid, url, width, name)
 		sm.CloseDialog(sid)
 		state := sm.Get(sid)
 
 		return r.NewResponse().
 			Replace(MainAreaID, renderMainArea(state, sid)).
 			Replace(DialogID, renderAddDialog(false, sid)).
-			Add(saveToLocalStorageJS("url", url, string(width), false)).
+			Add(saveToLocalStorageJS("url", url, string(width), name, false)).
 			Build()
 	})
 
@@ -145,6 +150,7 @@ func main() {
 		if val, ok := data["width"].(string); ok && val != "" {
 			width = Width(val)
 		}
+		name, _ := data["name"].(string)
 
 		if appType == "terminal" {
 			command, _ := data["command"].(string)
@@ -163,9 +169,9 @@ func main() {
 				return r.Notify("error", "Failed to start ttyd: "+err.Error())
 			}
 
-			sm.AddTerminalApp(sid, command, port, writable, width)
+			sm.PrependTerminalApp(sid, command, port, writable, width, name)
 			state := sm.Get(sid)
-			lastApp := &state.Apps[len(state.Apps)-1]
+			lastApp := &state.Apps[0]
 			tm.mu.Lock()
 			if cmd, ok := tm.processes["pending"]; ok {
 				delete(tm.processes, "pending")
@@ -188,7 +194,7 @@ func main() {
 			url = "https://" + url
 		}
 
-		sm.AddApp(sid, url, width)
+		sm.PrependApp(sid, url, width, name)
 		state := sm.Get(sid)
 		return renderMainArea(state, sid).ToJSReplace(MainAreaID)
 	})
