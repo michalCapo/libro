@@ -8,7 +8,7 @@ import (
 func renderPage(state *AppState, sid string) *r.Node {
 	page := r.Div("h-screen w-screen flex flex-col bg-gray-100 dark:bg-zinc-900 overflow-hidden").Render(
 		renderProjectBar(state, sid),
-		renderMainArea(state, sid),
+		renderMainAreaWrapper(state, sid),
 		renderAddDialog(state.DialogOpen, sid),
 		renderProjectDialog(state.ProjectDialogOpen, sid),
 	)

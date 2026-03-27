@@ -50,6 +50,7 @@ type AppState struct {
 	ActiveProject     string
 	ProjectDialogOpen bool
 	snapshots         map[string]*projectSnapshot
+	renderedProjects  map[string]bool // tracks which projects have DOM divs
 }
 
 // StateManager manages per-session app states
@@ -103,8 +104,9 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 		Projects: []Project{
 			{Name: "home", Path: defaultHomeDir()},
 		},
-		ActiveProject: "home",
-		snapshots:     make(map[string]*projectSnapshot),
+		ActiveProject:    "home",
+		snapshots:        make(map[string]*projectSnapshot),
+		renderedProjects: map[string]bool{"home": true},
 	}
 	sm.states[sessionID] = s
 	return s
@@ -403,6 +405,25 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 
 	s.ActiveProject = projectName
 	return true
+}
+
+// IsProjectRendered checks if a project's DOM div has been created.
+// If not yet rendered, it marks it as rendered and returns false.
+func (sm *StateManager) IsProjectRendered(sessionID, projectName string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return false
+	}
+	if s.renderedProjects[projectName] {
+		return true
+	}
+	if s.renderedProjects == nil {
+		s.renderedProjects = make(map[string]bool)
+	}
+	s.renderedProjects[projectName] = true
+	return false
 }
 
 // GetActiveProjectPath returns the folder path for the active project

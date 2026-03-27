@@ -141,14 +141,14 @@ func main() {
 				frame := renderAppFrame(*newApp, state.SelectedIndex, true, sid)
 				return r.NewResponse().
 					Replace(DialogID, renderAddDialog(false, sid)).
-					Add(insertAppJS(frame, prepend)).
+					Add(insertAppJS(frame, prepend, state.ActiveProject)).
 					Add(navigateJS(state, sid)).
 					Add(saveToLocalStorageJS("terminal", command, string(width), name, writable)).
 					Build()
 			}
 
 			return r.NewResponse().
-				Replace(MainAreaID, renderMainArea(state, sid)).
+				Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 				Replace(DialogID, renderAddDialog(false, sid)).
 				Add(saveToLocalStorageJS("terminal", command, string(width), name, writable)).
 				Build()
@@ -178,14 +178,14 @@ func main() {
 			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
 			return r.NewResponse().
 				Replace(DialogID, renderAddDialog(false, sid)).
-				Add(insertAppJS(frame, prepend)).
+				Add(insertAppJS(frame, prepend, state.ActiveProject)).
 				Add(navigateJS(state, sid)).
 				Add(saveToLocalStorageJS("url", url, string(width), name, false)).
 				Build()
 		}
 
 		return r.NewResponse().
-			Replace(MainAreaID, renderMainArea(state, sid)).
+			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(DialogID, renderAddDialog(false, sid)).
 			Add(saveToLocalStorageJS("url", url, string(width), name, false)).
 			Build()
@@ -225,10 +225,10 @@ func main() {
 			lastApp := state.Apps[len(state.Apps)-1]
 			newIndex := len(state.Apps) - 1
 			frame := renderAppFrame(lastApp, newIndex, true, sid)
-			return insertAppJS(frame, false) + navigateJS(state, sid)
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid)
 		}
 
-		return renderMainArea(state, sid).ToJSReplace(MainAreaID)
+		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
 	})
 
 	// Start a saved/predefined application
@@ -285,10 +285,10 @@ func main() {
 
 			if hadApps > 0 {
 				frame := renderAppFrame(*newApp, state.SelectedIndex, true, sid)
-				return insertAppJS(frame, prepend) + navigateJS(state, sid)
+				return insertAppJS(frame, prepend, state.ActiveProject) + navigateJS(state, sid)
 			}
 
-			return renderMainArea(state, sid).ToJSReplace(MainAreaID)
+			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
 		}
 
 		// URL app
@@ -315,10 +315,10 @@ func main() {
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
 			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
-			return insertAppJS(frame, prepend) + navigateJS(state, sid)
+			return insertAppJS(frame, prepend, state.ActiveProject) + navigateJS(state, sid)
 		}
 
-		return renderMainArea(state, sid).ToJSReplace(MainAreaID)
+		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
 	})
 
 	// Close/remove application
@@ -345,7 +345,7 @@ func main() {
 
 		// If no apps left, full replace to show empty state
 		if len(state.Apps) == 0 || hadApps <= 1 {
-			return renderMainArea(state, sid).ToJSReplace(MainAreaID)
+			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
 		}
 
 		// Otherwise, remove just the app frame and update navigation
@@ -419,12 +419,12 @@ func main() {
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
 			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
-			return insertAppJS(frame, prepend) + navigateJS(state, sid) +
+			return insertAppJS(frame, prepend, state.ActiveProject) + navigateJS(state, sid) +
 				fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, newApp.ID)
 		}
 
 		return r.NewResponse().
-			Replace(MainAreaID, renderMainArea(state, sid)).
+			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Add(fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, state.Apps[state.SelectedIndex].ID)).
 			Build()
 	})
@@ -502,12 +502,16 @@ func main() {
 
 		sm.CloseProjectDialog(sid)
 		sm.SwitchProject(sid, name)
+		sm.IsProjectRendered(sid, name) // mark as rendered
 		state := sm.Get(sid)
+
+		// New project always needs a new div appended, hide old project div
+		jsSwitch := switchProjectJS(name, renderMainArea(state, sid))
 
 		return r.NewResponse().
 			Replace(ProjectBarID, renderProjectBar(state, sid)).
-			Replace(MainAreaID, renderMainArea(state, sid)).
 			Replace(ProjectDialogID, renderProjectDialog(false, sid)).
+			Add(jsSwitch).
 			Add(saveProjectToLocalStorageJS(name, path)).
 			Add(updateHashJS(name)).
 			Build()
@@ -524,9 +528,19 @@ func main() {
 		}
 
 		state := sm.Get(sid)
+
+		var jsSwitch string
+		if sm.IsProjectRendered(sid, name) {
+			// Project div exists in DOM, just hide/show
+			jsSwitch = switchProjectJS(name, nil)
+		} else {
+			// Project div doesn't exist yet, append new content and hide old
+			jsSwitch = switchProjectJS(name, renderMainArea(state, sid))
+		}
+
 		return r.NewResponse().
 			Replace(ProjectBarID, renderProjectBar(state, sid)).
-			Replace(MainAreaID, renderMainArea(state, sid)).
+			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Build()
 	})
