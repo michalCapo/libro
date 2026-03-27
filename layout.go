@@ -16,7 +16,6 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderAddDialog(state.DialogOpen, sid),
 		renderProjectDialog(state.ProjectDialogOpen, sid),
 	)
-	page.JS(keyboardShortcutsJS(sid))
-	page.JS(loadProjectsJS(sid))
+	page.JS(keyboardShortcutsJS(sid) + loadProjectsJS(sid))
 	return page
 }

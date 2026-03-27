@@ -90,6 +90,10 @@ func main() {
 				writable = val
 			}
 
+			// Check if strip already exists (apps running)
+			stateBefore := sm.Get(sid)
+			hadApps := len(stateBefore.Apps)
+
 			pwd := sm.GetActiveProjectPath(sid)
 			port := sm.NextPort()
 			if err := tm.Start("pending", port, command, writable, pwd); err != nil {
@@ -112,6 +116,18 @@ func main() {
 			// Small delay to let ttyd start
 			time.Sleep(500 * time.Millisecond)
 
+			if hadApps > 0 {
+				// Insert new app into existing strip without destroying iframes
+				newIndex := len(state.Apps) - 1
+				frame := renderAppFrame(*lastApp, newIndex, true, sid)
+				return r.NewResponse().
+					Replace(DialogID, renderAddDialog(false, sid)).
+					Add(insertAppJS(frame, false)).
+					Add(navigateJS(state, sid)).
+					Add(saveToLocalStorageJS("terminal", command, string(width), name, writable)).
+					Build()
+			}
+
 			return r.NewResponse().
 				Replace(MainAreaID, renderMainArea(state, sid)).
 				Replace(DialogID, renderAddDialog(false, sid)).
@@ -130,9 +146,25 @@ func main() {
 			url = "https://" + url
 		}
 
+		// Check if strip already exists (apps running)
+		stateBefore := sm.Get(sid)
+		hadApps := len(stateBefore.Apps)
+
 		sm.AddApp(sid, url, width, name)
 		sm.CloseDialog(sid)
 		state := sm.Get(sid)
+
+		if hadApps > 0 {
+			lastApp := state.Apps[len(state.Apps)-1]
+			newIndex := len(state.Apps) - 1
+			frame := renderAppFrame(lastApp, newIndex, true, sid)
+			return r.NewResponse().
+				Replace(DialogID, renderAddDialog(false, sid)).
+				Add(insertAppJS(frame, false)).
+				Add(navigateJS(state, sid)).
+				Add(saveToLocalStorageJS("url", url, string(width), name, false)).
+				Build()
+		}
 
 		return r.NewResponse().
 			Replace(MainAreaID, renderMainArea(state, sid)).
@@ -165,6 +197,10 @@ func main() {
 				writable = val
 			}
 
+			// Check if strip already exists
+			stateBefore := sm.Get(sid)
+			hadApps := len(stateBefore.Apps)
+
 			pwd := sm.GetActiveProjectPath(sid)
 			port := sm.NextPort()
 			if err := tm.Start("pending", port, command, writable, pwd); err != nil {
@@ -173,15 +209,20 @@ func main() {
 
 			sm.PrependTerminalApp(sid, command, port, writable, width, name)
 			state := sm.Get(sid)
-			lastApp := &state.Apps[0]
+			firstApp := &state.Apps[0]
 			tm.mu.Lock()
 			if cmd, ok := tm.processes["pending"]; ok {
 				delete(tm.processes, "pending")
-				tm.processes[lastApp.ID] = cmd
+				tm.processes[firstApp.ID] = cmd
 			}
 			tm.mu.Unlock()
 
 			time.Sleep(500 * time.Millisecond)
+
+			if hadApps > 0 {
+				frame := renderAppFrame(*firstApp, 0, true, sid)
+				return insertAppJS(frame, true) + navigateJS(state, sid)
+			}
 
 			return renderMainArea(state, sid).ToJSReplace(MainAreaID)
 		}
@@ -196,27 +237,51 @@ func main() {
 			url = "https://" + url
 		}
 
+		// Check if strip already exists
+		stateBefore := sm.Get(sid)
+		hadApps := len(stateBefore.Apps)
+
 		sm.PrependApp(sid, url, width, name)
 		state := sm.Get(sid)
+
+		if hadApps > 0 {
+			firstApp := state.Apps[0]
+			frame := renderAppFrame(firstApp, 0, true, sid)
+			return insertAppJS(frame, true) + navigateJS(state, sid)
+		}
+
 		return renderMainArea(state, sid).ToJSReplace(MainAreaID)
 	})
 
 	// Close/remove application
 	app.Action("app.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
-		var data struct {
-			Index float64 `json:"index"`
+		data := ctx.WsData()
+		appID, _ := data["id"].(string)
+		if appID == "" {
+			return ""
 		}
-		ctx.Body(&data)
-		removed := sm.RemoveApp(sid, int(data.Index))
+
+		// Check how many apps before removing
+		state := sm.Get(sid)
+		hadApps := len(state.Apps)
+
+		removed := sm.RemoveAppByID(sid, appID)
 
 		// If it was a terminal app, stop the ttyd process
 		if removed != nil && removed.Type == AppTypeTerminal {
 			tm.Stop(removed.ID)
 		}
 
-		state := sm.Get(sid)
-		return renderMainArea(state, sid).ToJSReplace(MainAreaID)
+		state = sm.Get(sid)
+
+		// If no apps left, full replace to show empty state
+		if len(state.Apps) == 0 || hadApps <= 1 {
+			return renderMainArea(state, sid).ToJSReplace(MainAreaID)
+		}
+
+		// Otherwise, remove just the app frame and update navigation
+		return removeAppJS(appID) + navigateJS(state, sid)
 	})
 
 	// Navigate left - JS-only update to preserve iframes
@@ -239,17 +304,19 @@ func main() {
 	app.Action("app.resize", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
-		index := 0
-		if v, ok := data["index"].(float64); ok {
-			index = int(v)
+		appID, _ := data["id"].(string)
+		if appID == "" {
+			return ""
 		}
 		width := WidthLG
 		if v, ok := data["width"].(string); ok && v != "" {
 			width = Width(v)
 		}
-		sm.SetAppWidth(sid, index, width)
+		if sm.SetAppWidthByID(sid, appID, width) < 0 {
+			return ""
+		}
 		state := sm.Get(sid)
-		return resizeJS(state, index, width, sid)
+		return resizeJS(state, width, appID)
 	})
 
 	// Select specific app - JS-only update to preserve iframes

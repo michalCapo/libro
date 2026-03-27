@@ -18,7 +18,7 @@ when user adds new project use directory picker, determine name from this folder
 --switch
 when user click inside ttyd application shortcuts for switch prev/next application (win+h/l) shortcut ist not working. this is crutial for correct application functionality fix it
 
---open
+--open (done)
 one application is already running. user open second application, but first application will reset. this is true for ttyd applications. make it work so already created application wont reset and will stay in current state. this same problem is when user close the second application then first will reset also. make sure running application will not reset until user close it.
 
 --position (done)

@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	r "github.com/michalCapo/g-sui/ui"
@@ -303,14 +302,14 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			Text(strings.ToUpper(string(w))).
 			OnClick(&r.Action{
 				Name: "app.resize",
-				Data: sidData(sid, "index", index, "width", string(w)),
+				Data: sidData(sid, "id", app.ID, "width", string(w)),
 			}))
 	}
 	badges = append(badges, r.Button(badgeBase+" text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 ml-1").
 		Text("CLOSE").
 		OnClick(&r.Action{
 			Name: "app.close",
-			Data: sidData(sid, "index", index),
+			Data: sidData(sid, "id", app.ID),
 		}))
 	topButtons := r.Div("absolute top-1.5 right-1.5 flex gap-0.5 items-center bg-white/90 dark:bg-zinc-900/80 border border-gray-200 dark:border-transparent rounded-md px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-75 z-30 backdrop-blur-sm").
 		Render(badges...)
@@ -344,7 +343,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 	}
 
 	return r.Div("group relative "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75 mx-0.5").
-		Attr("data-index", strconv.Itoa(index)).
+		Attr("data-app-id", app.ID).
 		Render(
 			topButtons,
 			labelNode,
@@ -367,6 +366,40 @@ func renderIframe(app Application, frameID, iframeSrc string) *r.Node {
 		iframe.Attr("scrolling", "no")
 	}
 	return iframe
+}
+
+// insertAppJS returns JS that inserts a new app frame into the existing strip.
+// The node is compiled to JS and inserted before nav-right (append) or after nav-left (prepend).
+func insertAppJS(node *r.Node, prepend bool) string {
+	if prepend {
+		return node.ToJSAppend(StripID) + fmt.Sprintf(`
+(function(){
+	var strip=document.getElementById('%s');
+	if(!strip)return;
+	var navLeft=document.getElementById('%s');
+	if(!navLeft)return;
+	var last=strip.lastChild;
+	strip.insertBefore(last,navLeft.nextSibling);
+})();`, StripID, NavLeftID)
+	}
+	return node.ToJSAppend(StripID) + fmt.Sprintf(`
+(function(){
+	var strip=document.getElementById('%s');
+	if(!strip)return;
+	var navRight=document.getElementById('%s');
+	if(!navRight)return;
+	var last=strip.lastChild;
+	strip.insertBefore(last,navRight);
+})();`, StripID, NavRightID)
+}
+
+// removeAppJS returns JS that removes an app frame by its app ID from the strip.
+func removeAppJS(appID string) string {
+	return fmt.Sprintf(`
+(function(){
+	var el=document.querySelector('[data-app-id="%s"]');
+	if(el)el.remove();
+})();`, appID)
 }
 
 var sideDockCounter int
@@ -554,7 +587,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 }
 
 // resizeJS returns JS that updates an app frame's width without replacing the DOM
-func resizeJS(state *AppState, index int, width Width, _ string) string {
+func resizeJS(state *AppState, width Width, appID string) string {
 	// Build a map of width value -> container classes
 	widthMap := ""
 	for _, w := range AllWidths() {
@@ -568,8 +601,7 @@ func resizeJS(state *AppState, index int, width Width, _ string) string {
 (function(){
 	var strip = document.getElementById('%s');
 	if (!strip) return;
-	var offset = 2;
-	var el = strip.children[%d + offset];
+	var el = document.querySelector('[data-app-id="%s"]');
 	if (!el) return;
 
 	var widths = {%s};
@@ -631,7 +663,7 @@ func resizeJS(state *AppState, index int, width Width, _ string) string {
 		}
 	});
 })();
-`, StripID, index, widthMap, string(width), len(state.Apps))
+`, StripID, appID, widthMap, string(width), len(state.Apps))
 }
 
 // renderProjectBar renders the horizontal project switcher bar
@@ -832,7 +864,8 @@ func saveProjectToLocalStorageJS(name, path string) string {
 // loadProjectsJS returns JS that reads saved projects from localStorage and initializes them
 func loadProjectsJS(sid string) string {
 	return fmt.Sprintf(`
-(function(){
+(function _loadProjects(){
+	if(typeof __ws==='undefined'||!__ws.call){setTimeout(_loadProjects,50);return;}
 	var projects=JSON.parse(localStorage.getItem('libro-projects')||'[]');
 	if(projects.length>0){
 		__ws.call('project.init',{sid:'%s',projects:projects});
