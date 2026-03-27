@@ -824,7 +824,8 @@ func renderSearchDialog(sid string) *r.Node {
 							Attr("type", "text").
 							Attr("placeholder", "Search applications...").
 							Attr("autocomplete", "off").
-							Attr("spellcheck", "false"),
+							Attr("spellcheck", "false").
+							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();event.stopImmediatePropagation();}"),
 					),
 					r.Div("max-h-80 overflow-y-auto").ID("search-results"),
 					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
@@ -959,6 +960,7 @@ func searchDialogJS(sid string) string {
 
 	inp.addEventListener('input',filter);
 	inp.addEventListener('keydown',function(e){
+		e.stopImmediatePropagation();
 		if(e.key==='ArrowDown'){
 			e.preventDefault();
 			if(selIdx<filtered.length-1){selIdx++;render();}
