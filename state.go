@@ -221,6 +221,48 @@ func (sm *StateManager) RemoveApp(sessionID string, index int) *Application {
 	return &removed
 }
 
+// RemoveAppByID removes an application by its ID and returns it (for cleanup)
+func (sm *StateManager) RemoveAppByID(sessionID, appID string) *Application {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return nil
+	}
+	for i, app := range s.Apps {
+		if app.ID == appID {
+			removed := s.Apps[i]
+			s.Apps = append(s.Apps[:i], s.Apps[i+1:]...)
+			if len(s.Apps) == 0 {
+				s.SelectedIndex = 0
+			} else if s.SelectedIndex >= len(s.Apps) {
+				s.SelectedIndex = len(s.Apps) - 1
+			} else if i < s.SelectedIndex {
+				s.SelectedIndex--
+			}
+			return &removed
+		}
+	}
+	return nil
+}
+
+// SetAppWidthByID sets the width of an app by its ID and returns the app's current index
+func (sm *StateManager) SetAppWidthByID(sessionID, appID string, width Width) int {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return -1
+	}
+	for i, app := range s.Apps {
+		if app.ID == appID {
+			s.Apps[i].Width = width
+			return i
+		}
+	}
+	return -1
+}
+
 // NavigateLeft shifts focus to the previous app
 func (sm *StateManager) NavigateLeft(sessionID string) {
 	sm.mu.Lock()
