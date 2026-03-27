@@ -74,7 +74,7 @@ func (w Width) PixelWidthInt() int {
 // using the fixed pixel width the user selected.
 func (w Width) ContainerClasses() string {
 	if w == WidthFull {
-		return "flex-1 min-w-0"
+		return "w-full shrink-0"
 	}
-	return "max-w-[" + w.PixelWidth() + "] w-full shrink-0"
+	return "w-[" + w.PixelWidth() + "] shrink-0"
 }
