@@ -192,7 +192,11 @@ func centerSelectedJS(selectedIndex int, totalApps int, projectName string) stri
 					if (!strip || %d === 0) return;
 					var app = strip.children[%d + 1];
 					if (app) {
-						app.scrollIntoView({block: 'nearest', inline: 'center'});
+						var stripRect = strip.getBoundingClientRect();
+						var appRect = app.getBoundingClientRect();
+						if (appRect.left < stripRect.left || appRect.right > stripRect.right) {
+							app.scrollIntoView({block: 'nearest', inline: 'center'});
+						}
 					}
 				});
 			});
@@ -236,7 +240,7 @@ func navigateJS(state *AppState, sid string) string {
 
 			var selected = strip.children[selectedIdx + offset];
 			if (selected) {
-				selected.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
+				selected.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'nearest'});
 				if (window.__libroFocusApp) {
 					setTimeout(function() { window.__libroFocusApp(selectedIdx); }, 100);
 				}
@@ -441,6 +445,14 @@ func switchProjectJS(toProject string, newContent *r.Node) string {
 
 	// Target already exists in DOM — hide all, show target
 	return hideJS + showProjectJS(toProject)
+}
+
+// focusSelectedAppJS returns JS that focuses the selected app's iframe after a short delay
+func focusSelectedAppJS(selectedIndex int) string {
+	return fmt.Sprintf(`
+setTimeout(function(){
+	if(window.__libroFocusApp) window.__libroFocusApp(%d);
+}, 150);`, selectedIndex)
 }
 
 // removeAppJS returns JS that removes an app frame by its app ID from the strip.
@@ -729,8 +741,8 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 
 	// Add project button
 	buttons = append(buttons,
-		r.Button("px-2 py-1.5 text-xs font-mono rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-gray-200 dark:hover:bg-zinc-800 transition-colors duration-75").
-			Text("+").
+		r.Button("flex items-center justify-center w-7 h-7 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-gray-200 dark:hover:bg-zinc-800 transition-colors duration-75").
+			Render(r.I("material-icons-round text-[18px]").Text("add")).
 			OnClick(&r.Action{
 				Name: "project.dialog.open",
 				Data: sidData(sid),
@@ -751,7 +763,16 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 		Render(
 			r.Div("flex items-center gap-1.5").Render(buttons...),
 			r.Span("ml-3 text-[11px] font-mono text-gray-400 dark:text-zinc-600 truncate").Text(activePath),
-			r.Div("ml-auto").Render(r.ThemeSwitcher()),
+			r.Div("ml-auto flex items-center gap-1").Render(
+				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
+					Attr("title", "Toggle fullscreen").
+					Attr("onclick", "if(document.fullscreenElement){document.exitFullscreen();this.querySelector('i').textContent='fullscreen';this.querySelector('span').textContent='Fullscreen';}else{document.documentElement.requestFullscreen();this.querySelector('i').textContent='fullscreen_exit';this.querySelector('span').textContent='Exit';}").
+					Render(
+						r.I("material-icons-round text-base").Text("fullscreen"),
+						r.Span("").Text("Fullscreen"),
+					),
+				r.ThemeSwitcher(),
+			),
 		)
 }
 
@@ -931,7 +952,16 @@ func keyboardShortcutsJS(sid string) string {
 			window.__libroKbRegistered = true;
 
 			window.__libroFocusApp = function(idx) {
-				var strip = document.getElementById('app-strip');
+				// Find the visible strip (parent project div has display != none)
+				var strips = document.querySelectorAll('[id^="app-strip-"]');
+				var strip = null;
+				for (var s = 0; s < strips.length; s++) {
+					var parent = strips[s].closest('[id^="project-main-"]');
+					if (parent && parent.style.display !== 'none') {
+						strip = strips[s];
+						break;
+					}
+				}
 				if (!strip) return;
 				var container = strip.children[idx + 1];
 				if (!container) return;
@@ -974,6 +1004,16 @@ func keyboardShortcutsJS(sid string) string {
 					var idx = parseInt(e.key) - 1;
 					__ws.call('app.select', {"sid": "%s", "index": idx});
 					window.__libroFocusApp(idx);
+				}
+				if (e.metaKey && (e.key === 'j' || e.key === 'J')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					__ws.call('project.navigate.next', {"sid": "%s"});
+				}
+				if (e.metaKey && (e.key === 'k' || e.key === 'K')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					__ws.call('project.navigate.prev', {"sid": "%s"});
 				}
 			}
 
@@ -1023,5 +1063,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-	`, sid, sid, sid)
+	`, sid, sid, sid, sid, sid)
 }

@@ -407,6 +407,38 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 	return true
 }
 
+// NextProject returns the name of the next project (wrapping around)
+func (sm *StateManager) NextProject(sessionID string) string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil || len(s.Projects) <= 1 {
+		return ""
+	}
+	for i, p := range s.Projects {
+		if p.Name == s.ActiveProject {
+			return s.Projects[(i+1)%len(s.Projects)].Name
+		}
+	}
+	return ""
+}
+
+// PrevProject returns the name of the previous project (wrapping around)
+func (sm *StateManager) PrevProject(sessionID string) string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil || len(s.Projects) <= 1 {
+		return ""
+	}
+	for i, p := range s.Projects {
+		if p.Name == s.ActiveProject {
+			return s.Projects[(i-1+len(s.Projects))%len(s.Projects)].Name
+		}
+	}
+	return ""
+}
+
 // IsProjectRendered checks if a project's DOM div has been created.
 // If not yet rendered, it marks it as rendered and returns false.
 func (sm *StateManager) IsProjectRendered(sessionID, projectName string) bool {

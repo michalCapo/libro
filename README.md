@@ -98,6 +98,8 @@ On 2K+ screens, if the selected app doesn't fill the viewport, adjacent apps are
 - `app.dialog.close` - Close the add application dialog
 - `app.url.set` - Change URL of a running application (navigates iframe to new URL)
 - `app.browse.new` - Open a new empty browser panel with focus on the URL bar
+- `project.navigate.next` - Switch to the next project (wraps around)
+- `project.navigate.prev` - Switch to the previous project (wraps around)
 
 All actions re-render the affected DOM sections via g-sui's Replace/Append.
 
@@ -108,7 +110,13 @@ Support for terminal-based applications via [ttyd](https://github.com/tsl0922/tt
 A close button is available on each application/iframe to remove it from the strip.
 
 ### Keyboard Shortcuts
-Keyboard shortcuts to switch between applications: `Win/Meta+H` navigates left and `Win/Meta+L` navigates right. The selected application is kept centered after switching.
+- `Win/Meta+H` — navigate left (previous app)
+- `Win/Meta+L` — navigate right (next app)
+- `Ctrl+1..9` — select app by position
+- `Win/Meta+J` — switch to next project
+- `Win/Meta+K` — switch to previous project
+
+When switching apps, the selected application scrolls into view only if it is off-screen (minimal scroll, no centering). Terminal (ttyd) iframes automatically receive focus when selected, including across project switches.
 
 ### Project Support
 Projects are tied to folders. The default project is "home" which starts in the home directory. Users can create new projects by defining a folder. When a user clicks on a project, the working directory changes to that folder. All ttyd applications start with `cd <pwd>` to ensure they begin in the project's directory.
@@ -126,6 +134,9 @@ When a single application is open in a project, it is centered horizontally. Whe
 
 ### Browse (Empty Browser)
 The "Browse" button (in both the empty state and side launchers) opens a new empty browser panel. The panel starts with a blank page and the URL bar focused, so the user can immediately type a URL or search query and press Enter to navigate. This behaves like opening a new browser tab.
+
+### Fullscreen Mode
+A fullscreen toggle button is available in the project bar next to the theme switcher. It uses the browser's Fullscreen API to enter and exit fullscreen mode. The button label and icon update dynamically to reflect the current state ("Fullscreen" / "Exit").
 
 ## Key Technical Decisions
 
