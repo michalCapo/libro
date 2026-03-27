@@ -167,6 +167,8 @@ func injectProxyScript(body []byte, baseURL string) []byte {
 // It also neutralizes common redirect-based frame-busting patterns.
 const frameBustNeutralizer = `<script>(function(){
 try{
+// Save real parent reference before overriding (used for URL tracking postMessage)
+window.__libroP=window.parent;
 // Override top/parent to point to self so frame-detection checks fail
 Object.defineProperty(window,'top',{get:function(){return window},configurable:false});
 Object.defineProperty(window,'parent',{get:function(){return window},configurable:false});
@@ -191,9 +193,10 @@ return u;
 }
 var _f=window.fetch;window.fetch=function(i,o){if(typeof i==='string')i=t(i);else if(i instanceof Request)i=new Request(t(i.url),i);return _f.call(this,i,o);};
 var _o=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){if(arguments.length>1&&typeof arguments[1]==='string')arguments[1]=t(arguments[1]);return _o.apply(this,arguments);};
-document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href]');if(!a)return;var h=a.getAttribute('href');if(!h||h.startsWith('#')||h.startsWith('javascript:'))return;e.preventDefault();window.location.href=t(h);},true);
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href]');if(!a)return;var h=a.getAttribute('href');if(!h||h.startsWith('#')||h.startsWith('javascript:'))return;e.preventDefault();try{var ru=new URL(h,B).href;window.__libroP.postMessage({libroNav:ru},'*');}catch(x){}window.location.href=t(h);},true);
 document.addEventListener('submit',function(e){var f=e.target,a=f.getAttribute('action');if(a)f.setAttribute('action',t(a));},true);
 var _w=window.open;window.open=function(u){if(u)arguments[0]=t(u);return _w.apply(this,arguments);};
+try{window.__libroP.postMessage({libroNav:B},'*');}catch(x){}
 })();</script>`
 
 // serveOfflinePage renders a styled HTML page when the proxied target is unreachable.
