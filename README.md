@@ -113,6 +113,9 @@ When opening new applications, existing applications (especially ttyd) are not r
 ### Application Position Centering
 When a single application is open in a project, it is centered horizontally. When two or more applications are open, they start from the left side.
 
+### Quick Browse (New Window)
+A button in the application list opens a new window with default size and asks the user for a URL. This works only for URL applications, acting as a simple browser. If the URL is not available, a Google search query is created and displayed in the iframe (using Google with a search parameter).
+
 ## Key Technical Decisions
 
 1. **Viewport panning**: CSS `transform: translateX()` on the strip container, controlled by server state. The offset is calculated based on selected app index and total widths.

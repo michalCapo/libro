@@ -46,9 +46,14 @@ func renderEmptyState(sid string) *r.Node {
 	container := r.Div("flex-1 flex items-center justify-center").ID(MainAreaID).Render(
 		r.Div("flex flex-col items-center gap-2 w-full max-w-md").Render(
 			r.Div("flex flex-col gap-1.5 w-full").ID("saved-apps-list"),
-			r.Button("w-full flex items-center justify-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75 mt-1").
-				Text("+ Add New").
-				OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
+			r.Div("flex gap-2 w-full mt-1").Render(
+				r.Button("flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
+					Text("+ Add New").
+					OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
+				r.Button("flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
+					Text("Browse").
+					OnClick(r.JS(quickBrowseJS(sid))),
+			),
 		),
 	)
 	container.JS(renderSavedAppsJS(sid))
@@ -144,7 +149,7 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 
 	stripChildren := make([]*r.Node, 0)
 
-	stripChildren = append(stripChildren, renderSideLauncher(sid))
+	stripChildren = append(stripChildren, renderSideLauncher(sid, "left"))
 
 	leftNavCls := "w-8 shrink-0 flex items-center justify-center bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700 text-gray-500 dark:text-zinc-400 hover:text-teal-600 dark:hover:text-teal-400 text-sm font-mono rounded-md cursor-pointer transition-colors duration-75"
 	if !hasLeft {
@@ -168,7 +173,7 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 			OnClick(&r.Action{Name: "app.navigate.right", Data: sidData(sid)}),
 	)
 
-	stripChildren = append(stripChildren, renderSideLauncher(sid))
+	stripChildren = append(stripChildren, renderSideLauncher(sid, "right"))
 
 	strip := r.Div("flex items-stretch h-full min-w-full transition-transform duration-75 ease-out").
 		ID(StripID).
@@ -353,10 +358,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 }
 
 func renderIframe(app Application, frameID, iframeSrc string) *r.Node {
-	sandbox := "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
-	if app.Type == AppTypeTerminal {
-		sandbox += " allow-same-origin"
-	}
+	sandbox := "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin"
 	iframe := r.Iframe("w-full h-full border-0").
 		ID(frameID).
 		Attr("src", iframeSrc).
@@ -405,8 +407,8 @@ func removeAppJS(appID string) string {
 var sideDockCounter int
 
 // renderSideLauncher renders a vertical icon dock: saved app icons + "+" button.
-// Built via JS since saved apps are in localStorage.
-func renderSideLauncher(sid string) *r.Node {
+// Built via JS since saved apps are in localStorage. side is "left" or "right".
+func renderSideLauncher(sid, side string) *r.Node {
 	sideDockCounter++
 	dockID := fmt.Sprintf("side-dock-%d", sideDockCounter)
 	container := r.Div("shrink-0 flex items-center mx-0.5").Render(
@@ -453,6 +455,20 @@ func renderSideLauncher(sid string) *r.Node {
 		dock.appendChild(btn);
 	});
 
+	var browseBtn=document.createElement('button');
+	browseBtn.className=btnCls;
+	browseBtn.innerHTML='<i class="material-icons-round '+(dk?'text-zinc-500 hover:text-indigo-400':'text-gray-400 hover:text-indigo-600')+' text-lg">language</i>';
+	var browseTip=document.createElement('span');
+	browseTip.className=tipCls;
+	browseTip.textContent='Quick browse';
+	browseBtn.appendChild(browseTip);
+	browseBtn.onclick=function(){
+		var input=prompt('Enter URL or search query:');
+		if(!input||!input.trim())return;
+		__ws.call('app.browse',{sid:'%s',query:input.trim()});
+	};
+	dock.appendChild(browseBtn);
+
 	var addBtn=document.createElement('button');
 	addBtn.className=btnCls;
 	addBtn.innerHTML='<i class="material-icons-round '+(dk?'text-zinc-500 hover:text-teal-400':'text-gray-400 hover:text-teal-600')+' text-lg">add</i>';
@@ -460,10 +476,10 @@ func renderSideLauncher(sid string) *r.Node {
 	addTip.className=tipCls;
 	addTip.textContent='Add new';
 	addBtn.appendChild(addTip);
-	addBtn.onclick=function(){__ws.call('app.dialog.open',{sid:'%s'});};
+	addBtn.onclick=function(){__ws.call('app.dialog.open',{sid:'%s',side:'%s'});};
 	dock.appendChild(addBtn);
 })();
-`, dockID, sid, sid))
+`, dockID, sid, sid, sid, side))
 	return container
 }
 
@@ -681,10 +697,10 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 			r.Button(cls).
 				Text(proj.Name).
 				Attr("title", proj.Path).
-				OnClick(&r.Action{
-					Name: "project.switch",
-					Data: sidData(sid, "name", proj.Name),
-				}),
+				OnClick(r.JS(fmt.Sprintf(
+					"history.replaceState(null,'','#%s');__ws.call('project.switch',{sid:'%s',name:'%s'});",
+					proj.Name, sid, proj.Name,
+				))),
 		)
 	}
 
@@ -712,6 +728,7 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 		Render(
 			r.Div("flex items-center gap-1.5").Render(buttons...),
 			r.Span("ml-3 text-[11px] font-mono text-gray-400 dark:text-zinc-600 truncate").Text(activePath),
+			r.Div("ml-auto").Render(r.ThemeSwitcher()),
 		)
 }
 
@@ -849,6 +866,11 @@ func renderDirBrowser(currentPath string, sid string) *r.Node {
 	return r.Div("").ID(DirBrowserID).Render(pathBar, dirList)
 }
 
+// updateHashJS returns JS that updates the URL hash to the given project name
+func updateHashJS(name string) string {
+	return fmt.Sprintf("history.replaceState(null,'','#%s');", name)
+}
+
 // saveProjectToLocalStorageJS saves a project definition to localStorage
 func saveProjectToLocalStorageJS(name, path string) string {
 	return fmt.Sprintf(`
@@ -870,8 +892,23 @@ func loadProjectsJS(sid string) string {
 	if(projects.length>0){
 		__ws.call('project.init',{sid:'%s',projects:projects});
 	}
+	var hash=location.hash.replace('#','');
+	if(hash&&hash!=='home'){
+		setTimeout(function(){__ws.call('project.switch',{sid:'%s',name:hash});},100);
+	}
+	if(!location.hash){history.replaceState(null,'','#home');}
 })();
-`, sid)
+`, sid, sid)
+}
+
+// quickBrowseJS returns inline JS that prompts for a URL and calls app.browse
+func quickBrowseJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	var input=prompt('Enter URL or search query:');
+	if(!input||!input.trim())return;
+	__ws.call('app.browse',{sid:'%s',query:input.trim()});
+})();`, sid)
 }
 
 func keyboardShortcutsJS(sid string) string {
@@ -888,6 +925,10 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					__ws.call('app.navigate.right', {"sid": "%s"});
 				}
+				if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+					e.preventDefault();
+					__ws.call('app.select', {"sid": "%s", "index": parseInt(e.key) - 1});
+				}
 			});
 			window.addEventListener('message', function(e) {
 				if (e.data && e.data.type === 'libro-nav') {
@@ -899,5 +940,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-	`, sid, sid, sid, sid)
+	`, sid, sid, sid, sid, sid)
 }

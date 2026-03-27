@@ -20,9 +20,9 @@ import (
 // which the main keyboard handler picks up.
 const ttydNavScript = `<script>
 document.addEventListener('keydown',function(e){
-if(e.metaKey&&(e.key==='h'||e.key==='H')){e.preventDefault();window.parent.postMessage({type:'libro-nav',dir:'left'},'*');}
-if(e.metaKey&&(e.key==='l'||e.key==='L')){e.preventDefault();window.parent.postMessage({type:'libro-nav',dir:'right'},'*');}
-});
+if(e.metaKey&&(e.key==='h'||e.key==='H')){e.preventDefault();e.stopImmediatePropagation();window.parent.postMessage({type:'libro-nav',dir:'left'},'*');}
+if(e.metaKey&&(e.key==='l'||e.key==='L')){e.preventDefault();e.stopImmediatePropagation();window.parent.postMessage({type:'libro-nav',dir:'right'},'*');}
+},true);
 </script>`
 
 func registerTtydProxy(app *r.App) {

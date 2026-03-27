@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -48,7 +49,12 @@ func main() {
 	// Open add dialog
 	app.Action("app.dialog.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
-		sm.OpenDialog(sid)
+		data := ctx.WsData()
+		side := "right"
+		if s, ok := data["side"].(string); ok && s != "" {
+			side = s
+		}
+		sm.OpenDialog(sid, side)
 		return r.Show(DialogID)
 	})
 
@@ -77,6 +83,11 @@ func main() {
 			name = strings.TrimSpace(val)
 		}
 
+		// Determine insertion side from dialog state
+		stateBefore := sm.Get(sid)
+		prepend := stateBefore.DialogSide == "left"
+		hadApps := len(stateBefore.Apps)
+
 		if appType == "terminal" {
 			// Terminal (ttyd) app
 			command, _ := data["app-command"].(string)
@@ -90,24 +101,24 @@ func main() {
 				writable = val
 			}
 
-			// Check if strip already exists (apps running)
-			stateBefore := sm.Get(sid)
-			hadApps := len(stateBefore.Apps)
-
 			pwd := sm.GetActiveProjectPath(sid)
 			port := sm.NextPort()
 			if err := tm.Start("pending", port, command, writable, pwd); err != nil {
 				return r.Notify("error", "Failed to start ttyd: "+err.Error())
 			}
 
-			sm.AddTerminalApp(sid, command, port, writable, width, name)
+			if prepend {
+				sm.PrependTerminalApp(sid, command, port, writable, width, name)
+			} else {
+				sm.AddTerminalApp(sid, command, port, writable, width, name)
+			}
 			state := sm.Get(sid)
 			// Update the ttyd app ID to match the actual app ID for process tracking
-			lastApp := &state.Apps[len(state.Apps)-1]
+			newApp := &state.Apps[state.SelectedIndex]
 			tm.mu.Lock()
 			if cmd, ok := tm.processes["pending"]; ok {
 				delete(tm.processes, "pending")
-				tm.processes[lastApp.ID] = cmd
+				tm.processes[newApp.ID] = cmd
 			}
 			tm.mu.Unlock()
 
@@ -117,12 +128,10 @@ func main() {
 			time.Sleep(500 * time.Millisecond)
 
 			if hadApps > 0 {
-				// Insert new app into existing strip without destroying iframes
-				newIndex := len(state.Apps) - 1
-				frame := renderAppFrame(*lastApp, newIndex, true, sid)
+				frame := renderAppFrame(*newApp, state.SelectedIndex, true, sid)
 				return r.NewResponse().
 					Replace(DialogID, renderAddDialog(false, sid)).
-					Add(insertAppJS(frame, false)).
+					Add(insertAppJS(frame, prepend)).
 					Add(navigateJS(state, sid)).
 					Add(saveToLocalStorageJS("terminal", command, string(width), name, writable)).
 					Build()
@@ -146,21 +155,20 @@ func main() {
 			url = "https://" + url
 		}
 
-		// Check if strip already exists (apps running)
-		stateBefore := sm.Get(sid)
-		hadApps := len(stateBefore.Apps)
-
-		sm.AddApp(sid, url, width, name)
+		if prepend {
+			sm.PrependApp(sid, url, width, name)
+		} else {
+			sm.AddApp(sid, url, width, name)
+		}
 		sm.CloseDialog(sid)
 		state := sm.Get(sid)
 
 		if hadApps > 0 {
-			lastApp := state.Apps[len(state.Apps)-1]
-			newIndex := len(state.Apps) - 1
-			frame := renderAppFrame(lastApp, newIndex, true, sid)
+			newApp := state.Apps[state.SelectedIndex]
+			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
 			return r.NewResponse().
 				Replace(DialogID, renderAddDialog(false, sid)).
-				Add(insertAppJS(frame, false)).
+				Add(insertAppJS(frame, prepend)).
 				Add(navigateJS(state, sid)).
 				Add(saveToLocalStorageJS("url", url, string(width), name, false)).
 				Build()
@@ -171,6 +179,46 @@ func main() {
 			Replace(DialogID, renderAddDialog(false, sid)).
 			Add(saveToLocalStorageJS("url", url, string(width), name, false)).
 			Build()
+	})
+
+	// Quick browse - open URL or Google search
+	app.Action("app.browse", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		query, _ := data["query"].(string)
+		query = strings.TrimSpace(query)
+		if query == "" {
+			return ""
+		}
+
+		// Determine if input looks like a URL or a search query
+		isURL := strings.Contains(query, ".") && !strings.Contains(query, " ")
+		var target string
+		if isURL {
+			target = query
+			if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
+				target = "https://" + target
+			}
+		} else {
+			// Google search - igu=1 enables iframe-friendly mode
+			target = "https://www.google.com/search?igu=1&q=" + url.QueryEscape(query)
+		}
+
+		// Check if strip already exists
+		stateBefore := sm.Get(sid)
+		hadApps := len(stateBefore.Apps)
+
+		sm.AddApp(sid, target, WidthLG, query)
+		state := sm.Get(sid)
+
+		if hadApps > 0 {
+			lastApp := state.Apps[len(state.Apps)-1]
+			newIndex := len(state.Apps) - 1
+			frame := renderAppFrame(lastApp, newIndex, true, sid)
+			return insertAppJS(frame, false) + navigateJS(state, sid)
+		}
+
+		return renderMainArea(state, sid).ToJSReplace(MainAreaID)
 	})
 
 	// Start a saved/predefined application
@@ -387,6 +435,7 @@ func main() {
 			Replace(MainAreaID, renderMainArea(state, sid)).
 			Replace(ProjectDialogID, renderProjectDialog(false, sid)).
 			Add(saveProjectToLocalStorageJS(name, path)).
+			Add(updateHashJS(name)).
 			Build()
 	})
 
@@ -404,6 +453,7 @@ func main() {
 		return r.NewResponse().
 			Replace(ProjectBarID, renderProjectBar(state, sid)).
 			Replace(MainAreaID, renderMainArea(state, sid)).
+			Add(updateHashJS(name)).
 			Build()
 	})
 
