@@ -916,29 +916,53 @@ func keyboardShortcutsJS(sid string) string {
 		(function() {
 			if (window.__libroKbRegistered) return;
 			window.__libroKbRegistered = true;
-			document.addEventListener('keydown', function(e) {
+
+			function libroKeyHandler(e) {
 				if (e.metaKey && (e.key === 'h' || e.key === 'H')) {
 					e.preventDefault();
+					e.stopImmediatePropagation();
 					__ws.call('app.navigate.left', {"sid": "%s"});
 				}
 				if (e.metaKey && (e.key === 'l' || e.key === 'L')) {
 					e.preventDefault();
+					e.stopImmediatePropagation();
 					__ws.call('app.navigate.right', {"sid": "%s"});
 				}
 				if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
 					e.preventDefault();
+					e.stopImmediatePropagation();
 					__ws.call('app.select', {"sid": "%s", "index": parseInt(e.key) - 1});
 				}
-			});
-			window.addEventListener('message', function(e) {
-				if (e.data && e.data.type === 'libro-nav') {
-					if (e.data.dir === 'left') {
-						__ws.call('app.navigate.left', {"sid": "%s"});
-					} else if (e.data.dir === 'right') {
-						__ws.call('app.navigate.right', {"sid": "%s"});
-					}
+			}
+
+			document.addEventListener('keydown', libroKeyHandler, true);
+
+			function attachIframeListeners() {
+				var iframes = document.querySelectorAll('iframe');
+				for (var i = 0; i < iframes.length; i++) {
+					if (iframes[i].__libroKbAttached) continue;
+					iframes[i].__libroKbAttached = true;
+					(function(iframe) {
+						function attach() {
+							try {
+								var doc = iframe.contentDocument || iframe.contentWindow.document;
+								if (!doc.__libroKbAttached) {
+									doc.__libroKbAttached = true;
+									doc.addEventListener('keydown', libroKeyHandler, true);
+								}
+							} catch(err) {}
+						}
+						iframe.addEventListener('load', attach);
+						attach();
+					})(iframes[i]);
 				}
-			});
+			}
+
+			attachIframeListeners();
+			window.__libroAttachIframeListeners = attachIframeListeners;
+
+			var obs = new MutationObserver(function() { attachIframeListeners(); });
+			obs.observe(document.body, {childList: true, subtree: true});
 		})();
-	`, sid, sid, sid, sid, sid)
+	`, sid, sid, sid)
 }

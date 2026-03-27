@@ -14,17 +14,6 @@ import (
 	r "github.com/michalCapo/g-sui/ui"
 )
 
-// ttydNavScript is injected into proxied ttyd HTML pages so that
-// Meta+H / Meta+L keyboard shortcuts work even when the terminal
-// iframe has focus.  It sends a postMessage to the parent window
-// which the main keyboard handler picks up.
-const ttydNavScript = `<script>
-document.addEventListener('keydown',function(e){
-if(e.metaKey&&(e.key==='h'||e.key==='H')){e.preventDefault();e.stopImmediatePropagation();window.parent.postMessage({type:'libro-nav',dir:'left'},'*');}
-if(e.metaKey&&(e.key==='l'||e.key==='L')){e.preventDefault();e.stopImmediatePropagation();window.parent.postMessage({type:'libro-nav',dir:'right'},'*');}
-},true);
-</script>`
-
 func registerTtydProxy(app *r.App) {
 	app.GET("/ttyd/", handleTtydProxy)
 }
@@ -62,7 +51,7 @@ func handleTtydProxy(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Regular HTTP — use ReverseProxy with script injection
+	// Regular HTTP — reverse proxy with frame-header stripping
 	target, _ := url.Parse(fmt.Sprintf("http://localhost:%d", port))
 	rawQuery := req.URL.RawQuery
 
@@ -75,24 +64,8 @@ func handleTtydProxy(w http.ResponseWriter, req *http.Request) {
 			outReq.Host = target.Host
 		},
 		ModifyResponse: func(resp *http.Response) error {
-			ct := resp.Header.Get("Content-Type")
-			if !strings.Contains(ct, "text/html") {
-				return nil
-			}
-
-			body, err := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if err != nil {
-				return err
-			}
-
-			modified := injectNavScript(body)
-			resp.Body = io.NopCloser(bytes.NewReader(modified))
-			resp.ContentLength = int64(len(modified))
-			resp.Header.Set("Content-Length", strconv.Itoa(len(modified)))
 			resp.Header.Del("X-Frame-Options")
 			resp.Header.Del("Content-Security-Policy")
-
 			return nil
 		},
 	}
@@ -164,17 +137,3 @@ func queryString(req *http.Request) string {
 	return ""
 }
 
-// injectNavScript inserts the keyboard navigation script before </body>,
-// or appends it at the end if no closing body tag is found.
-func injectNavScript(body []byte) []byte {
-	script := []byte(ttydNavScript)
-	idx := bytes.LastIndex(bytes.ToLower(body), []byte("</body>"))
-	if idx >= 0 {
-		result := make([]byte, 0, len(body)+len(script))
-		result = append(result, body[:idx]...)
-		result = append(result, script...)
-		result = append(result, body[idx:]...)
-		return result
-	}
-	return append(body, script...)
-}
