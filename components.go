@@ -165,7 +165,7 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 
 	stripChildren = append(stripChildren, renderSideLauncher(sid))
 
-	strip := r.Div("flex items-stretch h-full transition-transform duration-75 ease-out").
+	strip := r.Div("flex items-stretch h-full min-w-full transition-transform duration-75 ease-out").
 		ID(StripID).
 		Render(stripChildren...)
 

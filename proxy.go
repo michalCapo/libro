@@ -112,6 +112,20 @@ const offlinePageHTML = `<!DOCTYPE html>
 <title>Offline</title>
 <style>
   *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#f3f4f6;--text:#6b7280;--heading:#9ca3af;
+    --accent:#0d9488;--accent-light:rgba(13,148,136,.08);--accent-border:rgba(13,148,136,.18);
+    --ring:rgba(13,148,136,.15);--dot:#0d9488;
+    --icon-bg:linear-gradient(135deg,rgba(13,148,136,.1),rgba(16,185,129,.05));
+    --icon-stroke:#0d9488;
+  }
+  .dark{
+    --bg:#0c0e12;--text:#6b7280;--heading:#5b6270;
+    --accent:#2dd4bf;--accent-light:rgba(20,184,166,.08);--accent-border:rgba(20,184,166,.12);
+    --ring:rgba(20,184,166,.2);--dot:#2dd4bf;
+    --icon-bg:linear-gradient(135deg,rgba(20,184,166,.12),rgba(16,185,129,.06));
+    --icon-stroke:#2dd4bf;
+  }
   @keyframes pulse-ring{
     0%%{transform:scale(.85);opacity:.4}
     50%%{transform:scale(1);opacity:.15}
@@ -128,7 +142,8 @@ const offlinePageHTML = `<!DOCTYPE html>
   body{
     min-height:100vh;display:flex;align-items:center;justify-content:center;
     font-family:'SF Mono',SFMono-Regular,ui-monospace,'Cascadia Mono','Segoe UI Mono','Liberation Mono',Menlo,Monaco,Consolas,monospace;
-    background:#0c0e12;color:#a1a7b4;overflow:hidden;
+    background:var(--bg);color:var(--text);overflow:hidden;
+    transition:background .15s,color .15s;
   }
   .card{
     text-align:center;max-width:380px;padding:2.5rem 2rem;
@@ -137,38 +152,38 @@ const offlinePageHTML = `<!DOCTYPE html>
   .icon-wrap{position:relative;width:80px;height:80px;margin:0 auto 2rem}
   .icon-ring{
     position:absolute;inset:-8px;border-radius:50%%;
-    border:1.5px solid rgba(20,184,166,.2);
+    border:1.5px solid var(--ring);
     animation:pulse-ring 2.8s ease-in-out infinite;
   }
   .icon-circle{
     width:80px;height:80px;border-radius:50%%;
-    background:linear-gradient(135deg,rgba(20,184,166,.12),rgba(16,185,129,.06));
-    border:1px solid rgba(20,184,166,.18);
+    background:var(--icon-bg);
+    border:1px solid var(--accent-border);
     display:flex;align-items:center;justify-content:center;
     position:relative;
   }
-  .icon-circle svg{width:32px;height:32px;stroke:#2dd4bf;stroke-width:1.5;fill:none}
+  .icon-circle svg{width:32px;height:32px;stroke:var(--icon-stroke);stroke-width:1.5;fill:none}
   h1{
     font-size:.8rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
-    color:#5b6270;margin-bottom:.75rem;
+    color:var(--heading);margin-bottom:.75rem;
   }
   .url{
-    font-size:.75rem;color:#2dd4bf;background:rgba(20,184,166,.08);
-    border:1px solid rgba(20,184,166,.12);border-radius:6px;
+    font-size:.75rem;color:var(--accent);background:var(--accent-light);
+    border:1px solid var(--accent-border);border-radius:6px;
     padding:.45rem .85rem;display:inline-block;margin-bottom:1.5rem;
     max-width:100%%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
     word-break:break-all;
   }
-  .msg{font-size:.78rem;line-height:1.65;color:#6b7280;margin-bottom:1.75rem}
+  .msg{font-size:.78rem;line-height:1.65;color:var(--text);margin-bottom:1.75rem}
   .retry-row{display:flex;align-items:center;justify-content:center;gap:.55rem}
   .dots span{
-    display:inline-block;width:4px;height:4px;border-radius:50%%;background:#2dd4bf;
+    display:inline-block;width:4px;height:4px;border-radius:50%%;background:var(--dot);
     animation:dot-blink 1.2s infinite;
   }
   .dots span:nth-child(2){animation-delay:.15s}
   .dots span:nth-child(3){animation-delay:.3s}
-  .retry-text{font-size:.68rem;color:#4b5563;letter-spacing:.04em}
-  .countdown{font-variant-numeric:tabular-nums;color:#2dd4bf}
+  .retry-text{font-size:.68rem;color:var(--text);letter-spacing:.04em}
+  .countdown{font-variant-numeric:tabular-nums;color:var(--accent)}
 </style>
 </head>
 <body>
@@ -191,6 +206,17 @@ const offlinePageHTML = `<!DOCTYPE html>
 </div>
 <script>
 (function(){
+  function applyTheme(){
+    try{
+      var dark=window.parent.document.documentElement.classList.contains('dark');
+      document.documentElement.classList.toggle('dark',dark);
+    }catch(e){
+      if(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches){
+        document.documentElement.classList.add('dark');
+      }
+    }
+  }
+  applyTheme();
   var s=5,el=document.getElementById('cd');
   var t=setInterval(function(){
     s--;el.textContent=s;
