@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -17,6 +20,7 @@ const (
 	NavRightID      = "nav-right"
 	ProjectBarID    = "project-bar"
 	ProjectDialogID = "project-dialog"
+	DirBrowserID    = "dir-browser"
 )
 
 // sidData creates a data map with the session ID included
@@ -688,28 +692,36 @@ func renderProjectDialog(visible bool, sid string) *r.Node {
 
 	inputCls := "w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-1 focus:ring-teal-500 focus:border-teal-500 outline-none transition-colors"
 
+	homeDir, _ := os.UserHomeDir()
+	if homeDir == "" {
+		homeDir = "/"
+	}
+
 	return r.Div("fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75"+hiddenClass).
 		ID(ProjectDialogID).
 		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden')", ProjectDialogID))).
 		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl p-5 w-full max-w-md mx-4").
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl p-5 w-full max-w-lg mx-4").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
 					r.H2("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100 mb-4 tracking-tight").Text("New Project"),
 
+					// Directory picker
 					r.Div("mb-4").Render(
+						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Select Folder"),
+						renderDirBrowser(homeDir, sid),
+					),
+
+					// Hidden input for selected path
+					r.IHidden("").ID("project-path").Attr("value", ""),
+
+					// Name field (auto-populated, editable)
+					r.Div("mb-5").Render(
 						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Name"),
 						r.IText(inputCls).
 							ID("project-name").
-							Attr("placeholder", "my-project").
-							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-create-project').click();}"),
-					),
-
-					r.Div("mb-5").Render(
-						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Folder Path"),
-						r.IText(inputCls+" font-mono").
-							ID("project-path").
-							Attr("placeholder", "/home/user/projects/my-project").
+							Attr("placeholder", "select a folder above").
+							Attr("oninput", "this.dataset.auto='false'").
 							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-create-project').click();}"),
 					),
 
@@ -728,6 +740,81 @@ func renderProjectDialog(visible bool, sid string) *r.Node {
 					),
 				),
 		)
+}
+
+// renderDirBrowser renders the directory browser component
+func renderDirBrowser(currentPath string, sid string) *r.Node {
+	dirCls := "flex items-center gap-2 px-3 py-1.5 text-sm font-mono text-gray-700 dark:text-zinc-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded cursor-pointer transition-colors"
+	selectedCls := "flex items-center gap-2 px-3 py-1.5 text-sm font-mono text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/30 rounded font-medium"
+
+	// Read directories
+	entries, err := os.ReadDir(currentPath)
+	var dirs []string
+	if err == nil {
+		for _, e := range entries {
+			if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+				dirs = append(dirs, e.Name())
+			}
+		}
+		sort.Strings(dirs)
+	}
+
+	// Current path display + select button
+	pathBar := r.Div("flex items-center gap-2 mb-2").Render(
+		r.Div("flex-1 px-3 py-2 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-md text-xs font-mono text-gray-600 dark:text-zinc-400 truncate").
+			Attr("title", currentPath).
+			Text(currentPath),
+		r.Button("shrink-0 px-3 py-2 bg-teal-600 hover:bg-teal-500 text-white font-mono text-xs font-medium rounded-md transition-colors cursor-pointer").
+			Text("Select").
+			OnClick(r.JS(fmt.Sprintf(`
+				document.getElementById('project-path').value='%s';
+				var nameEl=document.getElementById('project-name');
+				if(!nameEl.value||nameEl.dataset.auto==='true'){
+					nameEl.value='%s';
+					nameEl.dataset.auto='true';
+				}
+				nameEl.dispatchEvent(new Event('input'));
+			`, currentPath, filepath.Base(currentPath)))),
+	)
+
+	// Parent directory entry
+	var items []*r.Node
+	parentPath := filepath.Dir(currentPath)
+	if parentPath != currentPath {
+		items = append(items, r.Div(dirCls).Render(
+			r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-base").Text("arrow_upward"),
+			r.Span("").Text(".."),
+		).OnClick(&r.Action{
+			Name: "project.browse",
+			Data: map[string]any{"sid": sid, "path": parentPath},
+		}))
+	}
+
+	// Directory entries
+	for _, d := range dirs {
+		fullPath := filepath.Join(currentPath, d)
+		items = append(items, r.Div(dirCls).Render(
+			r.I("material-icons-round text-amber-500 dark:text-amber-400 text-base").Text("folder"),
+			r.Span("truncate").Text(d),
+		).OnClick(&r.Action{
+			Name: "project.browse",
+			Data: map[string]any{"sid": sid, "path": fullPath},
+		}))
+	}
+
+	// Highlight current path as selected
+	_ = selectedCls
+
+	dirList := r.Div("max-h-48 overflow-y-auto space-y-0.5 border border-gray-200 dark:border-zinc-700 rounded-md p-1.5 bg-gray-50/50 dark:bg-zinc-800/50")
+	if len(items) == 0 {
+		dirList.Render(
+			r.Div("px-3 py-2 text-xs font-mono text-gray-400 dark:text-zinc-600 italic").Text("No subdirectories"),
+		)
+	} else {
+		dirList.Render(items...)
+	}
+
+	return r.Div("").ID(DirBrowserID).Render(pathBar, dirList)
 }
 
 // saveProjectToLocalStorageJS saves a project definition to localStorage
