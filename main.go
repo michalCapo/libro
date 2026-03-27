@@ -551,7 +551,7 @@ func main() {
 		sid := extractSID(ctx)
 		name := sm.NextProject(sid)
 		if name == "" {
-			return ""
+			return "/* noop */"
 		}
 		sm.SwitchProject(sid, name)
 		state := sm.Get(sid)
@@ -576,7 +576,7 @@ func main() {
 		sid := extractSID(ctx)
 		name := sm.PrevProject(sid)
 		if name == "" {
-			return ""
+			return "/* noop */"
 		}
 		sm.SwitchProject(sid, name)
 		state := sm.Get(sid)

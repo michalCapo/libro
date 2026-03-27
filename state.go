@@ -407,7 +407,7 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 	return true
 }
 
-// NextProject returns the name of the next project (wrapping around)
+// NextProject returns the name of the next project (clamped, no wrap-around)
 func (sm *StateManager) NextProject(sessionID string) string {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -417,13 +417,16 @@ func (sm *StateManager) NextProject(sessionID string) string {
 	}
 	for i, p := range s.Projects {
 		if p.Name == s.ActiveProject {
-			return s.Projects[(i+1)%len(s.Projects)].Name
+			if i+1 >= len(s.Projects) {
+				return ""
+			}
+			return s.Projects[i+1].Name
 		}
 	}
 	return ""
 }
 
-// PrevProject returns the name of the previous project (wrapping around)
+// PrevProject returns the name of the previous project (clamped, no wrap-around)
 func (sm *StateManager) PrevProject(sessionID string) string {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -433,7 +436,10 @@ func (sm *StateManager) PrevProject(sessionID string) string {
 	}
 	for i, p := range s.Projects {
 		if p.Name == s.ActiveProject {
-			return s.Projects[(i-1+len(s.Projects))%len(s.Projects)].Name
+			if i == 0 {
+				return ""
+			}
+			return s.Projects[i-1].Name
 		}
 	}
 	return ""

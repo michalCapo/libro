@@ -481,13 +481,13 @@ func renderSideLauncher(sid, side string) *r.Node {
 	var dk=document.documentElement.classList.contains('dark');
 	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
 	var btnCls=dk
-		?'w-8 h-8 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-zinc-700 relative group/ico'
-		:'w-8 h-8 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-gray-200 relative group/ico';
+		?'w-12 h-12 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-zinc-700 relative group/ico'
+		:'w-12 h-12 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-gray-200 relative group/ico';
 	var tipCls=dk
 		?'absolute left-full ml-2 px-2 py-1 text-xs rounded bg-zinc-800 text-zinc-200 border border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg'
 		:'absolute left-full ml-2 px-2 py-1 text-xs rounded bg-white text-gray-800 border border-gray-200 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg';
 
-	function termIconHtml2(cmd){var ini=(cmd||'T').substring(0,2).toUpperCase();return '<span class="w-5 h-5 shrink-0 rounded-md bg-gradient-to-br from-teal-400 to-emerald-600 dark:from-teal-500 dark:to-emerald-700" style="display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;line-height:20px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(20,184,166,.35),inset 0 1px 0 rgba(255,255,255,.15)">'+ini+'</span>';}
+	function termIconHtml2(cmd){var ini=(cmd||'T').substring(0,2).toUpperCase();return '<span class="w-8 h-8 shrink-0 rounded-md bg-gradient-to-br from-teal-400 to-emerald-600 dark:from-teal-500 dark:to-emerald-700" style="display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;line-height:32px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(20,184,166,.35),inset 0 1px 0 rgba(255,255,255,.15)">'+ini+'</span>';}
 	apps.forEach(function(app){
 		var btn=document.createElement('button');
 		btn.className=btnCls;
@@ -498,10 +498,10 @@ func renderSideLauncher(sid, side string) *r.Node {
 		}else{
 			try{
 				var u=new URL(app.url);
-				btn.innerHTML='<img class="w-5 h-5 rounded-sm" src="https://www.google.com/s2/favicons?domain='+encodeURIComponent(u.hostname)+'&sz=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 dark:text-zinc-500 text-lg\\\'>language</i>\'">';
+				btn.innerHTML='<img class="w-8 h-8 rounded-sm" src="https://www.google.com/s2/favicons?domain='+encodeURIComponent(u.hostname)+'&sz=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 dark:text-zinc-500 text-2xl\\\'>language</i>\'">';
 				lb=app.name||u.hostname.replace(/^www\./,'');
 			}catch(e){
-				btn.innerHTML='<i class="material-icons-round text-gray-400 dark:text-zinc-500 text-lg">language</i>';
+				btn.innerHTML='<i class="material-icons-round text-gray-400 dark:text-zinc-500 text-2xl">language</i>';
 				lb=app.name||app.url;
 			}
 		}
@@ -517,7 +517,7 @@ func renderSideLauncher(sid, side string) *r.Node {
 
 	var browseBtn=document.createElement('button');
 	browseBtn.className=btnCls;
-	browseBtn.innerHTML='<i class="material-icons-round '+(dk?'text-zinc-500 hover:text-indigo-400':'text-gray-400 hover:text-indigo-600')+' text-lg">language</i>';
+	browseBtn.innerHTML='<i class="material-icons-round '+(dk?'text-zinc-500 hover:text-indigo-400':'text-gray-400 hover:text-indigo-600')+' text-2xl">language</i>';
 	var browseTip=document.createElement('span');
 	browseTip.className=tipCls;
 	browseTip.textContent='Quick browse';
@@ -529,7 +529,7 @@ func renderSideLauncher(sid, side string) *r.Node {
 
 	var addBtn=document.createElement('button');
 	addBtn.className=btnCls;
-	addBtn.innerHTML='<i class="material-icons-round '+(dk?'text-zinc-500 hover:text-teal-400':'text-gray-400 hover:text-teal-600')+' text-lg">add</i>';
+	addBtn.innerHTML='<i class="material-icons-round '+(dk?'text-zinc-500 hover:text-teal-400':'text-gray-400 hover:text-teal-600')+' text-2xl">add</i>';
 	var addTip=document.createElement('span');
 	addTip.className=tipCls;
 	addTip.textContent='Add new';
