@@ -62,7 +62,7 @@ Each application renders as an iframe with `src` set to the app's URL. The ifram
 Each application frame has a non-overlapping toolbar above the iframe content, similar to a real browser. The toolbar is always visible and contains:
 
 - **Left side (URL apps)**: Back/forward buttons, globe icon, editable URL input field, copy URL button, reload button
-- **Left side (Terminal apps)**: Initials badge with gradient background, command/name label
+- **Left side (Terminal apps)**: Real application icon (for known commands) or gradient initials badge, command/name label
 - **Right side (all apps)**: Width size badges (MD, LG, XL, 2XL, FULL) and close button
 
 Users can see the current URL, copy it to clipboard, edit it and press Enter to navigate to a new URL, or reload the iframe. Back and forward buttons navigate the iframe's browser history. The URL bar automatically updates when the user clicks links inside the iframe, reflecting the current page URL in real time (via postMessage from the injected proxy script). The URL is automatically prefixed with `https://` if no scheme is provided. URL changes are persisted to localStorage.
@@ -115,8 +115,15 @@ A close button is available on each application/iframe to remove it from the str
 - `Ctrl+1..9` — select app by position
 - `Win/Meta+J` — switch to next project
 - `Win/Meta+K` — switch to previous project
+- `Win/Meta+/` — open fuzzy search launcher
 
 When switching apps, the selected application scrolls into view only if it is off-screen (minimal scroll, no centering). Terminal (ttyd) iframes automatically receive focus when selected, including across project switches.
+
+### Fuzzy Search Launcher
+Press `Win/Meta+/` to open a fuzzy search popup that lists all saved applications from localStorage. The user can type to filter the list — matching is fuzzy across app name, command, URL, and type, with scoring that prioritizes word boundaries and consecutive matches. Use arrow keys (Up/Down) to navigate the list, `Enter` to launch the selected app on the right side, `Ctrl+Enter` to launch on the left side, and `Escape` to close. The search is accessible from any context (with or without apps open, from any project).
+
+### Smart Terminal Icons
+Terminal applications display real brand icons for known commands instead of generic initials. Icons are resolved by matching the base command name (handling prefixes like `sudo`, `env`, and full paths). Known commands include neovim, vim, claude, node, python, docker, git, go, rust, ruby, kubernetes, terraform, tmux, and many more — sourced from Simple Icons CDN. Generic categories (shells, monitoring tools, build tools) use Material Design icons. Unknown commands fall back to the original colored gradient letter icon.
 
 ### Project Support
 Projects are tied to folders. The default project is "home" which starts in the home directory. Users can create new projects by defining a folder. When a user clicks on a project, the working directory changes to that folder. All ttyd applications start with `cd <pwd>` to ensure they begin in the project's directory.
