@@ -542,6 +542,57 @@ func main() {
 			Replace(ProjectBarID, renderProjectBar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
+			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Build()
+	})
+
+	// Navigate to next project
+	app.Action("project.navigate.next", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		name := sm.NextProject(sid)
+		if name == "" {
+			return ""
+		}
+		sm.SwitchProject(sid, name)
+		state := sm.Get(sid)
+
+		var jsSwitch string
+		if sm.IsProjectRendered(sid, name) {
+			jsSwitch = switchProjectJS(name, nil)
+		} else {
+			jsSwitch = switchProjectJS(name, renderMainArea(state, sid))
+		}
+
+		return r.NewResponse().
+			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Add(jsSwitch).
+			Add(updateHashJS(name)).
+			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Build()
+	})
+
+	// Navigate to previous project
+	app.Action("project.navigate.prev", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		name := sm.PrevProject(sid)
+		if name == "" {
+			return ""
+		}
+		sm.SwitchProject(sid, name)
+		state := sm.Get(sid)
+
+		var jsSwitch string
+		if sm.IsProjectRendered(sid, name) {
+			jsSwitch = switchProjectJS(name, nil)
+		} else {
+			jsSwitch = switchProjectJS(name, renderMainArea(state, sid))
+		}
+
+		return r.NewResponse().
+			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Add(jsSwitch).
+			Add(updateHashJS(name)).
+			Add(focusSelectedAppJS(state.SelectedIndex)).
 			Build()
 	})
 
