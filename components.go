@@ -294,7 +294,7 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 	}
 	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0"))
 
-	strip := r.Div("flex-1 min-w-0 flex items-stretch h-full overflow-x-auto overflow-y-hidden gap-0.5 p-0.5").
+	strip := r.Div("flex-1 min-w-0 flex items-stretch h-full overflow-x-auto overflow-y-hidden gap-4 p-0.5").
 		ID(stripID(state.ActiveProject)).
 		Render(stripChildren...)
 
@@ -825,7 +825,7 @@ func renderSearchDialog(sid string) *r.Node {
 							Attr("placeholder", "Search applications...").
 							Attr("autocomplete", "off").
 							Attr("spellcheck", "false").
-							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();event.stopImmediatePropagation();}"),
+							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();}"),
 					),
 					r.Div("max-h-80 overflow-y-auto").ID("search-results"),
 					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
