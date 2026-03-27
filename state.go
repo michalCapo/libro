@@ -87,8 +87,9 @@ func (sm *StateManager) NewSession() string {
 		Projects: []Project{
 			{Name: "home", Path: defaultHomeDir()},
 		},
-		ActiveProject: "home",
-		snapshots:     make(map[string]*projectSnapshot),
+		ActiveProject:    "home",
+		snapshots:        make(map[string]*projectSnapshot),
+		renderedProjects: map[string]bool{"home": true},
 	}
 	return sid
 }
