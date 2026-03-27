@@ -58,6 +58,15 @@ Modal/dialog overlay triggered by "+" button click. Contains a URL input field (
 ### Application Rendering (Iframe Display)
 Each application renders as an iframe with `src` set to the app's URL. The iframe container has a fixed width based on the app's width setting and takes the full height of the viewport. Applications are displayed side-by-side in a horizontal row, each maintaining its configured width at all times.
 
+### Browser-Like Toolbar
+Each application frame has a non-overlapping toolbar above the iframe content, similar to a real browser. The toolbar is always visible and contains:
+
+- **Left side (URL apps)**: Back/forward buttons, globe icon, editable URL input field, copy URL button, reload button
+- **Left side (Terminal apps)**: Initials badge with gradient background, command/name label
+- **Right side (all apps)**: Width size badges (MD, LG, XL, 2XL, FULL) and close button
+
+Users can see the current URL, copy it to clipboard, edit it and press Enter to navigate to a new URL, or reload the iframe. Back and forward buttons navigate the iframe's browser history. The URL bar automatically updates when the user clicks links inside the iframe, reflecting the current page URL in real time (via postMessage from the injected proxy script). The URL is automatically prefixed with `https://` if no scheme is provided. URL changes are persisted to localStorage.
+
 ### Horizontal Strip Layout
 Applications are arranged in a horizontal flexbox row. The currently selected application is centered in the viewport. Applications that don't fit extend beyond the viewport (off-screen left/right). The strip takes the full height of the viewport.
 
@@ -87,6 +96,8 @@ On 2K+ screens, if the selected app doesn't fill the viewport, adjacent apps are
 - `app.select` - Select/focus a specific application by index
 - `app.dialog.open` - Open the add application dialog
 - `app.dialog.close` - Close the add application dialog
+- `app.url.set` - Change URL of a running application (navigates iframe to new URL)
+- `app.browse.new` - Open a new empty browser panel with focus on the URL bar
 
 All actions re-render the affected DOM sections via g-sui's Replace/Append.
 
@@ -113,8 +124,8 @@ When opening new applications, existing applications (especially ttyd) are not r
 ### Application Position Centering
 When a single application is open in a project, it is centered horizontally. When two or more applications are open, they start from the left side.
 
-### Quick Browse (New Window)
-A button in the application list opens a new window with default size and asks the user for a URL. This works only for URL applications, acting as a simple browser. If the URL is not available, a Google search query is created and displayed in the iframe (using Google with a search parameter).
+### Browse (Empty Browser)
+The "Browse" button (in both the empty state and side launchers) opens a new empty browser panel. The panel starts with a blank page and the URL bar focused, so the user can immediately type a URL or search query and press Enter to navigate. This behaves like opening a new browser tab.
 
 ## Key Technical Decisions
 

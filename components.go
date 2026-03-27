@@ -50,7 +50,7 @@ func renderEmptyState(sid string) *r.Node {
 					OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
 				r.Button("flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
 					Text("Browse").
-					OnClick(r.JS(quickBrowseJS(sid))),
+					OnClick(&r.Action{Name: "app.browse.new", Data: sidData(sid)}),
 			),
 		),
 	)
@@ -210,7 +210,8 @@ func navigateJS(state *AppState, sid string) string {
 						ov.onclick = function(idx) {
 							return function() { __ws.call('app.select', {"sid": "%s", "index": idx}); };
 						}(i);
-						child.appendChild(ov);
+						var iframeWrap = child.children[1];
+						if (iframeWrap) { iframeWrap.appendChild(ov); } else { child.appendChild(ov); }
 					}
 				}
 			}
@@ -237,10 +238,14 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 
 	iframeSrc := app.URL
 	if app.Type == AppTypeURL {
-		iframeSrc = "/proxy?url=" + url.QueryEscape(app.URL)
+		if app.URL == "" {
+			iframeSrc = "about:blank"
+		} else {
+			iframeSrc = "/proxy?url=" + url.QueryEscape(app.URL)
+		}
 	}
 
-	// Size badge bar + close
+	// Size badge bar + close (right side of toolbar)
 	badgeBase := "px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase rounded-sm cursor-pointer transition-colors duration-75"
 	badges := make([]*r.Node, 0, len(AllWidths())+1)
 	for _, w := range AllWidths() {
@@ -261,11 +266,55 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			Name: "app.close",
 			Data: sidData(sid, "id", app.ID),
 		}))
-	topButtons := r.Div("absolute top-1.5 right-1.5 flex gap-0.5 items-center bg-white/90 dark:bg-zinc-900/80 border border-gray-200 dark:border-transparent rounded-md px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-75 z-30 backdrop-blur-sm").
+	rightButtons := r.Div("flex gap-0.5 items-center shrink-0").
+		Attr("data-size-badges", "").
 		Render(badges...)
 
-	var labelNode *r.Node
-	if app.Type == AppTypeTerminal {
+	// Left side of toolbar depends on app type
+	var leftSide *r.Node
+	if app.Type == AppTypeURL {
+		urlInputID := fmt.Sprintf("urlinput-%s", app.ID)
+		btnCls := "flex items-center justify-center w-6 h-6 rounded-sm text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors duration-75 cursor-pointer shrink-0"
+
+		// Back button
+		backBtn := r.Button(btnCls).
+			Attr("title", "Back").
+			OnClick(r.JS(fmt.Sprintf(`try{var f=document.getElementById('frame-%s');if(f)f.contentWindow.history.back();}catch(e){}`, app.ID)))
+		backBtn.Render(r.I("material-icons-round text-sm").Text("arrow_back"))
+
+		// Forward button
+		forwardBtn := r.Button(btnCls).
+			Attr("title", "Forward").
+			OnClick(r.JS(fmt.Sprintf(`try{var f=document.getElementById('frame-%s');if(f)f.contentWindow.history.forward();}catch(e){}`, app.ID)))
+		forwardBtn.Render(r.I("material-icons-round text-sm").Text("arrow_forward"))
+
+		// Copy button
+		copyBtn := r.Button(btnCls).
+			Attr("title", "Copy URL").
+			OnClick(r.JS(fmt.Sprintf(`var inp=document.getElementById('%s');if(inp){navigator.clipboard.writeText(inp.value);var btn=event.currentTarget;btn.style.color='rgb(20,184,166)';setTimeout(function(){btn.style.color='';},800);}`, urlInputID)))
+		copyBtn.Render(r.I("material-icons-round text-sm").Text("content_copy"))
+
+		// Reload button
+		reloadBtn := r.Button(btnCls).
+			Attr("title", "Reload").
+			OnClick(r.JS(fmt.Sprintf(`var f=document.getElementById('frame-%s');if(f){f.src=f.src;}`, app.ID)))
+		reloadBtn.Render(r.I("material-icons-round text-sm").Text("refresh"))
+
+		// URL input
+		urlInput := r.Input("flex-1 min-w-0 bg-gray-100 dark:bg-zinc-800 rounded-sm text-[11px] font-mono text-gray-600 dark:text-zinc-400 outline-none placeholder-gray-400 dark:placeholder-zinc-600 px-2 h-6").
+			ID(urlInputID).
+			Attr("type", "text").
+			Attr("value", app.URL).
+			Attr("spellcheck", "false").
+			Attr("autocomplete", "off").
+			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();__ws.call('app.url.set',{"sid":"%s","id":"%s","url":event.target.value});}`, sid, app.ID)))
+
+		// Globe icon
+		globe := r.I("material-icons-round text-sm text-gray-400 dark:text-zinc-500 shrink-0 leading-none").Text("language")
+
+		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
+			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn)
+	} else if app.Type == AppTypeTerminal {
 		initials := strings.ToUpper(app.Command)
 		if len(initials) > 2 {
 			initials = initials[:2]
@@ -274,13 +323,17 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		if app.Name != "" {
 			labelText = app.Name
 		}
-		labelNode = r.Div("absolute top-1.5 left-1.5 flex items-center gap-1.5 px-2 py-0.5 bg-white/90 dark:bg-zinc-900/80 border border-gray-200 dark:border-transparent text-[10px] font-mono tracking-wider uppercase rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-75 z-30 backdrop-blur-sm").Render(
+		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1.5").Render(
 			r.Span("w-4 h-4 shrink-0 rounded-md bg-gradient-to-br from-teal-400 to-emerald-600 dark:from-teal-500 dark:to-emerald-700").
 				Attr("style", "display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;line-height:16px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(20,184,166,.35),inset 0 1px 0 rgba(255,255,255,.15)").
 				Text(initials),
-			r.Span("text-gray-600 dark:text-zinc-300").Text(labelText),
+			r.Span("text-[10px] font-mono tracking-wider uppercase text-gray-600 dark:text-zinc-300 truncate").Text(labelText),
 		)
 	}
+
+	// Toolbar: always visible, sits above the iframe
+	toolbar := r.Div("flex items-center gap-2 px-1.5 py-1 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-700/50 shrink-0").
+		Render(leftSide, rightButtons)
 
 	var clickOverlay *r.Node
 	if !selected {
@@ -292,13 +345,14 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			})
 	}
 
-	return r.Div("group relative "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
+	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
 		Attr("data-app-id", app.ID).
 		Render(
-			topButtons,
-			labelNode,
-			renderIframe(app, frameID, iframeSrc),
-			clickOverlay,
+			toolbar,
+			r.Div("relative flex-1 min-h-0").Render(
+				renderIframe(app, frameID, iframeSrc),
+				clickOverlay,
+			),
 		)
 }
 
@@ -405,9 +459,7 @@ func renderSideLauncher(sid, side string) *r.Node {
 	browseTip.textContent='Quick browse';
 	browseBtn.appendChild(browseTip);
 	browseBtn.onclick=function(){
-		var input=prompt('Enter URL or search query:');
-		if(!input||!input.trim())return;
-		__ws.call('app.browse',{sid:'%s',query:input.trim()});
+		__ws.call('app.browse.new',{sid:'%s',side:'%s'});
 	};
 	dock.appendChild(browseBtn);
 
@@ -421,7 +473,7 @@ func renderSideLauncher(sid, side string) *r.Node {
 	addBtn.onclick=function(){__ws.call('app.dialog.open',{sid:'%s',side:'%s'});};
 	dock.appendChild(addBtn);
 })();
-`, dockID, sid, side, sid, sid, side))
+`, dockID, sid, side, sid, side, sid, side))
 	return container
 }
 
@@ -578,7 +630,7 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 	el.className = keep.join(' ');
 
 	// Update size badges: highlight active, dim others
-	var topBar = el.querySelector('.absolute.top-1\\.5.right-1\\.5');
+	var topBar = el.querySelector('[data-size-badges]');
 	if (topBar) {
 		var btns = topBar.querySelectorAll('button');
 		var sizeLabels = ['MD','LG','XL','2XL','FULL'];
@@ -820,16 +872,6 @@ func loadProjectsJS(sid string) string {
 `, sid, sid)
 }
 
-// quickBrowseJS returns inline JS that prompts for a URL and calls app.browse
-func quickBrowseJS(sid string) string {
-	return fmt.Sprintf(`
-(function(){
-	var input=prompt('Enter URL or search query:');
-	if(!input||!input.trim())return;
-	__ws.call('app.browse',{sid:'%s',query:input.trim()});
-})();`, sid)
-}
-
 func keyboardShortcutsJS(sid string) string {
 	return fmt.Sprintf(`
 		(function() {
@@ -911,6 +953,23 @@ func keyboardShortcutsJS(sid string) string {
 
 			var obs = new MutationObserver(function() { attachIframeListeners(); });
 			obs.observe(document.body, {childList: true, subtree: true});
+
+			// Listen for URL navigation messages from proxied iframes
+			window.addEventListener('message', function(e) {
+				if (!e.data || !e.data.libroNav) return;
+				var iframes = document.querySelectorAll('iframe');
+				for (var i = 0; i < iframes.length; i++) {
+					try {
+						if (iframes[i].contentWindow === e.source) {
+							var id = iframes[i].id;
+							var appId = id.replace('frame-', '');
+							var input = document.getElementById('urlinput-' + appId);
+							if (input) input.value = e.data.libroNav;
+							break;
+						}
+					} catch(err) {}
+				}
+			});
 		})();
 	`, sid, sid, sid)
 }

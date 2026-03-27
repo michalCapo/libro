@@ -264,6 +264,23 @@ func (sm *StateManager) SetAppWidthByID(sessionID, appID string, width Width) in
 	return -1
 }
 
+// SetAppURLByID changes the URL of an app by its ID. Returns the app index or -1.
+func (sm *StateManager) SetAppURLByID(sessionID, appID, newURL string) int {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return -1
+	}
+	for i, app := range s.Apps {
+		if app.ID == appID {
+			s.Apps[i].URL = newURL
+			return i
+		}
+	}
+	return -1
+}
+
 // NavigateLeft shifts focus to the previous app
 func (sm *StateManager) NavigateLeft(sessionID string) {
 	sm.mu.Lock()

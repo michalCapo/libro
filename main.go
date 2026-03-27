@@ -29,6 +29,16 @@ func saveToLocalStorageJS(appType, urlOrCmd, width, name string, writable bool) 
 `, appType, width, writable, name, urlOrCmd, urlOrCmd)
 }
 
+// updateLocalStorageURLJS returns JS that updates the URL of an app at a given index in localStorage
+func updateLocalStorageURLJS(index int, newURL string) string {
+	return fmt.Sprintf(`
+(function(){
+	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
+	if(%d>=0&&%d<apps.length){apps[%d].url='%s';localStorage.setItem('libro-apps',JSON.stringify(apps));}
+})();
+`, index, index, index, newURL)
+}
+
 var (
 	sm = NewStateManager()
 	tm = NewTtydManager()
@@ -387,6 +397,60 @@ func main() {
 		sm.SelectApp(sid, int(data.Index))
 		state := sm.Get(sid)
 		return navigateJS(state, sid)
+	})
+
+	// Open a new empty browser panel
+	app.Action("app.browse.new", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		side, _ := data["side"].(string)
+		prepend := side == "left"
+
+		stateBefore := sm.Get(sid)
+		hadApps := len(stateBefore.Apps)
+
+		if prepend {
+			sm.PrependApp(sid, "", WidthLG, "New Tab")
+		} else {
+			sm.AddApp(sid, "", WidthLG, "New Tab")
+		}
+		state := sm.Get(sid)
+
+		if hadApps > 0 {
+			newApp := state.Apps[state.SelectedIndex]
+			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
+			return insertAppJS(frame, prepend) + navigateJS(state, sid) +
+				fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, newApp.ID)
+		}
+
+		return r.NewResponse().
+			Replace(MainAreaID, renderMainArea(state, sid)).
+			Add(fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, state.Apps[state.SelectedIndex].ID)).
+			Build()
+	})
+
+	// Set URL for an app — navigates the iframe to a new URL
+	app.Action("app.url.set", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		appID, _ := data["id"].(string)
+		newURL, _ := data["url"].(string)
+		newURL = strings.TrimSpace(newURL)
+		if appID == "" || newURL == "" {
+			return ""
+		}
+		// Ensure URL has a scheme
+		if !strings.HasPrefix(newURL, "http://") && !strings.HasPrefix(newURL, "https://") {
+			newURL = "https://" + newURL
+		}
+		idx := sm.SetAppURLByID(sid, appID, newURL)
+		if idx < 0 {
+			return ""
+		}
+		// Update iframe src and also update localStorage
+		proxiedURL := "/proxy?url=" + url.QueryEscape(newURL)
+		return fmt.Sprintf(`(function(){var f=document.getElementById('frame-%s');if(f){f.src='%s';}})();`, appID, proxiedURL) +
+			updateLocalStorageURLJS(idx, newURL)
 	})
 
 	// Browse directories for project picker
