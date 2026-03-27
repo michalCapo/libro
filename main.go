@@ -352,6 +352,7 @@ func main() {
 	})
 
 	registerProxy(app)
+	registerTtydProxy(app)
 	app.Listen(":1439")
 }
 

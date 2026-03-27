@@ -172,12 +172,12 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 		Render(stripChildren...)
 
 	container := r.Div("flex-1 flex items-stretch overflow-hidden").Render(strip)
-	container.JS(centerSelectedJS(state.SelectedIndex))
+	container.JS(centerSelectedJS(state.SelectedIndex, len(state.Apps)))
 
 	return r.Div("flex-1 flex items-stretch overflow-hidden relative").ID(MainAreaID).Render(container)
 }
 
-func centerSelectedJS(selectedIndex int) string {
+func centerSelectedJS(selectedIndex int, totalApps int) string {
 	return fmt.Sprintf(`
 		(function centerApp() {
 			requestAnimationFrame(function() {
@@ -188,20 +188,19 @@ func centerSelectedJS(selectedIndex int) string {
 					if (!selected) return;
 					var container = strip.parentElement;
 					var containerWidth = container.offsetWidth;
-					var stripWidth = strip.scrollWidth;
-					if (stripWidth <= containerWidth) {
-						var centerOffset = (containerWidth - stripWidth) / 2;
-						strip.style.transform = 'translateX(' + centerOffset + 'px)';
-						return;
+					var totalApps = %d;
+					if (totalApps === 1) {
+						var selectedLeft = selected.offsetLeft;
+						var selectedWidth = selected.offsetWidth;
+						var offset = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
+						strip.style.transform = 'translateX(' + (-offset) + 'px)';
+					} else {
+						strip.style.transform = 'translateX(0px)';
 					}
-					var selectedLeft = selected.offsetLeft;
-					var selectedWidth = selected.offsetWidth;
-					var offset = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
-					strip.style.transform = 'translateX(' + (-offset) + 'px)';
 				});
 			});
 		})();
-	`, StripID, selectedIndex+2)
+	`, StripID, selectedIndex+2, totalApps)
 }
 
 func navigateJS(state *AppState, sid string) string {
@@ -243,15 +242,21 @@ func navigateJS(state *AppState, sid string) string {
 			if (!selected) return;
 			var container = strip.parentElement;
 			var containerWidth = container.offsetWidth;
-			var stripWidth = strip.scrollWidth;
-			if (stripWidth <= containerWidth) {
-				var centerOffset = (containerWidth - stripWidth) / 2;
-				strip.style.transform = 'translateX(' + centerOffset + 'px)';
-			} else {
+			if (totalApps === 1) {
 				var selectedLeft = selected.offsetLeft;
 				var selectedWidth = selected.offsetWidth;
 				var off = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
 				strip.style.transform = 'translateX(' + (-off) + 'px)';
+			} else {
+				var stripWidth = strip.scrollWidth;
+				if (stripWidth <= containerWidth) {
+					strip.style.transform = 'translateX(0px)';
+				} else {
+					var selectedLeft = selected.offsetLeft;
+					var selectedWidth = selected.offsetWidth;
+					var off = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
+					strip.style.transform = 'translateX(' + (-off) + 'px)';
+				}
 			}
 
 			var navLeft = document.getElementById('%s');
@@ -545,7 +550,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 }
 
 // resizeJS returns JS that updates an app frame's width without replacing the DOM
-func resizeJS(_ *AppState, index int, width Width, _ string) string {
+func resizeJS(state *AppState, index int, width Width, _ string) string {
 	// Build a map of width value -> container classes
 	widthMap := ""
 	for _, w := range AllWidths() {
@@ -602,20 +607,27 @@ func resizeJS(_ *AppState, index int, width Width, _ string) string {
 	// Re-center strip
 	var container = strip.parentElement;
 	var containerWidth = container.offsetWidth;
+	var totalApps = %d;
 	requestAnimationFrame(function(){
-		var stripWidth = strip.scrollWidth;
-		if (stripWidth <= containerWidth) {
-			var centerOffset = (containerWidth - stripWidth) / 2;
-			strip.style.transform = 'translateX(' + centerOffset + 'px)';
-		} else {
+		if (totalApps === 1) {
 			var selectedLeft = el.offsetLeft;
 			var selectedWidth = el.offsetWidth;
 			var off = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
 			strip.style.transform = 'translateX(' + (-off) + 'px)';
+		} else {
+			var stripWidth = strip.scrollWidth;
+			if (stripWidth <= containerWidth) {
+				strip.style.transform = 'translateX(0px)';
+			} else {
+				var selectedLeft = el.offsetLeft;
+				var selectedWidth = el.offsetWidth;
+				var off = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
+				strip.style.transform = 'translateX(' + (-off) + 'px)';
+			}
 		}
 	});
 })();
-`, StripID, index, widthMap, string(width))
+`, StripID, index, widthMap, string(width), len(state.Apps))
 }
 
 // renderProjectBar renders the horizontal project switcher bar
@@ -757,6 +769,15 @@ func keyboardShortcutsJS(sid string) string {
 					__ws.call('app.navigate.right', {"sid": "%s"});
 				}
 			});
+			window.addEventListener('message', function(e) {
+				if (e.data && e.data.type === 'libro-nav') {
+					if (e.data.dir === 'left') {
+						__ws.call('app.navigate.left', {"sid": "%s"});
+					} else if (e.data.dir === 'right') {
+						__ws.call('app.navigate.right', {"sid": "%s"});
+					}
+				}
+			});
 		})();
-	`, sid, sid)
+	`, sid, sid, sid, sid)
 }
