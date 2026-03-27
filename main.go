@@ -390,11 +390,12 @@ func main() {
 	// Select specific app - JS-only update to preserve iframes
 	app.Action("app.select", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
-		var data struct {
-			Index float64 `json:"index"`
+		data := ctx.WsData()
+		idx := 0
+		if v, ok := data["index"].(float64); ok {
+			idx = int(v)
 		}
-		ctx.Body(&data)
-		sm.SelectApp(sid, int(data.Index))
+		sm.SelectApp(sid, idx)
 		state := sm.Get(sid)
 		return navigateJS(state, sid)
 	})
