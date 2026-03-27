@@ -12,13 +12,17 @@ import (
 )
 
 const (
-	StripID         = "app-strip"
 	DialogID        = "add-dialog"
 	MainAreaID      = "main-area"
 	ProjectBarID    = "project-bar"
 	ProjectDialogID = "project-dialog"
 	DirBrowserID    = "dir-browser"
 )
+
+// stripID returns the DOM ID for a project's app strip
+func stripID(projectName string) string {
+	return "app-strip-" + projectName
+}
 
 // sidData creates a data map with the session ID included
 func sidData(sid string, extra ...any) map[string]any {
@@ -31,19 +35,33 @@ func sidData(sid string, extra ...any) map[string]any {
 	return m
 }
 
+// projectMainID returns the DOM ID for a project's main area div
+func projectMainID(projectName string) string {
+	return "project-main-" + projectName
+}
+
+// renderMainAreaWrapper renders the wrapper that contains all per-project main area divs.
+// Only the active project's div is visible; others are hidden to preserve state.
+func renderMainAreaWrapper(state *AppState, sid string) *r.Node {
+	return r.Div("flex-1 flex flex-col overflow-hidden relative").ID(MainAreaID).Render(
+		renderMainArea(state, sid),
+	)
+}
+
 // renderMainArea renders the entire main area based on current state
 func renderMainArea(state *AppState, sid string) *r.Node {
 	if len(state.Apps) == 0 {
-		return renderEmptyState(sid)
+		return renderEmptyState(state, sid)
 	}
 	return renderAppStrip(state, sid)
 }
 
 // renderEmptyState renders the saved apps list with "+ Add New" button
-func renderEmptyState(sid string) *r.Node {
-	container := r.Div("flex-1 flex items-center justify-center").ID(MainAreaID).Render(
+func renderEmptyState(state *AppState, sid string) *r.Node {
+	savedAppsListID := "saved-apps-list-" + state.ActiveProject
+	container := r.Div("flex-1 flex items-center justify-center").ID(projectMainID(state.ActiveProject)).Render(
 		r.Div("flex flex-col items-center gap-2 w-full max-w-md").Render(
-			r.Div("flex flex-col gap-1.5 w-full").ID("saved-apps-list"),
+			r.Div("flex flex-col gap-1.5 w-full").ID(savedAppsListID),
 			r.Div("flex gap-2 w-full mt-1").Render(
 				r.Button("flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
 					Text("+ Add New").
@@ -54,15 +72,15 @@ func renderEmptyState(sid string) *r.Node {
 			),
 		),
 	)
-	container.JS(renderSavedAppsJS(sid))
+	container.JS(renderSavedAppsJS(sid, savedAppsListID))
 	return container
 }
 
 // renderSavedAppsJS returns JS that reads localStorage and renders saved app buttons
-func renderSavedAppsJS(sid string) string {
+func renderSavedAppsJS(sid, listID string) string {
 	return fmt.Sprintf(`
 (function(){
-	var c=document.getElementById('saved-apps-list');
+	var c=document.getElementById('%s');
 	if(!c)return;
 	var dk=document.documentElement.classList.contains('dark');
 	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
@@ -137,7 +155,7 @@ func renderSavedAppsJS(sid string) string {
 		c.appendChild(btn);
 	});
 })();
-`, sid, sid)
+`, listID, sid, sid)
 }
 
 // renderAppStrip renders the horizontal strip of applications with navigation
@@ -151,21 +169,21 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0"))
 
 	strip := r.Div("flex-1 min-w-0 flex items-stretch h-full overflow-x-auto overflow-y-hidden gap-0.5 p-0.5").
-		ID(StripID).
+		ID(stripID(state.ActiveProject)).
 		Render(stripChildren...)
 
-	mainArea := r.Div("flex-1 flex items-stretch overflow-hidden relative").ID(MainAreaID).
+	mainArea := r.Div("flex-1 flex items-stretch overflow-hidden relative").ID(projectMainID(state.ActiveProject)).
 		Render(
 			renderSideLauncher(sid, "left"),
 			strip,
 			renderSideLauncher(sid, "right"),
 		)
-	mainArea.JS(centerSelectedJS(state.SelectedIndex, len(state.Apps)))
+	mainArea.JS(centerSelectedJS(state.SelectedIndex, len(state.Apps), state.ActiveProject))
 
 	return mainArea
 }
 
-func centerSelectedJS(selectedIndex int, totalApps int) string {
+func centerSelectedJS(selectedIndex int, totalApps int, projectName string) string {
 	return fmt.Sprintf(`
 		(function centerApp() {
 			requestAnimationFrame(function() {
@@ -179,7 +197,7 @@ func centerSelectedJS(selectedIndex int, totalApps int) string {
 				});
 			});
 		})();
-	`, StripID, totalApps, selectedIndex)
+	`, stripID(projectName), totalApps, selectedIndex)
 }
 
 func navigateJS(state *AppState, sid string) string {
@@ -224,7 +242,7 @@ func navigateJS(state *AppState, sid string) string {
 				}
 			}
 		})();
-	`, StripID, state.SelectedIndex, len(state.Apps), sid)
+	`, stripID(state.ActiveProject), state.SelectedIndex, len(state.Apps), sid)
 }
 
 // renderAppFrame renders a single application iframe with controls
@@ -371,24 +389,58 @@ func renderIframe(app Application, frameID, iframeSrc string) *r.Node {
 
 // insertAppJS returns JS that inserts a new app frame into the existing strip.
 // The node is compiled to JS and inserted after the left spacer (prepend) or before the right spacer (append).
-func insertAppJS(node *r.Node, prepend bool) string {
+func insertAppJS(node *r.Node, prepend bool, projectName string) string {
+	sid := stripID(projectName)
 	if prepend {
-		return node.ToJSAppend(StripID) + fmt.Sprintf(`
+		return node.ToJSAppend(sid) + fmt.Sprintf(`
 (function(){
 	var strip=document.getElementById('%s');
 	if(!strip||strip.children.length<3)return;
 	var newApp=strip.lastChild;
 	strip.insertBefore(newApp,strip.children[1]);
-})();`, StripID)
+})();`, sid)
 	}
-	return node.ToJSAppend(StripID) + fmt.Sprintf(`
+	return node.ToJSAppend(sid) + fmt.Sprintf(`
 (function(){
 	var strip=document.getElementById('%s');
 	if(!strip||strip.children.length<3)return;
 	var newApp=strip.lastChild;
 	var rightSpacer=strip.children[strip.children.length-2];
 	strip.insertBefore(newApp,rightSpacer);
-})();`, StripID)
+})();`, sid)
+}
+
+// hideAllProjectsJS returns JS that hides all project divs inside the wrapper.
+func hideAllProjectsJS() string {
+	return fmt.Sprintf(`
+(function(){
+	var w=document.getElementById('%s');
+	if(!w)return;
+	for(var i=0;i<w.children.length;i++)w.children[i].style.display='none';
+})();`, MainAreaID)
+}
+
+// showProjectJS returns JS that makes a project div visible.
+func showProjectJS(projectName string) string {
+	return fmt.Sprintf(`
+(function(){
+	var el=document.getElementById('%s');
+	if(el)el.style.display='flex';
+})();`, projectMainID(projectName))
+}
+
+// switchProjectJS returns JS that hides all project divs and shows the target.
+// If the target div doesn't exist yet, newContent is appended to the wrapper.
+func switchProjectJS(toProject string, newContent *r.Node) string {
+	hideJS := hideAllProjectsJS()
+
+	if newContent != nil {
+		// Hide all existing, then append new content (which is visible by default)
+		return hideJS + newContent.ToJSAppend(MainAreaID)
+	}
+
+	// Target already exists in DOM — hide all, show target
+	return hideJS + showProjectJS(toProject)
 }
 
 // removeAppJS returns JS that removes an app frame by its app ID from the strip.
