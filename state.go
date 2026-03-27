@@ -174,7 +174,7 @@ func (sm *StateManager) addTerminalApp(sessionID string, command string, port in
 	app := Application{
 		ID:       fmt.Sprintf("app-%d", sm.nextID),
 		Type:     AppTypeTerminal,
-		URL:      fmt.Sprintf("http://localhost:%d", port),
+		URL:      fmt.Sprintf("/ttyd/%d/", port),
 		Command:  command,
 		Width:    width,
 		Port:     port,
