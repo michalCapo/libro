@@ -15,8 +15,6 @@ const (
 	StripID         = "app-strip"
 	DialogID        = "add-dialog"
 	MainAreaID      = "main-area"
-	NavLeftID       = "nav-left"
-	NavRightID      = "nav-right"
 	ProjectBarID    = "project-bar"
 	ProjectDialogID = "project-dialog"
 	DirBrowserID    = "dir-browser"
@@ -144,45 +142,27 @@ func renderSavedAppsJS(sid string) string {
 
 // renderAppStrip renders the horizontal strip of applications with navigation
 func renderAppStrip(state *AppState, sid string) *r.Node {
-	hasLeft := state.SelectedIndex > 0
-	hasRight := state.SelectedIndex < len(state.Apps)-1
-
-	stripChildren := make([]*r.Node, 0)
-
-	stripChildren = append(stripChildren, renderSideLauncher(sid, "left"))
-
-	leftNavCls := "w-8 shrink-0 flex items-center justify-center bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700 text-gray-500 dark:text-zinc-400 hover:text-teal-600 dark:hover:text-teal-400 text-sm font-mono rounded-md cursor-pointer transition-colors duration-75"
-	if !hasLeft {
-		leftNavCls += " hidden"
-	}
-	stripChildren = append(stripChildren,
-		r.Button(leftNavCls).ID(NavLeftID).Text("<").
-			OnClick(&r.Action{Name: "app.navigate.left", Data: sidData(sid)}),
-	)
-
+	// Build strip children: left spacer + apps + right spacer
+	stripChildren := make([]*r.Node, 0, len(state.Apps)+2)
+	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0"))
 	for i, app := range state.Apps {
 		stripChildren = append(stripChildren, renderAppFrame(app, i, i == state.SelectedIndex, sid))
 	}
+	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0"))
 
-	rightNavCls := "w-8 shrink-0 flex items-center justify-center bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700 text-gray-500 dark:text-zinc-400 hover:text-teal-600 dark:hover:text-teal-400 text-sm font-mono rounded-md cursor-pointer transition-colors duration-75"
-	if !hasRight {
-		rightNavCls += " hidden"
-	}
-	stripChildren = append(stripChildren,
-		r.Button(rightNavCls).ID(NavRightID).Text(">").
-			OnClick(&r.Action{Name: "app.navigate.right", Data: sidData(sid)}),
-	)
-
-	stripChildren = append(stripChildren, renderSideLauncher(sid, "right"))
-
-	strip := r.Div("flex items-stretch h-full min-w-full transition-transform duration-75 ease-out").
+	strip := r.Div("flex-1 min-w-0 flex items-stretch h-full overflow-x-auto overflow-y-hidden gap-0.5 p-0.5").
 		ID(StripID).
 		Render(stripChildren...)
 
-	container := r.Div("flex-1 flex items-stretch overflow-hidden").Render(strip)
-	container.JS(centerSelectedJS(state.SelectedIndex, len(state.Apps)))
+	mainArea := r.Div("flex-1 flex items-stretch overflow-hidden relative").ID(MainAreaID).
+		Render(
+			renderSideLauncher(sid, "left"),
+			strip,
+			renderSideLauncher(sid, "right"),
+		)
+	mainArea.JS(centerSelectedJS(state.SelectedIndex, len(state.Apps)))
 
-	return r.Div("flex-1 flex items-stretch overflow-hidden relative").ID(MainAreaID).Render(container)
+	return mainArea
 }
 
 func centerSelectedJS(selectedIndex int, totalApps int) string {
@@ -191,24 +171,15 @@ func centerSelectedJS(selectedIndex int, totalApps int) string {
 			requestAnimationFrame(function() {
 				requestAnimationFrame(function() {
 					var strip = document.getElementById('%s');
-					if (!strip) return;
-					var selected = strip.children[%d];
-					if (!selected) return;
-					var container = strip.parentElement;
-					var containerWidth = container.offsetWidth;
-					var totalApps = %d;
-					if (totalApps === 1) {
-						var selectedLeft = selected.offsetLeft;
-						var selectedWidth = selected.offsetWidth;
-						var offset = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
-						strip.style.transform = 'translateX(' + (-offset) + 'px)';
-					} else {
-						strip.style.transform = 'translateX(0px)';
+					if (!strip || %d === 0) return;
+					var app = strip.children[%d + 1];
+					if (app) {
+						app.scrollIntoView({block: 'nearest', inline: 'center'});
 					}
 				});
 			});
 		})();
-	`, StripID, selectedIndex+2, totalApps)
+	`, StripID, totalApps, selectedIndex)
 }
 
 func navigateJS(state *AppState, sid string) string {
@@ -218,7 +189,7 @@ func navigateJS(state *AppState, sid string) string {
 			if (!strip) return;
 			var selectedIdx = %d;
 			var totalApps = %d;
-			var offset = 2;
+			var offset = 1;
 
 			for (var i = 0; i < totalApps; i++) {
 				var child = strip.children[i + offset];
@@ -227,13 +198,11 @@ func navigateJS(state *AppState, sid string) string {
 					child.className = child.className.replace(/border-gray-200/g, 'border-teal-500');
 					child.className = child.className.replace(/dark:border-zinc-700\/50/g, 'dark:border-teal-500/70');
 					child.className = child.className.replace(/border-transparent/g, 'border-teal-500');
-					// Remove click overlay from selected app
 					var overlay = child.querySelector('[data-click-overlay]');
 					if (overlay) overlay.remove();
 				} else {
 					child.className = child.className.replace(/border-teal-500(?!\/)/g, 'border-gray-200');
 					child.className = child.className.replace(/dark:border-teal-500\/70/g, 'dark:border-zinc-700/50');
-					// Add click overlay to unselected app if missing
 					if (!child.querySelector('[data-click-overlay]')) {
 						var ov = document.createElement('div');
 						ov.setAttribute('data-click-overlay', '');
@@ -247,38 +216,11 @@ func navigateJS(state *AppState, sid string) string {
 			}
 
 			var selected = strip.children[selectedIdx + offset];
-			if (!selected) return;
-			var container = strip.parentElement;
-			var containerWidth = container.offsetWidth;
-			if (totalApps === 1) {
-				var selectedLeft = selected.offsetLeft;
-				var selectedWidth = selected.offsetWidth;
-				var off = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
-				strip.style.transform = 'translateX(' + (-off) + 'px)';
-			} else {
-				var stripWidth = strip.scrollWidth;
-				if (stripWidth <= containerWidth) {
-					strip.style.transform = 'translateX(0px)';
-				} else {
-					var selectedLeft = selected.offsetLeft;
-					var selectedWidth = selected.offsetWidth;
-					var off = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
-					strip.style.transform = 'translateX(' + (-off) + 'px)';
-				}
-			}
-
-			var navLeft = document.getElementById('%s');
-			var navRight = document.getElementById('%s');
-			if (navLeft) {
-				if (selectedIdx > 0) { navLeft.classList.remove('hidden'); }
-				else { navLeft.classList.add('hidden'); }
-			}
-			if (navRight) {
-				if (selectedIdx < totalApps - 1) { navRight.classList.remove('hidden'); }
-				else { navRight.classList.add('hidden'); }
+			if (selected) {
+				selected.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
 			}
 		})();
-	`, StripID, state.SelectedIndex, len(state.Apps), sid, NavLeftID, NavRightID)
+	`, StripID, state.SelectedIndex, len(state.Apps), sid)
 }
 
 // renderAppFrame renders a single application iframe with controls
@@ -347,7 +289,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			})
 	}
 
-	return r.Div("group relative "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75 mx-0.5").
+	return r.Div("group relative "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
 		Attr("data-app-id", app.ID).
 		Render(
 			topButtons,
@@ -371,28 +313,25 @@ func renderIframe(app Application, frameID, iframeSrc string) *r.Node {
 }
 
 // insertAppJS returns JS that inserts a new app frame into the existing strip.
-// The node is compiled to JS and inserted before nav-right (append) or after nav-left (prepend).
+// The node is compiled to JS and inserted after the left spacer (prepend) or before the right spacer (append).
 func insertAppJS(node *r.Node, prepend bool) string {
 	if prepend {
 		return node.ToJSAppend(StripID) + fmt.Sprintf(`
 (function(){
 	var strip=document.getElementById('%s');
-	if(!strip)return;
-	var navLeft=document.getElementById('%s');
-	if(!navLeft)return;
-	var last=strip.lastChild;
-	strip.insertBefore(last,navLeft.nextSibling);
-})();`, StripID, NavLeftID)
+	if(!strip||strip.children.length<3)return;
+	var newApp=strip.lastChild;
+	strip.insertBefore(newApp,strip.children[1]);
+})();`, StripID)
 	}
 	return node.ToJSAppend(StripID) + fmt.Sprintf(`
 (function(){
 	var strip=document.getElementById('%s');
-	if(!strip)return;
-	var navRight=document.getElementById('%s');
-	if(!navRight)return;
-	var last=strip.lastChild;
-	strip.insertBefore(last,navRight);
-})();`, StripID, NavRightID)
+	if(!strip||strip.children.length<3)return;
+	var newApp=strip.lastChild;
+	var rightSpacer=strip.children[strip.children.length-2];
+	strip.insertBefore(newApp,rightSpacer);
+})();`, StripID)
 }
 
 // removeAppJS returns JS that removes an app frame by its app ID from the strip.
@@ -450,7 +389,7 @@ func renderSideLauncher(sid, side string) *r.Node {
 		tip.textContent=lb+' ('+app.width+')';
 		btn.appendChild(tip);
 		btn.onclick=function(){
-			__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false,name:app.name||''});
+			__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false,name:app.name||'',side:'%s'});
 		};
 		dock.appendChild(btn);
 	});
@@ -479,7 +418,7 @@ func renderSideLauncher(sid, side string) *r.Node {
 	addBtn.onclick=function(){__ws.call('app.dialog.open',{sid:'%s',side:'%s'});};
 	dock.appendChild(addBtn);
 })();
-`, dockID, sid, sid, sid, side))
+`, dockID, sid, side, sid, sid, side))
 	return container
 }
 
@@ -603,7 +542,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 }
 
 // resizeJS returns JS that updates an app frame's width without replacing the DOM
-func resizeJS(state *AppState, width Width, appID string) string {
+func resizeJS(_ *AppState, width Width, appID string) string {
 	// Build a map of width value -> container classes
 	widthMap := ""
 	for _, w := range AllWidths() {
@@ -615,8 +554,6 @@ func resizeJS(state *AppState, width Width, appID string) string {
 
 	return fmt.Sprintf(`
 (function(){
-	var strip = document.getElementById('%s');
-	if (!strip) return;
 	var el = document.querySelector('[data-app-id="%s"]');
 	if (!el) return;
 
@@ -638,8 +575,6 @@ func resizeJS(state *AppState, width Width, appID string) string {
 	el.className = keep.join(' ');
 
 	// Update size badges: highlight active, dim others
-	var badges = el.querySelectorAll('[data-click-overlay] ~ div button, .group > div:first-child button, div.absolute button');
-	// Find the top buttons bar
 	var topBar = el.querySelector('.absolute.top-1\\.5.right-1\\.5');
 	if (topBar) {
 		var btns = topBar.querySelectorAll('button');
@@ -656,30 +591,11 @@ func resizeJS(state *AppState, width Width, appID string) string {
 		});
 	}
 
-	// Re-center strip
-	var container = strip.parentElement;
-	var containerWidth = container.offsetWidth;
-	var totalApps = %d;
 	requestAnimationFrame(function(){
-		if (totalApps === 1) {
-			var selectedLeft = el.offsetLeft;
-			var selectedWidth = el.offsetWidth;
-			var off = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
-			strip.style.transform = 'translateX(' + (-off) + 'px)';
-		} else {
-			var stripWidth = strip.scrollWidth;
-			if (stripWidth <= containerWidth) {
-				strip.style.transform = 'translateX(0px)';
-			} else {
-				var selectedLeft = el.offsetLeft;
-				var selectedWidth = el.offsetWidth;
-				var off = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
-				strip.style.transform = 'translateX(' + (-off) + 'px)';
-			}
-		}
+		el.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
 	});
 })();
-`, StripID, appID, widthMap, string(width), len(state.Apps))
+`, appID, widthMap, string(width))
 }
 
 // renderProjectBar renders the horizontal project switcher bar

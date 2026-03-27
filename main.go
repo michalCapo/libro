@@ -232,6 +232,8 @@ func main() {
 			width = Width(val)
 		}
 		name, _ := data["name"].(string)
+		side, _ := data["side"].(string)
+		prepend := side == "left"
 
 		if appType == "terminal" {
 			command, _ := data["command"].(string)
@@ -255,21 +257,25 @@ func main() {
 				return r.Notify("error", "Failed to start ttyd: "+err.Error())
 			}
 
-			sm.PrependTerminalApp(sid, command, port, writable, width, name)
+			if prepend {
+				sm.PrependTerminalApp(sid, command, port, writable, width, name)
+			} else {
+				sm.AddTerminalApp(sid, command, port, writable, width, name)
+			}
 			state := sm.Get(sid)
-			firstApp := &state.Apps[0]
+			newApp := &state.Apps[state.SelectedIndex]
 			tm.mu.Lock()
 			if cmd, ok := tm.processes["pending"]; ok {
 				delete(tm.processes, "pending")
-				tm.processes[firstApp.ID] = cmd
+				tm.processes[newApp.ID] = cmd
 			}
 			tm.mu.Unlock()
 
 			time.Sleep(500 * time.Millisecond)
 
 			if hadApps > 0 {
-				frame := renderAppFrame(*firstApp, 0, true, sid)
-				return insertAppJS(frame, true) + navigateJS(state, sid)
+				frame := renderAppFrame(*newApp, state.SelectedIndex, true, sid)
+				return insertAppJS(frame, prepend) + navigateJS(state, sid)
 			}
 
 			return renderMainArea(state, sid).ToJSReplace(MainAreaID)
@@ -289,13 +295,17 @@ func main() {
 		stateBefore := sm.Get(sid)
 		hadApps := len(stateBefore.Apps)
 
-		sm.PrependApp(sid, url, width, name)
+		if prepend {
+			sm.PrependApp(sid, url, width, name)
+		} else {
+			sm.AddApp(sid, url, width, name)
+		}
 		state := sm.Get(sid)
 
 		if hadApps > 0 {
-			firstApp := state.Apps[0]
-			frame := renderAppFrame(firstApp, 0, true, sid)
-			return insertAppJS(frame, true) + navigateJS(state, sid)
+			newApp := state.Apps[state.SelectedIndex]
+			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
+			return insertAppJS(frame, prepend) + navigateJS(state, sid)
 		}
 
 		return renderMainArea(state, sid).ToJSReplace(MainAreaID)
