@@ -1,0 +1,6 @@
+github.com/michalCapo/g-sui v1.1.18 h1:T5pZnB0Q8RJzVvqNQaAin1lpnxYD0X3PXNRs2W7t9vY=
+github.com/michalCapo/g-sui v1.1.18/go.mod h1:XW9IRugw75bP9jXtaxD+TxkwdzcCtqSlFhLghE04okc=
+github.com/yuin/goldmark v1.7.13 h1:GPddIs617DnBLFFVJFgpo1aBfe/4xcvMc3SB5t/D0pA=
+github.com/yuin/goldmark v1.7.13/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
+golang.org/x/net v0.48.0 h1:zyQRTTrjc33Lhh0fBgT/H3oZq9WuvRR5gPC70xpDiQU=
+golang.org/x/net v0.48.0/go.mod h1:+ndRgGjkh8FGtu1w1FGbEC31if4VrNVMuKTgcAAnQRY=
