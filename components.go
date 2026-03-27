@@ -58,7 +58,7 @@ func renderSavedAppsJS(sid string) string {
 	if(!c)return;
 	var dk=document.documentElement.classList.contains('dark');
 	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
-	function termIconHtml(cmd){var ini=(cmd||'T').substring(0,2).toUpperCase();return '<span class="w-5 h-5 shrink-0 rounded-sm border border-teal-500 flex items-center justify-center text-[9px] font-bold text-teal-600 bg-teal-50 dark:bg-teal-950 dark:text-teal-400 leading-none">'+ini+'</span>';}
+	function termIconHtml(cmd){var ini=(cmd||'T').substring(0,2).toUpperCase();return '<span class="w-5 h-5 shrink-0 rounded-md bg-gradient-to-br from-teal-400 to-emerald-600 dark:from-teal-500 dark:to-emerald-700" style="display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;line-height:20px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(20,184,166,.35),inset 0 1px 0 rgba(255,255,255,.15)">'+ini+'</span>';}
 	c.innerHTML='';
 	apps.forEach(function(app,i){
 		var btn=document.createElement('button');
@@ -184,6 +184,11 @@ func centerSelectedJS(selectedIndex int) string {
 					if (!selected) return;
 					var container = strip.parentElement;
 					var containerWidth = container.offsetWidth;
+					var stripWidth = strip.scrollWidth;
+					if (stripWidth <= containerWidth) {
+						strip.style.transform = 'translateX(0)';
+						return;
+					}
 					var selectedLeft = selected.offsetLeft;
 					var selectedWidth = selected.offsetWidth;
 					var offset = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
@@ -233,10 +238,15 @@ func navigateJS(state *AppState, sid string) string {
 			if (!selected) return;
 			var container = strip.parentElement;
 			var containerWidth = container.offsetWidth;
-			var selectedLeft = selected.offsetLeft;
-			var selectedWidth = selected.offsetWidth;
-			var off = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
-			strip.style.transform = 'translateX(' + (-off) + 'px)';
+			var stripWidth = strip.scrollWidth;
+			if (stripWidth <= containerWidth) {
+				strip.style.transform = 'translateX(0)';
+			} else {
+				var selectedLeft = selected.offsetLeft;
+				var selectedWidth = selected.offsetWidth;
+				var off = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
+				strip.style.transform = 'translateX(' + (-off) + 'px)';
+			}
 
 			var navLeft = document.getElementById('%s');
 			var navRight = document.getElementById('%s');
@@ -297,7 +307,9 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			initials = initials[:2]
 		}
 		labelNode = r.Div("absolute top-1.5 left-1.5 flex items-center gap-1.5 px-2 py-0.5 bg-white/90 dark:bg-zinc-900/80 border border-gray-200 dark:border-transparent text-[10px] font-mono tracking-wider uppercase rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-75 z-30 backdrop-blur-sm").Render(
-			r.Span("w-4 h-4 rounded-sm border border-teal-500 flex items-center justify-center text-[8px] font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950 leading-none shrink-0").Text(initials),
+			r.Span("w-4 h-4 shrink-0 rounded-md bg-gradient-to-br from-teal-400 to-emerald-600 dark:from-teal-500 dark:to-emerald-700").
+				Attr("style", "display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;line-height:16px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(20,184,166,.35),inset 0 1px 0 rgba(255,255,255,.15)").
+				Text(initials),
 			r.Span("text-gray-600 dark:text-zinc-300").Text(app.Command),
 		)
 	}
@@ -367,7 +379,7 @@ func renderSideLauncher(sid string) *r.Node {
 		var lb='';
 		if(app.type==='terminal'){
 			var ini=(app.command||'T').substring(0,2).toUpperCase();
-			btn.innerHTML='<span class="w-5 h-5 rounded-sm border border-teal-500 flex items-center justify-center text-[9px] font-bold text-teal-600 bg-teal-50 dark:bg-teal-950 dark:text-teal-400 leading-none">'+ini+'</span>';
+			btn.innerHTML='<span class="w-5 h-5 shrink-0 rounded-md bg-gradient-to-br from-teal-400 to-emerald-600 dark:from-teal-500 dark:to-emerald-700" style="display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;line-height:20px;letter-spacing:.04em;box-shadow:0 1px 3px rgba(20,184,166,.35),inset 0 1px 0 rgba(255,255,255,.15)">'+ini+'</span>';
 			lb=app.command;
 		}else{
 			try{

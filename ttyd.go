@@ -28,6 +28,7 @@ func (tm *TtydManager) Start(appID string, port int, command string, writable bo
 
 	args := []string{
 		"-p", strconv.Itoa(port),
+		"-t", "fontSize=18",
 	}
 	if writable {
 		args = append(args, "--writable")
