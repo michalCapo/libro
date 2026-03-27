@@ -113,7 +113,7 @@ const offlinePageHTML = `<!DOCTYPE html>
 <style>
   *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
   :root{
-    --bg:#f3f4f6;--text:#6b7280;--heading:#9ca3af;
+    --bg:#ffffff;--text:#6b7280;--heading:#9ca3af;
     --accent:#0d9488;--accent-light:rgba(13,148,136,.08);--accent-border:rgba(13,148,136,.18);
     --ring:rgba(13,148,136,.15);--dot:#0d9488;
     --icon-bg:linear-gradient(135deg,rgba(13,148,136,.1),rgba(16,185,129,.05));

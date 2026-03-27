@@ -10,11 +10,13 @@ import (
 )
 
 const (
-	StripID    = "app-strip"
-	DialogID   = "add-dialog"
-	MainAreaID = "main-area"
-	NavLeftID  = "nav-left"
-	NavRightID = "nav-right"
+	StripID         = "app-strip"
+	DialogID        = "add-dialog"
+	MainAreaID      = "main-area"
+	NavLeftID       = "nav-left"
+	NavRightID      = "nav-right"
+	ProjectBarID    = "project-bar"
+	ProjectDialogID = "project-dialog"
 )
 
 // sidData creates a data map with the session ID included
@@ -540,6 +542,204 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 					),
 				),
 		)
+}
+
+// resizeJS returns JS that updates an app frame's width without replacing the DOM
+func resizeJS(_ *AppState, index int, width Width, _ string) string {
+	// Build a map of width value -> container classes
+	widthMap := ""
+	for _, w := range AllWidths() {
+		if widthMap != "" {
+			widthMap += ","
+		}
+		widthMap += fmt.Sprintf("'%s':'%s'", string(w), w.ContainerClasses())
+	}
+
+	return fmt.Sprintf(`
+(function(){
+	var strip = document.getElementById('%s');
+	if (!strip) return;
+	var offset = 2;
+	var el = strip.children[%d + offset];
+	if (!el) return;
+
+	var widths = {%s};
+	var newWidth = '%s';
+	var newCls = widths[newWidth];
+
+	// Remove old width classes and apply new ones
+	var keep = [];
+	var cls = el.className.split(/\s+/);
+	var allWidthCls = {};
+	for (var k in widths) {
+		widths[k].split(/\s+/).forEach(function(c){ allWidthCls[c] = true; });
+	}
+	cls.forEach(function(c){
+		if (!allWidthCls[c]) keep.push(c);
+	});
+	newCls.split(/\s+/).forEach(function(c){ keep.push(c); });
+	el.className = keep.join(' ');
+
+	// Update size badges: highlight active, dim others
+	var badges = el.querySelectorAll('[data-click-overlay] ~ div button, .group > div:first-child button, div.absolute button');
+	// Find the top buttons bar
+	var topBar = el.querySelector('.absolute.top-1\\.5.right-1\\.5');
+	if (topBar) {
+		var btns = topBar.querySelectorAll('button');
+		var sizeLabels = ['MD','LG','XL','2XL','FULL'];
+		var activeBase = 'px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase rounded-sm cursor-pointer transition-colors duration-75';
+		btns.forEach(function(b){
+			var txt = b.textContent.trim();
+			if (sizeLabels.indexOf(txt) === -1) return;
+			if (txt === newWidth.toUpperCase()) {
+				b.className = activeBase + ' bg-teal-600 text-white';
+			} else {
+				b.className = activeBase + ' text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700';
+			}
+		});
+	}
+
+	// Re-center strip
+	var container = strip.parentElement;
+	var containerWidth = container.offsetWidth;
+	requestAnimationFrame(function(){
+		var stripWidth = strip.scrollWidth;
+		if (stripWidth <= containerWidth) {
+			var centerOffset = (containerWidth - stripWidth) / 2;
+			strip.style.transform = 'translateX(' + centerOffset + 'px)';
+		} else {
+			var selectedLeft = el.offsetLeft;
+			var selectedWidth = el.offsetWidth;
+			var off = selectedLeft - (containerWidth / 2) + (selectedWidth / 2);
+			strip.style.transform = 'translateX(' + (-off) + 'px)';
+		}
+	});
+})();
+`, StripID, index, widthMap, string(width))
+}
+
+// renderProjectBar renders the horizontal project switcher bar
+func renderProjectBar(state *AppState, sid string) *r.Node {
+	buttons := make([]*r.Node, 0, len(state.Projects)+1)
+
+	for _, proj := range state.Projects {
+		cls := "px-3 py-1.5 text-xs font-mono rounded-md cursor-pointer transition-colors duration-75 "
+		if proj.Name == state.ActiveProject {
+			cls += "bg-teal-600 text-white"
+		} else {
+			cls += "bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-300 dark:hover:bg-zinc-700"
+		}
+		buttons = append(buttons,
+			r.Button(cls).
+				Text(proj.Name).
+				Attr("title", proj.Path).
+				OnClick(&r.Action{
+					Name: "project.switch",
+					Data: sidData(sid, "name", proj.Name),
+				}),
+		)
+	}
+
+	// Add project button
+	buttons = append(buttons,
+		r.Button("px-2 py-1.5 text-xs font-mono rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-gray-200 dark:hover:bg-zinc-800 transition-colors duration-75").
+			Text("+").
+			OnClick(&r.Action{
+				Name: "project.dialog.open",
+				Data: sidData(sid),
+			}),
+	)
+
+	// Show active project path
+	activePath := ""
+	for _, p := range state.Projects {
+		if p.Name == state.ActiveProject {
+			activePath = p.Path
+			break
+		}
+	}
+
+	return r.Div("flex items-center gap-1.5 px-3 py-2 border-b border-gray-200 dark:border-zinc-800 shrink-0").
+		ID(ProjectBarID).
+		Render(
+			r.Div("flex items-center gap-1.5").Render(buttons...),
+			r.Span("ml-3 text-[11px] font-mono text-gray-400 dark:text-zinc-600 truncate").Text(activePath),
+		)
+}
+
+// renderProjectDialog renders the create project modal
+func renderProjectDialog(visible bool, sid string) *r.Node {
+	hiddenClass := " hidden"
+	if visible {
+		hiddenClass = ""
+	}
+
+	inputCls := "w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-1 focus:ring-teal-500 focus:border-teal-500 outline-none transition-colors"
+
+	return r.Div("fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75"+hiddenClass).
+		ID(ProjectDialogID).
+		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden')", ProjectDialogID))).
+		Render(
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl p-5 w-full max-w-md mx-4").
+				OnClick(r.JS("event.stopPropagation()")).
+				Render(
+					r.H2("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100 mb-4 tracking-tight").Text("New Project"),
+
+					r.Div("mb-4").Render(
+						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Name"),
+						r.IText(inputCls).
+							ID("project-name").
+							Attr("placeholder", "my-project").
+							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-create-project').click();}"),
+					),
+
+					r.Div("mb-5").Render(
+						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Folder Path"),
+						r.IText(inputCls+" font-mono").
+							ID("project-path").
+							Attr("placeholder", "/home/user/projects/my-project").
+							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-create-project').click();}"),
+					),
+
+					r.Div("flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-zinc-800").Render(
+						r.Button("px-4 py-2 text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 font-mono text-sm rounded-md hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer").
+							Text("Cancel").
+							OnClick(&r.Action{Name: "project.dialog.close", Data: sidData(sid)}),
+						r.Button("px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md transition-colors cursor-pointer").
+							ID("btn-create-project").
+							Text("Create").
+							OnClick(&r.Action{
+								Name:    "project.create",
+								Data:    sidData(sid),
+								Collect: []string{"project-name", "project-path"},
+							}),
+					),
+				),
+		)
+}
+
+// saveProjectToLocalStorageJS saves a project definition to localStorage
+func saveProjectToLocalStorageJS(name, path string) string {
+	return fmt.Sprintf(`
+(function(){
+	var projects=JSON.parse(localStorage.getItem('libro-projects')||'[]');
+	var exists=projects.some(function(p){return p.name==='%s';});
+	if(!exists){projects.push({name:'%s',path:'%s'});}
+	localStorage.setItem('libro-projects',JSON.stringify(projects));
+})();
+`, name, name, path)
+}
+
+// loadProjectsJS returns JS that reads saved projects from localStorage and initializes them
+func loadProjectsJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	var projects=JSON.parse(localStorage.getItem('libro-projects')||'[]');
+	if(projects.length>0){
+		__ws.call('project.init',{sid:'%s',projects:projects});
+	}
+})();
+`, sid)
 }
 
 func keyboardShortcutsJS(sid string) string {

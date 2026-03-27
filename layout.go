@@ -11,9 +11,12 @@ func renderPage(state *AppState, sid string) *r.Node {
 		r.Div("absolute top-3 right-3 z-40").Render(
 			r.ThemeSwitcher(),
 		),
+		renderProjectBar(state, sid),
 		renderMainArea(state, sid),
 		renderAddDialog(state.DialogOpen, sid),
+		renderProjectDialog(state.ProjectDialogOpen, sid),
 	)
 	page.JS(keyboardShortcutsJS(sid))
+	page.JS(loadProjectsJS(sid))
 	return page
 }

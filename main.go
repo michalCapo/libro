@@ -90,8 +90,9 @@ func main() {
 				writable = val
 			}
 
+			pwd := sm.GetActiveProjectPath(sid)
 			port := sm.NextPort()
-			if err := tm.Start("pending", port, command, writable); err != nil {
+			if err := tm.Start("pending", port, command, writable, pwd); err != nil {
 				return r.Notify("error", "Failed to start ttyd: "+err.Error())
 			}
 
@@ -164,8 +165,9 @@ func main() {
 				writable = val
 			}
 
+			pwd := sm.GetActiveProjectPath(sid)
 			port := sm.NextPort()
-			if err := tm.Start("pending", port, command, writable); err != nil {
+			if err := tm.Start("pending", port, command, writable, pwd); err != nil {
 				return r.Notify("error", "Failed to start ttyd: "+err.Error())
 			}
 
@@ -233,7 +235,7 @@ func main() {
 		return navigateJS(state, sid)
 	})
 
-	// Resize app to specific width
+	// Resize app to specific width — JS-only update to preserve iframes
 	app.Action("app.resize", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
@@ -247,7 +249,7 @@ func main() {
 		}
 		sm.SetAppWidth(sid, index, width)
 		state := sm.Get(sid)
-		return renderMainArea(state, sid).ToJSReplace(MainAreaID)
+		return resizeJS(state, index, width, sid)
 	})
 
 	// Select specific app - JS-only update to preserve iframes
@@ -260,6 +262,93 @@ func main() {
 		sm.SelectApp(sid, int(data.Index))
 		state := sm.Get(sid)
 		return navigateJS(state, sid)
+	})
+
+	// Open project dialog
+	app.Action("project.dialog.open", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		sm.OpenProjectDialog(sid)
+		return r.Show(ProjectDialogID)
+	})
+
+	// Close project dialog
+	app.Action("project.dialog.close", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		sm.CloseProjectDialog(sid)
+		return r.Hide(ProjectDialogID)
+	})
+
+	// Create a new project
+	app.Action("project.create", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+
+		name, _ := data["project-name"].(string)
+		name = strings.TrimSpace(name)
+		path, _ := data["project-path"].(string)
+		path = strings.TrimSpace(path)
+
+		if name == "" {
+			return r.Notify("error", "Project name is required")
+		}
+		if path == "" {
+			return r.Notify("error", "Folder path is required")
+		}
+
+		if !sm.AddProject(sid, name, path) {
+			return r.Notify("error", "Project '"+name+"' already exists")
+		}
+
+		sm.CloseProjectDialog(sid)
+		sm.SwitchProject(sid, name)
+		state := sm.Get(sid)
+
+		return r.NewResponse().
+			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Replace(MainAreaID, renderMainArea(state, sid)).
+			Replace(ProjectDialogID, renderProjectDialog(false, sid)).
+			Add(saveProjectToLocalStorageJS(name, path)).
+			Build()
+	})
+
+	// Switch active project
+	app.Action("project.switch", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		name, _ := data["name"].(string)
+
+		if !sm.SwitchProject(sid, name) {
+			return r.Notify("error", "Project not found")
+		}
+
+		state := sm.Get(sid)
+		return r.NewResponse().
+			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Replace(MainAreaID, renderMainArea(state, sid)).
+			Build()
+	})
+
+	// Initialize projects from localStorage on page load
+	app.Action("project.init", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		projects, ok := data["projects"].([]interface{})
+		if !ok || len(projects) == 0 {
+			return ""
+		}
+		for _, p := range projects {
+			pm, ok := p.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			name, _ := pm["name"].(string)
+			path, _ := pm["path"].(string)
+			if name != "" && path != "" && name != "home" {
+				sm.AddProject(sid, name, path)
+			}
+		}
+		state := sm.Get(sid)
+		return renderProjectBar(state, sid).ToJSReplace(ProjectBarID)
 	})
 
 	registerProxy(app)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"sync"
 )
 
@@ -25,11 +26,29 @@ type Application struct {
 	Name     string // optional display name
 }
 
+// Project represents a named working directory
+type Project struct {
+	Name string
+	Path string
+}
+
+// projectSnapshot stores a project's apps while it is not active
+type projectSnapshot struct {
+	Apps          []Application
+	SelectedIndex int
+}
+
 // AppState holds the per-session state
 type AppState struct {
 	Apps          []Application
 	SelectedIndex int
 	DialogOpen    bool
+
+	// Project state
+	Projects          []Project
+	ActiveProject     string
+	ProjectDialogOpen bool
+	snapshots         map[string]*projectSnapshot
 }
 
 // StateManager manages per-session app states
@@ -48,13 +67,27 @@ func NewStateManager() *StateManager {
 	}
 }
 
+func defaultHomeDir() string {
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		home = "/"
+	}
+	return home
+}
+
 // NewSession creates a new session and returns its ID
 func (sm *StateManager) NewSession() string {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.nextID++
 	sid := fmt.Sprintf("session-%d", sm.nextID)
-	sm.states[sid] = &AppState{}
+	sm.states[sid] = &AppState{
+		Projects: []Project{
+			{Name: "home", Path: defaultHomeDir()},
+		},
+		ActiveProject: "home",
+		snapshots:     make(map[string]*projectSnapshot),
+	}
 	return sid
 }
 
@@ -65,7 +98,13 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 	if s, ok := sm.states[sessionID]; ok {
 		return s
 	}
-	s := &AppState{}
+	s := &AppState{
+		Projects: []Project{
+			{Name: "home", Path: defaultHomeDir()},
+		},
+		ActiveProject: "home",
+		snapshots:     make(map[string]*projectSnapshot),
+	}
 	sm.states[sessionID] = s
 	return s
 }
@@ -84,7 +123,11 @@ func (sm *StateManager) addApp(sessionID, url string, width Width, name string, 
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
 	if s == nil {
-		s = &AppState{}
+		s = &AppState{
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
+		}
 		sm.states[sessionID] = s
 	}
 	sm.nextID++
@@ -120,7 +163,11 @@ func (sm *StateManager) addTerminalApp(sessionID string, command string, port in
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
 	if s == nil {
-		s = &AppState{}
+		s = &AppState{
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
+		}
 		sm.states[sessionID] = s
 	}
 	sm.nextID++
@@ -232,5 +279,103 @@ func (sm *StateManager) CloseDialog(sessionID string) {
 	s := sm.states[sessionID]
 	if s != nil {
 		s.DialogOpen = false
+	}
+}
+
+// AddProject adds a new project to the session. Returns false if name already exists.
+func (sm *StateManager) AddProject(sessionID, name, path string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return false
+	}
+	for _, p := range s.Projects {
+		if p.Name == name {
+			return false
+		}
+	}
+	s.Projects = append(s.Projects, Project{Name: name, Path: path})
+	return true
+}
+
+// SwitchProject switches the active project, saving and restoring app state
+func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return false
+	}
+
+	// Verify project exists
+	found := false
+	for _, p := range s.Projects {
+		if p.Name == projectName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return false
+	}
+
+	if s.ActiveProject == projectName {
+		return true
+	}
+
+	// Save current project's apps
+	s.snapshots[s.ActiveProject] = &projectSnapshot{
+		Apps:          s.Apps,
+		SelectedIndex: s.SelectedIndex,
+	}
+
+	// Load target project's apps
+	if snap, ok := s.snapshots[projectName]; ok {
+		s.Apps = snap.Apps
+		s.SelectedIndex = snap.SelectedIndex
+		delete(s.snapshots, projectName)
+	} else {
+		s.Apps = nil
+		s.SelectedIndex = 0
+	}
+
+	s.ActiveProject = projectName
+	return true
+}
+
+// GetActiveProjectPath returns the folder path for the active project
+func (sm *StateManager) GetActiveProjectPath(sessionID string) string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return defaultHomeDir()
+	}
+	for _, p := range s.Projects {
+		if p.Name == s.ActiveProject {
+			return p.Path
+		}
+	}
+	return defaultHomeDir()
+}
+
+// OpenProjectDialog sets the project dialog open flag
+func (sm *StateManager) OpenProjectDialog(sessionID string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s != nil {
+		s.ProjectDialogOpen = true
+	}
+}
+
+// CloseProjectDialog clears the project dialog open flag
+func (sm *StateManager) CloseProjectDialog(sessionID string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s != nil {
+		s.ProjectDialogOpen = false
 	}
 }

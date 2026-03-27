@@ -21,8 +21,9 @@ func NewTtydManager() *TtydManager {
 	}
 }
 
-// Start launches a ttyd process for the given app
-func (tm *TtydManager) Start(appID string, port int, command string, writable bool) error {
+// Start launches a ttyd process for the given app.
+// If pwd is non-empty, the command is prefixed with cd to that directory.
+func (tm *TtydManager) Start(appID string, port int, command string, writable bool, pwd string) error {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
@@ -35,7 +36,11 @@ func (tm *TtydManager) Start(appID string, port int, command string, writable bo
 	}
 	// Wrap in bash --norc --noprofile to avoid user profile scripts
 	// (e.g. .bashrc launching editors). Also supports complex commands with pipes.
-	args = append(args, "bash", "--norc", "--noprofile", "-c", command)
+	shellCmd := command
+	if pwd != "" {
+		shellCmd = fmt.Sprintf("cd '%s' && %s", pwd, command)
+	}
+	args = append(args, "bash", "--norc", "--noprofile", "-c", shellCmd)
 
 	cmd := exec.Command("ttyd", args...)
 	if err := cmd.Start(); err != nil {

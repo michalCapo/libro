@@ -20,13 +20,13 @@ func AllWidths() []Width {
 func (w Width) Label() string {
 	switch w {
 	case WidthMD:
-		return "MD (640px)"
+		return "MD (max 640px)"
 	case WidthLG:
-		return "LG (960px)"
+		return "LG (max 960px)"
 	case WidthXL:
-		return "XL (1280px)"
+		return "XL (max 1280px)"
 	case Width2XL:
-		return "2XL (1920px)"
+		return "2XL (max 1920px)"
 	case WidthFull:
 		return "FULL (100%)"
 	default:
@@ -76,5 +76,5 @@ func (w Width) ContainerClasses() string {
 	if w == WidthFull {
 		return "flex-1 min-w-0"
 	}
-	return "w-[" + w.PixelWidth() + "] shrink-0"
+	return "max-w-[" + w.PixelWidth() + "] w-full shrink-0"
 }
