@@ -298,7 +298,7 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 		ID(stripID(state.ActiveProject)).
 		Render(stripChildren...)
 
-	mainArea := r.Div("flex-1 flex items-stretch overflow-hidden relative").ID(projectMainID(state.ActiveProject)).
+	mainArea := r.Div("flex-1 flex items-stretch overflow-hidden relative p-2").ID(projectMainID(state.ActiveProject)).
 		Render(
 			renderSideLauncher(sid, "left"),
 			strip,
@@ -631,9 +631,10 @@ func renderSideLauncher(sid, side string) *r.Node {
 	var btnCls=dk
 		?'w-12 h-12 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-zinc-700 relative group/ico'
 		:'w-12 h-12 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-gray-200 relative group/ico';
+	var tipPos='%s'==='right'?'right-full mr-2':'left-full ml-2';
 	var tipCls=dk
-		?'absolute left-full ml-2 px-2 py-1 text-xs rounded bg-zinc-800 text-zinc-200 border border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg'
-		:'absolute left-full ml-2 px-2 py-1 text-xs rounded bg-white text-gray-800 border border-gray-200 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg';
+		?'absolute '+tipPos+' px-2 py-1 text-xs rounded bg-zinc-800 text-zinc-200 border border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg'
+		:'absolute '+tipPos+' px-2 py-1 text-xs rounded bg-white text-gray-800 border border-gray-200 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg';
 
 	apps.forEach(function(app){
 		var btn=document.createElement('button');
@@ -684,7 +685,7 @@ func renderSideLauncher(sid, side string) *r.Node {
 	addBtn.onclick=function(){__ws.call('app.dialog.open',{sid:'%s',side:'%s'});};
 	dock.appendChild(addBtn);
 })();
-`, dockID, sid, side, sid, side, sid, side))
+`, dockID, side, sid, side, sid, side, sid, side))
 	return container
 }
 
