@@ -218,6 +218,9 @@ func navigateJS(state *AppState, sid string) string {
 			var selected = strip.children[selectedIdx + offset];
 			if (selected) {
 				selected.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
+				if (window.__libroFocusApp) {
+					setTimeout(function() { window.__libroFocusApp(selectedIdx); }, 100);
+				}
 			}
 		})();
 	`, StripID, state.SelectedIndex, len(state.Apps), sid)
@@ -833,6 +836,33 @@ func keyboardShortcutsJS(sid string) string {
 			if (window.__libroKbRegistered) return;
 			window.__libroKbRegistered = true;
 
+			window.__libroFocusApp = function(idx) {
+				var strip = document.getElementById('app-strip');
+				if (!strip) return;
+				var container = strip.children[idx + 1];
+				if (!container) return;
+				var iframe = container.querySelector('iframe');
+				if (!iframe) return;
+				// Blur all other iframes first
+				var allIframes = document.querySelectorAll('iframe');
+				for (var i = 0; i < allIframes.length; i++) {
+					if (allIframes[i] !== iframe) {
+						try { allIframes[i].contentWindow.blur(); } catch(err) {}
+						allIframes[i].blur();
+					}
+				}
+				// Focus target iframe and click into it so xterm.js picks up focus
+				iframe.focus();
+				try {
+					iframe.contentWindow.focus();
+					var doc = iframe.contentDocument || iframe.contentWindow.document;
+					var termEl = doc.querySelector('.xterm-helper-textarea') || doc.querySelector('textarea') || doc.body;
+					if (termEl) {
+						termEl.focus();
+					}
+				} catch(err) {}
+			};
+
 			function libroKeyHandler(e) {
 				if (e.metaKey && (e.key === 'h' || e.key === 'H')) {
 					e.preventDefault();
@@ -847,7 +877,9 @@ func keyboardShortcutsJS(sid string) string {
 				if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					__ws.call('app.select', {"sid": "%s", "index": parseInt(e.key) - 1});
+					var idx = parseInt(e.key) - 1;
+					__ws.call('app.select', {"sid": "%s", "index": idx});
+					window.__libroFocusApp(idx);
 				}
 			}
 
