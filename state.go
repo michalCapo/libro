@@ -43,6 +43,7 @@ type AppState struct {
 	Apps          []Application
 	SelectedIndex int
 	DialogOpen    bool
+	DialogSide    string // "left" or "right" — which side the dialog was opened from
 
 	// Project state
 	Projects          []Project
@@ -304,13 +305,14 @@ func (sm *StateManager) SetAppWidth(sessionID string, index int, width Width) {
 	s.Apps[index].Width = width
 }
 
-// OpenDialog sets the dialog open flag
-func (sm *StateManager) OpenDialog(sessionID string) {
+// OpenDialog sets the dialog open flag and records which side it was opened from
+func (sm *StateManager) OpenDialog(sessionID, side string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
 	if s != nil {
 		s.DialogOpen = true
+		s.DialogSide = side
 	}
 }
 
