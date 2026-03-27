@@ -264,6 +264,18 @@ func main() {
 		return navigateJS(state, sid)
 	})
 
+	// Browse directories for project picker
+	app.Action("project.browse", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		path, _ := data["path"].(string)
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return ""
+		}
+		return renderDirBrowser(path, sid).ToJSReplace(DirBrowserID)
+	})
+
 	// Open project dialog
 	app.Action("project.dialog.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)

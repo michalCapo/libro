@@ -12,7 +12,7 @@ add keyboard shortcut down switch left/right the applications wint window/meta+h
 add project support. project is related to folder. Default project name is home which meanst it will start in home folder. User can create new project, he needs to define a folder where this project is related to. User can see list of project. When user clicks on project working directory will change to this folder. Now every application expectially ttyd applications can user this folder. Now all ttyd application will start with command 'cd <pwd>' and then appclition which will ensure every app starts in pwd folder (this will be done automatically)
 When user switch form one project to another application will be kept live. App will remmembered position and size of application. When user switch project application from prev project will hide and current applications will become visible or will be crated if this is first time the project will be open in this session.
 
---picker
+--picker (done)
 when user adds new project use directory picker, determine name from this folder path, but add allow user to change it (name) after he pick the directory
 
 --switch
