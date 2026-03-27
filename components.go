@@ -17,7 +17,111 @@ const (
 	ProjectBarID    = "project-bar"
 	ProjectDialogID = "project-dialog"
 	DirBrowserID    = "dir-browser"
+	SearchDialogID  = "search-dialog"
 )
+
+// termIconInfo stores the icon details for a known terminal command.
+type termIconInfo struct {
+	// URL to an SVG icon (e.g. Simple Icons CDN), or empty for material icon fallback
+	URL string
+	// Material icon name, used when URL is empty
+	MaterialIcon string
+}
+
+// knownTermIcons maps command base names to their icon info.
+// Uses Simple Icons CDN (https://cdn.simpleicons.org/{name}/{color}) for brand icons.
+var knownTermIcons = map[string]termIconInfo{
+	"nvim":       {URL: "https://cdn.simpleicons.org/neovim/57A143"},
+	"neovim":     {URL: "https://cdn.simpleicons.org/neovim/57A143"},
+	"vim":        {URL: "https://cdn.simpleicons.org/vim/019733"},
+	"vi":         {URL: "https://cdn.simpleicons.org/vim/019733"},
+	"claude":     {URL: "https://cdn.simpleicons.org/anthropic/d4a27f"},
+	"node":       {URL: "https://cdn.simpleicons.org/nodedotjs/5FA04E"},
+	"npm":        {URL: "https://cdn.simpleicons.org/npm/CB3837"},
+	"npx":        {URL: "https://cdn.simpleicons.org/npm/CB3837"},
+	"bun":        {URL: "https://cdn.simpleicons.org/bun/FBF0DF"},
+	"deno":       {URL: "https://cdn.simpleicons.org/deno/FFFFFF"},
+	"python":     {URL: "https://cdn.simpleicons.org/python/3776AB"},
+	"python3":    {URL: "https://cdn.simpleicons.org/python/3776AB"},
+	"pip":        {URL: "https://cdn.simpleicons.org/python/3776AB"},
+	"docker":     {URL: "https://cdn.simpleicons.org/docker/2496ED"},
+	"git":        {URL: "https://cdn.simpleicons.org/git/F05032"},
+	"go":         {URL: "https://cdn.simpleicons.org/go/00ADD8"},
+	"cargo":      {URL: "https://cdn.simpleicons.org/rust/DEA584"},
+	"rustc":      {URL: "https://cdn.simpleicons.org/rust/DEA584"},
+	"ruby":       {URL: "https://cdn.simpleicons.org/ruby/CC342D"},
+	"irb":        {URL: "https://cdn.simpleicons.org/ruby/CC342D"},
+	"lua":        {URL: "https://cdn.simpleicons.org/lua/2C2D72"},
+	"java":       {URL: "https://cdn.simpleicons.org/openjdk/FFFFFF"},
+	"kotlin":     {URL: "https://cdn.simpleicons.org/kotlin/7F52FF"},
+	"swift":      {URL: "https://cdn.simpleicons.org/swift/F05138"},
+	"redis-cli":  {URL: "https://cdn.simpleicons.org/redis/FF4438"},
+	"psql":       {URL: "https://cdn.simpleicons.org/postgresql/4169E1"},
+	"mysql":      {URL: "https://cdn.simpleicons.org/mysql/4479A1"},
+	"mongosh":    {URL: "https://cdn.simpleicons.org/mongodb/47A248"},
+	"kubectl":    {URL: "https://cdn.simpleicons.org/kubernetes/326CE5"},
+	"terraform":  {URL: "https://cdn.simpleicons.org/terraform/844FBA"},
+	"ansible":    {URL: "https://cdn.simpleicons.org/ansible/EE0000"},
+	"tmux":       {URL: "https://cdn.simpleicons.org/tmux/1BB91F"},
+	"bash":       {MaterialIcon: "terminal"},
+	"zsh":        {MaterialIcon: "terminal"},
+	"sh":         {MaterialIcon: "terminal"},
+	"fish":       {MaterialIcon: "terminal"},
+	"ssh":        {MaterialIcon: "vpn_key"},
+	"htop":       {MaterialIcon: "monitoring"},
+	"btop":       {MaterialIcon: "monitoring"},
+	"top":        {MaterialIcon: "monitoring"},
+	"make":       {MaterialIcon: "build"},
+	"cmake":      {MaterialIcon: "build"},
+	"gradle":     {MaterialIcon: "build"},
+}
+
+// lookupTermIcon resolves the icon for a terminal command.
+// It checks the base command name (first word, without path).
+func lookupTermIcon(command string) *termIconInfo {
+	// Extract base command: "sudo nvim foo.txt" → "nvim", "/usr/bin/python3" → "python3"
+	cmd := command
+	parts := strings.Fields(cmd)
+	if len(parts) > 0 {
+		cmd = parts[0]
+		// Skip sudo/env prefixes
+		for _, p := range parts {
+			if p != "sudo" && p != "env" && !strings.Contains(p, "=") {
+				cmd = p
+				break
+			}
+		}
+	}
+	// Strip path
+	if idx := strings.LastIndex(cmd, "/"); idx >= 0 {
+		cmd = cmd[idx+1:]
+	}
+	cmd = strings.ToLower(cmd)
+	if info, ok := knownTermIcons[cmd]; ok {
+		return &info
+	}
+	return nil
+}
+
+// knownTermIconsJS returns a JS object literal with the icon mapping for client-side use.
+func knownTermIconsJS() string {
+	var sb strings.Builder
+	sb.WriteString("{")
+	first := true
+	for cmd, info := range knownTermIcons {
+		if !first {
+			sb.WriteString(",")
+		}
+		first = false
+		if info.URL != "" {
+			fmt.Fprintf(&sb, "'%s':{url:'%s'}", cmd, info.URL)
+		} else {
+			fmt.Fprintf(&sb, "'%s':{mi:'%s'}", cmd, info.MaterialIcon)
+		}
+	}
+	sb.WriteString("}")
+	return sb.String()
+}
 
 // termIconColors returns a gradient palette [top, bottom, mid] for a terminal command.
 func termIconColors(cmd string) (string, string, string) {
@@ -107,7 +211,6 @@ func renderSavedAppsJS(sid, listID string) string {
 	if(!c)return;
 	var dk=document.documentElement.classList.contains('dark');
 	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
-	function termIconHtml(cmd){var ini=(cmd||'T').substring(0,1).toUpperCase();var palettes=[['#0d9488','#065f46','#047857'],['#7c3aed','#4c1d95','#5b21b6'],['#2563eb','#1e3a5f','#1d4ed8'],['#db2777','#831843','#9d174d'],['#d97706','#78350f','#92400e'],['#059669','#064e3b','#047857'],['#dc2626','#7f1d1d','#991b1b'],['#0891b2','#164e63','#155e75']];var hash=0;for(var i=0;i<cmd.length;i++)hash=((hash<<5)-hash)+cmd.charCodeAt(i);var p=palettes[Math.abs(hash)%%palettes.length];return '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;position:relative;overflow:hidden;background:linear-gradient(145deg,'+p[0]+' 0%%,'+p[2]+' 60%%,'+p[1]+' 100%%);box-shadow:0 1px 4px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.25),inset 0 -1px 0 rgba(0,0,0,.12);font-size:15px;font-weight:800;color:#fff;letter-spacing:.04em;text-shadow:0 1px 1px rgba(0,0,0,.3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace"><span style="position:absolute;inset:0;border-radius:5px;background:linear-gradient(180deg,rgba(255,255,255,.2) 0%%,rgba(255,255,255,.05) 40%%,transparent 60%%);pointer-events:none"></span><span style="position:relative;z-index:1">'+ini+'</span></span>';}
 	c.innerHTML='';
 	apps.forEach(function(app,i){
 		var btn=document.createElement('button');
@@ -118,7 +221,7 @@ func renderSavedAppsJS(sid, listID string) string {
 		var iconHtml='';
 		var label='';
 		if(app.type==='terminal'){
-			iconHtml=termIconHtml(app.command);
+			iconHtml=window.__libroTermIcon?window.__libroTermIcon(app.command,20):app.command.substring(0,1).toUpperCase();
 			label=app.name||app.command;
 		}else{
 			try{
@@ -360,21 +463,40 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
 			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn)
 	} else if app.Type == AppTypeTerminal {
-		initials := strings.ToUpper(app.Command)
-		if len(initials) > 1 {
-			initials = initials[:1]
-		}
 		labelText := app.Command
 		if app.Name != "" {
 			labelText = app.Name
 		}
-		top, bot, mid := termIconColors(app.Command)
-		iconStyle := fmt.Sprintf(
-			"display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;position:relative;overflow:hidden;background:linear-gradient(145deg,%s 0%%,%s 60%%,%s 100%%);box-shadow:0 1px 3px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.25),inset 0 -1px 0 rgba(0,0,0,.12);font-size:15px;font-weight:800;color:#fff;letter-spacing:.04em;text-shadow:0 1px 1px rgba(0,0,0,.3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace",
-			top, mid, bot,
-		)
+
+		var iconNode *r.Node
+		if info := lookupTermIcon(app.Command); info != nil {
+			if info.URL != "" {
+				iconNode = r.Div("shrink-0 w-4 h-4 flex items-center justify-center").Render(
+					r.Div("").Attr("style", fmt.Sprintf(
+						"width:16px;height:16px;background:url('%s') center/contain no-repeat",
+						info.URL,
+					)),
+				)
+			} else if info.MaterialIcon != "" {
+				iconNode = r.I("material-icons-round text-sm text-gray-500 dark:text-zinc-400 shrink-0").Text(info.MaterialIcon)
+			}
+		}
+		if iconNode == nil {
+			// Fallback: gradient letter icon
+			initials := strings.ToUpper(app.Command)
+			if len(initials) > 1 {
+				initials = initials[:1]
+			}
+			top, bot, mid := termIconColors(app.Command)
+			iconStyle := fmt.Sprintf(
+				"display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;position:relative;overflow:hidden;background:linear-gradient(145deg,%s 0%%,%s 60%%,%s 100%%);box-shadow:0 1px 3px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.25),inset 0 -1px 0 rgba(0,0,0,.12);font-size:15px;font-weight:800;color:#fff;letter-spacing:.04em;text-shadow:0 1px 1px rgba(0,0,0,.3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace",
+				top, mid, bot,
+			)
+			iconNode = r.Span("shrink-0").Attr("style", iconStyle).Text(initials)
+		}
+
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1.5").Render(
-			r.Span("shrink-0").Attr("style", iconStyle).Text(initials),
+			iconNode,
 			r.Span("text-[10px] font-mono tracking-wider uppercase text-gray-600 dark:text-zinc-300 truncate").Text(labelText),
 		)
 	}
@@ -513,13 +635,12 @@ func renderSideLauncher(sid, side string) *r.Node {
 		?'absolute left-full ml-2 px-2 py-1 text-xs rounded bg-zinc-800 text-zinc-200 border border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg'
 		:'absolute left-full ml-2 px-2 py-1 text-xs rounded bg-white text-gray-800 border border-gray-200 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg';
 
-	function termIconHtml2(cmd){var ini=(cmd||'T').substring(0,1).toUpperCase();var palettes=[['#0d9488','#065f46','#047857'],['#7c3aed','#4c1d95','#5b21b6'],['#2563eb','#1e3a5f','#1d4ed8'],['#db2777','#831843','#9d174d'],['#d97706','#78350f','#92400e'],['#059669','#064e3b','#047857'],['#dc2626','#7f1d1d','#991b1b'],['#0891b2','#164e63','#155e75']];var hash=0;for(var i=0;i<cmd.length;i++)hash=((hash<<5)-hash)+cmd.charCodeAt(i);var p=palettes[Math.abs(hash)%%palettes.length];return '<span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;position:relative;overflow:hidden;background:linear-gradient(145deg,'+p[0]+' 0%%,'+p[2]+' 60%%,'+p[1]+' 100%%);box-shadow:0 2px 8px rgba(0,0,0,.3),0 1px 3px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.25),inset 0 -1px 0 rgba(0,0,0,.15);font-size:25px;font-weight:800;color:#fff;letter-spacing:.06em;text-shadow:0 1px 2px rgba(0,0,0,.35);font-family:ui-monospace,SFMono-Regular,Menlo,monospace"><span style="position:absolute;inset:0;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.2) 0%%,rgba(255,255,255,.05) 40%%,transparent 60%%);pointer-events:none"></span><span style="position:relative;z-index:1">'+ini+'</span></span>';}
 	apps.forEach(function(app){
 		var btn=document.createElement('button');
 		btn.className=btnCls;
 		var lb='';
 		if(app.type==='terminal'){
-			btn.innerHTML=termIconHtml2(app.command);
+			btn.innerHTML=window.__libroTermIcon?window.__libroTermIcon(app.command,32):app.command.substring(0,1).toUpperCase();
 			lb=app.name||app.command;
 		}else{
 			try{
@@ -684,6 +805,178 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 					),
 				),
 		)
+}
+
+// renderSearchDialog renders the fuzzy search popup (hidden by default).
+// All filtering, navigation, and selection logic runs client-side via JS
+// since saved apps live in localStorage.
+func renderSearchDialog(sid string) *r.Node {
+	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
+		ID(SearchDialogID).
+		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", SearchDialogID))).
+		Render(
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
+				OnClick(r.JS("event.stopPropagation()")).
+				Render(
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
+						r.Input("w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
+							ID("search-input").
+							Attr("type", "text").
+							Attr("placeholder", "Search applications...").
+							Attr("autocomplete", "off").
+							Attr("spellcheck", "false"),
+					),
+					r.Div("max-h-80 overflow-y-auto").ID("search-results"),
+					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+						r.Span("").Text("↑↓ navigate"),
+						r.Span("").Text("Enter open right"),
+						r.Span("").Text("Ctrl+Enter open left"),
+						r.Span("").Text("Esc close"),
+					),
+				),
+		)
+}
+
+// searchDialogJS returns the JS that powers the fuzzy search popup behavior.
+func searchDialogJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	if(window.__libroSearchRegistered)return;
+	window.__libroSearchRegistered=true;
+
+	var dlg=document.getElementById('%s');
+	var inp=document.getElementById('search-input');
+	var res=document.getElementById('search-results');
+	var selIdx=0;
+	var filtered=[];
+
+	function fuzzyMatch(text,query){
+		text=text.toLowerCase();query=query.toLowerCase();
+		var ti=0,qi=0,score=0,lastMatch=-1;
+		while(ti<text.length&&qi<query.length){
+			if(text[ti]===query[qi]){
+				score+=1;
+				if(lastMatch===ti-1)score+=2;
+				if(ti===0||text[ti-1]===' '||text[ti-1]==='/'||text[ti-1]==='.')score+=3;
+				lastMatch=ti;qi++;
+			}
+			ti++;
+		}
+		return qi===query.length?score:0;
+	}
+
+	function getApps(){
+		return JSON.parse(localStorage.getItem('libro-apps')||'[]');
+	}
+
+	function render(){
+		var dk=document.documentElement.classList.contains('dark');
+		res.innerHTML='';
+		if(filtered.length===0){
+			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No matches</div>';
+			return;
+		}
+		filtered.forEach(function(item,i){
+			var row=document.createElement('div');
+			var sel=i===selIdx;
+			row.className='flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
+				+(sel?(dk?'bg-teal-900/30 border-l-2 border-teal-500':'bg-teal-50 border-l-2 border-teal-500')
+				:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'));
+			var iconHtml='';
+			var label='';
+			var sub='';
+			var app=item.app;
+			if(app.type==='terminal'){
+				iconHtml=window.__libroTermIcon?window.__libroTermIcon(app.command,24):'';
+				label=app.name||app.command;
+				sub=app.command;
+			}else{
+				try{
+					var u=new URL(app.url);
+					iconHtml='<img class="w-6 h-6 rounded-sm shrink-0" src="https://www.google.com/s2/favicons?domain='+encodeURIComponent(u.hostname)+'&sz=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 text-lg\\\'>language</i>\'">';
+					label=app.name||u.hostname.replace(/^www\./,'');
+					sub=app.url;
+				}catch(e){
+					iconHtml='<i class="material-icons-round text-gray-400 text-lg shrink-0">language</i>';
+					label=app.name||app.url;
+					sub=app.url;
+				}
+			}
+			var txtCls=dk?'text-zinc-200':'text-gray-800';
+			var subCls=dk?'text-zinc-500':'text-gray-400';
+			var badgeCls=dk?'bg-zinc-700 text-zinc-400':'bg-gray-200 text-gray-500';
+			row.innerHTML=iconHtml
+				+'<div class="flex-1 min-w-0"><div class="text-sm truncate '+txtCls+'">'+label+'</div>'
+				+(sub!==label?'<div class="text-[11px] truncate '+subCls+'">'+sub+'</div>':'')
+				+'</div>'
+				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+(app.width||'lg')+'</span>'
+				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+app.type+'</span>';
+			row.onmouseenter=function(){selIdx=i;render();};
+			row.onclick=function(e){launch(e.ctrlKey?'left':'right');};
+			res.appendChild(row);
+		});
+		var sel=res.children[selIdx];
+		if(sel)sel.scrollIntoView({block:'nearest'});
+	}
+
+	function filter(){
+		var q=inp.value.trim();
+		var apps=getApps();
+		if(!q){
+			filtered=apps.map(function(a){return{app:a,score:1};});
+		}else{
+			filtered=[];
+			apps.forEach(function(a){
+				var text=(a.name||'')+' '+(a.command||'')+' '+(a.url||'')+' '+a.type;
+				var score=fuzzyMatch(text,q);
+				if(score>0)filtered.push({app:a,score:score});
+			});
+			filtered.sort(function(a,b){return b.score-a.score;});
+		}
+		selIdx=0;
+		render();
+	}
+
+	function launch(side){
+		if(filtered.length===0)return;
+		var app=filtered[selIdx].app;
+		dlg.classList.add('hidden');
+		inp.value='';
+		__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false,name:app.name||'',side:side});
+	}
+
+	function openSearch(){
+		dlg.classList.remove('hidden');
+		inp.value='';
+		filter();
+		setTimeout(function(){inp.focus();},50);
+	}
+
+	function closeSearch(){
+		dlg.classList.add('hidden');
+		inp.value='';
+	}
+
+	inp.addEventListener('input',filter);
+	inp.addEventListener('keydown',function(e){
+		if(e.key==='ArrowDown'){
+			e.preventDefault();
+			if(selIdx<filtered.length-1){selIdx++;render();}
+		}else if(e.key==='ArrowUp'){
+			e.preventDefault();
+			if(selIdx>0){selIdx--;render();}
+		}else if(e.key==='Enter'){
+			e.preventDefault();
+			launch(e.ctrlKey?'left':'right');
+		}else if(e.key==='Escape'){
+			e.preventDefault();
+			closeSearch();
+		}
+	});
+
+	window.__libroOpenSearch=openSearch;
+})();
+`, SearchDialogID, sid)
 }
 
 // resizeJS returns JS that updates an app frame's width without replacing the DOM
@@ -971,6 +1264,50 @@ func loadProjectsJS(sid string) string {
 `, sid, sid)
 }
 
+// termIconSetupJS returns JS that registers a global icon lookup function
+// for terminal commands. All JS icon renderers should call __libroTermIcon(cmd, size).
+func termIconSetupJS() string {
+	return fmt.Sprintf(`
+(function(){
+	if(window.__libroTermIcon)return;
+	var icons=%s;
+
+	function resolveCmd(command){
+		var parts=command.trim().split(/\s+/);
+		var cmd=parts[0]||'';
+		for(var i=0;i<parts.length;i++){
+			if(parts[i]!=='sudo'&&parts[i]!=='env'&&parts[i].indexOf('=')===-1){cmd=parts[i];break;}
+		}
+		var sl=cmd.lastIndexOf('/');
+		if(sl>=0)cmd=cmd.substring(sl+1);
+		return cmd.toLowerCase();
+	}
+
+	window.__libroTermIcon=function(command,size){
+		size=size||24;
+		var cmd=resolveCmd(command);
+		var info=icons[cmd];
+		if(info&&info.url){
+			return '<img src="'+info.url+'" style="width:'+size+'px;height:'+size+'px;object-fit:contain" onerror="this.outerHTML=__libroTermIconFallback(\''+command.replace(/'/g,"\\'")+'\','+size+')">';
+		}
+		if(info&&info.mi){
+			return '<i class="material-icons-round" style="font-size:'+size+'px;color:#9ca3af">'+info.mi+'</i>';
+		}
+		return __libroTermIconFallback(command,size);
+	};
+
+	window.__libroTermIconFallback=function(command,size){
+		var ini=(command||'T').substring(0,1).toUpperCase();
+		var palettes=[['#0d9488','#065f46','#047857'],['#7c3aed','#4c1d95','#5b21b6'],['#2563eb','#1e3a5f','#1d4ed8'],['#db2777','#831843','#9d174d'],['#d97706','#78350f','#92400e'],['#059669','#064e3b','#047857'],['#dc2626','#7f1d1d','#991b1b'],['#0891b2','#164e63','#155e75']];
+		var hash=0;for(var i=0;i<command.length;i++)hash=((hash<<5)-hash)+command.charCodeAt(i);
+		var p=palettes[Math.abs(hash)%%palettes.length];
+		var r=Math.round(size*0.3);
+		return '<span style="display:inline-flex;align-items:center;justify-content:center;width:'+size+'px;height:'+size+'px;border-radius:'+r+'px;position:relative;overflow:hidden;background:linear-gradient(145deg,'+p[0]+' 0%%,'+p[2]+' 60%%,'+p[1]+' 100%%);box-shadow:0 1px 4px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.25),inset 0 -1px 0 rgba(0,0,0,.12);font-size:'+(size*0.5)+'px;font-weight:800;color:#fff;letter-spacing:.04em;text-shadow:0 1px 1px rgba(0,0,0,.3);font-family:ui-monospace,SFMono-Regular,Menlo,monospace"><span style="position:absolute;inset:0;border-radius:'+r+'px;background:linear-gradient(180deg,rgba(255,255,255,.2) 0%%,rgba(255,255,255,.05) 40%%,transparent 60%%);pointer-events:none"></span><span style="position:relative;z-index:1">'+ini+'</span></span>';
+	};
+})();
+`, knownTermIconsJS())
+}
+
 func keyboardShortcutsJS(sid string) string {
 	return fmt.Sprintf(`
 		(function() {
@@ -1040,6 +1377,11 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					__ws.call('project.navigate.prev', {"sid": "%s"});
+				}
+				if (e.metaKey && e.key === '/') {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenSearch) window.__libroOpenSearch();
 				}
 			}
 
