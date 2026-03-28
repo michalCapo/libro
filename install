@@ -135,6 +135,9 @@ Type=Application
 Categories=Utility;Development;
 DESKTOP
 
+    # Set custom icon on the binary itself (shown in file managers)
+    gio set "$INSTALL_DIR/$BIN_NAME" metadata::custom-icon "file://$ICON_DIR/libro.svg" 2>/dev/null || true
+
     ok "Desktop entry installed"
 fi
 
