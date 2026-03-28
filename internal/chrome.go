@@ -86,6 +86,9 @@ func (cm *ChromeManager) ensureStarted() error {
 		cm.cmd = nil
 	}
 
+	// Kill any leftover Chrome from a previous app session
+	cm.killOrphanedChrome()
+
 	home, _ := os.UserHomeDir()
 	profileDir := filepath.Join(home, ".config", "libro", "chrome-profile")
 	os.MkdirAll(profileDir, 0755)
@@ -160,6 +163,43 @@ func (cm *ChromeManager) ensureStarted() error {
 	}()
 
 	return nil
+}
+
+// killOrphanedChrome kills any existing headless Chrome process on the debug port
+// left over from a previous app session, so we start fresh.
+func (cm *ChromeManager) killOrphanedChrome() {
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/json/version", chromeDebugPort))
+	if err != nil {
+		return // no Chrome running
+	}
+	resp.Body.Close()
+
+	// Find and kill the process using the debug port
+	out, err := exec.Command("fuser", fmt.Sprintf("%d/tcp", chromeDebugPort)).Output()
+	if err != nil || len(out) == 0 {
+		return
+	}
+	pids := strings.Fields(strings.TrimSpace(string(out)))
+	for _, pidStr := range pids {
+		pid, err := strconv.Atoi(pidStr)
+		if err != nil || pid <= 0 {
+			continue
+		}
+		proc, err := os.FindProcess(pid)
+		if err == nil {
+			proc.Kill()
+			log.Printf("chrome: killed orphaned process pid=%d", pid)
+		}
+	}
+	// Wait for it to exit
+	for range 20 {
+		time.Sleep(100 * time.Millisecond)
+		resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/json/version", chromeDebugPort))
+		if err != nil {
+			break
+		}
+		resp.Body.Close()
+	}
 }
 
 func (cm *ChromeManager) getOrCreateTab(appID string) (*chromeTab, error) {
