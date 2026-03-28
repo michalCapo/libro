@@ -193,8 +193,8 @@ func renderEmptyState(state *AppState, sid string) *r.Node {
 				r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
 					Render(r.I("material-icons-round text-[18px]").Text("add"), r.Span("").Text("Add New")).
 					OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
-				r.Button("flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
-					Text("Browse").
+				r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
+					Render(r.I("material-icons-round text-[18px]").Text("language"), r.Span("").Text("Browse")).
 					OnClick(&r.Action{Name: "app.browse.new", Data: sidData(sid)}),
 			),
 		),
@@ -1190,7 +1190,7 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 	return r.Div("flex items-center gap-1.5 px-3 py-2 border-b border-gray-200 dark:border-zinc-800 shrink-0").
 		ID(ProjectBarID).
 		Render(
-			r.Img("w-5 h-5 shrink-0").Attr("src", "/assets/logo.svg").Attr("alt", "Libro"),
+			r.Img("w-7 h-7 shrink-0").Attr("src", "/assets/logo.svg").Attr("alt", "Libro"),
 			r.Div("flex items-center gap-1.5").Render(buttons...),
 			func() *r.Node {
 				pathWrapper := r.Div("group ml-3 flex items-center gap-1").Render(
