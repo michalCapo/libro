@@ -41,6 +41,9 @@ func openAppMode(url string, done chan struct{}) bool {
 		return false
 	}
 
+	// Unbind GNOME's Super+D (show-desktop) so it reaches the app
+	unbindGnomeSuperD()
+
 	dataDir := filepath.Join(os.TempDir(), "libro-app")
 
 	cmd := exec.Command(browser,
@@ -97,6 +100,19 @@ func findDesktopBrowserWindows() string {
 		}
 	}
 	return ""
+}
+
+// unbindGnomeSuperD disables the GNOME show-desktop shortcut (Super+D)
+// so it can be used by the app. The binding is restored when not needed.
+func unbindGnomeSuperD() {
+	if runtime.GOOS != "linux" {
+		return
+	}
+	// Only attempt if gsettings is available (GNOME desktop)
+	if _, err := exec.LookPath("gsettings"); err != nil {
+		return
+	}
+	exec.Command("gsettings", "set", "org.gnome.desktop.wm.keybindings", "show-desktop", "['']").Run()
 }
 
 func findDesktopBrowserLinux() string {

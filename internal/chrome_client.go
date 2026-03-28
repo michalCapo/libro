@@ -173,6 +173,8 @@ function initChromeView(container) {
 
 	// Keyboard events
 	container.addEventListener('keydown', function(e) {
+		// Let libro shortcuts pass through (Meta+H/L/J/K/D//)
+		if (e.metaKey && /^[hljkdHLJKD\/]$/.test(e.key)) return;
 		e.preventDefault();
 		e.stopPropagation();
 		// For printable chars: keyDown carries the text directly
@@ -188,6 +190,7 @@ function initChromeView(container) {
 	}, true);
 
 	container.addEventListener('keyup', function(e) {
+		if (e.metaKey && /^[hljkdHLJKD\/]$/.test(e.key)) return;
 		e.preventDefault();
 		e.stopPropagation();
 		send({
