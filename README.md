@@ -188,10 +188,11 @@ The Chrome instance includes stealth measures to bypass bot detection (Cloudflar
 Libro can run as a desktop application using Chromium's `--app` mode, which creates a frameless window with its own taskbar entry (no URL bar, no browser chrome).
 
 ```bash
-libro --desktop
+libro              # starts server + opens desktop window
+libro --no-desktop # starts server only (no window)
 ```
 
-This starts the Libro server and opens a Chromium window pointing to `http://localhost:1439`. On Linux and Windows it searches for Chrome, Chromium, Edge, or Brave in standard locations. On macOS it falls back to the default browser.
+By default, Libro starts the server and opens a Chromium window pointing to `http://localhost:1439`. On Linux and Windows it searches for Chrome, Chromium, Edge, or Brave in standard locations. On macOS it falls back to the default browser. Use `--no-desktop` to run the server without opening a window.
 
 The app window uses a dedicated user-data-dir (`/tmp/libro-app`) so it doesn't interfere with regular browser sessions.
 

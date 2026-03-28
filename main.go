@@ -22,11 +22,11 @@ func main() {
 		}
 	}
 
-	// Handle --desktop flag: start server then open app window
-	desktop := false
+	// Desktop mode is default — use --no-desktop to skip opening the browser window
+	desktop := true
 	for _, arg := range os.Args[1:] {
-		if arg == "--desktop" {
-			desktop = true
+		if arg == "--no-desktop" {
+			desktop = false
 		}
 	}
 

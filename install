@@ -71,6 +71,16 @@ fi
 LDFLAGS="-X ${MODULE}/internal/version.Version=${VERSION}"
 
 # ---------------------------------------------------------------------------
+# Cleanup
+# ---------------------------------------------------------------------------
+
+info "Cleaning up..."
+rm -f "$SCRIPT_DIR/libro" "$SCRIPT_DIR/libro.exe"
+go clean -cache -testcache 2>/dev/null || true
+go mod tidy
+ok "Clean"
+
+# ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 
@@ -101,5 +111,5 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
 fi
 
 echo ""
-echo "  Run 'libro' to start, or 'libro --desktop' for desktop mode."
+echo "  Run 'libro' to start, or 'libro --no-desktop' for server-only mode."
 echo ""
