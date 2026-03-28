@@ -202,7 +202,9 @@ The app window uses a dedicated user-data-dir (`/tmp/libro-app`) so it doesn't i
 ./install
 ```
 
-Compiles the binary for your OS/architecture and installs it to `~/.local/bin/`. Works on Linux, macOS, and Windows (via MSYS/Cygwin).
+Cleans build cache, compiles the binary for your OS/architecture, and installs it to `~/.local/bin/`. Works on Linux, macOS, and Windows (via MSYS/Cygwin).
+
+On **Linux**, it also installs a `.desktop` entry and sets a custom icon on the binary (visible in file managers). On **Windows**, it embeds the icon into the `.exe` via `go-winres` (if installed).
 
 ## Deploy
 
