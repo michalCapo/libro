@@ -18,6 +18,7 @@ type SavedApp struct {
 	Width    string
 	Writable bool
 	Name     string
+	IconURL  string // cached icon URL discovered via web search
 }
 
 var (
@@ -43,6 +44,7 @@ func InitDB() {
 	}
 
 	createTables()
+	migrateTables()
 	ensureHomeProject()
 }
 
@@ -70,6 +72,7 @@ func createTables() {
 			width        TEXT NOT NULL DEFAULT 'lg',
 			writable     INTEGER NOT NULL DEFAULT 1,
 			name         TEXT NOT NULL DEFAULT '',
+			icon_url     TEXT NOT NULL DEFAULT '',
 			position     INTEGER NOT NULL DEFAULT 0,
 			FOREIGN KEY (project_name) REFERENCES projects(name) ON DELETE CASCADE
 		);
@@ -77,6 +80,12 @@ func createTables() {
 	if err != nil {
 		log.Fatalf("db: failed to create tables: %v", err)
 	}
+}
+
+// migrateTables adds columns that may be missing in older databases.
+func migrateTables() {
+	// Add icon_url column if it doesn't exist (added for icon discovery feature)
+	_, _ = db.Exec("ALTER TABLE saved_apps ADD COLUMN icon_url TEXT NOT NULL DEFAULT ''")
 }
 
 func ensureHomeProject() {
@@ -162,7 +171,7 @@ func DBLoadSavedApps(projectName string) []SavedApp {
 	defer dbMu.Unlock()
 
 	rows, err := db.Query(
-		"SELECT type, url, command, width, writable, name FROM saved_apps WHERE project_name = ? ORDER BY position, id",
+		"SELECT type, url, command, width, writable, name, icon_url FROM saved_apps WHERE project_name = ? ORDER BY position, id",
 		projectName,
 	)
 	if err != nil {
@@ -175,7 +184,7 @@ func DBLoadSavedApps(projectName string) []SavedApp {
 	for rows.Next() {
 		var a SavedApp
 		var writable int
-		if err := rows.Scan(&a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name); err != nil {
+		if err := rows.Scan(&a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL); err != nil {
 			continue
 		}
 		a.Writable = writable != 0
@@ -189,7 +198,7 @@ func DBLoadAllSavedApps() []SavedApp {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
-	rows, err := db.Query("SELECT type, url, command, width, writable, name FROM saved_apps ORDER BY position, id")
+	rows, err := db.Query("SELECT type, url, command, width, writable, name, icon_url FROM saved_apps ORDER BY position, id")
 	if err != nil {
 		log.Printf("db: load all saved apps: %v", err)
 		return nil
@@ -200,7 +209,7 @@ func DBLoadAllSavedApps() []SavedApp {
 	for rows.Next() {
 		var a SavedApp
 		var writable int
-		if err := rows.Scan(&a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name); err != nil {
+		if err := rows.Scan(&a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL); err != nil {
 			continue
 		}
 		a.Writable = writable != 0
@@ -222,8 +231,8 @@ func DBAddSavedApp(projectName string, app SavedApp) {
 		writable = 1
 	}
 	_, err := db.Exec(
-		"INSERT INTO saved_apps (project_name, type, url, command, width, writable, name, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		projectName, app.Type, app.URL, app.Command, app.Width, writable, app.Name, maxPos+1,
+		"INSERT INTO saved_apps (project_name, type, url, command, width, writable, name, icon_url, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		projectName, app.Type, app.URL, app.Command, app.Width, writable, app.Name, app.IconURL, maxPos+1,
 	)
 	if err != nil {
 		log.Printf("db: add saved app: %v", err)
@@ -246,8 +255,8 @@ func DBUpdateSavedApp(projectName string, index int, app SavedApp) {
 		writable = 1
 	}
 	_, err := db.Exec(
-		"UPDATE saved_apps SET type=?, url=?, command=?, width=?, writable=?, name=? WHERE id=?",
-		app.Type, app.URL, app.Command, app.Width, writable, app.Name, id,
+		"UPDATE saved_apps SET type=?, url=?, command=?, width=?, writable=?, name=?, icon_url=? WHERE id=?",
+		app.Type, app.URL, app.Command, app.Width, writable, app.Name, app.IconURL, id,
 	)
 	if err != nil {
 		log.Printf("db: update saved app at %d: %v", index, err)

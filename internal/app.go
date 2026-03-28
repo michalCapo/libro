@@ -31,6 +31,10 @@ func dbSaveApp(projectName string, editIndex int, appType, urlOrCmd, width, name
 	}
 	if appType == "terminal" {
 		app.Command = urlOrCmd
+		// Discover icon for commands not in the hardcoded map
+		if info := lookupTermIcon(urlOrCmd); info == nil {
+			app.IconURL = discoverTermIconURL(urlOrCmd)
+		}
 	} else {
 		app.URL = urlOrCmd
 	}
@@ -206,6 +210,8 @@ func Run(assets embed.FS) {
 				writable = val
 			}
 
+			iconURL, _ := data["iconUrl"].(string)
+
 			// Check if strip already exists
 			stateBefore := sm.Get(sid)
 			hadApps := len(stateBefore.Apps)
@@ -217,9 +223,9 @@ func Run(assets embed.FS) {
 			}
 
 			if prepend {
-				sm.PrependTerminalApp(sid, command, port, writable, width, name)
+				sm.PrependTerminalApp(sid, command, port, writable, width, name, iconURL)
 			} else {
-				sm.AddTerminalApp(sid, command, port, writable, width, name)
+				sm.AddTerminalApp(sid, command, port, writable, width, name, iconURL)
 			}
 			state := sm.Get(sid)
 			newApp := &state.Apps[state.SelectedIndex]
