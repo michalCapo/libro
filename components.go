@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -386,11 +385,8 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 
 	iframeSrc := app.URL
 	if app.Type == AppTypeURL {
-		if app.URL == "" {
-			iframeSrc = "about:blank"
-		} else {
-			iframeSrc = "/proxy?url=" + url.QueryEscape(app.URL)
-		}
+		// Chrome-backed tabs don't use iframe src; canvas is initialized via JS
+		iframeSrc = ""
 	}
 
 	// Size badge bar + close (right side of toolbar)
@@ -427,13 +423,13 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		// Back button
 		backBtn := r.Button(btnCls).
 			Attr("title", "Back").
-			OnClick(r.JS(fmt.Sprintf(`try{var f=document.getElementById('frame-%s');if(f)f.contentWindow.history.back();}catch(e){}`, app.ID)))
+			OnClick(r.JS(fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS['%s'];if(c&&c.readyState===1)c.send(JSON.stringify({t:'back'}));})()`, app.ID)))
 		backBtn.Render(r.I("material-icons-round text-sm").Text("arrow_back"))
 
 		// Forward button
 		forwardBtn := r.Button(btnCls).
 			Attr("title", "Forward").
-			OnClick(r.JS(fmt.Sprintf(`try{var f=document.getElementById('frame-%s');if(f)f.contentWindow.history.forward();}catch(e){}`, app.ID)))
+			OnClick(r.JS(fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS['%s'];if(c&&c.readyState===1)c.send(JSON.stringify({t:'fwd'}));})()`, app.ID)))
 		forwardBtn.Render(r.I("material-icons-round text-sm").Text("arrow_forward"))
 
 		// Copy button
@@ -445,17 +441,17 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		// Reload button
 		reloadBtn := r.Button(btnCls).
 			Attr("title", "Reload").
-			OnClick(r.JS(fmt.Sprintf(`var f=document.getElementById('frame-%s');if(f){f.src=f.src;}`, app.ID)))
+			OnClick(r.JS(fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS['%s'];if(c&&c.readyState===1)c.send(JSON.stringify({t:'reload'}));})()`, app.ID)))
 		reloadBtn.Render(r.I("material-icons-round text-sm").Text("refresh"))
 
-		// URL input
+		// URL input — on Enter, navigate Chrome tab and update server state
 		urlInput := r.Input("flex-1 min-w-0 bg-gray-100 dark:bg-zinc-800 rounded-sm text-[11px] font-mono text-gray-600 dark:text-zinc-400 outline-none placeholder-gray-400 dark:placeholder-zinc-600 px-2 h-6").
 			ID(urlInputID).
 			Attr("type", "text").
 			Attr("value", app.URL).
 			Attr("spellcheck", "false").
 			Attr("autocomplete", "off").
-			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();__ws.call('app.url.set',{"sid":"%s","id":"%s","url":event.target.value});}`, sid, app.ID)))
+			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value;if(u&&!u.startsWith('http://') && !u.startsWith('https://'))u='https://'+u;var c=window.__chromeWS&&window.__chromeWS['%s'];if(c&&c.readyState===1)c.send(JSON.stringify({t:'nav',url:u}));__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});}`, app.ID, sid, app.ID)))
 
 		// Globe icon
 		globe := r.I("material-icons-round text-sm text-gray-400 dark:text-zinc-500 shrink-0 leading-none").Text("language")
@@ -527,6 +523,16 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 }
 
 func renderIframe(app Application, frameID, iframeSrc string) *r.Node {
+	if app.Type == AppTypeURL {
+		// Chrome-backed view: z-30 to sit above the click overlay (z-20)
+		return r.Div("w-full h-full bg-white dark:bg-zinc-950 absolute inset-0 z-30").
+			ID(frameID).
+			Attr("data-chrome-app", app.ID).
+			Attr("data-chrome-url", app.URL).
+			Attr("tabindex", "0").
+			Attr("style", "outline:none;overflow:hidden")
+	}
+	// Terminal apps use iframe (for ttyd)
 	sandbox := "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin"
 	iframe := r.Iframe("w-full h-full border-0").
 		ID(frameID).
