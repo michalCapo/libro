@@ -162,9 +162,7 @@ func main() {
 			return r.Notify("error", "URL is required")
 		}
 
-		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-			url = "https://" + url
-		}
+		url = ensureScheme(url)
 
 		if prepend {
 			sm.PrependApp(sid, url, width, name)
@@ -207,9 +205,7 @@ func main() {
 		var target string
 		if isURL {
 			target = query
-			if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
-				target = "https://" + target
-			}
+			target = ensureScheme(target)
 		} else {
 			// Google search
 			target = "https://www.google.com/search?q=" + url.QueryEscape(query)
@@ -298,9 +294,7 @@ func main() {
 		if url == "" {
 			return r.Notify("error", "URL is required")
 		}
-		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-			url = "https://" + url
-		}
+		url = ensureScheme(url)
 
 		// Check if strip already exists
 		stateBefore := sm.Get(sid)
@@ -446,9 +440,7 @@ func main() {
 			return ""
 		}
 		// Ensure URL has a scheme
-		if !strings.HasPrefix(newURL, "http://") && !strings.HasPrefix(newURL, "https://") {
-			newURL = "https://" + newURL
-		}
+		newURL = ensureScheme(newURL)
 		idx := sm.SetAppURLByID(sid, appID, newURL)
 		if idx < 0 {
 			return ""
@@ -627,6 +619,18 @@ func main() {
 	registerTtydProxy(app)
 	registerChrome(app)
 	app.Listen(":1439")
+}
+
+// ensureScheme adds http:// for local URLs and https:// for everything else.
+func ensureScheme(u string) string {
+	if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+		return u
+	}
+	if strings.HasPrefix(u, "localhost") || strings.HasPrefix(u, "127.0.0.1") || strings.HasPrefix(u, "0.0.0.0") ||
+		strings.HasPrefix(u, "[::1]") || strings.HasPrefix(u, "[::0]") || strings.HasPrefix(u, "[::]") {
+		return "http://" + u
+	}
+	return "https://" + u
 }
 
 // extractSID gets the session ID from the action data payload

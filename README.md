@@ -124,6 +124,15 @@ When switching apps, the selected application scrolls into view only if it is of
 ### Fuzzy Search Launcher
 Press `Win/Meta+/` to open a fuzzy search popup that lists all saved applications from localStorage. The user can type to filter the list — matching is fuzzy across app name, command, URL, and type, with scoring that prioritizes word boundaries and consecutive matches. Use arrow keys (Up/Down) to navigate the list, `Enter` to launch the selected app on the right side, `Ctrl+Enter` to launch on the left side, and `Escape` to close. The search is accessible from any context (with or without apps open, from any project).
 
+A **Browser** entry is always available at the bottom of the list. Selecting it opens a new empty browser panel with the URL bar focused.
+
+When typing a URL directly into the search box, a **Browse** entry appears at the top for quick navigation. URL detection covers:
+- Full URLs: `https://example.com`, `http://localhost:3000`
+- Domain-like strings: `google.com`, `app.example.org/path`
+- Local addresses: `localhost`, `127.0.0.1`, `0.0.0.0`, `[::1]`, `[::]`
+
+Local addresses (`localhost`, `127.0.0.1`, `0.0.0.0`, IPv6 loopback) automatically use `http://`. All other addresses default to `https://`.
+
 ### Smart Terminal Icons
 Terminal applications display real brand icons for known commands instead of generic initials. Icons are resolved by matching the base command name (handling prefixes like `sudo`, `env`, and full paths). Known commands include neovim, vim, claude, node, python, docker, git, go, rust, ruby, kubernetes, terraform, tmux, and many more — sourced from Simple Icons CDN. Generic categories (shells, monitoring tools, build tools) use Material Design icons. Unknown commands fall back to the original colored gradient letter icon.
 
