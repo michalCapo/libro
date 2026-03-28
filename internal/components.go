@@ -256,8 +256,18 @@ func renderEmptyState(state *AppState, sid string) *r.Node {
 		appButtons = append(appButtons, renderSavedAppButton(app, i, sid))
 	}
 
+	// Guide text for empty projects (no saved apps yet)
+	var guideNode *r.Node
+	if len(savedApps) == 0 {
+		guideNode = r.Div("text-center mb-4").Render(
+			r.P("text-sm text-gray-400 dark:text-zinc-500 leading-relaxed").
+				Text("Add web applications by URL or terminal commands to get started. Use Browse to quickly look something up on the web. Check out shortcuts for a productivity boost."),
+		)
+	}
+
 	container := r.Div("flex-1 flex items-center justify-center").ID(projectMainID(state.ActiveProject)).Render(
 		r.Div("flex flex-col items-center gap-2 w-full max-w-md").Render(
+			guideNode,
 			r.Div("flex flex-col gap-1.5 w-full").Render(appButtons...),
 			r.Div("flex gap-2 w-full mt-1").Render(
 				r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
@@ -414,16 +424,20 @@ func navigateJS(state *AppState, sid string) string {
 				var child = strip.children[i + offset];
 				if (!child) continue;
 				if (i === selectedIdx) {
-					child.className = child.className.replace(/\bborder\b/g, 'border-2');
-					child.className = child.className.replace(/border-gray-200/g, 'border-teal-500');
-					child.className = child.className.replace(/dark:border-zinc-700\/50/g, 'dark:border-teal-500/70');
-					child.className = child.className.replace(/border-transparent/g, 'border-teal-500');
+					// Add selection dot if not present
+					if (!child.querySelector('[data-selection-dot]')) {
+						var dot = document.createElement('div');
+						dot.setAttribute('data-selection-dot', '');
+						dot.className = 'absolute top-0 left-0 z-30 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-teal-500';
+						dot.style.cssText = 'box-shadow:0 0 6px 1px rgba(20,184,166,0.5)';
+						child.insertBefore(dot, child.firstChild);
+					}
 					var overlay = child.querySelector('[data-click-overlay]');
 					if (overlay) overlay.remove();
 				} else {
-					child.className = child.className.replace(/border-2/g, 'border');
-					child.className = child.className.replace(/border-teal-500(?!\/)/g, 'border-gray-200');
-					child.className = child.className.replace(/dark:border-teal-500\/70/g, 'dark:border-zinc-700/50');
+					// Remove selection dot
+					var existingDot = child.querySelector('[data-selection-dot]');
+					if (existingDot) existingDot.remove();
 					if (!child.querySelector('[data-click-overlay]')) {
 						var ov = document.createElement('div');
 						ov.setAttribute('data-click-overlay', '');
@@ -451,9 +465,6 @@ func navigateJS(state *AppState, sid string) string {
 // renderAppFrame renders a single application iframe with controls
 func renderAppFrame(app Application, index int, selected bool, sid string) *r.Node {
 	borderClass := "border border-gray-200 dark:border-zinc-700/50"
-	if selected {
-		borderClass = "border-2 border-teal-500 dark:border-teal-500/70"
-	}
 
 	frameID := fmt.Sprintf("frame-%s", app.ID)
 
@@ -592,9 +603,18 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			})
 	}
 
+	// Selection dot indicator (top-left corner)
+	var selectionDot *r.Node
+	if selected {
+		selectionDot = r.Div("absolute top-0 left-0 z-30 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-teal-500").
+			Attr("data-selection-dot", "").
+			Attr("style", "box-shadow:0 0 6px 1px rgba(20,184,166,0.5)")
+	}
+
 	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
 		Attr("data-app-id", app.ID).
 		Render(
+			selectionDot,
 			toolbar,
 			r.Div("relative flex-1 min-h-0").Render(
 				renderIframe(app, frameID, iframeSrc),
