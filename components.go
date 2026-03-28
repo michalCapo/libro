@@ -239,6 +239,7 @@ func renderSavedAppsJS(sid, listID string) string {
 		btn.innerHTML=iconHtml
 			+'<span class="flex-1 truncate text-sm '+txtCls+'">'+label+'</span>'
 			+'<span class="px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 '+badgeCls+'">'+app.width+'</span>'
+			+'<span class="px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 '+badgeCls+'">'+app.type+'</span>'
 			+'<i class="material-icons-round text-xl libro-edit cursor-pointer '+iconCls+'" data-i="'+i+'">edit</i>'
 			+'<i class="material-icons-round text-xl libro-del cursor-pointer '+delCls+'" data-i="'+i+'">close</i>';
 		btn.onclick=function(e){
@@ -451,7 +452,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			Attr("value", app.URL).
 			Attr("spellcheck", "false").
 			Attr("autocomplete", "off").
-			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value;if(u&&!u.startsWith('http://') && !u.startsWith('https://'))u='https://'+u;var c=window.__chromeWS&&window.__chromeWS['%s'];if(c&&c.readyState===1)c.send(JSON.stringify({t:'nav',url:u}));__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});}`, app.ID, sid, app.ID)))
+			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value;if(u&&!u.startsWith('http://')&&!u.startsWith('https://'))u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;var c=window.__chromeWS&&window.__chromeWS['%s'];if(c&&c.readyState===1)c.send(JSON.stringify({t:'nav',url:u}));__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});}`, app.ID, sid, app.ID)))
 
 		// Globe icon
 		globe := r.I("material-icons-round text-sm text-gray-400 dark:text-zinc-500 shrink-0 leading-none").Text("language")
@@ -894,7 +895,11 @@ func searchDialogJS(sid string) string {
 			var label='';
 			var sub='';
 			var app=item.app;
-			if(app.type==='terminal'){
+			if(item.isBrowse){
+				iconHtml='<i class="material-icons-round text-teal-500 text-lg shrink-0">public</i>';
+				label=app.name||app.url;
+				sub=app.url;
+			}else if(app.type==='terminal'){
 				iconHtml=window.__libroTermIcon?window.__libroTermIcon(app.command,24):'';
 				label=app.name||app.command;
 				sub=app.command;
@@ -913,12 +918,13 @@ func searchDialogJS(sid string) string {
 			var txtCls=dk?'text-zinc-200':'text-gray-800';
 			var subCls=dk?'text-zinc-500':'text-gray-400';
 			var badgeCls=dk?'bg-zinc-700 text-zinc-400':'bg-gray-200 text-gray-500';
+			var typeBadge=item.isBrowse?'browser':app.type;
 			row.innerHTML=iconHtml
 				+'<div class="flex-1 min-w-0"><div class="text-sm truncate '+txtCls+'">'+label+'</div>'
 				+(sub!==label?'<div class="text-[11px] truncate '+subCls+'">'+sub+'</div>':'')
 				+'</div>'
 				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+(app.width||'lg')+'</span>'
-				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+app.type+'</span>';
+				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+typeBadge+'</span>';
 			row.onmouseenter=function(){selIdx=i;render();};
 			row.onclick=function(e){launch(e.ctrlKey?'left':'right');};
 			res.appendChild(row);
@@ -927,11 +933,32 @@ func searchDialogJS(sid string) string {
 		if(sel)sel.scrollIntoView({block:'nearest'});
 	}
 
+	function isURL(q){
+		if(/^https?:\/\//i.test(q))return true;
+		if(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:\d+)?(\/|$)/i.test(q))return true;
+		// domain-like: contains dot, no spaces (e.g. google.com, foo.bar/path)
+		if(/^[^\s]+\.[^\s]+$/.test(q)&&!q.includes(' '))return true;
+		return false;
+	}
+
+	var browserEntry={app:{type:'url',url:'',name:'Browser',width:'lg'},score:0,isBrowse:true};
+
 	function filter(){
 		var q=inp.value.trim();
 		var apps=getApps();
 		if(!q){
 			filtered=apps.map(function(a){return{app:a,score:1};});
+			filtered.push(browserEntry);
+		}else if(isURL(q)){
+			// URL typed — show "Browse <url>" at top, then matching saved apps
+			var browseURL=q;
+			if(!/^https?:\/\//i.test(browseURL))browseURL=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(browseURL)?'http://':'https://')+browseURL;
+			filtered=[{app:{type:'url',url:browseURL,name:'Browse: '+q,width:'lg'},score:99999,isBrowse:true}];
+			apps.forEach(function(a){
+				var text=(a.name||'')+' '+(a.command||'')+' '+(a.url||'')+' '+a.type;
+				var score=fuzzyMatch(text,q);
+				if(score>0)filtered.push({app:a,score:score});
+			});
 		}else{
 			filtered=[];
 			apps.forEach(function(a){
@@ -940,6 +967,8 @@ func searchDialogJS(sid string) string {
 				if(score>0)filtered.push({app:a,score:score});
 			});
 			filtered.sort(function(a,b){return b.score-a.score;});
+			// Add browser if "browser" fuzzy matches query
+			if(fuzzyMatch('browser',q)>0)filtered.push(browserEntry);
 		}
 		selIdx=0;
 		render();
@@ -947,9 +976,15 @@ func searchDialogJS(sid string) string {
 
 	function launch(side){
 		if(filtered.length===0)return;
-		var app=filtered[selIdx].app;
+		var item=filtered[selIdx];
+		var app=item.app;
 		dlg.classList.add('hidden');
 		inp.value='';
+		// Empty browser — use app.browse.new to open blank tab with URL bar focused
+		if(item.isBrowse&&!app.url){
+			__ws.call('app.browse.new',{sid:'%s',side:side});
+			return;
+		}
 		__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false,name:app.name||'',side:side});
 	}
 
@@ -985,7 +1020,7 @@ func searchDialogJS(sid string) string {
 
 	window.__libroOpenSearch=openSearch;
 })();
-`, SearchDialogID, sid)
+`, SearchDialogID, sid, sid)
 }
 
 // resizeJS returns JS that updates an app frame's width without replacing the DOM
