@@ -16,7 +16,8 @@ const (
 	ProjectBarID    = "project-bar"
 	ProjectDialogID = "project-dialog"
 	DirBrowserID    = "dir-browser"
-	SearchDialogID  = "search-dialog"
+	SearchDialogID     = "search-dialog"
+	ShortcutsDialogID  = "shortcuts-dialog"
 )
 
 // termIconInfo stores the icon details for a known terminal command.
@@ -189,8 +190,8 @@ func renderEmptyState(state *AppState, sid string) *r.Node {
 		r.Div("flex flex-col items-center gap-2 w-full max-w-md").Render(
 			r.Div("flex flex-col gap-1.5 w-full").ID(savedAppsListID),
 			r.Div("flex gap-2 w-full mt-1").Render(
-				r.Button("flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
-					Text("+ Add New").
+				r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
+					Render(r.I("material-icons-round text-[18px]").Text("add"), r.Span("").Text("Add New")).
 					OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
 				r.Button("flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
 					Text("Browse").
@@ -684,7 +685,7 @@ func renderSideLauncher(sid, side string) *r.Node {
 
 	var addBtn=document.createElement('button');
 	addBtn.className=btnCls;
-	addBtn.innerHTML='<i class="material-icons-round '+(dk?'text-zinc-500 hover:text-teal-400':'text-gray-400 hover:text-teal-600')+' text-2xl">add</i>';
+	addBtn.innerHTML='<i class="material-icons-round '+(dk?'text-zinc-500 hover:text-teal-400':'text-gray-400 hover:text-teal-600')+' text-[18px]">add</i>';
 	var addTip=document.createElement('span');
 	addTip.className=tipCls;
 	addTip.textContent='Add new';
@@ -1023,6 +1024,71 @@ func searchDialogJS(sid string) string {
 `, SearchDialogID, sid, sid)
 }
 
+// renderShortcutsDialog renders the keyboard shortcuts popup (hidden by default).
+func renderShortcutsDialog() *r.Node {
+	type shortcut struct {
+		keys string
+		desc string
+	}
+	shortcuts := []shortcut{
+		{"⌘ + H", "Navigate left"},
+		{"⌘ + L", "Navigate right"},
+		{"Ctrl + 1–9", "Select app by index"},
+		{"⌘ + J", "Next project"},
+		{"⌘ + K", "Previous project"},
+		{"⌘ + /", "Open search"},
+		{"⌘ + D", "Close current app"},
+	}
+
+	rows := make([]*r.Node, 0, len(shortcuts))
+	for _, s := range shortcuts {
+		rows = append(rows,
+			r.Div("flex items-center justify-between py-2 px-1 border-b border-gray-100 dark:border-zinc-800 last:border-0").Render(
+				r.Span("text-sm text-gray-700 dark:text-zinc-300").Text(s.desc),
+				r.Span("text-xs font-mono px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400").Text(s.keys),
+			),
+		)
+	}
+
+	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
+		ID(ShortcutsDialogID).
+		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", ShortcutsDialogID))).
+		Render(
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden").
+				OnClick(r.JS("event.stopPropagation()")).
+				Render(
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center justify-between").Render(
+						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200").Text("Keyboard Shortcuts"),
+						r.Button("text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 cursor-pointer").
+							Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", ShortcutsDialogID)).
+							Render(r.I("material-icons-round text-base").Text("close")),
+					),
+					r.Div("px-4 py-2 max-h-80 overflow-y-auto").Render(rows...),
+					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+						r.Span("").Text("Esc to close"),
+					),
+				),
+		)
+}
+
+// shortcutsDialogJS returns JS to open/close the shortcuts dialog and handle Esc.
+func shortcutsDialogJS() string {
+	return fmt.Sprintf(`
+(function(){
+	var dlg=document.getElementById('%s');
+	window.__libroOpenShortcuts=function(){
+		dlg.classList.remove('hidden');
+	};
+	document.addEventListener('keydown',function(e){
+		if(e.key==='Escape'&&!dlg.classList.contains('hidden')){
+			e.preventDefault();e.stopImmediatePropagation();
+			dlg.classList.add('hidden');
+		}
+	},true);
+})();
+`, ShortcutsDialogID)
+}
+
 // resizeJS returns JS that updates an app frame's width without replacing the DOM
 func resizeJS(_ *AppState, width Width, appID string) string {
 	// Build a map of width value -> container classes
@@ -1124,6 +1190,7 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 	return r.Div("flex items-center gap-1.5 px-3 py-2 border-b border-gray-200 dark:border-zinc-800 shrink-0").
 		ID(ProjectBarID).
 		Render(
+			r.Img("w-5 h-5 shrink-0").Attr("src", "/assets/logo.svg").Attr("alt", "Libro"),
 			r.Div("flex items-center gap-1.5").Render(buttons...),
 			func() *r.Node {
 				pathWrapper := r.Div("group ml-3 flex items-center gap-1").Render(
@@ -1143,6 +1210,13 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 				return pathWrapper
 			}(),
 			r.Div("ml-auto flex items-center gap-1").Render(
+				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
+					Attr("title", "Keyboard shortcuts").
+					Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.toggle('hidden');", ShortcutsDialogID)).
+					Render(
+						r.I("material-icons-round text-base").Text("keyboard"),
+						r.Span("").Text("Shortcuts"),
+					),
 				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
 					Attr("title", "Toggle fullscreen").
 					Attr("onclick", "if(document.fullscreenElement){document.exitFullscreen();this.querySelector('i').textContent='fullscreen';this.querySelector('span').textContent='Fullscreen';}else{document.documentElement.requestFullscreen();this.querySelector('i').textContent='fullscreen_exit';this.querySelector('span').textContent='Exit';}").
