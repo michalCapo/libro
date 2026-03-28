@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"fmt"
 	"net/url"
 	"strings"
@@ -8,6 +9,9 @@ import (
 
 	r "github.com/michalCapo/g-sui/ui"
 )
+
+//go:embed assets/*
+var assets embed.FS
 
 // saveToLocalStorageJS returns JS that saves or updates an app definition in localStorage
 func saveToLocalStorageJS(appType, urlOrCmd, width, name string, writable bool) string {
@@ -49,6 +53,8 @@ func main() {
 	app := r.NewApp()
 	app.Title = "Libro"
 	app.Description = "Application Manager"
+	app.Assets(assets, "assets", "/assets/")
+	app.Favicon = "/assets/logo.svg"
 
 	// Main page - generates a unique session ID per page load
 	app.Page("/", func(ctx *r.Context) *r.Node {

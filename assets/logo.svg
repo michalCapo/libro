@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Open book / multi-panel concept representing app manager -->
+  <!-- Left page -->
+  <rect x="3" y="6" width="11" height="20" rx="2" fill="#0d9488" opacity="0.85"/>
+  <!-- Right page -->
+  <rect x="18" y="6" width="11" height="20" rx="2" fill="#14b8a6" opacity="0.85"/>
+  <!-- Spine / center binding -->
+  <rect x="14" y="4" width="4" height="24" rx="1" fill="#0f766e"/>
+  <!-- Page lines left -->
+  <rect x="5.5" y="11" width="6" height="1.2" rx="0.6" fill="white" opacity="0.5"/>
+  <rect x="5.5" y="14" width="6" height="1.2" rx="0.6" fill="white" opacity="0.5"/>
+  <rect x="5.5" y="17" width="4" height="1.2" rx="0.6" fill="white" opacity="0.5"/>
+  <!-- Page lines right -->
+  <rect x="20.5" y="11" width="6" height="1.2" rx="0.6" fill="white" opacity="0.5"/>
+  <rect x="20.5" y="14" width="6" height="1.2" rx="0.6" fill="white" opacity="0.5"/>
+  <rect x="20.5" y="17" width="4" height="1.2" rx="0.6" fill="white" opacity="0.5"/>
+</svg>
