@@ -183,6 +183,35 @@ The Chrome instance includes stealth measures to bypass bot detection (Cloudflar
 - **chromium-browser** or **google-chrome** must be installed on the system
 - **gorilla/websocket** for reliable WebSocket communication (CDP + client)
 
+## Desktop Mode
+
+Libro can run as a desktop application using Chromium's `--app` mode, which creates a frameless window with its own taskbar entry (no URL bar, no browser chrome).
+
+```bash
+libro --desktop
+```
+
+This starts the Libro server and opens a Chromium window pointing to `http://localhost:1439`. On Linux and Windows it searches for Chrome, Chromium, Edge, or Brave in standard locations. On macOS it falls back to the default browser.
+
+The app window uses a dedicated user-data-dir (`/tmp/libro-app`) so it doesn't interfere with regular browser sessions.
+
+## Install
+
+```bash
+./install
+```
+
+Compiles the binary for your OS/architecture and installs it to `~/.local/bin/`. Works on Linux, macOS, and Windows (via MSYS/Cygwin).
+
+## Deploy
+
+```bash
+./deploy           # bump version, build, commit, tag, push
+./deploy --dry-run # preview without changes
+```
+
+Reads the current version from `VERSION`, increments the patch number (e.g. `0.0.1` → `0.0.2`), builds the binary, commits the version bump, tags it `vX.X.X`, and pushes to git.
+
 ## Key Technical Decisions
 
 1. **Viewport panning**: CSS `transform: translateX()` on the strip container, controlled by server state. The offset is calculated based on selected app index and total widths.
