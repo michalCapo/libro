@@ -1,4 +1,4 @@
-package main
+package libro
 
 import (
 	r "github.com/michalCapo/g-sui/ui"

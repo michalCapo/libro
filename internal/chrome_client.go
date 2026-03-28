@@ -1,4 +1,4 @@
-package main
+package libro
 
 // chromeClientJS returns the JavaScript that manages Chrome tab canvas views.
 func chromeClientJS() string {

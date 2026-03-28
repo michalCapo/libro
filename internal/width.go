@@ -1,4 +1,4 @@
-package main
+package libro
 
 // Width represents the configurable width of an application
 type Width string
