@@ -3,11 +3,13 @@ package libro
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	r "github.com/michalCapo/g-sui/ui"
 
@@ -110,6 +112,60 @@ func lookupTermIcon(command string) *termIconInfo {
 		return &info
 	}
 	return nil
+}
+
+// discoverTermIconURL tries to find an icon for a terminal command by checking
+// the Simple Icons CDN. Returns the icon URL if found, empty string otherwise.
+func discoverTermIconURL(command string) string {
+	cmd := extractBaseCmd(command)
+	if cmd == "" {
+		return ""
+	}
+	// Already in known icons — no need to discover
+	if _, ok := knownTermIcons[cmd]; ok {
+		return ""
+	}
+
+	// Try the command name directly and common variations against Simple Icons CDN
+	candidates := []string{cmd}
+	// Also try without trailing digits (e.g. "python3" → "python")
+	trimmed := strings.TrimRight(cmd, "0123456789")
+	if trimmed != "" && trimmed != cmd {
+		candidates = append(candidates, trimmed)
+	}
+
+	client := &http.Client{Timeout: 4 * time.Second}
+	for _, name := range candidates {
+		iconURL := "https://cdn.simpleicons.org/" + name
+		resp, err := client.Head(iconURL)
+		if err != nil {
+			continue
+		}
+		resp.Body.Close()
+		if resp.StatusCode == 200 {
+			return iconURL
+		}
+	}
+	return ""
+}
+
+// extractBaseCmd extracts the base command name from a command string.
+func extractBaseCmd(command string) string {
+	parts := strings.Fields(command)
+	cmd := ""
+	for _, p := range parts {
+		if p != "sudo" && p != "env" && !strings.Contains(p, "=") {
+			cmd = p
+			break
+		}
+	}
+	if cmd == "" && len(parts) > 0 {
+		cmd = parts[0]
+	}
+	if idx := strings.LastIndex(cmd, "/"); idx >= 0 {
+		cmd = cmd[idx+1:]
+	}
+	return strings.ToLower(cmd)
 }
 
 // knownTermIconsJS returns a JS object literal with the icon mapping for client-side use.
@@ -231,6 +287,8 @@ func renderSavedAppButton(app SavedApp, index int, sid string) *r.Node {
 			} else {
 				iconNode = r.I("material-icons-round text-lg shrink-0 text-gray-400 dark:text-zinc-500").Text(info.MaterialIcon)
 			}
+		} else if app.IconURL != "" {
+			iconNode = r.Img("w-5 h-5 shrink-0 rounded-sm").Attr("src", app.IconURL)
 		} else {
 			iconNode = r.I("material-icons-round text-lg shrink-0 text-gray-400 dark:text-zinc-500").Text("terminal")
 		}
@@ -245,10 +303,7 @@ func renderSavedAppButton(app SavedApp, index int, sid string) *r.Node {
 				iconNode = r.Img("w-5 h-5 shrink-0 rounded-sm").
 					Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=32")
 				if label == app.URL {
-					h := u.Hostname()
-					if strings.HasPrefix(h, "www.") {
-						h = h[4:]
-					}
+					h := strings.TrimPrefix(u.Hostname(), "www.")
 					label = h
 				}
 			}
@@ -276,6 +331,7 @@ func renderSavedAppButton(app SavedApp, index int, sid string) *r.Node {
 			"sid": sid, "type": app.Type, "url": app.URL,
 			"command": app.Command, "width": app.Width,
 			"writable": writable, "name": app.Name,
+			"iconUrl": app.IconURL,
 		}})
 
 	return btn
@@ -494,6 +550,13 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			} else if info.MaterialIcon != "" {
 				iconNode = r.I("material-icons-round text-sm text-gray-500 dark:text-zinc-400 shrink-0").Text(info.MaterialIcon)
 			}
+		} else if app.IconURL != "" {
+			iconNode = r.Div("shrink-0 w-4 h-4 flex items-center justify-center").Render(
+				r.Div("").Attr("style", fmt.Sprintf(
+					"width:16px;height:16px;background:url('%s') center/contain no-repeat",
+					app.IconURL,
+				)),
+			)
 		}
 		if iconNode == nil {
 			// Fallback: gradient letter icon
@@ -664,6 +727,8 @@ func renderSideLauncher(sid, side string) *r.Node {
 				} else {
 					iconNode = r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-2xl").Text(info.MaterialIcon)
 				}
+			} else if app.IconURL != "" {
+				iconNode = r.Img("w-8 h-8 rounded-sm").Attr("src", app.IconURL)
 			} else {
 				iconNode = r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-2xl").Text("terminal")
 			}
@@ -677,10 +742,7 @@ func renderSideLauncher(sid, side string) *r.Node {
 					iconNode = r.Img("w-8 h-8 rounded-sm").
 						Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=32")
 					if label == app.URL {
-						h := u.Hostname()
-						if strings.HasPrefix(h, "www.") {
-							h = h[4:]
-						}
+						h := strings.TrimPrefix(u.Hostname(), "www.")
 						label = h
 					}
 				}
@@ -696,6 +758,7 @@ func renderSideLauncher(sid, side string) *r.Node {
 				"sid": sid, "type": app.Type, "url": app.URL,
 				"command": app.Command, "width": app.Width,
 				"writable": app.Writable, "name": app.Name, "side": side,
+				"iconUrl": app.IconURL,
 			}})
 		children = append(children, btn)
 	}
@@ -927,7 +990,7 @@ func searchDialogJS(sid string) string {
 				label=app.name||app.url;
 				sub=app.url;
 			}else if(app.type==='terminal'){
-				iconHtml=window.__libroTermIcon?window.__libroTermIcon(app.command,24):'';
+				iconHtml=window.__libroTermIcon?window.__libroTermIcon(app.command,24,app.iconUrl):'';
 				label=app.name||app.command;
 				sub=app.command;
 			}else{
@@ -1012,7 +1075,7 @@ func searchDialogJS(sid string) string {
 			__ws.call('app.browse.new',{sid:'%s',side:side});
 			return;
 		}
-		__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false,name:app.name||'',side:side});
+		__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false,name:app.name||'',iconUrl:app.iconUrl||'',side:side});
 	}
 
 	function openSearch(){
@@ -1405,10 +1468,11 @@ func savedAppsJS() string {
 		Width    string `json:"width"`
 		Writable bool   `json:"writable"`
 		Name     string `json:"name,omitempty"`
+		IconURL  string `json:"iconUrl,omitempty"`
 	}
 	jsApps := make([]jsApp, len(apps))
 	for i, a := range apps {
-		jsApps[i] = jsApp{Type: a.Type, URL: a.URL, Command: a.Command, Width: a.Width, Writable: a.Writable, Name: a.Name}
+		jsApps[i] = jsApp{Type: a.Type, URL: a.URL, Command: a.Command, Width: a.Width, Writable: a.Writable, Name: a.Name, IconURL: a.IconURL}
 	}
 	b, _ := json.Marshal(jsApps)
 	return fmt.Sprintf("window.__libroSavedApps=%s;", string(b))
@@ -1448,7 +1512,7 @@ func termIconSetupJS() string {
 		return cmd.toLowerCase();
 	}
 
-	window.__libroTermIcon=function(command,size){
+	window.__libroTermIcon=function(command,size,cachedIconUrl){
 		size=size||24;
 		var cmd=resolveCmd(command);
 		var info=icons[cmd];
@@ -1457,6 +1521,9 @@ func termIconSetupJS() string {
 		}
 		if(info&&info.mi){
 			return '<i class="material-icons-round" style="font-size:'+size+'px;color:#9ca3af">'+info.mi+'</i>';
+		}
+		if(cachedIconUrl){
+			return '<img src="'+cachedIconUrl+'" style="width:'+size+'px;height:'+size+'px;object-fit:contain" onerror="this.outerHTML=__libroTermIconFallback(\''+command.replace(/'/g,"\\'")+'\','+size+')">';
 		}
 		return __libroTermIconFallback(command,size);
 	};

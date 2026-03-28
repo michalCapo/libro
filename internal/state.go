@@ -24,6 +24,7 @@ type Application struct {
 	Port     int    // ttyd port (only for terminal apps)
 	Writable bool   // ttyd --writable flag (only for terminal apps)
 	Name     string // optional display name
+	IconURL  string // cached icon URL from DB (only for terminal apps)
 }
 
 // Project represents a named working directory
@@ -177,7 +178,7 @@ func (sm *StateManager) PrependApp(sessionID, url string, width Width, name stri
 }
 
 // addTerminalApp is the internal helper that inserts a terminal app at the given position
-func (sm *StateManager) addTerminalApp(sessionID string, command string, port int, writable bool, width Width, name string, prepend bool) {
+func (sm *StateManager) addTerminalApp(sessionID string, command string, port int, writable bool, width Width, name string, iconURL string, prepend bool) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -200,6 +201,7 @@ func (sm *StateManager) addTerminalApp(sessionID string, command string, port in
 		Port:     port,
 		Writable: writable,
 		Name:     name,
+		IconURL:  iconURL,
 	}
 	if prepend {
 		s.Apps = append([]Application{app}, s.Apps...)
@@ -211,13 +213,13 @@ func (sm *StateManager) addTerminalApp(sessionID string, command string, port in
 }
 
 // AddTerminalApp adds a new terminal application to the end of the session's app list
-func (sm *StateManager) AddTerminalApp(sessionID string, command string, port int, writable bool, width Width, name string) {
-	sm.addTerminalApp(sessionID, command, port, writable, width, name, false)
+func (sm *StateManager) AddTerminalApp(sessionID string, command string, port int, writable bool, width Width, name string, iconURL string) {
+	sm.addTerminalApp(sessionID, command, port, writable, width, name, iconURL, false)
 }
 
 // PrependTerminalApp adds a new terminal application to the beginning of the session's app list
-func (sm *StateManager) PrependTerminalApp(sessionID string, command string, port int, writable bool, width Width, name string) {
-	sm.addTerminalApp(sessionID, command, port, writable, width, name, true)
+func (sm *StateManager) PrependTerminalApp(sessionID string, command string, port int, writable bool, width Width, name string, iconURL string) {
+	sm.addTerminalApp(sessionID, command, port, writable, width, name, iconURL, true)
 }
 
 // RemoveApp removes an application by index and returns it (for cleanup)
