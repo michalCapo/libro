@@ -685,7 +685,7 @@ func Run(assets embed.FS) {
 
 	registerTtydProxy(app)
 	registerChrome(app)
-	app.Listen(":1439")
+	app.Listen(":" + Port())
 }
 
 // ensureScheme adds http:// for local URLs and https:// for everything else.

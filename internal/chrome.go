@@ -58,8 +58,10 @@ type chromeTab struct {
 	pending map[int64]chan json.RawMessage
 	pendMu  sync.Mutex
 
-	clientMu sync.Mutex
-	client   *websocket.Conn
+	clientMu  sync.Mutex
+	client    *websocket.Conn
+	outCh     chan []byte    // buffered channel for non-blocking client writes
+	writeDone chan struct{}  // closed to stop writePump
 
 	pumpRunning atomic.Bool
 }
@@ -210,6 +212,7 @@ func (cm *ChromeManager) createNewTab(appID string) (*chromeTab, error) {
 		wsURL:    info.WebSocketDebuggerURL,
 		cdpConn:  cdpConn,
 		pending:  make(map[int64]chan json.RawMessage),
+		outCh:    make(chan []byte, 30),
 	}
 	tab.pumpRunning.Store(true)
 
@@ -358,6 +361,35 @@ func (t *chromeTab) readPump() {
 	}
 }
 
+// writePump drains outCh and writes to the client WebSocket.
+// Runs as a goroutine so readPump never blocks on client writes.
+func (t *chromeTab) writePump() {
+	for {
+		select {
+		case data := <-t.outCh:
+			t.clientMu.Lock()
+			c := t.client
+			t.clientMu.Unlock()
+			if c != nil {
+				c.SetWriteDeadline(time.Now().Add(2 * time.Second))
+				c.WriteMessage(websocket.TextMessage, data)
+			}
+		case <-t.writeDone:
+			return
+		}
+	}
+}
+
+// sendToClient enqueues a message for the client. Drops the message if the
+// buffer is full so that readPump is never blocked.
+func (t *chromeTab) sendToClient(data []byte) {
+	select {
+	case t.outCh <- data:
+	default:
+		// drop frame — client can't keep up
+	}
+}
+
 func (t *chromeTab) handleCDPEvent(method string, params json.RawMessage) {
 	switch method {
 	case "Page.screencastFrame":
@@ -374,14 +406,10 @@ func (t *chromeTab) handleCDPEvent(method string, params json.RawMessage) {
 		// Ack to get next frame
 		t.fireCDP("Page.screencastFrameAck", map[string]int{"sessionId": p.SessionID})
 
-		// Forward frame to client
-		t.clientMu.Lock()
-		if t.client != nil {
-			msg := fmt.Sprintf(`{"t":"f","d":"%s","w":%v,"h":%v}`,
-				p.Data, p.Metadata.DeviceWidth, p.Metadata.DeviceHeight)
-			t.client.WriteMessage(websocket.TextMessage, []byte(msg))
-		}
-		t.clientMu.Unlock()
+		// Forward frame to client (non-blocking)
+		msg := fmt.Sprintf(`{"t":"f","d":"%s","w":%v,"h":%v}`,
+			p.Data, p.Metadata.DeviceWidth, p.Metadata.DeviceHeight)
+		t.sendToClient([]byte(msg))
 
 	case "Page.frameNavigated":
 		var p struct {
@@ -393,11 +421,8 @@ func (t *chromeTab) handleCDPEvent(method string, params json.RawMessage) {
 		json.Unmarshal(params, &p)
 
 		if p.Frame.ParentID == "" {
-			t.clientMu.Lock()
-			if t.client != nil {
-				t.client.WriteJSON(map[string]string{"t": "nav", "url": p.Frame.URL})
-			}
-			t.clientMu.Unlock()
+			navMsg, _ := json.Marshal(map[string]string{"t": "nav", "url": p.Frame.URL})
+			t.sendToClient(navMsg)
 		}
 	}
 }
@@ -438,10 +463,15 @@ func handleChromeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Register client
+	// Register client and start write pump
 	tab.clientMu.Lock()
+	if tab.writeDone != nil {
+		close(tab.writeDone) // stop previous writePump if any
+	}
 	tab.client = ws
+	tab.writeDone = make(chan struct{})
 	tab.clientMu.Unlock()
+	go tab.writePump()
 
 	// Setup Chrome tab
 	tab.sendCDP("Page.enable", nil)
@@ -550,6 +580,10 @@ func handleChromeHTTP(w http.ResponseWriter, req *http.Request) {
 	tab.clientMu.Lock()
 	if tab.client == ws {
 		tab.client = nil
+		if tab.writeDone != nil {
+			close(tab.writeDone)
+			tab.writeDone = nil
+		}
 	}
 	tab.clientMu.Unlock()
 	log.Printf("chrome: client disconnected for app %s", appID)

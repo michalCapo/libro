@@ -192,7 +192,7 @@ libro              # starts server + opens desktop window
 libro --no-desktop # starts server only (no window)
 ```
 
-By default, Libro starts the server and opens a Chromium window pointing to `http://localhost:1439`. On Linux and Windows it searches for Chrome, Chromium, Edge, or Brave in standard locations. On macOS it falls back to the default browser. Use `--no-desktop` to run the server without opening a window.
+By default, Libro starts the server and opens a Chromium window pointing to `http://localhost:8100` (production build). Development builds (`go build -tags dev`) use port `1439` instead, so both can run side-by-side on the same machine. On Linux and Windows it searches for Chrome, Chromium, Edge, or Brave in standard locations. On macOS it falls back to the default browser. Use `--no-desktop` to run the server without opening a window.
 
 The app window uses a dedicated user-data-dir (`/tmp/libro-app`) so it doesn't interfere with regular browser sessions.
 
