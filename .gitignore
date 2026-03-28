@@ -1,3 +1,5 @@
 tmp/
 libro
 *.syso
+node_modules/
+libro.db*
