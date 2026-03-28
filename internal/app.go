@@ -53,7 +53,6 @@ func dbUpdateAppURL(projectName string, index int, newURL string) {
 var (
 	sm = NewStateManager()
 	tm = NewTtydManager()
-	cm = NewChromeManager()
 )
 
 // Run initializes and starts the Libro application server.
@@ -291,8 +290,6 @@ func Run(assets embed.FS) {
 		if removed != nil {
 			if removed.Type == AppTypeTerminal {
 				tm.Stop(removed.ID)
-			} else if removed.Type == AppTypeURL {
-				cm.closeTab(removed.ID)
 			}
 		}
 
@@ -321,8 +318,6 @@ func Run(assets embed.FS) {
 		if removed != nil {
 			if removed.Type == AppTypeTerminal {
 				tm.Stop(removed.ID)
-			} else if removed.Type == AppTypeURL {
-				cm.closeTab(removed.ID)
 			}
 		}
 
@@ -429,10 +424,10 @@ func Run(assets embed.FS) {
 		}
 		// Save to browsed URL history (user-typed URLs only)
 		go DBSaveBrowsedURL(newURL)
-		// Navigate Chrome tab (if connected) and persist URL to DB
+		// Navigate webview and persist URL to DB
 		state := sm.Get(sid)
 		dbUpdateAppURL(state.ActiveProject, idx, newURL)
-		return fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS[%s];if(c&&c.readyState===1)c.send(JSON.stringify({t:'nav',url:%s}));var inp=document.getElementById('urlinput-'+%s);if(inp)inp.value=%s;})();`, jsString(appID), jsString(newURL), jsString(appID), jsString(newURL))
+		return fmt.Sprintf(`(function(){window.__libroWvNavigate(%s,%s);var inp=document.getElementById('urlinput-'+%s);if(inp)inp.value=%s;})();`, jsString(appID), jsString(newURL), jsString(appID), jsString(newURL))
 	})
 
 	// Clear browsing history
@@ -622,8 +617,6 @@ func Run(assets embed.FS) {
 		for _, a := range apps {
 			if a.Type == AppTypeTerminal {
 				tm.Stop(a.ID)
-			} else if a.Type == AppTypeURL {
-				cm.closeTab(a.ID)
 			}
 		}
 
@@ -675,7 +668,6 @@ func Run(assets embed.FS) {
 	})
 
 	registerTtydProxy(app)
-	registerChrome(app)
 	app.Listen(":" + Port())
 }
 

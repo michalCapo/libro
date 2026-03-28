@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# dev — Build libro (dev mode) and launch with Electron
+# ---------------------------------------------------------------------------
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODULE="libro"
+
+info()  { echo -e "\033[1;34m==>\033[0m $*"; }
+ok()    { echo -e "\033[1;32m==>\033[0m $*"; }
+err()   { echo -e "\033[1;31m==>\033[0m $*" >&2; }
+
+# ---------------------------------------------------------------------------
+# Build Go binary (dev tag → port 1439)
+# ---------------------------------------------------------------------------
+
+info "Building libro (dev, port 1439)..."
+go build -tags dev -o "$SCRIPT_DIR/libro" .
+ok "Built"
+
+# ---------------------------------------------------------------------------
+# Ensure Electron is installed
+# ---------------------------------------------------------------------------
+
+if [[ ! -d "$SCRIPT_DIR/node_modules/.package-lock.json" ]] && [[ ! -d "$SCRIPT_DIR/node_modules/electron" ]]; then
+    info "Installing Electron..."
+    npm install --no-fund --no-audit
+    ok "Electron installed"
+fi
+
+# ---------------------------------------------------------------------------
+# Launch
+# ---------------------------------------------------------------------------
+
+info "Starting Electron..."
+LIBRO_PORT=1439 GDK_BACKEND=x11 npx electron . --gtk-version=3 2>&1 | grep -v -E "gl_surface_presentation_helper|Autofill\."

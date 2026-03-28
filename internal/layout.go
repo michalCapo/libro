@@ -14,6 +14,6 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderSearchDialog(sid),
 		renderShortcutsDialog(),
 	)
-	page.JS(flashCSS() + termIconSetupJS() + keyboardShortcutsJS(sid) + savedAppsJS() + initHashJS(sid) + searchDialogJS(sid) + shortcutsDialogJS() + chromeClientJS())
+	page.JS(flashCSS() + termIconSetupJS() + keyboardShortcutsJS(sid) + savedAppsJS() + initHashJS(sid) + searchDialogJS(sid) + shortcutsDialogJS() + webviewClientJS())
 	return page
 }
