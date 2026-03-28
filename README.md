@@ -116,6 +116,7 @@ A close button is available on each application/iframe to remove it from the str
 - `Win/Meta+J` — switch to next project
 - `Win/Meta+K` — switch to previous project
 - `Win/Meta+/` — open fuzzy search launcher
+- `Win/Meta+D` — close the currently selected app
 
 When switching apps, the selected application scrolls into view only if it is off-screen (minimal scroll, no centering). Terminal (ttyd) iframes automatically receive focus when selected, including across project switches.
 

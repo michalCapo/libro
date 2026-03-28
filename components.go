@@ -1386,6 +1386,21 @@ func keyboardShortcutsJS(sid string) string {
 					e.stopImmediatePropagation();
 					if (window.__libroOpenSearch) window.__libroOpenSearch();
 				}
+				if (e.metaKey && (e.key === 'd' || e.key === 'D')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					var strips = document.querySelectorAll('[id^="app-strip-"]');
+					for (var s = 0; s < strips.length; s++) {
+						var parent = strips[s].closest('[id^="project-main-"]');
+						if (parent && parent.style.display !== 'none') {
+							var sel = strips[s].querySelector('.border-teal-500[data-app-id]');
+							if (sel) {
+								__ws.call('app.close', {"sid": "%s", "id": sel.getAttribute('data-app-id')});
+							}
+							break;
+						}
+					}
+				}
 			}
 
 			document.addEventListener('keydown', libroKeyHandler, true);
@@ -1434,5 +1449,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-	`, sid, sid, sid, sid, sid)
+	`, sid, sid, sid, sid, sid, sid)
 }
