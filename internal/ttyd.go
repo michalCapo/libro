@@ -20,7 +20,7 @@ type TtydManager struct {
 	processes map[string]*exec.Cmd // keyed by app ID
 }
 
-// NewTtydManager creates a new ttyd process manager
+// NewTtydManager creates a new ttyd process manager.
 func NewTtydManager() *TtydManager {
 	return &TtydManager{
 		processes: make(map[string]*exec.Cmd),

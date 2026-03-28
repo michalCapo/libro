@@ -217,24 +217,19 @@ func Run(assets embed.FS) {
 			hadApps := len(stateBefore.Apps)
 
 			pwd := sm.GetActiveProjectPath(sid)
+			appID := sm.NextAppID()
 			port := sm.NextPort()
-			if err := tm.Start("pending", port, command, writable, pwd); err != nil {
+			if err := tm.Start(appID, port, command, writable, pwd); err != nil {
 				return r.Notify("error", "Failed to start ttyd: "+err.Error())
 			}
 
 			if prepend {
-				sm.PrependTerminalApp(sid, command, port, writable, width, name, iconURL)
+				sm.PrependTerminalApp(sid, appID, command, port, writable, width, name, iconURL)
 			} else {
-				sm.AddTerminalApp(sid, command, port, writable, width, name, iconURL)
+				sm.AddTerminalApp(sid, appID, command, port, writable, width, name, iconURL)
 			}
 			state := sm.Get(sid)
 			newApp := &state.Apps[state.SelectedIndex]
-			tm.mu.Lock()
-			if cmd, ok := tm.processes["pending"]; ok {
-				delete(tm.processes, "pending")
-				tm.processes[newApp.ID] = cmd
-			}
-			tm.mu.Unlock()
 
 			time.Sleep(500 * time.Millisecond)
 

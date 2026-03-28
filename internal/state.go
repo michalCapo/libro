@@ -136,6 +136,14 @@ func (sm *StateManager) NextPort() int {
 	return sm.nextPort
 }
 
+// NextAppID returns a unique app ID without adding any app to state.
+func (sm *StateManager) NextAppID() string {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.nextID++
+	return fmt.Sprintf("app-%d", sm.nextID)
+}
+
 // addApp is the internal helper that inserts a URL app at the given position
 func (sm *StateManager) addApp(sessionID, url string, width Width, name string, prepend bool) {
 	sm.mu.Lock()
@@ -177,8 +185,9 @@ func (sm *StateManager) PrependApp(sessionID, url string, width Width, name stri
 	sm.addApp(sessionID, url, width, name, true)
 }
 
-// addTerminalApp is the internal helper that inserts a terminal app at the given position
-func (sm *StateManager) addTerminalApp(sessionID string, command string, port int, writable bool, width Width, name string, iconURL string, prepend bool) {
+// addTerminalApp is the internal helper that inserts a terminal app at the given position.
+// appID must be pre-generated via NextAppID to avoid race conditions with TtydManager.
+func (sm *StateManager) addTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string, prepend bool) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -191,9 +200,8 @@ func (sm *StateManager) addTerminalApp(sessionID string, command string, port in
 		}
 		sm.states[sessionID] = s
 	}
-	sm.nextID++
 	app := Application{
-		ID:       fmt.Sprintf("app-%d", sm.nextID),
+		ID:       appID,
 		Type:     AppTypeTerminal,
 		URL:      fmt.Sprintf("/ttyd/%d/", port),
 		Command:  command,
@@ -213,13 +221,13 @@ func (sm *StateManager) addTerminalApp(sessionID string, command string, port in
 }
 
 // AddTerminalApp adds a new terminal application to the end of the session's app list
-func (sm *StateManager) AddTerminalApp(sessionID string, command string, port int, writable bool, width Width, name string, iconURL string) {
-	sm.addTerminalApp(sessionID, command, port, writable, width, name, iconURL, false)
+func (sm *StateManager) AddTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string) {
+	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL, false)
 }
 
 // PrependTerminalApp adds a new terminal application to the beginning of the session's app list
-func (sm *StateManager) PrependTerminalApp(sessionID string, command string, port int, writable bool, width Width, name string, iconURL string) {
-	sm.addTerminalApp(sessionID, command, port, writable, width, name, iconURL, true)
+func (sm *StateManager) PrependTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string) {
+	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL, true)
 }
 
 // RemoveApp removes an application by index and returns it (for cleanup)
