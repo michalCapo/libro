@@ -5,8 +5,14 @@ import (
 	"log"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 )
+
+// shellQuote escapes a string for safe use as a single shell argument.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
 
 // TtydManager manages ttyd processes
 type TtydManager struct {
@@ -38,7 +44,7 @@ func (tm *TtydManager) Start(appID string, port int, command string, writable bo
 	// (e.g. .bashrc launching editors). Also supports complex commands with pipes.
 	shellCmd := command
 	if pwd != "" {
-		shellCmd = fmt.Sprintf("cd '%s' && %s", pwd, command)
+		shellCmd = fmt.Sprintf("cd %s && %s", shellQuote(pwd), command)
 	}
 	args = append(args, "bash", "--norc", "--noprofile", "-c", shellCmd)
 

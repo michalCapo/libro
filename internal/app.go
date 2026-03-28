@@ -2,21 +2,31 @@ package libro
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	r "github.com/michalCapo/g-sui/ui"
 )
 
+// jsString returns a JSON-encoded string safe for embedding in JavaScript.
+// It includes the surrounding quotes.
+func jsString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
 // saveToLocalStorageJS returns JS that saves or updates an app definition in localStorage
 func saveToLocalStorageJS(appType, urlOrCmd, width, name string, writable bool) string {
 	return fmt.Sprintf(`
 (function(){
 	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
-	var entry={type:'%s',width:'%s',writable:%v,name:'%s'};
-	if(entry.type==='terminal'){entry.command='%s';}else{entry.url='%s';}
+	var entry={type:%s,width:%s,writable:%v,name:%s};
+	if(entry.type==='terminal'){entry.command=%s;}else{entry.url=%s;}
 	var editIdx=localStorage.getItem('libro-edit-idx');
 	if(editIdx!==null){
 		var idx=parseInt(editIdx);
@@ -27,7 +37,7 @@ func saveToLocalStorageJS(appType, urlOrCmd, width, name string, writable bool) 
 	}
 	localStorage.setItem('libro-apps',JSON.stringify(apps));
 })();
-`, appType, width, writable, name, urlOrCmd, urlOrCmd)
+`, jsString(appType), jsString(width), writable, jsString(name), jsString(urlOrCmd), jsString(urlOrCmd))
 }
 
 // updateLocalStorageURLJS returns JS that updates the URL of an app at a given index in localStorage
@@ -35,9 +45,9 @@ func updateLocalStorageURLJS(index int, newURL string) string {
 	return fmt.Sprintf(`
 (function(){
 	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
-	if(%d>=0&&%d<apps.length){apps[%d].url='%s';localStorage.setItem('libro-apps',JSON.stringify(apps));}
+	if(%d>=0&&%d<apps.length){apps[%d].url=%s;localStorage.setItem('libro-apps',JSON.stringify(apps));}
 })();
-`, index, index, index, newURL)
+`, index, index, index, jsString(newURL))
 }
 
 var (
@@ -450,7 +460,7 @@ func Run(assets embed.FS) {
 			return ""
 		}
 		// Navigate Chrome tab (if connected) and update localStorage
-		return fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS['%s'];if(c&&c.readyState===1)c.send(JSON.stringify({t:'nav',url:'%s'}));var inp=document.getElementById('urlinput-%s');if(inp)inp.value='%s';})();`, appID, newURL, appID, newURL) +
+		return fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS[%s];if(c&&c.readyState===1)c.send(JSON.stringify({t:'nav',url:%s}));var inp=document.getElementById('urlinput-'+%s);if(inp)inp.value=%s;})();`, jsString(appID), jsString(newURL), jsString(appID), jsString(newURL)) +
 			updateLocalStorageURLJS(idx, newURL)
 	})
 
@@ -461,6 +471,12 @@ func Run(assets embed.FS) {
 		path, _ := data["path"].(string)
 		path = strings.TrimSpace(path)
 		if path == "" {
+			return ""
+		}
+		// Resolve to absolute path and ensure it stays under home directory
+		path = filepath.Clean(path)
+		home, _ := os.UserHomeDir()
+		if !filepath.IsAbs(path) || !strings.HasPrefix(path, home) {
 			return ""
 		}
 		return renderDirBrowser(path, sid).ToJSReplace(DirBrowserID)

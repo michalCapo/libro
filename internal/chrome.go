@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +23,18 @@ import (
 const chromeDebugPort = 9222
 
 var wsUpgrader = websocket.Upgrader{
-	CheckOrigin:     func(r *http.Request) bool { return true },
+	CheckOrigin: func(req *http.Request) bool {
+		origin := req.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		u, err := url.Parse(origin)
+		if err != nil {
+			return false
+		}
+		host := u.Hostname()
+		return host == "localhost" || host == "127.0.0.1" || host == "::1"
+	},
 	ReadBufferSize:  64 * 1024,
 	WriteBufferSize: 256 * 1024,
 }
