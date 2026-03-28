@@ -1091,15 +1091,15 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 		} else {
 			cls += "bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-300 dark:hover:bg-zinc-700"
 		}
-		buttons = append(buttons,
-			r.Button(cls).
-				Text(proj.Name).
-				Attr("title", proj.Path).
-				OnClick(r.JS(fmt.Sprintf(
-					"history.replaceState(null,'','#%s');__ws.call('project.switch',{sid:'%s',name:'%s'});",
-					proj.Name, sid, proj.Name,
-				))),
-		)
+		projBtn := r.Button(cls).
+			Text(proj.Name).
+			Attr("title", proj.Path).
+			OnClick(r.JS(fmt.Sprintf(
+				"history.replaceState(null,'','#%s');__ws.call('project.switch',{sid:'%s',name:'%s'});",
+				proj.Name, sid, proj.Name,
+			)))
+
+		buttons = append(buttons, projBtn)
 	}
 
 	// Add project button
@@ -1125,7 +1125,23 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 		ID(ProjectBarID).
 		Render(
 			r.Div("flex items-center gap-1.5").Render(buttons...),
-			r.Span("ml-3 text-[11px] font-mono text-gray-400 dark:text-zinc-600 truncate").Text(activePath),
+			func() *r.Node {
+				pathWrapper := r.Div("group ml-3 flex items-center gap-1").Render(
+					r.Span("text-[11px] font-mono text-gray-400 dark:text-zinc-600 truncate").Text(activePath),
+				)
+				if state.ActiveProject != "home" {
+					pathWrapper.Render(
+						r.Button("flex items-center justify-center w-4 h-4 rounded cursor-pointer text-red-500 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity duration-75").
+							Attr("title", "Remove project").
+							OnClick(&r.Action{
+								Name: "project.remove",
+								Data: map[string]any{"sid": sid, "name": state.ActiveProject},
+							}).
+							Render(r.I("material-icons-round text-[14px]").Text("close")),
+					)
+				}
+				return pathWrapper
+			}(),
 			r.Div("ml-auto flex items-center gap-1").Render(
 				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
 					Attr("title", "Toggle fullscreen").
@@ -1288,6 +1304,17 @@ func saveProjectToLocalStorageJS(name, path string) string {
 	localStorage.setItem('libro-projects',JSON.stringify(projects));
 })();
 `, name, name, path)
+}
+
+// removeProjectFromLocalStorageJS removes a project from localStorage
+func removeProjectFromLocalStorageJS(name string) string {
+	return fmt.Sprintf(`
+(function(){
+	var projects=JSON.parse(localStorage.getItem('libro-projects')||'[]');
+	projects=projects.filter(function(p){return p.name!=='%s';});
+	localStorage.setItem('libro-projects',JSON.stringify(projects));
+})();
+`, name)
 }
 
 // loadProjectsJS returns JS that reads saved projects from localStorage and initializes them

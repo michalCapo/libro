@@ -363,6 +363,43 @@ func (sm *StateManager) AddProject(sessionID, name, path string) bool {
 	return true
 }
 
+// RemoveProject removes a project from the session. Returns the project's snapshotted apps (for cleanup) and success.
+// The "home" project cannot be removed.
+func (sm *StateManager) RemoveProject(sessionID, projectName string) ([]Application, bool) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil || projectName == "home" {
+		return nil, false
+	}
+
+	idx := -1
+	for i, p := range s.Projects {
+		if p.Name == projectName {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return nil, false
+	}
+
+	s.Projects = append(s.Projects[:idx], s.Projects[idx+1:]...)
+
+	var apps []Application
+	if snap, ok := s.snapshots[projectName]; ok {
+		apps = snap.Apps
+		delete(s.snapshots, projectName)
+	}
+	delete(s.renderedProjects, projectName)
+
+	if s.ActiveProject == projectName {
+		s.ActiveProject = "home"
+	}
+
+	return apps, true
+}
+
 // SwitchProject switches the active project, saving and restoring app state
 func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 	sm.mu.Lock()
