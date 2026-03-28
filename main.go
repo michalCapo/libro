@@ -624,7 +624,6 @@ func main() {
 		return renderProjectBar(state, sid).ToJSReplace(ProjectBarID)
 	})
 
-	registerProxy(app)
 	registerTtydProxy(app)
 	registerChrome(app)
 	app.Listen(":1439")
