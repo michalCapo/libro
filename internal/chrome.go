@@ -447,10 +447,6 @@ func (t *chromeTab) handleCDPEvent(method string, params json.RawMessage) {
 		if p.Frame.ParentID == "" {
 			navMsg, _ := json.Marshal(map[string]string{"t": "nav", "url": p.Frame.URL})
 			t.sendToClient(navMsg)
-			// Store browsed URL for search history (skip internal pages)
-			if u := p.Frame.URL; u != "" && u != "about:blank" && (strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://")) {
-				go DBSaveBrowsedURL(u)
-			}
 		}
 	}
 }
