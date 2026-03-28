@@ -1,6 +1,3 @@
---border (todo)
-use frontend-design to improve the "selected app" look beautiful. forget about the border staff (remove the bordering of selected app) use absolute position and mark current application with a dot. place it on the top left corner. make it clearly visible
-
 --icon (todo)
 improve discovering icons of the ttyd application. opencode icon is not working use web fetch to search for given icon if not found locally. store found icons in database
 
