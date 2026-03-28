@@ -424,13 +424,14 @@ func navigateJS(state *AppState, sid string) string {
 				var child = strip.children[i + offset];
 				if (!child) continue;
 				if (i === selectedIdx) {
-					// Add selection dot if not present
-					if (!child.querySelector('[data-selection-dot]')) {
+					// Add selection dot in toolbar if not present
+					var toolbar = child.children[0];
+					if (toolbar && !toolbar.querySelector('[data-selection-dot]')) {
 						var dot = document.createElement('div');
 						dot.setAttribute('data-selection-dot', '');
-						dot.className = 'absolute top-0 left-0 z-30 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-teal-500';
-						dot.style.cssText = 'box-shadow:0 0 6px 1px rgba(20,184,166,0.5)';
-						child.insertBefore(dot, child.firstChild);
+						dot.className = 'shrink-0 w-2 h-2 rounded-full bg-red-500 ml-0.5';
+						dot.style.animation = 'libro-flash .5s ease-out forwards';
+						toolbar.insertBefore(dot, toolbar.firstChild);
 					}
 					var overlay = child.querySelector('[data-click-overlay]');
 					if (overlay) overlay.remove();
@@ -460,6 +461,10 @@ func navigateJS(state *AppState, sid string) string {
 			}
 		})();
 	`, stripID(state.ActiveProject), state.SelectedIndex, len(state.Apps), sid)
+}
+
+func flashCSS() string {
+	return `(function(){if(!document.getElementById('libro-flash-css')){var s=document.createElement('style');s.id='libro-flash-css';s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}}';document.head.appendChild(s);}})();`
 }
 
 // renderAppFrame renders a single application iframe with controls
@@ -589,10 +594,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		)
 	}
 
-	// Toolbar: always visible, sits above the iframe
-	toolbar := r.Div("flex items-center gap-2 px-1.5 py-1 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-700/50 shrink-0").
-		Render(leftSide, rightButtons)
-
+	var toolbar *r.Node
 	var clickOverlay *r.Node
 	if !selected {
 		clickOverlay = r.Div("absolute inset-0 z-20 cursor-pointer").
@@ -603,18 +605,21 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			})
 	}
 
-	// Selection dot indicator (top-left corner)
+	// Selection dot indicator (inline in toolbar, before left side content)
 	var selectionDot *r.Node
 	if selected {
-		selectionDot = r.Div("absolute top-0 left-0 z-30 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-teal-500").
+		selectionDot = r.Div("shrink-0 w-2 h-2 rounded-full bg-red-500 ml-0.5").
 			Attr("data-selection-dot", "").
-			Attr("style", "box-shadow:0 0 6px 1px rgba(20,184,166,0.5)")
+			Attr("style", "animation:libro-flash .5s ease-out forwards")
 	}
+
+	// Toolbar: always visible, sits above the iframe
+	toolbar = r.Div("flex items-center gap-2 px-1.5 py-1 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-700/50 shrink-0").
+		Render(selectionDot, leftSide, rightButtons)
 
 	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
 		Attr("data-app-id", app.ID).
 		Render(
-			selectionDot,
 			toolbar,
 			r.Div("relative flex-1 min-h-0").Render(
 				renderIframe(app, frameID, iframeSrc),

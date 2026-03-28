@@ -52,7 +52,7 @@ Each app uses its configured fixed pixel width. FULL takes 100% of the viewport.
 Full-height flex container as a single page app. One route (`/`) renders the application strip. The entire viewport is the application strip with a neutral background to distinguish from iframe content.
 
 ### Empty State
-When no applications exist, a centered "+ Application" button is displayed. Clicking it opens the "Add Application" dialog.
+When no applications exist, "Add New" and "Browse" buttons are displayed centered. If the project has no saved applications yet, a short gray guide text explains how to get started — add web apps by URL or terminal commands, use Browse for quick web lookups, and check shortcuts for a productivity boost.
 
 ### Add Application Dialog
 Modal/dialog overlay triggered by "+" button click. Contains a URL input field (required) and width selection via radio buttons (SM, MD, LG, XL, 2XL, FULL). On submit, validates the URL is not empty, adds the application to state, closes the dialog, and re-renders the strip.
@@ -79,7 +79,7 @@ When there is space on the left or right of the application strip, "+" buttons a
 When applications overflow the viewport, left (`<`) and right (`>`) arrows appear at viewport edges allowing the user to shift/pan the layout. Smooth CSS transitions animate the shift. Partially visible apps appear on edges during panning.
 
 ### Application Selection / Focus
-One application is always selected and centered. Clicking on a partially visible app selects and centers it. The selected app is visually distinguished.
+One application is always selected and centered. Clicking on a partially visible app selects and centers it. The selected app is marked with a small teal dot on the top-left corner (absolute positioned with a subtle glow), rather than a border change.
 
 ### Multi-App Layout on Large Screens
 If the selected app doesn't fill the viewport, adjacent apps are shown partially or fully next to it. "+" buttons fill remaining space if no more apps to show.
