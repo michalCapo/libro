@@ -42,6 +42,7 @@ func updateLocalStorageURLJS(index int, newURL string) string {
 var (
 	sm = NewStateManager()
 	tm = NewTtydManager()
+	cm = NewChromeManager()
 )
 
 func main() {
@@ -210,8 +211,8 @@ func main() {
 				target = "https://" + target
 			}
 		} else {
-			// Google search - igu=1 enables iframe-friendly mode
-			target = "https://www.google.com/search?igu=1&q=" + url.QueryEscape(query)
+			// Google search
+			target = "https://www.google.com/search?q=" + url.QueryEscape(query)
 		}
 
 		// Check if strip already exists
@@ -336,9 +337,13 @@ func main() {
 
 		removed := sm.RemoveAppByID(sid, appID)
 
-		// If it was a terminal app, stop the ttyd process
-		if removed != nil && removed.Type == AppTypeTerminal {
-			tm.Stop(removed.ID)
+		// Clean up associated processes
+		if removed != nil {
+			if removed.Type == AppTypeTerminal {
+				tm.Stop(removed.ID)
+			} else if removed.Type == AppTypeURL {
+				cm.closeTab(removed.ID)
+			}
 		}
 
 		state = sm.Get(sid)
@@ -448,9 +453,8 @@ func main() {
 		if idx < 0 {
 			return ""
 		}
-		// Update iframe src and also update localStorage
-		proxiedURL := "/proxy?url=" + url.QueryEscape(newURL)
-		return fmt.Sprintf(`(function(){var f=document.getElementById('frame-%s');if(f){f.src='%s';}})();`, appID, proxiedURL) +
+		// Navigate Chrome tab (if connected) and update localStorage
+		return fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS['%s'];if(c&&c.readyState===1)c.send(JSON.stringify({t:'nav',url:'%s'}));var inp=document.getElementById('urlinput-%s');if(inp)inp.value='%s';})();`, appID, newURL, appID, newURL) +
 			updateLocalStorageURLJS(idx, newURL)
 	})
 
@@ -622,6 +626,7 @@ func main() {
 
 	registerProxy(app)
 	registerTtydProxy(app)
+	registerChrome(app)
 	app.Listen(":1439")
 }
 

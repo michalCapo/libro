@@ -1,3 +1,5 @@
+github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg=
+github.com/gorilla/websocket v1.5.3/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/michalCapo/g-sui v1.1.18 h1:T5pZnB0Q8RJzVvqNQaAin1lpnxYD0X3PXNRs2W7t9vY=
 github.com/michalCapo/g-sui v1.1.18/go.mod h1:XW9IRugw75bP9jXtaxD+TxkwdzcCtqSlFhLghE04okc=
 github.com/yuin/goldmark v1.7.13 h1:GPddIs617DnBLFFVJFgpo1aBfe/4xcvMc3SB5t/D0pA=
