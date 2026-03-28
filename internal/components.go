@@ -344,12 +344,14 @@ func navigateJS(state *AppState, sid string) string {
 				var child = strip.children[i + offset];
 				if (!child) continue;
 				if (i === selectedIdx) {
+					child.className = child.className.replace(/\bborder\b/g, 'border-2');
 					child.className = child.className.replace(/border-gray-200/g, 'border-teal-500');
 					child.className = child.className.replace(/dark:border-zinc-700\/50/g, 'dark:border-teal-500/70');
 					child.className = child.className.replace(/border-transparent/g, 'border-teal-500');
 					var overlay = child.querySelector('[data-click-overlay]');
 					if (overlay) overlay.remove();
 				} else {
+					child.className = child.className.replace(/border-2/g, 'border');
 					child.className = child.className.replace(/border-teal-500(?!\/)/g, 'border-gray-200');
 					child.className = child.className.replace(/dark:border-teal-500\/70/g, 'dark:border-zinc-700/50');
 					if (!child.querySelector('[data-click-overlay]')) {
@@ -380,7 +382,7 @@ func navigateJS(state *AppState, sid string) string {
 func renderAppFrame(app Application, index int, selected bool, sid string) *r.Node {
 	borderClass := "border border-gray-200 dark:border-zinc-700/50"
 	if selected {
-		borderClass = "border border-teal-500 dark:border-teal-500/70"
+		borderClass = "border-2 border-teal-500 dark:border-teal-500/70"
 	}
 
 	frameID := fmt.Sprintf("frame-%s", app.ID)
