@@ -420,7 +420,10 @@ func Run(assets embed.FS) {
 		if !filepath.IsAbs(path) || !strings.HasPrefix(path, home) {
 			return ""
 		}
-		return renderDirBrowser(path, sid).ToJSReplace(DirBrowserID)
+		return r.NewResponse().
+			Add(renderDirBrowser(path, sid).ToJSReplace(DirBrowserID)).
+			Add(fmt.Sprintf("document.getElementById('project-path').value='%s';", path)).
+			Build()
 	})
 
 	// Open project dialog
@@ -442,16 +445,16 @@ func Run(assets embed.FS) {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 
-		name, _ := data["project-name"].(string)
-		name = strings.TrimSpace(name)
 		path, _ := data["project-path"].(string)
 		path = strings.TrimSpace(path)
 
-		if name == "" {
-			return r.Notify("error", "Project name is required")
-		}
 		if path == "" {
 			return r.Notify("error", "Folder path is required")
+		}
+
+		name := filepath.Base(path)
+		if name == "" || name == "." || name == "/" {
+			return r.Notify("error", "Invalid folder selected")
 		}
 
 		if !sm.AddProject(sid, name, path) {

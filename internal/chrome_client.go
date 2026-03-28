@@ -76,7 +76,7 @@ function initChromeView(container) {
 				frameImg.onload = function() {
 					ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
 				};
-				frameImg.src = 'data:image/png;base64,' + msg.d;
+				frameImg.src = 'data:image/jpeg;base64,' + msg.d;
 			} else if (msg.t === 'nav') {
 				var inp = document.getElementById('urlinput-' + appID);
 				if (inp && msg.url) inp.value = msg.url;

@@ -115,6 +115,9 @@ func (cm *ChromeManager) ensureStarted() error {
 		"--disable-blink-features=AutomationControlled",
 		"--disable-features=IsolateOrigins,site-per-process",
 		"--disable-infobars",
+		"--disable-renderer-backgrounding",
+		"--disable-background-timer-throttling",
+		"--disable-backgrounding-occluded-windows",
 		fmt.Sprintf("--user-data-dir=%s", profileDir),
 	)
 	cmd.Stdout = io.Discard
@@ -392,25 +395,6 @@ func (t *chromeTab) sendToClient(data []byte) {
 
 func (t *chromeTab) handleCDPEvent(method string, params json.RawMessage) {
 	switch method {
-	case "Page.screencastFrame":
-		var p struct {
-			Data      string `json:"data"`
-			SessionID int    `json:"sessionId"`
-			Metadata  struct {
-				DeviceWidth  float64 `json:"deviceWidth"`
-				DeviceHeight float64 `json:"deviceHeight"`
-			} `json:"metadata"`
-		}
-		json.Unmarshal(params, &p)
-
-		// Ack to get next frame
-		t.fireCDP("Page.screencastFrameAck", map[string]int{"sessionId": p.SessionID})
-
-		// Forward frame to client (non-blocking)
-		msg := fmt.Sprintf(`{"t":"f","d":"%s","w":%v,"h":%v}`,
-			p.Data, p.Metadata.DeviceWidth, p.Metadata.DeviceHeight)
-		t.sendToClient([]byte(msg))
-
 	case "Page.frameNavigated":
 		var p struct {
 			Frame struct {
@@ -495,15 +479,59 @@ func handleChromeHTTP(w http.ResponseWriter, req *http.Request) {
 		tab.sendCDP("Page.navigate", map[string]string{"url": targetURL})
 	}
 
-	_, err = tab.sendCDP("Page.startScreencast", map[string]any{
-		"format": "png", "quality": 100,
-		"maxWidth": vw, "maxHeight": vh, "everyNthFrame": 1,
-	})
-	if err != nil {
-		log.Printf("chrome: startScreencast failed: %v", err)
-		return
-	}
-	log.Printf("chrome: screencast started for app %s", appID)
+	// Screenshot polling: works for all tabs regardless of Chrome focus state
+	screenshotDone := make(chan struct{})
+	var viewWidth, viewHeight atomic.Int32
+	viewWidth.Store(int32(vw))
+	viewHeight.Store(int32(vh))
+
+	go func() {
+		for {
+			select {
+			case <-screenshotDone:
+				return
+			default:
+			}
+
+			w := int(viewWidth.Load())
+			h := int(viewHeight.Load())
+
+			result, err := tab.sendCDP("Page.captureScreenshot", map[string]any{
+				"format":  "jpeg",
+				"quality": 70,
+			})
+			if err != nil {
+				select {
+				case <-screenshotDone:
+					return
+				case <-time.After(500 * time.Millisecond):
+					continue
+				}
+			}
+
+			var resp struct {
+				Data string `json:"data"`
+			}
+			if json.Unmarshal(result, &resp) != nil || resp.Data == "" {
+				select {
+				case <-screenshotDone:
+					return
+				case <-time.After(100 * time.Millisecond):
+					continue
+				}
+			}
+
+			msg := fmt.Sprintf(`{"t":"f","d":"%s","w":%d,"h":%d}`, resp.Data, w, h)
+			tab.sendToClient([]byte(msg))
+
+			select {
+			case <-screenshotDone:
+				return
+			case <-time.After(83 * time.Millisecond):
+			}
+		}
+	}()
+	log.Printf("chrome: screenshot polling started for app %s", appID)
 
 	// Read client input
 	for {
@@ -552,13 +580,10 @@ func handleChromeHTTP(w http.ResponseWriter, req *http.Request) {
 		case "r":
 			nw, nh := intVal(msg["w"]), intVal(msg["h"])
 			if nw > 0 && nh > 0 {
+				viewWidth.Store(int32(nw))
+				viewHeight.Store(int32(nh))
 				tab.sendCDP("Emulation.setDeviceMetricsOverride", map[string]any{
 					"width": nw, "height": nh, "deviceScaleFactor": 1, "mobile": false,
-				})
-				tab.fireCDP("Page.stopScreencast", nil)
-				tab.sendCDP("Page.startScreencast", map[string]any{
-					"format": "png", "quality": 100,
-					"maxWidth": nw, "maxHeight": nh, "everyNthFrame": 1,
 				})
 			}
 
@@ -576,7 +601,7 @@ func handleChromeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	tab.fireCDP("Page.stopScreencast", nil)
+	close(screenshotDone)
 	tab.clientMu.Lock()
 	if tab.client == ws {
 		tab.client = nil
