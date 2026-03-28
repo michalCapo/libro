@@ -1,4 +1,4 @@
-package main
+package libro
 
 import (
 	"log"
@@ -8,11 +8,11 @@ import (
 	"runtime"
 )
 
-// openDesktop opens the libro UI in a Chromium --app mode window.
+// OpenDesktop opens the libro UI in a Chromium --app mode window.
 // When the browser window is closed, it sends on the returned channel
 // so the process can shut down. If the browser can't be waited on
 // (fallback path), the channel is never closed.
-func openDesktop(url string) <-chan struct{} {
+func OpenDesktop(url string) <-chan struct{} {
 	done := make(chan struct{})
 
 	if runtime.GOOS == "windows" || runtime.GOOS == "linux" {

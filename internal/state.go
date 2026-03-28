@@ -51,6 +51,9 @@ type AppState struct {
 	ProjectDialogOpen bool
 	snapshots         map[string]*projectSnapshot
 	renderedProjects  map[string]bool // tracks which projects have DOM divs
+
+	// EditIndex tracks which saved app is being edited (-1 = new app)
+	EditIndex int
 }
 
 // StateManager manages per-session app states
@@ -77,19 +80,26 @@ func defaultHomeDir() string {
 	return home
 }
 
-// NewSession creates a new session and returns its ID
+// NewSession creates a new session and returns its ID.
+// Projects are loaded from the database.
 func (sm *StateManager) NewSession() string {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.nextID++
 	sid := fmt.Sprintf("session-%d", sm.nextID)
+
+	projects := DBLoadProjects()
+	rendered := make(map[string]bool)
+	if len(projects) > 0 {
+		rendered[projects[0].Name] = true
+	}
+
 	sm.states[sid] = &AppState{
-		Projects: []Project{
-			{Name: "home", Path: defaultHomeDir()},
-		},
-		ActiveProject:    "home",
+		Projects:         projects,
+		ActiveProject:    projects[0].Name,
 		snapshots:        make(map[string]*projectSnapshot),
-		renderedProjects: map[string]bool{"home": true},
+		renderedProjects: rendered,
+		EditIndex:        -1,
 	}
 	return sid
 }
@@ -101,13 +111,17 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 	if s, ok := sm.states[sessionID]; ok {
 		return s
 	}
+	projects := DBLoadProjects()
+	rendered := make(map[string]bool)
+	if len(projects) > 0 {
+		rendered[projects[0].Name] = true
+	}
 	s := &AppState{
-		Projects: []Project{
-			{Name: "home", Path: defaultHomeDir()},
-		},
-		ActiveProject:    "home",
+		Projects:         projects,
+		ActiveProject:    projects[0].Name,
 		snapshots:        make(map[string]*projectSnapshot),
-		renderedProjects: map[string]bool{"home": true},
+		renderedProjects: rendered,
+		EditIndex:        -1,
 	}
 	sm.states[sessionID] = s
 	return s
@@ -131,6 +145,7 @@ func (sm *StateManager) addApp(sessionID, url string, width Width, name string, 
 			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
 			ActiveProject: "home",
 			snapshots:     make(map[string]*projectSnapshot),
+			EditIndex:     -1,
 		}
 		sm.states[sessionID] = s
 	}
@@ -171,6 +186,7 @@ func (sm *StateManager) addTerminalApp(sessionID string, command string, port in
 			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
 			ActiveProject: "home",
 			snapshots:     make(map[string]*projectSnapshot),
+			EditIndex:     -1,
 		}
 		sm.states[sessionID] = s
 	}

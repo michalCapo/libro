@@ -33,7 +33,7 @@ func main() {
 	if desktop {
 		go func() {
 			time.Sleep(500 * time.Millisecond)
-			done := openDesktop("http://localhost:" + libro.Port())
+			done := libro.OpenDesktop("http://localhost:" + libro.Port())
 
 			// When the browser window closes, exit the process
 			<-done
