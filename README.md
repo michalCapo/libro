@@ -5,10 +5,11 @@ A Go web application using [g-sui](https://github.com/michalCapo/g-sui) that man
 ## Architecture
 
 - **Backend**: Go with g-sui (server-rendered UI via WebSocket)
-- **Frontend**: Zero custom JS - all UI generated server-side via g-sui node trees
+- **Browser Engine**: Headless Chromium via Chrome DevTools Protocol (CDP) for URL apps
+- **Frontend**: Minimal client JS for Chrome canvas rendering and input forwarding
 - **Styling**: Tailwind CSS classes (built into g-sui)
 - **State**: Server-side in-memory (application list, selected index, viewport offset)
-- **Communication**: WebSocket for all interactions (add app, navigate, scroll)
+- **Communication**: WebSocket for UI interactions + WebSocket for Chrome screencast/input per tab
 
 ## Data Model
 
@@ -55,17 +56,17 @@ When no applications exist, a centered "+ Application" button is displayed. Clic
 ### Add Application Dialog
 Modal/dialog overlay triggered by "+" button click. Contains a URL input field (required) and width selection via radio buttons (xs, sm, md, lg, xl). On submit, validates the URL is not empty, adds the application to state, closes the dialog, and re-renders the strip.
 
-### Application Rendering (Iframe Display)
-Each application renders as an iframe with `src` set to the app's URL. The iframe container has a fixed width based on the app's width setting and takes the full height of the viewport. Applications are displayed side-by-side in a horizontal row, each maintaining its configured width at all times.
+### Application Rendering (Chrome Screencast)
+URL applications are rendered using a headless Chromium instance controlled via the Chrome DevTools Protocol (CDP). Each URL app gets its own Chrome tab, with screencast frames streamed to an HTML canvas via WebSocket. This approach bypasses X-Frame-Options and CSP restrictions that block iframe embedding, allowing any website to be displayed. The iframe container has a fixed width based on the app's width setting and takes the full height of the viewport. Applications are displayed side-by-side in a horizontal row, each maintaining its configured width at all times.
 
 ### Browser-Like Toolbar
-Each application frame has a non-overlapping toolbar above the iframe content, similar to a real browser. The toolbar is always visible and contains:
+Each application frame has a non-overlapping toolbar above the content, similar to a real browser. The toolbar is always visible and contains:
 
 - **Left side (URL apps)**: Back/forward buttons, globe icon, editable URL input field, copy URL button, reload button
 - **Left side (Terminal apps)**: Real application icon (for known commands) or gradient initials badge, command/name label
 - **Right side (all apps)**: Width size badges (MD, LG, XL, 2XL, FULL) and close button
 
-Users can see the current URL, copy it to clipboard, edit it and press Enter to navigate to a new URL, or reload the iframe. Back and forward buttons navigate the iframe's browser history. The URL bar automatically updates when the user clicks links inside the iframe, reflecting the current page URL in real time (via postMessage from the injected proxy script). The URL is automatically prefixed with `https://` if no scheme is provided. URL changes are persisted to localStorage.
+Users can see the current URL, copy it to clipboard, edit it and press Enter to navigate to a new URL, or reload the page. Back and forward buttons navigate the browser history. The URL bar automatically updates when the user navigates within the Chrome tab, reflecting the current page URL in real time (via CDP Page.frameNavigated events). The URL is automatically prefixed with `https://` if no scheme is provided. URL changes are persisted to localStorage.
 
 ### Horizontal Strip Layout
 Applications are arranged in a horizontal flexbox row. The currently selected application is centered in the viewport. Applications that don't fit extend beyond the viewport (off-screen left/right). The strip takes the full height of the viewport.
@@ -146,10 +147,35 @@ The "Browse" button (in both the empty state and side launchers) opens a new emp
 ### Fullscreen Mode
 A fullscreen toggle button is available in the project bar next to the theme switcher. It uses the browser's Fullscreen API to enter and exit fullscreen mode. The button label and icon update dynamically to reflect the current state ("Fullscreen" / "Exit").
 
+## Chrome Browser Component
+
+URL applications use a headless Chromium instance instead of iframes. This solves the fundamental limitation that most websites set `X-Frame-Options: sameorigin` which blocks iframe embedding.
+
+### How It Works
+
+1. **One Chrome process**: A single headless Chromium instance is launched on first use, with a persistent profile at `~/.config/libro/chrome-profile`
+2. **Per-tab targets**: Each URL app creates a separate Chrome tab via the CDP HTTP API, sharing cookies/sessions/profile
+3. **Screencast streaming**: Chrome's `Page.startScreencast` streams PNG frames to the Go backend via CDP WebSocket
+4. **Canvas rendering**: Client JS creates an HTML canvas, connects via WebSocket to `/chrome/<appID>/`, and draws received frames
+5. **Input forwarding**: Mouse, keyboard, and scroll events on the canvas are captured and forwarded to Chrome via CDP `Input.dispatch*` commands
+6. **Navigation tracking**: CDP `Page.frameNavigated` events update the address bar in real-time
+
+### Anti-Bot Detection
+
+The Chrome instance includes stealth measures to bypass bot detection (Cloudflare Turnstile, etc.):
+- `--disable-blink-features=AutomationControlled` removes the `navigator.webdriver` flag
+- User-Agent override removes "HeadlessChrome" from the UA string
+- `Page.addScriptToEvaluateOnNewDocument` injects patches for `navigator.plugins`, `navigator.languages`, `window.chrome`, and Permissions API
+
+### Dependencies
+
+- **chromium-browser** or **google-chrome** must be installed on the system
+- **gorilla/websocket** for reliable WebSocket communication (CDP + client)
+
 ## Key Technical Decisions
 
 1. **Viewport panning**: CSS `transform: translateX()` on the strip container, controlled by server state. The offset is calculated based on selected app index and total widths.
-2. **Iframe sizing**: Each iframe container gets a CSS class based on its width setting. Tailwind responsive utilities or inline styles computed server-side.
+2. **App container sizing**: Each app container gets a CSS class based on its width setting. Tailwind responsive utilities or inline styles computed server-side.
 3. **Session state**: g-sui's WebSocket connection context maintains per-user state. Each connected client has its own `AppState`.
-4. **No client-side JS needed**: All navigation, panning, and dialog logic happens via g-sui WebSocket actions. The server computes the new layout and sends DOM patches.
+4. **Chrome over iframes**: URL apps use headless Chrome with CDP screencast instead of iframes. This eliminates X-Frame-Options restrictions at the cost of slightly higher resource usage.
 5. **Width classes**: Width enum maps to actual CSS max-width values. On mobile, overridden to 100%. Uses Tailwind's responsive prefixes (sm:, md:, lg:, xl:, 2xl:).
