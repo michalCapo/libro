@@ -864,20 +864,20 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 				Render(
 					r.H2("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100 mb-4 tracking-tight").Text("Add Application"),
 
-					r.IHidden("").ID("app-type").Attr("value", "url"),
+					r.IHidden("").ID("app-type").Attr("value", "terminal"),
 
 					r.Div("flex border-b border-gray-200 dark:border-zinc-700/50 mb-4").Render(
 						r.Button("px-4 py-2 text-sm font-mono border-b-2 border-teal-500 text-teal-600 cursor-pointer transition-colors").
-							ID("tab-url-btn").
-							Text("URL").
-							OnClick(r.JS(tabSwitchJS("url"))),
-						r.Button("px-4 py-2 text-sm font-mono border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 cursor-pointer transition-colors").
 							ID("tab-terminal-btn").
 							Text("Terminal").
 							OnClick(r.JS(tabSwitchJS("terminal"))),
+						r.Button("px-4 py-2 text-sm font-mono border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 cursor-pointer transition-colors").
+							ID("tab-url-btn").
+							Text("URL").
+							OnClick(r.JS(tabSwitchJS("url"))),
 					),
 
-					r.Div("mb-5").ID("tab-url-content").Render(
+					r.Div("mb-5 hidden").ID("tab-url-content").Render(
 						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("URL"),
 						r.IUrl(inputCls).
 							ID("app-url").
@@ -885,7 +885,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-add').click();}"),
 					),
 
-					r.Div("mb-5 hidden").ID("tab-terminal-content").Render(
+					r.Div("mb-5").ID("tab-terminal-content").Render(
 						r.Div("mb-3").Render(
 							r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Command"),
 							r.IText(inputCls+" font-mono").
@@ -951,11 +951,16 @@ func renderSearchDialog(sid string) *r.Node {
 							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();}"),
 					),
 					r.Div("max-h-80 overflow-y-auto").ID("search-results"),
-					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
-						r.Span("").Text("↑↓ navigate"),
-						r.Span("").Text("Enter open right"),
-						r.Span("").Text("Ctrl+Enter open left"),
-						r.Span("").Text("Esc close"),
+					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+						r.Div("flex items-center gap-4").Render(
+							r.Span("").Text("↑↓ navigate"),
+							r.Span("").Text("Enter open right"),
+							r.Span("").Text("Ctrl+Enter open left"),
+							r.Span("").Text("Esc close"),
+						),
+						r.Span("cursor-pointer hover:text-red-400 transition-colors").
+							Attr("onclick", "event.stopPropagation();__ws.call('history.clear',{sid:'"+sid+"'});").
+							Text("clear history"),
 					),
 				),
 		)

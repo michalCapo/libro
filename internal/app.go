@@ -172,6 +172,8 @@ func Run(assets embed.FS) {
 		stateBefore := sm.Get(sid)
 		hadApps := len(stateBefore.Apps)
 
+		// Save to browsed URL history (user-typed URLs only)
+		go DBSaveBrowsedURL(target)
 		sm.AddApp(sid, target, WidthLG, query)
 		state := sm.Get(sid)
 
@@ -425,10 +427,18 @@ func Run(assets embed.FS) {
 		if idx < 0 {
 			return ""
 		}
+		// Save to browsed URL history (user-typed URLs only)
+		go DBSaveBrowsedURL(newURL)
 		// Navigate Chrome tab (if connected) and persist URL to DB
 		state := sm.Get(sid)
 		dbUpdateAppURL(state.ActiveProject, idx, newURL)
 		return fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS[%s];if(c&&c.readyState===1)c.send(JSON.stringify({t:'nav',url:%s}));var inp=document.getElementById('urlinput-'+%s);if(inp)inp.value=%s;})();`, jsString(appID), jsString(newURL), jsString(appID), jsString(newURL))
+	})
+
+	// Clear browsing history
+	app.Action("history.clear", func(ctx *r.Context) string {
+		DBClearBrowsedURLs()
+		return `window.__libroBrowsedURLs=[];if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}`
 	})
 
 	// Browse directories for project picker

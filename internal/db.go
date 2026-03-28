@@ -350,6 +350,17 @@ func DBSaveBrowsedURL(urlStr string) {
 	}
 }
 
+// DBClearBrowsedURLs deletes all entries from the browsed_urls table.
+func DBClearBrowsedURLs() {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	_, err := db.Exec("DELETE FROM browsed_urls")
+	if err != nil {
+		log.Printf("db: clear browsed urls: %v", err)
+	}
+}
+
 // DBLoadBrowsedURLs returns all browsed URLs ordered by most recently visited.
 func DBLoadBrowsedURLs() []string {
 	dbMu.Lock()
