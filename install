@@ -98,7 +98,7 @@ fi
 # Build
 # ---------------------------------------------------------------------------
 
-info "Building libro v${VERSION}..."
+info "Building libro v${VERSION} (production, port 8100)..."
 GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags "$LDFLAGS" -o "$SCRIPT_DIR/$BIN_NAME" .
 ok "Built $BIN_NAME"
 

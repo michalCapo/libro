@@ -1,7 +1,9 @@
 package libro
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -9,6 +11,11 @@ import (
 
 	r "github.com/michalCapo/g-sui/ui"
 )
+
+// urlParse is a convenience wrapper around url.Parse.
+func urlParse(rawURL string) (*url.URL, error) {
+	return url.Parse(rawURL)
+}
 
 const (
 	DialogID        = "add-dialog"
@@ -185,10 +192,15 @@ func renderMainArea(state *AppState, sid string) *r.Node {
 
 // renderEmptyState renders the saved apps list with "+ Add New" button
 func renderEmptyState(state *AppState, sid string) *r.Node {
-	savedAppsListID := "saved-apps-list-" + state.ActiveProject
+	savedApps := DBLoadSavedApps(state.ActiveProject)
+	appButtons := make([]*r.Node, 0, len(savedApps))
+	for i, app := range savedApps {
+		appButtons = append(appButtons, renderSavedAppButton(app, i, sid))
+	}
+
 	container := r.Div("flex-1 flex items-center justify-center").ID(projectMainID(state.ActiveProject)).Render(
 		r.Div("flex flex-col items-center gap-2 w-full max-w-md").Render(
-			r.Div("flex flex-col gap-1.5 w-full").ID(savedAppsListID),
+			r.Div("flex flex-col gap-1.5 w-full").Render(appButtons...),
 			r.Div("flex gap-2 w-full mt-1").Render(
 				r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
 					Render(r.I("material-icons-round text-[18px]").Text("add"), r.Span("").Text("Add New")).
@@ -199,90 +211,91 @@ func renderEmptyState(state *AppState, sid string) *r.Node {
 			),
 		),
 	)
-	container.JS(renderSavedAppsJS(sid, savedAppsListID))
 	return container
 }
 
-// renderSavedAppsJS returns JS that reads localStorage and renders saved app buttons
-func renderSavedAppsJS(sid, listID string) string {
-	return fmt.Sprintf(`
-(function(){
-	var c=document.getElementById('%s');
-	if(!c)return;
-	var dk=document.documentElement.classList.contains('dark');
-	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
-	c.innerHTML='';
-	apps.forEach(function(app,i){
-		var btn=document.createElement('button');
-		btn.className=dk
-			?'w-full flex items-center gap-3 px-4 py-3 bg-zinc-800/80 hover:bg-zinc-700/80 border border-zinc-700/40 hover:border-zinc-600 rounded-lg cursor-pointer text-left transition-colors duration-75'
-			:'w-full flex items-center gap-3 px-4 py-3 bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-lg cursor-pointer text-left transition-colors duration-75 shadow-sm';
+// renderSavedAppButton renders a single saved app button (server-side, from DB data).
+func renderSavedAppButton(app SavedApp, index int, sid string) *r.Node {
+	var iconNode *r.Node
+	label := app.Name
 
-		var iconHtml='';
-		var label='';
-		if(app.type==='terminal'){
-			iconHtml=window.__libroTermIcon?window.__libroTermIcon(app.command,20):app.command.substring(0,1).toUpperCase();
-			label=app.name||app.command;
-		}else{
-			try{
-				var u=new URL(app.url);
-				iconHtml='<img class="w-5 h-5 shrink-0 rounded-sm" src="https://www.google.com/s2/favicons?domain='+encodeURIComponent(u.hostname)+'&sz=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 text-lg shrink-0\\\'>language</i>\'">';
-				label=app.name||u.hostname.replace(/^www\./,'');
-			}catch(e){
-				iconHtml='<i class="material-icons-round text-gray-400 text-lg shrink-0">language</i>';
-				label=app.name||app.url;
+	if app.Type == "terminal" {
+		if label == "" {
+			label = app.Command
+		}
+		if info := lookupTermIcon(app.Command); info != nil {
+			if info.URL != "" {
+				iconNode = r.Img("w-5 h-5 shrink-0 rounded-sm").Attr("src", info.URL)
+			} else {
+				iconNode = r.I("material-icons-round text-lg shrink-0 text-gray-400 dark:text-zinc-500").Text(info.MaterialIcon)
+			}
+		} else {
+			iconNode = r.I("material-icons-round text-lg shrink-0 text-gray-400 dark:text-zinc-500").Text("terminal")
+		}
+	} else {
+		if label == "" {
+			label = app.URL
+		}
+		iconNode = r.I("material-icons-round text-lg shrink-0 text-gray-400 dark:text-zinc-500").Text("language")
+		if app.URL != "" {
+			// Try to extract hostname for favicon
+			if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
+				iconNode = r.Img("w-5 h-5 shrink-0 rounded-sm").
+					Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=32")
+				if label == app.URL {
+					h := u.Hostname()
+					if strings.HasPrefix(h, "www.") {
+						h = h[4:]
+					}
+					label = h
+				}
 			}
 		}
-		var txtCls=dk?'text-zinc-200':'text-gray-800';
-		var badgeCls=dk?'bg-zinc-700 text-zinc-300':'bg-gray-200 text-gray-600';
-		var iconCls=dk?'text-zinc-500 hover:text-zinc-200':'text-gray-400 hover:text-gray-700';
-		var delCls=dk?'text-zinc-500 hover:text-red-400':'text-gray-400 hover:text-red-500';
-		btn.innerHTML=iconHtml
-			+'<span class="flex-1 truncate text-sm '+txtCls+'">'+label+'</span>'
-			+'<span class="px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 '+badgeCls+'">'+app.width+'</span>'
-			+'<span class="px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 '+badgeCls+'">'+app.type+'</span>'
-			+'<i class="material-icons-round text-xl libro-edit cursor-pointer '+iconCls+'" data-i="'+i+'">edit</i>'
-			+'<i class="material-icons-round text-xl libro-del cursor-pointer '+delCls+'" data-i="'+i+'">close</i>';
-		btn.onclick=function(e){
-			var idx=parseInt(e.target.dataset.i);
-			if(e.target.classList.contains('libro-del')){
-				e.stopPropagation();
-				apps.splice(idx,1);
-				localStorage.setItem('libro-apps',JSON.stringify(apps));
-				location.reload();
-				return;
-			}
-			if(e.target.classList.contains('libro-edit')){
-				e.stopPropagation();
-				localStorage.setItem('libro-edit-idx',String(idx));
-				__ws.call('app.dialog.open',{sid:'%s'});
-				setTimeout(function(){
-					var a=apps[idx];
-					if(a.type==='terminal'){
-						document.getElementById('tab-terminal-btn').click();
-						var cmd=document.getElementById('app-command');
-						if(cmd)cmd.value=a.command||'bash';
-						var wr=document.getElementById('app-writable');
-						if(wr)wr.checked=a.writable!==false;
-					}else{
-						document.getElementById('tab-url-btn').click();
-						var url=document.getElementById('app-url');
-						if(url)url.value=a.url||'';
-					}
-					var nm=document.getElementById('app-name');
-					if(nm)nm.value=a.name||'';
-					var wr=document.getElementById('width-'+(a.width||'md'));
-					if(wr)wr.checked=true;
-				},100);
-				return;
-			}
-			__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'md',writable:app.writable!==false,name:app.name||''});
-		};
+	}
 
-		c.appendChild(btn);
-	});
-})();
-`, listID, sid, sid)
+	writable := app.Writable
+
+	// Launch button
+	btn := r.Button("w-full flex items-center gap-3 px-4 py-3 bg-white dark:bg-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-zinc-700/40 hover:border-gray-300 dark:hover:border-zinc-600 rounded-lg cursor-pointer text-left transition-colors duration-75 shadow-sm dark:shadow-none").
+		Render(
+			iconNode,
+			r.Span("flex-1 truncate text-sm text-gray-800 dark:text-zinc-200").Text(label),
+			r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Width),
+			r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Type),
+			r.I("material-icons-round text-xl cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-200").
+				Text("edit").
+				OnClick(&r.Action{Name: "app.saved.edit", Data: sidData(sid, "index", index)}).
+				Attr("onclick", fmt.Sprintf(`event.stopPropagation();__ws.call('app.saved.edit',{sid:'%s',index:%d});__ws.call('app.dialog.open',{sid:'%s'});`, sid, index, sid)+
+					savedAppEditFillJS(app, index)),
+			r.I("material-icons-round text-xl cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400").
+				Text("close").
+				Attr("onclick", fmt.Sprintf(`event.stopPropagation();__ws.call('app.saved.delete',{sid:'%s',index:%d});`, sid, index)),
+		).
+		OnClick(&r.Action{Name: "app.start", Data: map[string]any{
+			"sid": sid, "type": app.Type, "url": app.URL,
+			"command": app.Command, "width": app.Width,
+			"writable": writable, "name": app.Name,
+		}})
+
+	return btn
+}
+
+// savedAppEditFillJS returns JS that fills the add dialog with saved app data for editing.
+func savedAppEditFillJS(app SavedApp, _ int) string {
+	return fmt.Sprintf(`
+setTimeout(function(){
+	if(%s==='terminal'){
+		var tb=document.getElementById('tab-terminal-btn');if(tb)tb.click();
+		var cmd=document.getElementById('app-command');if(cmd)cmd.value=%s;
+		var wr=document.getElementById('app-writable');if(wr)wr.checked=%v;
+	}else{
+		var tb=document.getElementById('tab-url-btn');if(tb)tb.click();
+		var url=document.getElementById('app-url');if(url)url.value=%s;
+	}
+	var nm=document.getElementById('app-name');if(nm)nm.value=%s;
+	var wr=document.getElementById('width-'+((%s)||'md'));if(wr)wr.checked=true;
+},100);
+`, jsString(app.Type), jsString(app.Command), app.Writable, jsString(app.URL), jsString(app.Name), jsString(app.Width))
 }
 
 // renderAppStrip renders the horizontal strip of applications with navigation
@@ -622,81 +635,91 @@ func removeAppJS(appID string) string {
 })();`, appID)
 }
 
-var sideDockCounter int
-
 // renderSideLauncher renders a vertical icon dock: saved app icons + "+" button.
-// Built via JS since saved apps are in localStorage. side is "left" or "right".
+// Now server-rendered from DB instead of client-side localStorage.
 func renderSideLauncher(sid, side string) *r.Node {
-	sideDockCounter++
-	dockID := fmt.Sprintf("side-dock-%d", sideDockCounter)
-	container := r.Div("shrink-0 flex items-center mx-0.5").Render(
-		r.Div("flex flex-col items-center gap-1 py-1").ID(dockID),
-	)
-	container.JS(fmt.Sprintf(`
-(function(){
-	var dock=document.getElementById('%s');
-	if(!dock)return;
-	var dk=document.documentElement.classList.contains('dark');
-	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
-	var btnCls=dk
-		?'w-12 h-12 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-zinc-700 relative group/ico'
-		:'w-12 h-12 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-gray-200 relative group/ico';
-	var tipPos='%s'==='right'?'right-full mr-2':'left-full ml-2';
-	var tipCls=dk
-		?'absolute '+tipPos+' px-2 py-1 text-xs rounded bg-zinc-800 text-zinc-200 border border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg'
-		:'absolute '+tipPos+' px-2 py-1 text-xs rounded bg-white text-gray-800 border border-gray-200 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg';
+	savedApps := DBLoadAllSavedApps()
 
-	apps.forEach(function(app){
-		var btn=document.createElement('button');
-		btn.className=btnCls;
-		var lb='';
-		if(app.type==='terminal'){
-			btn.innerHTML=window.__libroTermIcon?window.__libroTermIcon(app.command,32):app.command.substring(0,1).toUpperCase();
-			lb=app.name||app.command;
-		}else{
-			try{
-				var u=new URL(app.url);
-				btn.innerHTML='<img class="w-8 h-8 rounded-sm" src="https://www.google.com/s2/favicons?domain='+encodeURIComponent(u.hostname)+'&sz=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 dark:text-zinc-500 text-2xl\\\'>language</i>\'">';
-				lb=app.name||u.hostname.replace(/^www\./,'');
-			}catch(e){
-				btn.innerHTML='<i class="material-icons-round text-gray-400 dark:text-zinc-500 text-2xl">language</i>';
-				lb=app.name||app.url;
+	tipPos := "left-full ml-2"
+	if side == "right" {
+		tipPos = "right-full mr-2"
+	}
+	btnCls := "w-12 h-12 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-gray-200 dark:hover:bg-zinc-700 relative group/ico"
+	tipCls := "absolute " + tipPos + " px-2 py-1 text-xs rounded bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg"
+
+	children := make([]*r.Node, 0, len(savedApps)+2)
+
+	for _, app := range savedApps {
+		var iconNode *r.Node
+		label := app.Name
+
+		if app.Type == "terminal" {
+			if label == "" {
+				label = app.Command
+			}
+			if info := lookupTermIcon(app.Command); info != nil {
+				if info.URL != "" {
+					iconNode = r.Img("w-8 h-8 rounded-sm").Attr("src", info.URL)
+				} else {
+					iconNode = r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-2xl").Text(info.MaterialIcon)
+				}
+			} else {
+				iconNode = r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-2xl").Text("terminal")
+			}
+		} else {
+			if label == "" {
+				label = app.URL
+			}
+			iconNode = r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-2xl").Text("language")
+			if app.URL != "" {
+				if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
+					iconNode = r.Img("w-8 h-8 rounded-sm").
+						Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=32")
+					if label == app.URL {
+						h := u.Hostname()
+						if strings.HasPrefix(h, "www.") {
+							h = h[4:]
+						}
+						label = h
+					}
+				}
 			}
 		}
-		var tip=document.createElement('span');
-		tip.className=tipCls;
-		tip.textContent=lb+' ('+app.width+')';
-		btn.appendChild(tip);
-		btn.onclick=function(){
-			__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false,name:app.name||'',side:'%s'});
-		};
-		dock.appendChild(btn);
-	});
 
-	var browseBtn=document.createElement('button');
-	browseBtn.className=btnCls;
-	browseBtn.innerHTML='<i class="material-icons-round '+(dk?'text-zinc-500 hover:text-indigo-400':'text-gray-400 hover:text-indigo-600')+' text-2xl">language</i>';
-	var browseTip=document.createElement('span');
-	browseTip.className=tipCls;
-	browseTip.textContent='Quick browse';
-	browseBtn.appendChild(browseTip);
-	browseBtn.onclick=function(){
-		__ws.call('app.browse.new',{sid:'%s',side:'%s'});
-	};
-	dock.appendChild(browseBtn);
+		btn := r.Button(btnCls).
+			Render(
+				iconNode,
+				r.Span(tipCls).Text(label+" ("+app.Width+")"),
+			).
+			OnClick(&r.Action{Name: "app.start", Data: map[string]any{
+				"sid": sid, "type": app.Type, "url": app.URL,
+				"command": app.Command, "width": app.Width,
+				"writable": app.Writable, "name": app.Name, "side": side,
+			}})
+		children = append(children, btn)
+	}
 
-	var addBtn=document.createElement('button');
-	addBtn.className=btnCls;
-	addBtn.innerHTML='<i class="material-icons-round '+(dk?'text-zinc-500 hover:text-teal-400':'text-gray-400 hover:text-teal-600')+' text-[18px]">add</i>';
-	var addTip=document.createElement('span');
-	addTip.className=tipCls;
-	addTip.textContent='Add new';
-	addBtn.appendChild(addTip);
-	addBtn.onclick=function(){__ws.call('app.dialog.open',{sid:'%s',side:'%s'});};
-	dock.appendChild(addBtn);
-})();
-`, dockID, side, sid, side, sid, side, sid, side))
-	return container
+	// Browse button
+	browseBtn := r.Button(btnCls).
+		Render(
+			r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-2xl").Text("language"),
+			r.Span(tipCls).Text("Quick browse"),
+		).
+		OnClick(&r.Action{Name: "app.browse.new", Data: sidData(sid, "side", side)})
+	children = append(children, browseBtn)
+
+	// Add button
+	addBtn := r.Button(btnCls).
+		Render(
+			r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-teal-600 dark:hover:text-teal-400 text-[18px]").Text("add"),
+			r.Span(tipCls).Text("Add new"),
+		).
+		OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid, "side", side)})
+	children = append(children, addBtn)
+
+	return r.Div("shrink-0 flex items-center mx-0.5").Render(
+		r.Div("flex flex-col items-center gap-1 py-1").Render(children...),
+	)
 }
 
 // renderAddDialog renders the add application modal dialog
@@ -820,7 +843,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 
 // renderSearchDialog renders the fuzzy search popup (hidden by default).
 // All filtering, navigation, and selection logic runs client-side via JS
-// since saved apps live in localStorage.
+// since saved apps are injected via __libroSavedApps from the DB.
 func renderSearchDialog(sid string) *r.Node {
 	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
 		ID(SearchDialogID).
@@ -878,7 +901,7 @@ func searchDialogJS(sid string) string {
 	}
 
 	function getApps(){
-		return JSON.parse(localStorage.getItem('libro-apps')||'[]');
+		return window.__libroSavedApps||[];
 	}
 
 	function render(){
@@ -1370,45 +1393,38 @@ func updateHashJS(name string) string {
 	return fmt.Sprintf("history.replaceState(null,'','#%s');", name)
 }
 
-// saveProjectToLocalStorageJS saves a project definition to localStorage
-func saveProjectToLocalStorageJS(name, path string) string {
-	return fmt.Sprintf(`
-(function(){
-	var projects=JSON.parse(localStorage.getItem('libro-projects')||'[]');
-	var exists=projects.some(function(p){return p.name==='%s';});
-	if(!exists){projects.push({name:'%s',path:'%s'});}
-	localStorage.setItem('libro-projects',JSON.stringify(projects));
-})();
-`, name, name, path)
-}
-
-// removeProjectFromLocalStorageJS removes a project from localStorage
-func removeProjectFromLocalStorageJS(name string) string {
-	return fmt.Sprintf(`
-(function(){
-	var projects=JSON.parse(localStorage.getItem('libro-projects')||'[]');
-	projects=projects.filter(function(p){return p.name!=='%s';});
-	localStorage.setItem('libro-projects',JSON.stringify(projects));
-})();
-`, name)
-}
-
-// loadProjectsJS returns JS that reads saved projects from localStorage and initializes them
-func loadProjectsJS(sid string) string {
-	return fmt.Sprintf(`
-(function _loadProjects(){
-	if(typeof __ws==='undefined'||!__ws.call){setTimeout(_loadProjects,50);return;}
-	var projects=JSON.parse(localStorage.getItem('libro-projects')||'[]');
-	if(projects.length>0){
-		__ws.call('project.init',{sid:'%s',projects:projects});
+// savedAppsJS returns JS that sets the global __libroSavedApps variable from DB data.
+func savedAppsJS() string {
+	apps := DBLoadAllSavedApps()
+	type jsApp struct {
+		Type     string `json:"type"`
+		URL      string `json:"url,omitempty"`
+		Command  string `json:"command,omitempty"`
+		Width    string `json:"width"`
+		Writable bool   `json:"writable"`
+		Name     string `json:"name,omitempty"`
 	}
+	jsApps := make([]jsApp, len(apps))
+	for i, a := range apps {
+		jsApps[i] = jsApp{Type: a.Type, URL: a.URL, Command: a.Command, Width: a.Width, Writable: a.Writable, Name: a.Name}
+	}
+	b, _ := json.Marshal(jsApps)
+	return fmt.Sprintf("window.__libroSavedApps=%s;", string(b))
+}
+
+// initHashJS handles hash-based project navigation on page load.
+// Projects are now loaded from DB on server side, so only hash switching is needed.
+func initHashJS(sid string) string {
+	return fmt.Sprintf(`
+(function _initHash(){
+	if(typeof __ws==='undefined'||!__ws.call){setTimeout(_initHash,50);return;}
 	var hash=location.hash.replace('#','');
 	if(hash&&hash!=='home'){
 		setTimeout(function(){__ws.call('project.switch',{sid:'%s',name:hash});},100);
 	}
 	if(!location.hash){history.replaceState(null,'','#home');}
 })();
-`, sid, sid)
+`, sid)
 }
 
 // termIconSetupJS returns JS that registers a global icon lookup function

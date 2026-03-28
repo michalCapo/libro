@@ -20,34 +20,30 @@ func jsString(s string) string {
 	return string(b)
 }
 
-// saveToLocalStorageJS returns JS that saves or updates an app definition in localStorage
-func saveToLocalStorageJS(appType, urlOrCmd, width, name string, writable bool) string {
-	return fmt.Sprintf(`
-(function(){
-	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
-	var entry={type:%s,width:%s,writable:%v,name:%s};
-	if(entry.type==='terminal'){entry.command=%s;}else{entry.url=%s;}
-	var editIdx=localStorage.getItem('libro-edit-idx');
-	if(editIdx!==null){
-		var idx=parseInt(editIdx);
-		if(idx>=0&&idx<apps.length){apps[idx]=entry;}else{apps.push(entry);}
-		localStorage.removeItem('libro-edit-idx');
-	}else{
-		apps.push(entry);
+// dbSaveApp persists an app definition to the database for the given project.
+// If editIndex >= 0, it updates the app at that index; otherwise it appends.
+func dbSaveApp(projectName string, editIndex int, appType, urlOrCmd, width, name string, writable bool) {
+	app := SavedApp{
+		Type:     appType,
+		Width:    width,
+		Writable: writable,
+		Name:     name,
 	}
-	localStorage.setItem('libro-apps',JSON.stringify(apps));
-})();
-`, jsString(appType), jsString(width), writable, jsString(name), jsString(urlOrCmd), jsString(urlOrCmd))
+	if appType == "terminal" {
+		app.Command = urlOrCmd
+	} else {
+		app.URL = urlOrCmd
+	}
+	if editIndex >= 0 {
+		DBUpdateSavedApp(projectName, editIndex, app)
+	} else {
+		DBAddSavedApp(projectName, app)
+	}
 }
 
-// updateLocalStorageURLJS returns JS that updates the URL of an app at a given index in localStorage
-func updateLocalStorageURLJS(index int, newURL string) string {
-	return fmt.Sprintf(`
-(function(){
-	var apps=JSON.parse(localStorage.getItem('libro-apps')||'[]');
-	if(%d>=0&&%d<apps.length){apps[%d].url=%s;localStorage.setItem('libro-apps',JSON.stringify(apps));}
-})();
-`, index, index, index, jsString(newURL))
+// dbUpdateAppURL updates the URL of a saved app at the given index.
+func dbUpdateAppURL(projectName string, index int, newURL string) {
+	DBUpdateSavedAppURL(projectName, index, newURL)
 }
 
 var (
@@ -58,6 +54,8 @@ var (
 
 // Run initializes and starts the Libro application server.
 func Run(assets embed.FS) {
+	InitDB()
+	defer CloseDB()
 	app := r.NewApp()
 	app.Title = "Libro"
 	app.Description = "Application Manager"
@@ -152,20 +150,23 @@ func Run(assets embed.FS) {
 			// Small delay to let ttyd start
 			time.Sleep(500 * time.Millisecond)
 
+			// Persist to DB
+			editIdx := stateBefore.EditIndex
+			dbSaveApp(state.ActiveProject, editIdx, "terminal", command, string(width), name, writable)
+			sm.Get(sid).EditIndex = -1
+
 			if hadApps > 0 {
 				frame := renderAppFrame(*newApp, state.SelectedIndex, true, sid)
 				return r.NewResponse().
 					Replace(DialogID, renderAddDialog(false, sid)).
 					Add(insertAppJS(frame, prepend, state.ActiveProject)).
 					Add(navigateJS(state, sid)).
-					Add(saveToLocalStorageJS("terminal", command, string(width), name, writable)).
 					Build()
 			}
 
 			return r.NewResponse().
 				Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 				Replace(DialogID, renderAddDialog(false, sid)).
-				Add(saveToLocalStorageJS("terminal", command, string(width), name, writable)).
 				Build()
 		}
 
@@ -186,6 +187,11 @@ func Run(assets embed.FS) {
 		sm.CloseDialog(sid)
 		state := sm.Get(sid)
 
+		// Persist to DB
+		editIdx := stateBefore.EditIndex
+		dbSaveApp(state.ActiveProject, editIdx, "url", url, string(width), name, false)
+		sm.Get(sid).EditIndex = -1
+
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
 			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
@@ -193,14 +199,12 @@ func Run(assets embed.FS) {
 				Replace(DialogID, renderAddDialog(false, sid)).
 				Add(insertAppJS(frame, prepend, state.ActiveProject)).
 				Add(navigateJS(state, sid)).
-				Add(saveToLocalStorageJS("url", url, string(width), name, false)).
 				Build()
 		}
 
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(DialogID, renderAddDialog(false, sid)).
-			Add(saveToLocalStorageJS("url", url, string(width), name, false)).
 			Build()
 	})
 
@@ -459,9 +463,10 @@ func Run(assets embed.FS) {
 		if idx < 0 {
 			return ""
 		}
-		// Navigate Chrome tab (if connected) and update localStorage
-		return fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS[%s];if(c&&c.readyState===1)c.send(JSON.stringify({t:'nav',url:%s}));var inp=document.getElementById('urlinput-'+%s);if(inp)inp.value=%s;})();`, jsString(appID), jsString(newURL), jsString(appID), jsString(newURL)) +
-			updateLocalStorageURLJS(idx, newURL)
+		// Navigate Chrome tab (if connected) and persist URL to DB
+		state := sm.Get(sid)
+		dbUpdateAppURL(state.ActiveProject, idx, newURL)
+		return fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS[%s];if(c&&c.readyState===1)c.send(JSON.stringify({t:'nav',url:%s}));var inp=document.getElementById('urlinput-'+%s);if(inp)inp.value=%s;})();`, jsString(appID), jsString(newURL), jsString(appID), jsString(newURL))
 	})
 
 	// Browse directories for project picker
@@ -517,6 +522,9 @@ func Run(assets embed.FS) {
 			return r.Notify("error", "Project '"+name+"' already exists")
 		}
 
+		// Persist project to DB
+		DBSaveProject(name, path)
+
 		sm.CloseProjectDialog(sid)
 		sm.SwitchProject(sid, name)
 		sm.IsProjectRendered(sid, name) // mark as rendered
@@ -529,7 +537,6 @@ func Run(assets embed.FS) {
 			Replace(ProjectBarID, renderProjectBar(state, sid)).
 			Replace(ProjectDialogID, renderProjectDialog(false, sid)).
 			Add(jsSwitch).
-			Add(saveProjectToLocalStorageJS(name, path)).
 			Add(updateHashJS(name)).
 			Build()
 	})
@@ -647,9 +654,11 @@ func Run(assets embed.FS) {
 
 		state := sm.Get(sid)
 
+		// Remove project from DB
+		DBRemoveProject(name)
+
 		resp := r.NewResponse().
 			Replace(ProjectBarID, renderProjectBar(state, sid)).
-			Add(removeProjectFromLocalStorageJS(name)).
 			Add(fmt.Sprintf(`(function(){var el=document.getElementById('project-main-%s');if(el)el.remove();})();`, name))
 
 		if wasActive {
@@ -660,27 +669,34 @@ func Run(assets embed.FS) {
 		return resp.Build()
 	})
 
-	// Initialize projects from localStorage on page load
-	app.Action("project.init", func(ctx *r.Context) string {
+	// Delete a saved app from DB
+	app.Action("app.saved.delete", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
-		projects, ok := data["projects"].([]interface{})
-		if !ok || len(projects) == 0 {
+		idx := -1
+		if v, ok := data["index"].(float64); ok {
+			idx = int(v)
+		}
+		if idx < 0 {
 			return ""
 		}
-		for _, p := range projects {
-			pm, ok := p.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			name, _ := pm["name"].(string)
-			path, _ := pm["path"].(string)
-			if name != "" && path != "" && name != "home" {
-				sm.AddProject(sid, name, path)
-			}
+		state := sm.Get(sid)
+		DBRemoveSavedApp(state.ActiveProject, idx)
+		// Re-render the empty state / main area to refresh saved apps list
+		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+	})
+
+	// Set edit index for editing a saved app
+	app.Action("app.saved.edit", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		idx := -1
+		if v, ok := data["index"].(float64); ok {
+			idx = int(v)
 		}
 		state := sm.Get(sid)
-		return renderProjectBar(state, sid).ToJSReplace(ProjectBarID)
+		state.EditIndex = idx
+		return ""
 	})
 
 	registerTtydProxy(app)
