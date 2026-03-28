@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	r "github.com/michalCapo/g-sui/ui"
+
+	"libro/internal/version"
 )
 
 // urlParse is a convenience wrapper around url.Parse.
@@ -1235,6 +1237,7 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 				return pathWrapper
 			}(),
 			r.Div("ml-auto flex items-center gap-1").Render(
+				r.Span("text-xs text-gray-400 dark:text-gray-500 font-mono select-none").Text("v"+version.Version),
 				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
 					Attr("title", "Keyboard shortcuts").
 					Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.toggle('hidden');", ShortcutsDialogID)).

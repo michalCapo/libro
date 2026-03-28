@@ -155,6 +155,9 @@ When a single application is open in a project, it is centered horizontally. Whe
 ### Browse (Empty Browser)
 The "Browse" button (in both the empty state and side launchers) opens a new empty browser panel. The panel starts with a blank page and the URL bar focused, so the user can immediately type a URL or search query and press Enter to navigate. This behaves like opening a new browser tab.
 
+### Version Display
+The current application version is shown in the header toolbar next to the shortcut buttons. In production builds, the version is injected at compile time via `-ldflags`. In development, it is read from the `VERSION` file at startup.
+
 ### Fullscreen Mode
 A fullscreen toggle button is available in the project bar next to the theme switcher. It uses the browser's Fullscreen API to enter and exit fullscreen mode. The button label and icon update dynamically to reflect the current state ("Fullscreen" / "Exit").
 
