@@ -58,6 +58,7 @@ var (
 
 // Run initializes and starts the Libro application server.
 func Run(assets embed.FS) {
+	KillStaleTtyd()
 	InitDB()
 	defer CloseDB()
 	app := r.NewApp()
