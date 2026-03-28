@@ -1,0 +1,13 @@
+{
+  "name": "libro",
+  "version": "0.0.8",
+  "description": "Application Manager",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "LIBRO_PORT=1439 electron ."
+  },
+  "devDependencies": {
+    "electron": "^36.0.0"
+  }
+}

@@ -3,7 +3,6 @@ module libro
 go 1.25.8
 
 require (
-	github.com/gorilla/websocket v1.5.3
 	github.com/michalCapo/g-sui v1.1.18
 	modernc.org/sqlite v1.48.0
 )

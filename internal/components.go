@@ -474,10 +474,6 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 	frameID := fmt.Sprintf("frame-%s", app.ID)
 
 	iframeSrc := app.URL
-	if app.Type == AppTypeURL {
-		// Chrome-backed tabs don't use iframe src; canvas is initialized via JS
-		iframeSrc = ""
-	}
 
 	// Size badge bar + close (right side of toolbar)
 	badgeBase := "px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase rounded-sm cursor-pointer transition-colors duration-75"
@@ -513,13 +509,13 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		// Back button
 		backBtn := r.Button(btnCls).
 			Attr("title", "Back").
-			OnClick(r.JS(fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS['%s'];if(c&&c.readyState===1)c.send(JSON.stringify({t:'back'}));})()`, app.ID)))
+			OnClick(r.JS(fmt.Sprintf(`window.__libroWvBack('%s')`, app.ID)))
 		backBtn.Render(r.I("material-icons-round text-sm").Text("arrow_back"))
 
 		// Forward button
 		forwardBtn := r.Button(btnCls).
 			Attr("title", "Forward").
-			OnClick(r.JS(fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS['%s'];if(c&&c.readyState===1)c.send(JSON.stringify({t:'fwd'}));})()`, app.ID)))
+			OnClick(r.JS(fmt.Sprintf(`window.__libroWvForward('%s')`, app.ID)))
 		forwardBtn.Render(r.I("material-icons-round text-sm").Text("arrow_forward"))
 
 		// Copy button
@@ -531,17 +527,17 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		// Reload button
 		reloadBtn := r.Button(btnCls).
 			Attr("title", "Reload").
-			OnClick(r.JS(fmt.Sprintf(`(function(){var c=window.__chromeWS&&window.__chromeWS['%s'];if(c&&c.readyState===1)c.send(JSON.stringify({t:'reload'}));})()`, app.ID)))
+			OnClick(r.JS(fmt.Sprintf(`window.__libroWvReload('%s')`, app.ID)))
 		reloadBtn.Render(r.I("material-icons-round text-sm").Text("refresh"))
 
-		// URL input — on Enter, navigate Chrome tab and update server state
+		// URL input — on Enter, navigate webview and update server state
 		urlInput := r.Input("flex-1 min-w-0 bg-gray-100 dark:bg-zinc-800 rounded-sm text-[11px] font-mono text-gray-600 dark:text-zinc-400 outline-none placeholder-gray-400 dark:placeholder-zinc-600 px-2 h-6").
 			ID(urlInputID).
 			Attr("type", "text").
 			Attr("value", app.URL).
 			Attr("spellcheck", "false").
 			Attr("autocomplete", "off").
-			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value;if(u&&!u.startsWith('http://')&&!u.startsWith('https://'))u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;var c=window.__chromeWS&&window.__chromeWS['%s'];if(c&&c.readyState===1)c.send(JSON.stringify({t:'nav',url:u}));__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});}`, app.ID, sid, app.ID)))
+			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value;if(u&&!u.startsWith('http://')&&!u.startsWith('https://'))u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;window.__libroWvNavigate('%s',u);__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});}`, app.ID, sid, app.ID)))
 
 		// Globe icon
 		globe := r.I("material-icons-round text-sm text-gray-400 dark:text-zinc-500 shrink-0 leading-none").Text("language")
@@ -630,13 +626,30 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 
 func renderIframe(app Application, frameID, iframeSrc string) *r.Node {
 	if app.Type == AppTypeURL {
-		// Chrome-backed view: z-30 to sit above the click overlay (z-20)
-		return r.Div("w-full h-full bg-white dark:bg-zinc-950 absolute inset-0 z-30").
+		// Electron webview: native rendering, no screencast needed.
+		// z-30 to sit above the click overlay (z-20)
+		webviewSrc := app.URL
+		if webviewSrc == "" {
+			webviewSrc = "about:blank"
+		}
+		wv := r.El("webview", "").
 			ID(frameID).
-			Attr("data-chrome-app", app.ID).
-			Attr("data-chrome-url", app.URL).
-			Attr("tabindex", "0").
-			Attr("style", "outline:none;overflow:hidden")
+			Attr("data-webview-app", app.ID).
+			Attr("src", webviewSrc).
+			Attr("partition", "persist:libro").
+			Attr("allowpopups", "").
+			Attr("style", "display:inline-flex;width:100%;height:100%")
+		// Force closing tag by adding empty text content
+		wv.Text("")
+		container := r.Div("w-full h-full absolute inset-0 z-30").Render(wv)
+		if app.URL == "" {
+			container.Render(
+				r.Div("absolute inset-0 flex items-center justify-center text-gray-400 dark:text-zinc-600 font-mono text-xs z-10 pointer-events-none").
+					Attr("data-webview-loading", "").
+					Text("Enter a URL above"),
+			)
+		}
+		return container
 	}
 	// Terminal apps use iframe (for ttyd)
 	sandbox := "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin"
