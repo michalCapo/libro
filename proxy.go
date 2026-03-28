@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"compress/flate"
+	"compress/gzip"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -17,8 +19,11 @@ import (
 )
 
 // proxyClient is a shared HTTP client for proxying requests.
-// It follows redirects and skips TLS verification to maximize compatibility.
+// It does NOT follow redirects — we rewrite them to go through the proxy.
 var proxyClient = &http.Client{
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
 	Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	},
@@ -68,17 +73,29 @@ func handleProxy(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Forward relevant request headers (strip Accept-Encoding so we get uncompressed responses for injection)
+	// Forward relevant request headers
 	for key, vals := range req.Header {
 		lower := strings.ToLower(key)
-		if hopByHopHeaders[lower] || lower == "host" || lower == "accept-encoding" {
+		if hopByHopHeaders[lower] || lower == "host" {
+			continue
+		}
+		// Strip Accept-Encoding so we get uncompressed responses for HTML injection.
+		// For non-HTML we'll pass through compressed responses as-is.
+		if lower == "accept-encoding" {
 			continue
 		}
 		for _, v := range vals {
 			outReq.Header.Add(key, v)
 		}
 	}
+
+	// Set proper headers so the target site sees a normal browser request
 	outReq.Header.Set("Host", parsed.Host)
+	outReq.Header.Set("Referer", parsed.Scheme+"://"+parsed.Host+"/")
+	outReq.Header.Set("Origin", parsed.Scheme+"://"+parsed.Host)
+
+	// Accept compressed responses — we'll decompress when needed
+	outReq.Header.Set("Accept-Encoding", "gzip, deflate")
 
 	resp, err := proxyClient.Do(outReq)
 	if err != nil {
@@ -87,8 +104,16 @@ func handleProxy(w http.ResponseWriter, req *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	// Final URL after redirects (used as base for relative URL resolution)
-	finalURL := resp.Request.URL.String()
+	// Handle redirects — rewrite Location header to go through proxy
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		loc := resp.Header.Get("Location")
+		if loc != "" {
+			absLoc := resolveURL(loc, targetURL)
+			w.Header().Set("Location", "/proxy?url="+url.QueryEscape(absLoc))
+			w.WriteHeader(resp.StatusCode)
+			return
+		}
+	}
 
 	// Copy response headers, stripping frame-blocking and hop-by-hop headers
 	for key, vals := range resp.Header {
@@ -96,20 +121,36 @@ func handleProxy(w http.ResponseWriter, req *http.Request) {
 		if frameBlockHeaders[lower] || hopByHopHeaders[lower] {
 			continue
 		}
+		// Rewrite Set-Cookie: strip Domain and Secure flags so cookies work through proxy
+		if lower == "set-cookie" {
+			for _, v := range vals {
+				rewritten := rewriteSetCookie(v)
+				w.Header().Add(key, rewritten)
+			}
+			continue
+		}
+		// Strip Location header (already handled above for redirects)
+		if lower == "location" {
+			continue
+		}
 		for _, v := range vals {
 			w.Header().Add(key, v)
 		}
 	}
 
-	// For HTML responses, inject proxy interceptor to route sub-requests and navigation through the proxy
 	ct := resp.Header.Get("Content-Type")
+
+	// For HTML responses, decompress if needed and inject proxy interceptor
 	if strings.Contains(ct, "text/html") {
-		body, err := io.ReadAll(resp.Body)
+		body, err := readResponseBody(resp)
 		if err != nil {
 			http.Error(w, "failed to read response", http.StatusBadGateway)
 			return
 		}
+
+		finalURL := targetURL
 		body = injectProxyScript(body, finalURL)
+
 		w.Header().Del("Content-Encoding")
 		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 		w.WriteHeader(resp.StatusCode)
@@ -117,8 +158,109 @@ func handleProxy(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// For CSS responses, rewrite url() references
+	if strings.Contains(ct, "text/css") {
+		body, err := readResponseBody(resp)
+		if err != nil {
+			http.Error(w, "failed to read response", http.StatusBadGateway)
+			return
+		}
+
+		body = rewriteCSSURLs(body, targetURL)
+
+		w.Header().Del("Content-Encoding")
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		w.WriteHeader(resp.StatusCode)
+		w.Write(body)
+		return
+	}
+
+	// For all other content types, stream through as-is (including compression)
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
+}
+
+// readResponseBody reads and decompresses the response body based on Content-Encoding.
+func readResponseBody(resp *http.Response) ([]byte, error) {
+	var reader io.Reader = resp.Body
+	switch strings.ToLower(resp.Header.Get("Content-Encoding")) {
+	case "gzip":
+		gz, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		defer gz.Close()
+		reader = gz
+	case "deflate":
+		reader = flate.NewReader(resp.Body)
+	}
+	return io.ReadAll(reader)
+}
+
+// resolveURL resolves a potentially relative URL against a base URL.
+func resolveURL(ref, base string) string {
+	baseURL, err := url.Parse(base)
+	if err != nil {
+		return ref
+	}
+	refURL, err := url.Parse(ref)
+	if err != nil {
+		return ref
+	}
+	return baseURL.ResolveReference(refURL).String()
+}
+
+// rewriteSetCookie strips Domain, Secure, and SameSite attributes from Set-Cookie
+// so cookies work when proxied through localhost.
+func rewriteSetCookie(cookie string) string {
+	parts := strings.Split(cookie, ";")
+	var kept []string
+	for i, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		lower := strings.ToLower(trimmed)
+		if i == 0 {
+			kept = append(kept, part)
+			continue
+		}
+		// Strip attributes that break cross-origin cookie usage
+		if strings.HasPrefix(lower, "domain") ||
+			strings.HasPrefix(lower, "secure") ||
+			strings.HasPrefix(lower, "samesite") {
+			continue
+		}
+		// Rewrite path to root so cookies are sent on all proxy requests
+		if strings.HasPrefix(lower, "path") {
+			kept = append(kept, " Path=/")
+			continue
+		}
+		kept = append(kept, part)
+	}
+	return strings.Join(kept, ";") + "; SameSite=Lax"
+}
+
+// rewriteCSSURLs rewrites url() references in CSS to go through the proxy.
+var reCSSURL = regexp.MustCompile(`url\(\s*(['"]?)([^)'"]+)['"]?\s*\)`)
+
+func rewriteCSSURLs(css []byte, baseURL string) []byte {
+	return reCSSURL.ReplaceAllFunc(css, func(match []byte) []byte {
+		sub := reCSSURL.FindSubmatch(match)
+		if len(sub) < 3 {
+			return match
+		}
+		quote := string(sub[1])
+		rawURL := strings.TrimSpace(string(sub[2]))
+
+		// Skip data URIs, blob URIs, and already-proxied URLs
+		if strings.HasPrefix(rawURL, "data:") ||
+			strings.HasPrefix(rawURL, "blob:") ||
+			strings.HasPrefix(rawURL, "#") ||
+			strings.Contains(rawURL, "/proxy?url=") {
+			return match
+		}
+
+		abs := resolveURL(rawURL, baseURL)
+		return []byte(fmt.Sprintf("url(%s/proxy?url=%s%s)", quote, url.QueryEscape(abs), quote))
+	})
 }
 
 // Patterns for stripping frame-busting meta tags from HTML
@@ -164,7 +306,7 @@ func injectProxyScript(body []byte, baseURL string) []byte {
 // frameBustNeutralizer is injected before all other scripts to prevent frame-busting.
 // It makes window.top and window.parent return window itself, so checks like
 // `if (top !== self)` or `if (window !== window.top)` evaluate to false.
-// It also neutralizes common redirect-based frame-busting patterns.
+// It also neutralizes common redirect-based frame-busting patterns and blocks Service Workers.
 const frameBustNeutralizer = `<script>(function(){
 try{
 // Save real parent reference before overriding (used for URL tracking postMessage)
@@ -172,12 +314,21 @@ window.__libroP=window.parent;
 // Override top/parent to point to self so frame-detection checks fail
 Object.defineProperty(window,'top',{get:function(){return window},configurable:false});
 Object.defineProperty(window,'parent',{get:function(){return window},configurable:false});
-// Neutralize location-based frame busting (top.location = ...)
-// By making top === self, these become no-ops, but as extra safety:
-var _loc=window.location;
+// Neutralize frameElement detection
 Object.defineProperty(window,'frameElement',{get:function(){return null},configurable:false});
 // Block attempts to detect cross-origin parent via window.length
 Object.defineProperty(window,'length',{get:function(){return 0},set:function(){},configurable:false});
+// Block Service Worker registration — SW intercepts break proxied requests
+if(navigator.serviceWorker){
+Object.defineProperty(navigator,'serviceWorker',{get:function(){return{register:function(){return Promise.reject()},getRegistration:function(){return Promise.resolve(undefined)},getRegistrations:function(){return Promise.resolve([])}}}});
+}
+// Neutralize document.domain assignments (used for frame-busting)
+try{Object.defineProperty(document,'domain',{get:function(){return location.hostname},set:function(){},configurable:false});}catch(e){}
+// Block visibility API checks (some sites pause in hidden iframes)
+try{
+Object.defineProperty(document,'hidden',{get:function(){return false},configurable:false});
+Object.defineProperty(document,'visibilityState',{get:function(){return'visible'},configurable:false});
+}catch(e){}
 }catch(e){}
 })();</script>`
 
@@ -191,11 +342,122 @@ if(u.startsWith(P)||u.startsWith('/proxy?url=')||u.startsWith('#')||u.startsWith
 try{var a=new URL(u,B).href;if(a.startsWith('http://')||a.startsWith('https://'))return P+encodeURIComponent(a);}catch(e){}
 return u;
 }
-var _f=window.fetch;window.fetch=function(i,o){if(typeof i==='string')i=t(i);else if(i instanceof Request)i=new Request(t(i.url),i);return _f.call(this,i,o);};
-var _o=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){if(arguments.length>1&&typeof arguments[1]==='string')arguments[1]=t(arguments[1]);return _o.apply(this,arguments);};
-document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href]');if(!a)return;var h=a.getAttribute('href');if(!h||h.startsWith('#')||h.startsWith('javascript:'))return;e.preventDefault();try{var ru=new URL(h,B).href;window.__libroP.postMessage({libroNav:ru},'*');}catch(x){}window.location.href=t(h);},true);
-document.addEventListener('submit',function(e){var f=e.target,a=f.getAttribute('action');if(a)f.setAttribute('action',t(a));},true);
-var _w=window.open;window.open=function(u){if(u)arguments[0]=t(u);return _w.apply(this,arguments);};
+
+// Intercept fetch
+var _f=window.fetch;window.fetch=function(i,o){
+if(typeof i==='string')i=t(i);
+else if(i instanceof Request)i=new Request(t(i.url),i);
+return _f.call(this,i,o);
+};
+
+// Intercept XMLHttpRequest
+var _o=XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open=function(){
+if(arguments.length>1&&typeof arguments[1]==='string')arguments[1]=t(arguments[1]);
+return _o.apply(this,arguments);
+};
+
+// Intercept link clicks — navigate through proxy and notify parent of URL change
+document.addEventListener('click',function(e){
+var a=e.target.closest&&e.target.closest('a[href]');
+if(!a)return;
+var h=a.getAttribute('href');
+if(!h||h.startsWith('#')||h.startsWith('javascript:'))return;
+e.preventDefault();
+try{var ru=new URL(h,B).href;window.__libroP.postMessage({libroNav:ru},'*');}catch(x){}
+window.location.href=t(h);
+},true);
+
+// Intercept form submissions
+document.addEventListener('submit',function(e){
+var f=e.target,a=f.getAttribute('action');
+if(a)f.setAttribute('action',t(a));
+},true);
+
+// Intercept window.open
+var _w=window.open;window.open=function(u){
+if(u)arguments[0]=t(u);
+return _w.apply(this,arguments);
+};
+
+// Intercept dynamic image/script/link/iframe src/href assignments
+function hookSetter(proto,prop,rewrite){
+var desc=Object.getOwnPropertyDescriptor(proto,prop);
+if(!desc||!desc.set)return;
+var origSet=desc.set;
+Object.defineProperty(proto,prop,{
+get:desc.get,
+set:function(v){return origSet.call(this,rewrite(v));},
+configurable:true,enumerable:desc.enumerable
+});
+}
+try{
+hookSetter(HTMLImageElement.prototype,'src',t);
+hookSetter(HTMLScriptElement.prototype,'src',t);
+hookSetter(HTMLIFrameElement.prototype,'src',t);
+hookSetter(HTMLSourceElement.prototype,'src',t);
+hookSetter(HTMLSourceElement.prototype,'srcset',function(v){
+if(!v)return v;
+return v.split(',').map(function(s){var p=s.trim().split(/\s+/);p[0]=t(p[0]);return p.join(' ');}).join(', ');
+});
+hookSetter(HTMLImageElement.prototype,'srcset',function(v){
+if(!v)return v;
+return v.split(',').map(function(s){var p=s.trim().split(/\s+/);p[0]=t(p[0]);return p.join(' ');}).join(', ');
+});
+}catch(e){}
+
+// Rewrite existing srcset attributes in the DOM once loaded
+document.addEventListener('DOMContentLoaded',function(){
+document.querySelectorAll('[srcset]').forEach(function(el){
+var v=el.getAttribute('srcset');
+if(v){
+var nv=v.split(',').map(function(s){var p=s.trim().split(/\s+/);p[0]=t(p[0]);return p.join(' ');}).join(', ');
+el.setAttribute('srcset',nv);
+}
+});
+});
+
+// Intercept History API to track URL changes for the address bar
+var _ps=history.pushState,_rs=history.replaceState;
+history.pushState=function(){
+var r=_ps.apply(this,arguments);
+try{window.__libroP.postMessage({libroNav:arguments[2]?new URL(arguments[2],B).href:B},'*');}catch(x){}
+return r;
+};
+history.replaceState=function(){
+var r=_rs.apply(this,arguments);
+try{window.__libroP.postMessage({libroNav:arguments[2]?new URL(arguments[2],B).href:B},'*');}catch(x){}
+return r;
+};
+
+// Intercept WebSocket to rewrite proxy URLs back to original
+var _WS=window.WebSocket;
+window.WebSocket=function(u,p){
+// If the WS URL points to our proxy host, rewrite to the actual target
+try{
+var wu=new URL(u);
+if(wu.hostname===location.hostname&&wu.port===location.port){
+var orig=new URL(B);
+wu.hostname=orig.hostname;wu.port=orig.port||'';wu.protocol=orig.protocol==='https:'?'wss:':'ws:';
+u=wu.href;
+}
+}catch(e){}
+return p!==undefined?new _WS(u,p):new _WS(u);
+};
+window.WebSocket.prototype=_WS.prototype;
+window.WebSocket.CONNECTING=_WS.CONNECTING;
+window.WebSocket.OPEN=_WS.OPEN;
+window.WebSocket.CLOSING=_WS.CLOSING;
+window.WebSocket.CLOSED=_WS.CLOSED;
+
+// Intercept EventSource
+var _ES=window.EventSource;
+if(_ES){
+window.EventSource=function(u,o){return new _ES(t(u),o);};
+window.EventSource.prototype=_ES.prototype;
+}
+
+// Notify parent of current URL
 try{window.__libroP.postMessage({libroNav:B},'*');}catch(x){}
 })();</script>`
 
