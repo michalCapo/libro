@@ -33,7 +33,11 @@ func main() {
 	if desktop {
 		go func() {
 			time.Sleep(500 * time.Millisecond)
-			openDesktop("http://localhost:1439")
+			done := openDesktop("http://localhost:1439")
+
+			// When the browser window closes, exit the process
+			<-done
+			os.Exit(0)
 		}()
 	}
 
