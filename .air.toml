@@ -3,7 +3,8 @@ tmp_dir = "tmp"
 
 [build]
   bin = "./tmp/main"
-  cmd = "go build -tags dev -o ./tmp/main ."
+  cmd = "go build -tags dev -o ./tmp/main . && echo 'dev server: http://localhost:1439'"
+  args_bin = ["--no-desktop"]
   delay = 1000
   exclude_dir = ["assets", "tmp", "spec", "winres", "node_modules"]
   exclude_regex = ["_test.go"]
