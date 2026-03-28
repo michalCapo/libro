@@ -305,6 +305,32 @@ func Run(assets embed.FS) {
 		return removeAppJS(appID) + navigateJS(state, sid)
 	})
 
+	// Close current (selected) app — no app ID needed from client
+	app.Action("app.close.current", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		state := sm.Get(sid)
+		if len(state.Apps) == 0 {
+			return ""
+		}
+		appID := state.Apps[state.SelectedIndex].ID
+		hadApps := len(state.Apps)
+
+		removed := sm.RemoveAppByID(sid, appID)
+		if removed != nil {
+			if removed.Type == AppTypeTerminal {
+				tm.Stop(removed.ID)
+			} else if removed.Type == AppTypeURL {
+				cm.closeTab(removed.ID)
+			}
+		}
+
+		state = sm.Get(sid)
+		if len(state.Apps) == 0 || hadApps <= 1 {
+			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+		}
+		return removeAppJS(appID) + navigateJS(state, sid)
+	})
+
 	// Navigate left - JS-only update to preserve iframes
 	app.Action("app.navigate.left", func(ctx *r.Context) string {
 		sid := extractSID(ctx)

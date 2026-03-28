@@ -993,6 +993,14 @@ func searchDialogJS(sid string) string {
 		return window.__libroSavedApps||[];
 	}
 
+	function getBrowsedURLs(){
+		return (window.__libroBrowsedURLs||[]).map(function(u){
+			var host='';
+			try{host=new URL(u).hostname.replace(/^www\./,'');}catch(e){}
+			return {app:{type:'url',url:u,name:host||u,width:'lg',writable:true},isHistory:true};
+		});
+	}
+
 	function render(){
 		var dk=document.documentElement.classList.contains('dark');
 		res.innerHTML='';
@@ -1014,6 +1022,17 @@ func searchDialogJS(sid string) string {
 				iconHtml='<i class="material-icons-round text-teal-500 text-lg shrink-0">public</i>';
 				label=app.name||app.url;
 				sub=app.url;
+			}else if(item.isHistory){
+				try{
+					var u=new URL(app.url);
+					iconHtml='<img class="w-6 h-6 rounded-sm shrink-0" src="https://www.google.com/s2/favicons?domain='+encodeURIComponent(u.hostname)+'&sz=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 text-lg\\\'>history</i>\'">';
+					label=u.hostname.replace(/^www\./,'');
+					sub=app.url;
+				}catch(e){
+					iconHtml='<i class="material-icons-round text-gray-400 text-lg shrink-0">history</i>';
+					label=app.url;
+					sub=app.url;
+				}
 			}else if(app.type==='terminal'){
 				iconHtml=window.__libroTermIcon?window.__libroTermIcon(app.command,24,app.iconUrl):'';
 				label=app.name||app.command;
@@ -1033,7 +1052,7 @@ func searchDialogJS(sid string) string {
 			var txtCls=dk?'text-zinc-200':'text-gray-800';
 			var subCls=dk?'text-zinc-500':'text-gray-400';
 			var badgeCls=dk?'bg-zinc-700 text-zinc-400':'bg-gray-200 text-gray-500';
-			var typeBadge=item.isBrowse?'browser':app.type;
+			var typeBadge=item.isBrowse?'browser':item.isHistory?'history':app.type;
 			row.innerHTML=iconHtml
 				+'<div class="flex-1 min-w-0"><div class="text-sm truncate '+txtCls+'">'+label+'</div>'
 				+(sub!==label?'<div class="text-[11px] truncate '+subCls+'">'+sub+'</div>':'')
@@ -1061,11 +1080,17 @@ func searchDialogJS(sid string) string {
 	function filter(){
 		var q=inp.value.trim();
 		var apps=getApps();
+		var history=getBrowsedURLs();
+		// Build a set of saved app URLs to avoid duplicates from history
+		var savedURLs={};
+		apps.forEach(function(a){if(a.url)savedURLs[a.url]=true;});
+		var uniqueHistory=history.filter(function(h){return !savedURLs[h.app.url];});
 		if(!q){
 			filtered=apps.map(function(a){return{app:a,score:1};});
+			uniqueHistory.forEach(function(h){filtered.push({app:h.app,score:0.5,isHistory:true});});
 			filtered.push(browserEntry);
 		}else if(isURL(q)){
-			// URL typed — show "Browse <url>" at top, then matching saved apps
+			// URL typed — show "Browse <url>" at top, then matching saved apps + history
 			var browseURL=q;
 			if(!/^https?:\/\//i.test(browseURL))browseURL=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(browseURL)?'http://':'https://')+browseURL;
 			filtered=[{app:{type:'url',url:browseURL,name:'Browse: '+q,width:'lg'},score:99999,isBrowse:true}];
@@ -1074,12 +1099,21 @@ func searchDialogJS(sid string) string {
 				var score=fuzzyMatch(text,q);
 				if(score>0)filtered.push({app:a,score:score});
 			});
+			uniqueHistory.forEach(function(h){
+				var score=fuzzyMatch(h.app.url+' '+h.app.name,q);
+				if(score>0)filtered.push({app:h.app,score:score,isHistory:true});
+			});
+			filtered.sort(function(a,b){return b.score-a.score;});
 		}else{
 			filtered=[];
 			apps.forEach(function(a){
 				var text=(a.name||'')+' '+(a.command||'')+' '+(a.url||'')+' '+a.type;
 				var score=fuzzyMatch(text,q);
 				if(score>0)filtered.push({app:a,score:score});
+			});
+			uniqueHistory.forEach(function(h){
+				var score=fuzzyMatch(h.app.url+' '+h.app.name,q);
+				if(score>0)filtered.push({app:h.app,score:score,isHistory:true});
 			});
 			filtered.sort(function(a,b){return b.score-a.score;});
 			// Add browser if "browser" fuzzy matches query
@@ -1098,6 +1132,11 @@ func searchDialogJS(sid string) string {
 		// Empty browser — use app.browse.new to open blank tab with URL bar focused
 		if(item.isBrowse&&!app.url){
 			__ws.call('app.browse.new',{sid:'%s',side:side});
+			return;
+		}
+		// History items — open directly (URL is already complete)
+		if(item.isHistory){
+			__ws.call('app.start',{sid:'%s',type:'url',url:app.url,command:'',width:app.width||'lg',writable:true,name:'',iconUrl:'',side:side});
 			return;
 		}
 		__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false,name:app.name||'',iconUrl:app.iconUrl||'',side:side});
@@ -1135,7 +1174,7 @@ func searchDialogJS(sid string) string {
 
 	window.__libroOpenSearch=openSearch;
 })();
-`, SearchDialogID, sid, sid)
+`, SearchDialogID, sid, sid, sid)
 }
 
 // renderShortcutsDialog renders the keyboard shortcuts popup (hidden by default).
@@ -1462,7 +1501,7 @@ func updateHashJS(name string) string {
 	return fmt.Sprintf("history.replaceState(null,'','#%s');", name)
 }
 
-// savedAppsJS returns JS that sets the global __libroSavedApps variable from DB data.
+// savedAppsJS returns JS that sets the global __libroSavedApps and __libroBrowsedURLs variables from DB data.
 func savedAppsJS() string {
 	apps := DBLoadAllSavedApps()
 	type jsApp struct {
@@ -1479,7 +1518,10 @@ func savedAppsJS() string {
 		jsApps[i] = jsApp{Type: a.Type, URL: a.URL, Command: a.Command, Width: a.Width, Writable: a.Writable, Name: a.Name, IconURL: a.IconURL}
 	}
 	b, _ := json.Marshal(jsApps)
-	return fmt.Sprintf("window.__libroSavedApps=%s;", string(b))
+
+	browsedURLs := DBLoadBrowsedURLs()
+	bu, _ := json.Marshal(browsedURLs)
+	return fmt.Sprintf("window.__libroSavedApps=%s;window.__libroBrowsedURLs=%s;", string(b), string(bu))
 }
 
 // initHashJS handles hash-based project navigation on page load.
@@ -1622,17 +1664,7 @@ func keyboardShortcutsJS(sid string) string {
 				if (e.metaKey && (e.key === 'd' || e.key === 'D')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					var strips = document.querySelectorAll('[id^="app-strip-"]');
-					for (var s = 0; s < strips.length; s++) {
-						var parent = strips[s].closest('[id^="project-main-"]');
-						if (parent && parent.style.display !== 'none') {
-							var sel = strips[s].querySelector('.border-teal-500[data-app-id]');
-							if (sel) {
-								__ws.call('app.close', {"sid": "%s", "id": sel.getAttribute('data-app-id')});
-							}
-							break;
-						}
-					}
+					__ws.call('app.close.current', {"sid": "%s"});
 				}
 			}
 

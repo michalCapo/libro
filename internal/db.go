@@ -63,6 +63,12 @@ func createTables() {
 			path     TEXT NOT NULL,
 			position INTEGER NOT NULL DEFAULT 0
 		);
+		CREATE TABLE IF NOT EXISTS browsed_urls (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			url        TEXT NOT NULL UNIQUE,
+			title      TEXT NOT NULL DEFAULT '',
+			visited_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
 		CREATE TABLE IF NOT EXISTS saved_apps (
 			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			project_name TEXT NOT NULL DEFAULT 'home',
@@ -326,4 +332,43 @@ func dbAppIDAtIndex(projectName string, index int) int64 {
 		i++
 	}
 	return -1
+}
+
+// --- Browsed URLs ---
+
+// DBSaveBrowsedURL upserts a URL into the browsed_urls table (updates visited_at if exists).
+func DBSaveBrowsedURL(urlStr string) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	_, err := db.Exec(
+		"INSERT INTO browsed_urls (url, visited_at) VALUES (?, CURRENT_TIMESTAMP) ON CONFLICT(url) DO UPDATE SET visited_at=CURRENT_TIMESTAMP",
+		urlStr,
+	)
+	if err != nil {
+		log.Printf("db: save browsed url: %v", err)
+	}
+}
+
+// DBLoadBrowsedURLs returns all browsed URLs ordered by most recently visited.
+func DBLoadBrowsedURLs() []string {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	rows, err := db.Query("SELECT url FROM browsed_urls ORDER BY visited_at DESC LIMIT 200")
+	if err != nil {
+		log.Printf("db: load browsed urls: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var urls []string
+	for rows.Next() {
+		var u string
+		if err := rows.Scan(&u); err != nil {
+			continue
+		}
+		urls = append(urls, u)
+	}
+	return urls
 }
