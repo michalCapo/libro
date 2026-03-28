@@ -139,6 +139,8 @@ Terminal applications display real brand icons for known commands instead of gen
 ### Project Support
 Projects are tied to folders. The default project is "home" which starts in the home directory. Users can create new projects by defining a folder. When a user clicks on a project, the working directory changes to that folder. All ttyd applications start with `cd <pwd>` to ensure they begin in the project's directory.
 
+Projects can be removed by clicking the close button next to the project name in the project bar. The "home" project cannot be removed. Removing a project cleans up all its running applications (terminals and browser tabs) and removes it from localStorage.
+
 When switching between projects, applications from the previous project are kept alive but hidden. The app remembers position and size of applications per project. When returning to a project, its applications become visible again or are created if this is the first time opening the project in the session.
 
 ### Directory Picker for Projects

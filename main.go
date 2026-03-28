@@ -593,6 +593,53 @@ func main() {
 			Build()
 	})
 
+	// Remove a project
+	app.Action("project.remove", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		name, _ := data["name"].(string)
+		if name == "" || name == "home" {
+			return ""
+		}
+
+		// Check if we're removing the active project
+		stateBefore := sm.Get(sid)
+		wasActive := stateBefore.ActiveProject == name
+
+		// If removing active project, switch to home first
+		if wasActive {
+			sm.SwitchProject(sid, "home")
+		}
+
+		apps, ok := sm.RemoveProject(sid, name)
+		if !ok {
+			return r.Notify("error", "Cannot remove project")
+		}
+
+		// Cleanup apps from the removed project's snapshot
+		for _, a := range apps {
+			if a.Type == AppTypeTerminal {
+				tm.Stop(a.ID)
+			} else if a.Type == AppTypeURL {
+				cm.closeTab(a.ID)
+			}
+		}
+
+		state := sm.Get(sid)
+
+		resp := r.NewResponse().
+			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Add(removeProjectFromLocalStorageJS(name)).
+			Add(fmt.Sprintf(`(function(){var el=document.getElementById('project-main-%s');if(el)el.remove();})();`, name))
+
+		if wasActive {
+			resp.Replace(projectMainID("home"), renderMainArea(state, sid)).
+				Add(updateHashJS("home"))
+		}
+
+		return resp.Build()
+	})
+
 	// Initialize projects from localStorage on page load
 	app.Action("project.init", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
