@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# install — Build libro and install to ~/.local/bin/
+# ---------------------------------------------------------------------------
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION_FILE="$SCRIPT_DIR/VERSION"
+MODULE="libro"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+info()  { echo -e "\033[1;34m==>\033[0m $*"; }
+ok()    { echo -e "\033[1;32m==>\033[0m $*"; }
+err()   { echo -e "\033[1;31m==>\033[0m $*" >&2; }
+
+# ---------------------------------------------------------------------------
+# Detect OS and set install directory + binary name
+# ---------------------------------------------------------------------------
+
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "$ARCH" in
+    x86_64)  GOARCH="amd64" ;;
+    aarch64) GOARCH="arm64" ;;
+    arm64)   GOARCH="arm64" ;;
+    *)       GOARCH="$ARCH" ;;
+esac
+
+BIN_NAME="libro"
+INSTALL_DIR="$HOME/.local/bin"
+
+case "$OS" in
+    Linux)
+        GOOS="linux"
+        ;;
+    Darwin)
+        GOOS="darwin"
+        ;;
+    MINGW*|MSYS*|CYGWIN*)
+        GOOS="windows"
+        BIN_NAME="libro.exe"
+        INSTALL_DIR="$USERPROFILE/.local/bin"
+        # Fallback if USERPROFILE is not set
+        if [[ -z "$INSTALL_DIR" || "$INSTALL_DIR" == "/.local/bin" ]]; then
+            INSTALL_DIR="$HOME/.local/bin"
+        fi
+        ;;
+    *)
+        err "Unsupported OS: $OS"
+        exit 1
+        ;;
+esac
+
+info "OS: $GOOS/$GOARCH"
+info "Install directory: $INSTALL_DIR"
+
+# ---------------------------------------------------------------------------
+# Read version
+# ---------------------------------------------------------------------------
+
+VERSION="dev"
+if [[ -f "$VERSION_FILE" ]]; then
+    VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
+fi
+
+LDFLAGS="-X ${MODULE}/internal/version.Version=${VERSION}"
+
+# ---------------------------------------------------------------------------
+# Build
+# ---------------------------------------------------------------------------
+
+info "Building libro v${VERSION}..."
+GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags "$LDFLAGS" -o "$SCRIPT_DIR/$BIN_NAME" .
+ok "Built $BIN_NAME"
+
+# ---------------------------------------------------------------------------
+# Install
+# ---------------------------------------------------------------------------
+
+mkdir -p "$INSTALL_DIR"
+mv "$SCRIPT_DIR/$BIN_NAME" "$INSTALL_DIR/$BIN_NAME"
+chmod +x "$INSTALL_DIR/$BIN_NAME"
+ok "Installed to $INSTALL_DIR/$BIN_NAME"
+
+# ---------------------------------------------------------------------------
+# Check PATH
+# ---------------------------------------------------------------------------
+
+if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
+    echo ""
+    echo "  NOTE: $INSTALL_DIR is not in your PATH."
+    echo "  Add this to your shell profile:"
+    echo ""
+    echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo ""
+fi
+
+echo ""
+echo "  Run 'libro' to start, or 'libro --desktop' for desktop mode."
+echo ""
