@@ -250,7 +250,7 @@ func renderMainArea(state *AppState, sid string) *r.Node {
 
 // renderEmptyState renders the saved apps list with "+ Add New" button
 func renderEmptyState(state *AppState, sid string) *r.Node {
-	savedApps := DBLoadSavedApps(state.ActiveProject)
+	savedApps := DBLoadAllSavedApps()
 	appButtons := make([]*r.Node, 0, len(savedApps))
 	for i, app := range savedApps {
 		appButtons = append(appButtons, renderSavedAppButton(app, i, sid))
@@ -1152,6 +1152,8 @@ func renderShortcutsDialog() *r.Node {
 		{"⌘ + K", "Previous project"},
 		{"⌘ + /", "Open search"},
 		{"⌘ + D", "Close current app"},
+		{"Ctrl + +", "Zoom in"},
+		{"Ctrl + -", "Zoom out"},
 	}
 
 	rows := make([]*r.Node, 0, len(shortcuts))
@@ -1177,7 +1179,7 @@ func renderShortcutsDialog() *r.Node {
 							Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", ShortcutsDialogID)).
 							Render(r.I("material-icons-round text-base").Text("close")),
 					),
-					r.Div("px-4 py-2 max-h-80 overflow-y-auto").Render(rows...),
+					r.Div("px-4 py-2").Render(rows...),
 					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
 						r.Span("").Text("Esc to close"),
 					),
@@ -1351,8 +1353,6 @@ func renderProjectDialog(visible bool, sid string) *r.Node {
 		hiddenClass = ""
 	}
 
-	inputCls := "w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-1 focus:ring-teal-500 focus:border-teal-500 outline-none transition-colors"
-
 	homeDir, _ := os.UserHomeDir()
 	if homeDir == "" {
 		homeDir = "/"
@@ -1362,7 +1362,7 @@ func renderProjectDialog(visible bool, sid string) *r.Node {
 		ID(ProjectDialogID).
 		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden')", ProjectDialogID))).
 		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl p-5 w-full max-w-lg mx-4").
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl p-5 w-full max-w-2xl mx-4").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
 					r.H2("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100 mb-4 tracking-tight").Text("New Project"),
@@ -1374,17 +1374,7 @@ func renderProjectDialog(visible bool, sid string) *r.Node {
 					),
 
 					// Hidden input for selected path
-					r.IHidden("").ID("project-path").Attr("value", ""),
-
-					// Name field (auto-populated, editable)
-					r.Div("mb-5").Render(
-						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Name"),
-						r.IText(inputCls).
-							ID("project-name").
-							Attr("placeholder", "select a folder above").
-							Attr("oninput", "this.dataset.auto='false'").
-							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-create-project').click();}"),
-					),
+					r.IHidden("").ID("project-path").Attr("value", homeDir),
 
 					r.Div("flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-zinc-800").Render(
 						r.Button("px-4 py-2 text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 font-mono text-sm rounded-md hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer").
@@ -1396,7 +1386,7 @@ func renderProjectDialog(visible bool, sid string) *r.Node {
 							OnClick(&r.Action{
 								Name:    "project.create",
 								Data:    sidData(sid),
-								Collect: []string{"project-name", "project-path"},
+								Collect: []string{"project-path"},
 							}),
 					),
 				),
@@ -1420,22 +1410,11 @@ func renderDirBrowser(currentPath string, sid string) *r.Node {
 		sort.Strings(dirs)
 	}
 
-	// Current path display + select button
-	pathBar := r.Div("flex items-center gap-2 mb-2").Render(
-		r.Div("flex-1 px-3 py-2 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-md text-xs font-mono text-gray-600 dark:text-zinc-400 truncate").
+	// Current path display
+	pathBar := r.Div("mb-2").Render(
+		r.Div("px-3 py-2 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-md text-xs font-mono text-gray-600 dark:text-zinc-400 truncate").
 			Attr("title", currentPath).
 			Text(currentPath),
-		r.Button("shrink-0 px-3 py-2 bg-teal-600 hover:bg-teal-500 text-white font-mono text-xs font-medium rounded-md transition-colors cursor-pointer").
-			Text("Select").
-			OnClick(r.JS(fmt.Sprintf(`
-				document.getElementById('project-path').value='%s';
-				var nameEl=document.getElementById('project-name');
-				if(!nameEl.value||nameEl.dataset.auto==='true'){
-					nameEl.value='%s';
-					nameEl.dataset.auto='true';
-				}
-				nameEl.dispatchEvent(new Event('input'));
-			`, currentPath, filepath.Base(currentPath)))),
 	)
 
 	// Parent directory entry
@@ -1466,7 +1445,7 @@ func renderDirBrowser(currentPath string, sid string) *r.Node {
 	// Highlight current path as selected
 	_ = selectedCls
 
-	dirList := r.Div("max-h-48 overflow-y-auto space-y-0.5 border border-gray-200 dark:border-zinc-700 rounded-md p-1.5 bg-gray-50/50 dark:bg-zinc-800/50")
+	dirList := r.Div("max-h-80 overflow-y-auto space-y-0.5 border border-gray-200 dark:border-zinc-700 rounded-md p-1.5 bg-gray-50/50 dark:bg-zinc-800/50")
 	if len(items) == 0 {
 		dirList.Render(
 			r.Div("px-3 py-2 text-xs font-mono text-gray-400 dark:text-zinc-600 italic").Text("No subdirectories"),
