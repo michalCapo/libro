@@ -128,12 +128,16 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 	return s
 }
 
-// NextPort returns the next available port for ttyd
+// NextPort returns the next available port for ttyd, skipping any ports already in use.
 func (sm *StateManager) NextPort() int {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	sm.nextPort++
-	return sm.nextPort
+	for {
+		sm.nextPort++
+		if portFree(sm.nextPort) {
+			return sm.nextPort
+		}
+	}
 }
 
 // NextAppID returns a unique app ID without adding any app to state.

@@ -3,10 +3,12 @@ package libro
 import (
 	"fmt"
 	"log"
+	"net"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // shellQuote escapes a string for safe use as a single shell argument.
@@ -27,11 +29,52 @@ func NewTtydManager() *TtydManager {
 	}
 }
 
+// KillStaleTtyd kills any ttyd processes left over from a previous run.
+// Should be called once at startup before allocating ports.
+func KillStaleTtyd() {
+	// pkill sends SIGTERM to all matching processes; ignore errors (no matches is fine)
+	_ = exec.Command("pkill", "-f", "^ttyd ").Run()
+	// Give processes a moment to exit so their ports are released
+	time.Sleep(200 * time.Millisecond)
+	// Force-kill any that didn't exit
+	_ = exec.Command("pkill", "-9", "-f", "^ttyd ").Run()
+	time.Sleep(100 * time.Millisecond)
+}
+
+// portFree returns true if nothing is listening on the given TCP port.
+func portFree(port int) bool {
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return false
+	}
+	ln.Close()
+	return true
+}
+
+// waitForPort polls until something is listening on port, or timeout elapses.
+func waitForPort(port int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 50*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return false
+}
+
 // Start launches a ttyd process for the given app.
 // If pwd is non-empty, the command is prefixed with cd to that directory.
 func (tm *TtydManager) Start(appID string, port int, command string, writable bool, pwd string) error {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
+
+	// Verify port is free before starting
+	if !portFree(port) {
+		return fmt.Errorf("port %d is already in use", port)
+	}
 
 	args := []string{
 		"-p", strconv.Itoa(port),
@@ -64,6 +107,16 @@ func (tm *TtydManager) Start(appID string, port int, command string, writable bo
 		tm.mu.Unlock()
 		log.Printf("ttyd process for app %s exited", appID)
 	}()
+
+	// Verify ttyd is actually listening before returning
+	if !waitForPort(port, 3*time.Second) {
+		// Process started but never bound to port — clean up
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		delete(tm.processes, appID)
+		return fmt.Errorf("ttyd on port %d failed to start listening", port)
+	}
 
 	return nil
 }
