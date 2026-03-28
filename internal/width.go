@@ -4,6 +4,7 @@ package libro
 type Width string
 
 const (
+	WidthSM   Width = "sm"
 	WidthMD   Width = "md"
 	WidthLG   Width = "lg"
 	WidthXL   Width = "xl"
@@ -13,12 +14,14 @@ const (
 
 // AllWidths returns all available width options in order
 func AllWidths() []Width {
-	return []Width{WidthMD, WidthLG, WidthXL, Width2XL, WidthFull}
+	return []Width{WidthSM, WidthMD, WidthLG, WidthXL, Width2XL, WidthFull}
 }
 
 // Label returns the display label for a width
 func (w Width) Label() string {
 	switch w {
+	case WidthSM:
+		return "SM (max 480px)"
 	case WidthMD:
 		return "MD (max 640px)"
 	case WidthLG:
@@ -37,6 +40,8 @@ func (w Width) Label() string {
 // PixelWidth returns the fixed pixel width for the given width tier
 func (w Width) PixelWidth() string {
 	switch w {
+	case WidthSM:
+		return "480px"
 	case WidthMD:
 		return "640px"
 	case WidthLG:
@@ -55,6 +60,8 @@ func (w Width) PixelWidth() string {
 // PixelWidthInt returns the fixed pixel width as an integer
 func (w Width) PixelWidthInt() int {
 	switch w {
+	case WidthSM:
+		return 480
 	case WidthMD:
 		return 640
 	case WidthLG:

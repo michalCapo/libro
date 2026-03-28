@@ -18,7 +18,7 @@ A Go web application using [g-sui](https://github.com/michalCapo/g-sui) that man
 type Application struct {
     ID    string // unique identifier
     URL   string // iframe source URL
-    Width string // "xs" | "sm" | "md" | "lg" | "xl"
+    Width string // "sm" | "md" | "lg" | "xl" | "2xl" | "full"
 }
 ```
 
@@ -35,15 +35,16 @@ type AppState struct {
 
 Widths map to Tailwind-like responsive behavior. Each width defines max-width at different breakpoints:
 
-| Width | Mobile (<640px) | Tablet (640-1024px) | Laptop (1024-1536px) | Desktop (1536-2560px) | 2K+ (>2560px) |
-|-------|----------------|---------------------|----------------------|----------------------|---------------|
-| xs    | 100%           | 320px               | 320px                | 320px                | 320px         |
-| sm    | 100%           | 480px               | 480px                | 480px                | 480px         |
-| md    | 100%           | 100%                | 640px                | 640px                | 640px         |
-| lg    | 100%           | 100%                | 100%                 | 960px                | 960px         |
-| xl    | 100%           | 100%                | 100%                 | 100%                 | 1280px        |
+| Width | Fixed Width |
+|-------|-------------|
+| SM    | 480px       |
+| MD    | 640px       |
+| LG    | 960px       |
+| XL    | 1280px      |
+| 2XL   | 1920px      |
+| FULL  | 100%        |
 
-All widths are responsive to viewport. On mobile, everything is 100%. On larger screens, apps use their configured fixed width. On 2K+ screens, xl apps are centered and space on both sides can show "+" buttons or adjacent apps.
+Each app uses its configured fixed pixel width. FULL takes 100% of the viewport.
 
 ## Features
 
@@ -54,7 +55,7 @@ Full-height flex container as a single page app. One route (`/`) renders the app
 When no applications exist, a centered "+ Application" button is displayed. Clicking it opens the "Add Application" dialog.
 
 ### Add Application Dialog
-Modal/dialog overlay triggered by "+" button click. Contains a URL input field (required) and width selection via radio buttons (xs, sm, md, lg, xl). On submit, validates the URL is not empty, adds the application to state, closes the dialog, and re-renders the strip.
+Modal/dialog overlay triggered by "+" button click. Contains a URL input field (required) and width selection via radio buttons (SM, MD, LG, XL, 2XL, FULL). On submit, validates the URL is not empty, adds the application to state, closes the dialog, and re-renders the strip.
 
 ### Application Rendering (Chrome Screencast)
 URL applications are rendered using a headless Chromium instance controlled via the Chrome DevTools Protocol (CDP). Each URL app gets its own Chrome tab, with screencast frames streamed to an HTML canvas via WebSocket. This approach bypasses X-Frame-Options and CSP restrictions that block iframe embedding, allowing any website to be displayed. The iframe container has a fixed width based on the app's width setting and takes the full height of the viewport. Applications are displayed side-by-side in a horizontal row, each maintaining its configured width at all times.
@@ -64,7 +65,7 @@ Each application frame has a non-overlapping toolbar above the content, similar 
 
 - **Left side (URL apps)**: Back/forward buttons, globe icon, editable URL input field, copy URL button, reload button
 - **Left side (Terminal apps)**: Real application icon (for known commands) or gradient initials badge, command/name label
-- **Right side (all apps)**: Width size badges (MD, LG, XL, 2XL, FULL) and close button
+- **Right side (all apps)**: Width size badges (SM, MD, LG, XL, 2XL, FULL) and close button
 
 Users can see the current URL, copy it to clipboard, edit it and press Enter to navigate to a new URL, or reload the page. Back and forward buttons navigate the browser history. The URL bar automatically updates when the user navigates within the Chrome tab, reflecting the current page URL in real time (via CDP Page.frameNavigated events). The URL is automatically prefixed with `https://` if no scheme is provided. URL changes are persisted to localStorage.
 
@@ -80,15 +81,8 @@ When applications overflow the viewport, left (`<`) and right (`>`) arrows appea
 ### Application Selection / Focus
 One application is always selected and centered. Clicking on a partially visible app selects and centers it. The selected app is visually distinguished.
 
-### Responsive Behavior
-- **Mobile (<640px)**: All apps take 100% width, one app at a time
-- **Tablet (640-1024px)**: xs/sm at fixed width, md/lg/xl take 100%
-- **Laptop (1024-1536px)**: xs/sm/md at fixed width, lg/xl take 100%
-- **Desktop (1536-2560px)**: xs/sm/md/lg at fixed width, xl takes 100%
-- **2K+ (>2560px)**: All apps at fixed width, xl apps centered with space for "+" buttons and adjacent apps
-
-### Multi-App Layout on Large Screens (2K+)
-On 2K+ screens, if the selected app doesn't fill the viewport, adjacent apps are shown partially or fully next to it. "+" buttons fill remaining space if no more apps to show.
+### Multi-App Layout on Large Screens
+If the selected app doesn't fill the viewport, adjacent apps are shown partially or fully next to it. "+" buttons fill remaining space if no more apps to show.
 
 ### State Management via WebSocket Actions
 - `app.add` - Add new application (receives URL + width from dialog)

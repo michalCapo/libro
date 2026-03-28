@@ -5,6 +5,7 @@ go 1.25.8
 require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/michalCapo/g-sui v1.1.18
+	modernc.org/sqlite v1.48.0
 )
 
 require (
@@ -19,5 +20,4 @@ require (
 	modernc.org/libc v1.70.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.48.0 // indirect
 )

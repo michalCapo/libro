@@ -89,7 +89,7 @@ func Run(assets embed.FS) {
 	})
 
 	// Add application (URL or Terminal)
-	app.Action("app.add", func(ctx *r.Context) string {
+	app.Action("app.save", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 
@@ -106,13 +106,10 @@ func Run(assets embed.FS) {
 			name = strings.TrimSpace(val)
 		}
 
-		// Determine insertion side from dialog state
-		stateBefore := sm.Get(sid)
-		prepend := stateBefore.DialogSide == "left"
-		hadApps := len(stateBefore.Apps)
+		state := sm.Get(sid)
+		editIdx := state.EditIndex
 
 		if appType == "terminal" {
-			// Terminal (ttyd) app
 			command, _ := data["app-command"].(string)
 			command = strings.TrimSpace(command)
 			if command == "" {
@@ -124,83 +121,20 @@ func Run(assets embed.FS) {
 				writable = val
 			}
 
-			pwd := sm.GetActiveProjectPath(sid)
-			port := sm.NextPort()
-			if err := tm.Start("pending", port, command, writable, pwd); err != nil {
-				return r.Notify("error", "Failed to start ttyd: "+err.Error())
-			}
-
-			if prepend {
-				sm.PrependTerminalApp(sid, command, port, writable, width, name)
-			} else {
-				sm.AddTerminalApp(sid, command, port, writable, width, name)
-			}
-			state := sm.Get(sid)
-			// Update the ttyd app ID to match the actual app ID for process tracking
-			newApp := &state.Apps[state.SelectedIndex]
-			tm.mu.Lock()
-			if cmd, ok := tm.processes["pending"]; ok {
-				delete(tm.processes, "pending")
-				tm.processes[newApp.ID] = cmd
-			}
-			tm.mu.Unlock()
-
-			sm.CloseDialog(sid)
-
-			// Small delay to let ttyd start
-			time.Sleep(500 * time.Millisecond)
-
-			// Persist to DB
-			editIdx := stateBefore.EditIndex
 			dbSaveApp(state.ActiveProject, editIdx, "terminal", command, string(width), name, writable)
-			sm.Get(sid).EditIndex = -1
-
-			if hadApps > 0 {
-				frame := renderAppFrame(*newApp, state.SelectedIndex, true, sid)
-				return r.NewResponse().
-					Replace(DialogID, renderAddDialog(false, sid)).
-					Add(insertAppJS(frame, prepend, state.ActiveProject)).
-					Add(navigateJS(state, sid)).
-					Build()
-			}
-
-			return r.NewResponse().
-				Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
-				Replace(DialogID, renderAddDialog(false, sid)).
-				Build()
-		}
-
-		// URL app
-		url, _ := data["app-url"].(string)
-		url = strings.TrimSpace(url)
-		if url == "" {
-			return r.Notify("error", "URL is required")
-		}
-
-		url = ensureScheme(url)
-
-		if prepend {
-			sm.PrependApp(sid, url, width, name)
 		} else {
-			sm.AddApp(sid, url, width, name)
+			url, _ := data["app-url"].(string)
+			url = strings.TrimSpace(url)
+			if url == "" {
+				return r.Notify("error", "URL is required")
+			}
+			url = ensureScheme(url)
+
+			dbSaveApp(state.ActiveProject, editIdx, "url", url, string(width), name, false)
 		}
+
 		sm.CloseDialog(sid)
-		state := sm.Get(sid)
-
-		// Persist to DB
-		editIdx := stateBefore.EditIndex
-		dbSaveApp(state.ActiveProject, editIdx, "url", url, string(width), name, false)
 		sm.Get(sid).EditIndex = -1
-
-		if hadApps > 0 {
-			newApp := state.Apps[state.SelectedIndex]
-			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
-			return r.NewResponse().
-				Replace(DialogID, renderAddDialog(false, sid)).
-				Add(insertAppJS(frame, prepend, state.ActiveProject)).
-				Add(navigateJS(state, sid)).
-				Build()
-		}
 
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
