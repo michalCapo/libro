@@ -81,12 +81,29 @@ go mod tidy
 ok "Clean"
 
 # ---------------------------------------------------------------------------
+# Embed Windows resources (icon + version info)
+# ---------------------------------------------------------------------------
+
+if [[ "$GOOS" == "windows" ]]; then
+    if command -v go-winres &>/dev/null; then
+        info "Embedding Windows resources..."
+        (cd "$SCRIPT_DIR" && go-winres make --product-version="${VERSION}" --file-version="${VERSION}")
+        ok "Windows resources generated"
+    else
+        info "go-winres not found — skipping icon embedding (install: go install github.com/tc-hib/go-winres@latest)"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 
 info "Building libro v${VERSION}..."
 GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags "$LDFLAGS" -o "$SCRIPT_DIR/$BIN_NAME" .
 ok "Built $BIN_NAME"
+
+# Cleanup .syso files from go-winres
+rm -f "$SCRIPT_DIR/"*.syso
 
 # ---------------------------------------------------------------------------
 # Install
@@ -96,6 +113,30 @@ mkdir -p "$INSTALL_DIR"
 mv "$SCRIPT_DIR/$BIN_NAME" "$INSTALL_DIR/$BIN_NAME"
 chmod +x "$INSTALL_DIR/$BIN_NAME"
 ok "Installed to $INSTALL_DIR/$BIN_NAME"
+
+# ---------------------------------------------------------------------------
+# Desktop integration (Linux)
+# ---------------------------------------------------------------------------
+
+if [[ "$GOOS" == "linux" ]]; then
+    ICON_DIR="$HOME/.local/share/icons"
+    DESKTOP_DIR="$HOME/.local/share/applications"
+
+    mkdir -p "$ICON_DIR" "$DESKTOP_DIR"
+    cp "$SCRIPT_DIR/assets/logo.svg" "$ICON_DIR/libro.svg"
+
+    cat > "$DESKTOP_DIR/libro.desktop" <<DESKTOP
+[Desktop Entry]
+Name=Libro
+Comment=Application Manager
+Exec=$INSTALL_DIR/libro
+Icon=$ICON_DIR/libro.svg
+Type=Application
+Categories=Utility;Development;
+DESKTOP
+
+    ok "Desktop entry installed"
+fi
 
 # ---------------------------------------------------------------------------
 # Check PATH

@@ -97,9 +97,19 @@ ok "VERSION file updated to $NEW_VERSION"
 
 LDFLAGS="-X ${MODULE}/internal/version.Version=${NEW_VERSION}"
 
+# Embed Windows resources if go-winres is available
+if command -v go-winres &>/dev/null; then
+    info "Embedding Windows resources..."
+    (cd "$SCRIPT_DIR" && go-winres make --product-version="${NEW_VERSION}" --file-version="${NEW_VERSION}")
+    ok "Windows resources generated"
+fi
+
 info "Building libro..."
 go build -ldflags "$LDFLAGS" -o "$SCRIPT_DIR/libro" .
 ok "libro built"
+
+# Cleanup .syso files
+rm -f "$SCRIPT_DIR/"*.syso
 
 # ---------------------------------------------------------------------------
 # Git commit, tag, and push

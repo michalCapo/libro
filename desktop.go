@@ -8,16 +8,20 @@ import (
 	"runtime"
 )
 
-// openDesktop opens the libro UI in a Chromium --app mode window,
-// creating a desktop-app-like experience (no URL bar, own taskbar entry).
-func openDesktop(url string) {
+// openDesktop opens the libro UI in a Chromium --app mode window.
+// When the browser window is closed, it sends on the returned channel
+// so the process can shut down. If the browser can't be waited on
+// (fallback path), the channel is never closed.
+func openDesktop(url string) <-chan struct{} {
+	done := make(chan struct{})
+
 	if runtime.GOOS == "windows" || runtime.GOOS == "linux" {
-		if openAppMode(url) {
-			return
+		if openAppMode(url, done) {
+			return done
 		}
 	}
 
-	// Fallback: default browser
+	// Fallback: default browser (can't track when it closes)
 	switch runtime.GOOS {
 	case "windows":
 		exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
@@ -26,10 +30,12 @@ func openDesktop(url string) {
 	default:
 		exec.Command("xdg-open", url).Start()
 	}
+	return done
 }
 
 // openAppMode launches a Chromium-based browser in --app mode.
-func openAppMode(url string) bool {
+// When the window closes, it signals on done.
+func openAppMode(url string, done chan struct{}) bool {
 	browser := findDesktopBrowser()
 	if browser == "" {
 		return false
@@ -49,6 +55,12 @@ func openAppMode(url string) bool {
 		log.Printf("[desktop] --app mode failed (%s): %v", browser, err)
 		return false
 	}
+
+	go func() {
+		cmd.Wait()
+		close(done)
+	}()
+
 	return true
 }
 
