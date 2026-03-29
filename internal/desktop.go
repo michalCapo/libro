@@ -8,55 +8,38 @@ import (
 	"runtime"
 )
 
-// OpenDesktop opens the libro UI in a Chromium --app mode window.
-// When the browser window is closed, it sends on the returned channel
-// so the process can shut down. If the browser can't be waited on
-// (fallback path), the channel is never closed.
+// OpenDesktop opens the libro UI in an Electron window.
+// When the Electron window is closed, it sends on the returned channel
+// so the process can shut down.
 func OpenDesktop(url string) <-chan struct{} {
 	done := make(chan struct{})
 
-	if runtime.GOOS == "windows" || runtime.GOOS == "linux" {
-		if openAppMode(url, done) {
+	electron := findElectron()
+	if electron == "" {
+		projectRoot := findProjectRoot()
+		if installElectron(projectRoot) {
+			electron = findElectron()
+		}
+		if electron == "" {
+			log.Println("[desktop] Electron not found. Run 'npm install' in the libro directory.")
 			return done
 		}
-	}
-
-	// Fallback: default browser (can't track when it closes)
-	switch runtime.GOOS {
-	case "windows":
-		exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin":
-		exec.Command("open", url).Start()
-	default:
-		exec.Command("xdg-open", url).Start()
-	}
-	return done
-}
-
-// openAppMode launches a Chromium-based browser in --app mode.
-// When the window closes, it signals on done.
-func openAppMode(url string, done chan struct{}) bool {
-	browser := findDesktopBrowser()
-	if browser == "" {
-		return false
 	}
 
 	// Unbind GNOME's Super+D (show-desktop) so it reaches the app
 	unbindGnomeSuperD()
 
-	dataDir := filepath.Join(os.TempDir(), "libro-app")
+	// Find project root (where package.json / electron/main.js live)
+	projectRoot := findProjectRoot()
 
-	cmd := exec.Command(browser,
-		"--app="+url,
-		"--user-data-dir="+dataDir,
-		"--disable-extensions",
-		"--disable-default-apps",
-		"--no-first-run",
-		"--start-maximized",
-	)
+	cmd := exec.Command(electron, projectRoot, "--gtk-version=3")
+	cmd.Dir = projectRoot
+	cmd.Env = append(os.Environ(), "LIBRO_PORT="+Port())
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		log.Printf("[desktop] --app mode failed (%s): %v", browser, err)
-		return false
+		log.Printf("[desktop] Electron failed: %v", err)
+		return done
 	}
 
 	go func() {
@@ -64,42 +47,82 @@ func openAppMode(url string, done chan struct{}) bool {
 		close(done)
 	}()
 
+	return done
+}
+
+// installElectron runs npm install in the project root to install Electron.
+func installElectron(projectRoot string) bool {
+	npmBin, err := exec.LookPath("npm")
+	if err != nil {
+		log.Println("[desktop] npm not found, cannot install Electron")
+		return false
+	}
+
+	// Only attempt if package.json exists
+	if _, err := os.Stat(filepath.Join(projectRoot, "package.json")); err != nil {
+		log.Println("[desktop] package.json not found, cannot install Electron")
+		return false
+	}
+
+	log.Println("[desktop] Electron not found, installing...")
+	cmd := exec.Command(npmBin, "install", "--no-fund", "--no-audit", "--omit=dev")
+	cmd.Dir = projectRoot
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Printf("[desktop] npm install failed: %v", err)
+		return false
+	}
+	log.Println("[desktop] Electron installed")
 	return true
 }
 
-// findDesktopBrowser returns the path to the first available Chromium-based browser.
-func findDesktopBrowser() string {
-	switch runtime.GOOS {
-	case "windows":
-		return findDesktopBrowserWindows()
-	case "linux":
-		return findDesktopBrowserLinux()
-	default:
-		return ""
+// findElectron returns the path to a locally installed Electron binary.
+// Never falls back to npx to avoid downloading ~200MB on every launch.
+func findElectron() string {
+	ext := ""
+	if runtime.GOOS == "windows" {
+		ext = ".cmd"
 	}
+
+	// Check node_modules/.bin/electron relative to the executable
+	if exePath, err := os.Executable(); err == nil {
+		candidate := filepath.Join(filepath.Dir(exePath), "node_modules", ".bin", "electron"+ext)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+
+	// Check node_modules/.bin/electron relative to working directory
+	if wd, err := os.Getwd(); err == nil {
+		candidate := filepath.Join(wd, "node_modules", ".bin", "electron"+ext)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+
+	// Check in PATH (system-installed electron)
+	if p, err := exec.LookPath("electron"); err == nil {
+		return p
+	}
+
+	return ""
 }
 
-func findDesktopBrowserWindows() string {
-	candidates := []string{
-		filepath.Join(os.Getenv("ProgramFiles(x86)"), "Microsoft", "Edge", "Application", "msedge.exe"),
-		filepath.Join(os.Getenv("ProgramFiles"), "Microsoft", "Edge", "Application", "msedge.exe"),
-		filepath.Join(os.Getenv("ProgramFiles"), "Google", "Chrome", "Application", "chrome.exe"),
-		filepath.Join(os.Getenv("ProgramFiles(x86)"), "Google", "Chrome", "Application", "chrome.exe"),
-		filepath.Join(os.Getenv("LOCALAPPDATA"), "Google", "Chrome", "Application", "chrome.exe"),
-		filepath.Join(os.Getenv("ProgramFiles"), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
-		filepath.Join(os.Getenv("ProgramFiles(x86)"), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
-	}
-
-	for _, path := range candidates {
-		if path == "" {
-			continue
-		}
-		if _, err := os.Stat(path); err == nil {
-			log.Printf("[desktop] found browser: %s", path)
-			return path
+// findProjectRoot returns the directory containing package.json (project root).
+func findProjectRoot() string {
+	exePath, err := os.Executable()
+	if err == nil {
+		exeDir := filepath.Dir(exePath)
+		if _, err := os.Stat(filepath.Join(exeDir, "package.json")); err == nil {
+			return exeDir
 		}
 	}
-	return ""
+	// Fallback to working directory
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+	return "."
 }
 
 // unbindGnomeSuperD disables the GNOME show-desktop shortcut (Super+D)
@@ -108,29 +131,8 @@ func unbindGnomeSuperD() {
 	if runtime.GOOS != "linux" {
 		return
 	}
-	// Only attempt if gsettings is available (GNOME desktop)
 	if _, err := exec.LookPath("gsettings"); err != nil {
 		return
 	}
 	exec.Command("gsettings", "set", "org.gnome.desktop.wm.keybindings", "show-desktop", "['']").Run()
-}
-
-func findDesktopBrowserLinux() string {
-	names := []string{
-		"google-chrome-stable",
-		"google-chrome",
-		"chromium-browser",
-		"chromium",
-		"microsoft-edge-stable",
-		"microsoft-edge",
-		"brave-browser",
-	}
-
-	for _, name := range names {
-		if path, err := exec.LookPath(name); err == nil {
-			log.Printf("[desktop] found browser: %s", path)
-			return path
-		}
-	}
-	return ""
 }

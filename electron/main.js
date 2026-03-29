@@ -39,6 +39,18 @@ function startGoServer() {
   })
 }
 
+// Check if the Go server is already running (launched by the Go binary in desktop mode)
+function isServerRunning() {
+  return new Promise((resolve) => {
+    http.get(serverURL, (res) => {
+      res.resume()
+      resolve(true)
+    }).on('error', () => {
+      resolve(false)
+    })
+  })
+}
+
 function waitForServer(retries = 50) {
   return new Promise((resolve, reject) => {
     let attempt = 0
@@ -88,13 +100,16 @@ function createWindow() {
 
 app.on('ready', async () => {
   Menu.setApplicationMenu(null)
-  startGoServer()
-  try {
-    await waitForServer()
-  } catch (e) {
-    console.error(e.message)
-    app.quit()
-    return
+  const alreadyRunning = await isServerRunning()
+  if (!alreadyRunning) {
+    startGoServer()
+    try {
+      await waitForServer()
+    } catch (e) {
+      console.error(e.message)
+      app.quit()
+      return
+    }
   }
   createWindow()
 })
