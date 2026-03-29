@@ -13,9 +13,9 @@ MODULE="libro"
 # Helpers
 # ---------------------------------------------------------------------------
 
-info()  { echo -e "\033[1;34m==>\033[0m $*"; }
-ok()    { echo -e "\033[1;32m==>\033[0m $*"; }
-err()   { echo -e "\033[1;31m==>\033[0m $*" >&2; }
+info() { echo -e "\033[1;34m==>\033[0m $*"; }
+ok() { echo -e "\033[1;32m==>\033[0m $*"; }
+err() { echo -e "\033[1;31m==>\033[0m $*" >&2; }
 
 # ---------------------------------------------------------------------------
 # Detect OS and set install directory + binary name
@@ -25,35 +25,35 @@ OS="$(uname -s)"
 ARCH="$(uname -m)"
 
 case "$ARCH" in
-    x86_64)  GOARCH="amd64" ;;
-    aarch64) GOARCH="arm64" ;;
-    arm64)   GOARCH="arm64" ;;
-    *)       GOARCH="$ARCH" ;;
+x86_64) GOARCH="amd64" ;;
+aarch64) GOARCH="arm64" ;;
+arm64) GOARCH="arm64" ;;
+*) GOARCH="$ARCH" ;;
 esac
 
 BIN_NAME="libro"
 INSTALL_DIR="$HOME/.local/bin"
 
 case "$OS" in
-    Linux)
-        GOOS="linux"
-        ;;
-    Darwin)
-        GOOS="darwin"
-        ;;
-    MINGW*|MSYS*|CYGWIN*)
-        GOOS="windows"
-        BIN_NAME="libro.exe"
-        INSTALL_DIR="$USERPROFILE/.local/bin"
-        # Fallback if USERPROFILE is not set
-        if [[ -z "$INSTALL_DIR" || "$INSTALL_DIR" == "/.local/bin" ]]; then
-            INSTALL_DIR="$HOME/.local/bin"
-        fi
-        ;;
-    *)
-        err "Unsupported OS: $OS"
-        exit 1
-        ;;
+Linux)
+    GOOS="linux"
+    ;;
+Darwin)
+    GOOS="darwin"
+    ;;
+MINGW* | MSYS* | CYGWIN*)
+    GOOS="windows"
+    BIN_NAME="libro.exe"
+    INSTALL_DIR="$USERPROFILE/.local/bin"
+    # Fallback if USERPROFILE is not set
+    if [[ -z "$INSTALL_DIR" || "$INSTALL_DIR" == "/.local/bin" ]]; then
+        INSTALL_DIR="$HOME/.local/bin"
+    fi
+    ;;
+*)
+    err "Unsupported OS: $OS"
+    exit 1
+    ;;
 esac
 
 info "OS: $GOOS/$GOARCH"
@@ -142,7 +142,7 @@ if [[ "$GOOS" == "linux" ]]; then
     mkdir -p "$ICON_DIR" "$DESKTOP_DIR"
     cp "$SCRIPT_DIR/assets/logo.svg" "$ICON_DIR/libro.svg"
 
-    cat > "$DESKTOP_DIR/libro.desktop" <<DESKTOP
+    cat >"$DESKTOP_DIR/libro.desktop" <<DESKTOP
 [Desktop Entry]
 Name=Libro
 Comment=Application Manager
