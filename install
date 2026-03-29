@@ -109,10 +109,27 @@ rm -f "$SCRIPT_DIR/"*.syso
 # Install
 # ---------------------------------------------------------------------------
 
-mkdir -p "$INSTALL_DIR"
-mv "$SCRIPT_DIR/$BIN_NAME" "$INSTALL_DIR/$BIN_NAME"
-chmod +x "$INSTALL_DIR/$BIN_NAME"
-ok "Installed to $INSTALL_DIR/$BIN_NAME"
+LIBRO_DIR="$HOME/.local/share/libro"
+
+mkdir -p "$INSTALL_DIR" "$LIBRO_DIR/electron"
+
+# Copy Go binary
+mv "$SCRIPT_DIR/$BIN_NAME" "$LIBRO_DIR/$BIN_NAME"
+chmod +x "$LIBRO_DIR/$BIN_NAME"
+
+# Copy Electron files
+cp "$SCRIPT_DIR/package.json" "$LIBRO_DIR/"
+cp "$SCRIPT_DIR/electron/main.js" "$LIBRO_DIR/electron/"
+cp "$SCRIPT_DIR/electron/preload.js" "$LIBRO_DIR/electron/"
+
+# Install Electron
+info "Installing Electron..."
+(cd "$LIBRO_DIR" && npm install --no-fund --no-audit --omit=dev 2>&1 | tail -1)
+ok "Electron installed"
+
+# Create launcher symlink in bin dir
+ln -sf "$LIBRO_DIR/$BIN_NAME" "$INSTALL_DIR/$BIN_NAME"
+ok "Installed to $LIBRO_DIR (symlink at $INSTALL_DIR/$BIN_NAME)"
 
 # ---------------------------------------------------------------------------
 # Desktop integration (Linux)
@@ -129,14 +146,14 @@ if [[ "$GOOS" == "linux" ]]; then
 [Desktop Entry]
 Name=Libro
 Comment=Application Manager
-Exec=$INSTALL_DIR/libro
+Exec=$LIBRO_DIR/libro
 Icon=$ICON_DIR/libro.svg
 Type=Application
 Categories=Utility;Development;
 DESKTOP
 
     # Set custom icon on the binary itself (shown in file managers)
-    gio set "$INSTALL_DIR/$BIN_NAME" metadata::custom-icon "file://$ICON_DIR/libro.svg" 2>/dev/null || true
+    gio set "$LIBRO_DIR/$BIN_NAME" metadata::custom-icon "file://$ICON_DIR/libro.svg" 2>/dev/null || true
 
     ok "Desktop entry installed"
 fi

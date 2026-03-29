@@ -35,4 +35,4 @@ fi
 # ---------------------------------------------------------------------------
 
 info "Starting Electron..."
-LIBRO_PORT=1439 GDK_BACKEND=x11 npx electron . --gtk-version=3 2>&1 | grep -v -E "gl_surface_presentation_helper|Autofill\."
+LIBRO_PORT=1439 GDK_BACKEND=x11 ./node_modules/.bin/electron . --gtk-version=3 2>&1 | grep -v -E "gl_surface_presentation_helper|Autofill\."

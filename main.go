@@ -4,7 +4,6 @@ import (
 	"embed"
 	"fmt"
 	"os"
-	"time"
 
 	"libro/internal"
 	"libro/internal/version"
@@ -32,7 +31,6 @@ func main() {
 
 	if desktop {
 		go func() {
-			time.Sleep(500 * time.Millisecond)
 			done := libro.OpenDesktop("http://localhost:" + libro.Port())
 
 			// When the browser window closes, exit the process
