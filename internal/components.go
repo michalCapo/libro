@@ -439,12 +439,46 @@ func navigateJS(state *AppState, sid string) string {
 						dot.style.animation = 'libro-flash .5s ease-out forwards';
 						toolbar.insertBefore(dot, toolbar.firstChild);
 					}
+					// Update size badges to red for selected app
+					var badges = child.querySelector('[data-size-badges]');
+					if (badges) {
+						var btns = badges.querySelectorAll('button');
+						var sizeLabels = ['SM','MD','LG','XL','2XL','FULL'];
+						var activeBase = 'px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase rounded-sm cursor-pointer transition-colors duration-75';
+						btns.forEach(function(b){
+							var txt = b.textContent.trim();
+							if (sizeLabels.indexOf(txt) === -1) return;
+							var isActive = b.className.indexOf('bg-teal-600') !== -1 || b.className.indexOf('bg-red-500') !== -1;
+							if (isActive) {
+								b.className = activeBase + ' bg-red-500 text-white';
+							} else {
+								b.className = activeBase + ' text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700';
+							}
+						});
+					}
 					var overlay = child.querySelector('[data-click-overlay]');
 					if (overlay) overlay.remove();
 				} else {
 					// Remove selection dot
 					var existingDot = child.querySelector('[data-selection-dot]');
 					if (existingDot) existingDot.remove();
+					// Revert size badges to default for unselected app
+					var badges2 = child.querySelector('[data-size-badges]');
+					if (badges2) {
+						var btns2 = badges2.querySelectorAll('button');
+						var sizeLabels2 = ['SM','MD','LG','XL','2XL','FULL'];
+						var activeBase2 = 'px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase rounded-sm cursor-pointer transition-colors duration-75';
+						btns2.forEach(function(b){
+							var txt = b.textContent.trim();
+							if (sizeLabels2.indexOf(txt) === -1) return;
+							var isActive = b.className.indexOf('bg-red-500') !== -1 || b.className.indexOf('bg-teal-600') !== -1;
+							if (isActive) {
+								b.className = activeBase2 + ' bg-teal-600 text-white';
+							} else {
+								b.className = activeBase2 + ' text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700';
+							}
+						});
+					}
 					if (!child.querySelector('[data-click-overlay]')) {
 						var ov = document.createElement('div');
 						ov.setAttribute('data-click-overlay', '');
@@ -496,9 +530,19 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 	badgeBase := "px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase rounded-sm cursor-pointer transition-colors duration-75"
 	badges := make([]*r.Node, 0, len(AllWidths())+1)
 	for _, w := range AllWidths() {
-		cls := badgeBase + " text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700"
-		if w == app.Width {
-			cls = badgeBase + " bg-teal-600 text-white"
+		var cls string
+		if selected {
+			if w == app.Width {
+				cls = badgeBase + " bg-red-500 text-white"
+			} else {
+				cls = badgeBase + " text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700"
+			}
+		} else {
+			if w == app.Width {
+				cls = badgeBase + " bg-teal-600 text-white"
+			} else {
+				cls = badgeBase + " text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700"
+			}
 		}
 		badges = append(badges, r.Button(cls).
 			Text(strings.ToUpper(string(w))).
@@ -1322,7 +1366,7 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 			var txt = b.textContent.trim();
 			if (sizeLabels.indexOf(txt) === -1) return;
 			if (txt === newWidth.toUpperCase()) {
-				b.className = activeBase + ' bg-teal-600 text-white';
+				b.className = activeBase + ' bg-red-500 text-white';
 			} else {
 				b.className = activeBase + ' text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700';
 			}
