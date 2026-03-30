@@ -490,7 +490,7 @@ func navigateJS(state *AppState, sid string) string {
 					if (!child.querySelector('[data-click-overlay]')) {
 						var ov = document.createElement('div');
 						ov.setAttribute('data-click-overlay', '');
-						ov.className = 'absolute inset-0 z-20 cursor-pointer';
+						ov.className = 'absolute inset-0 z-40 cursor-pointer';
 						ov.onclick = function(idx) {
 							return function() { __ws.call('app.select', {"sid": "%s", "index": idx}); };
 						}(i);
@@ -654,7 +654,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 	var toolbar *r.Node
 	var clickOverlay *r.Node
 	if !selected {
-		clickOverlay = r.Div("absolute inset-0 z-20 cursor-pointer").
+		clickOverlay = r.Div("absolute inset-0 z-40 cursor-pointer").
 			Attr("data-click-overlay", "").
 			OnClick(&r.Action{
 				Name: "app.select",
@@ -671,8 +671,14 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 	}
 
 	// Toolbar: always visible, sits above the iframe
-	toolbar = r.Div("flex items-center gap-2 px-1.5 py-1 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-700/50 shrink-0").
-		Render(selectionDot, leftSide, rightButtons)
+	toolbar = r.Div("flex items-center gap-2 px-1.5 py-1 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-700/50 shrink-0")
+	if !selected {
+		toolbar = toolbar.OnClick(&r.Action{
+			Name: "app.select",
+			Data: sidData(sid, "index", index),
+		})
+	}
+	toolbar = toolbar.Render(selectionDot, leftSide, rightButtons)
 
 	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
 		Attr("data-app-id", app.ID).
