@@ -145,6 +145,25 @@ app.on('web-contents-created', (event, contents) => {
       }
     }
 
+    // Ctrl+L (select URL bar) and Ctrl+R (reload) for browser apps
+    if (input.control && !input.meta && ['l', 'r'].includes(key)) {
+      e.preventDefault()
+      if (mainWindow) {
+        const safeKey = input.key.replace(/'/g, "\\'")
+        const safeCode = (input.code || '').replace(/'/g, "\\'")
+        mainWindow.webContents.executeJavaScript(`
+          document.dispatchEvent(new KeyboardEvent('keydown', {
+            key: '${safeKey}',
+            code: '${safeCode}',
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true
+          }));
+        `)
+      }
+      return
+    }
+
     // Ctrl+1–9 shortcuts
     if (input.control && key >= '1' && key <= '9') {
       e.preventDefault()
