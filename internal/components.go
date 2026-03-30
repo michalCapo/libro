@@ -1258,6 +1258,8 @@ func renderShortcutsDialog() *r.Node {
 		{"⌘ + K", "Previous project"},
 		{"⌘ + /", "Open search"},
 		{"⌘ + D", "Close current app"},
+		{"Ctrl + L", "Select browser URL bar"},
+		{"Ctrl + R", "Reload browser page"},
 		{"Ctrl + +", "Zoom in"},
 		{"Ctrl + -", "Zoom out"},
 	}
@@ -1763,6 +1765,37 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					__ws.call('app.close.current', {"sid": "%s"});
+				}
+				if (e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L')) {
+					var dot = document.querySelector('[data-selection-dot]');
+					if (dot) {
+						var appEl = dot.closest('[data-app-id]');
+						if (appEl) {
+							var wv = appEl.querySelector('webview');
+							if (wv) {
+								e.preventDefault();
+								e.stopImmediatePropagation();
+								var appId = appEl.getAttribute('data-app-id');
+								var inp = document.getElementById('urlinput-' + appId);
+								if (inp) { inp.focus(); inp.select(); }
+							}
+						}
+					}
+				}
+				if (e.ctrlKey && !e.metaKey && (e.key === 'r' || e.key === 'R')) {
+					var dot2 = document.querySelector('[data-selection-dot]');
+					if (dot2) {
+						var appEl2 = dot2.closest('[data-app-id]');
+						if (appEl2) {
+							var wv2 = appEl2.querySelector('webview');
+							if (wv2) {
+								e.preventDefault();
+								e.stopImmediatePropagation();
+								var appId2 = appEl2.getAttribute('data-app-id');
+								window.__libroWvReload(appId2);
+							}
+						}
+					}
 				}
 			}
 

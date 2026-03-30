@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"libro/internal"
+	libro "libro/internal"
 	"libro/internal/version"
 )
 
