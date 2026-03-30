@@ -334,6 +334,34 @@ func (sm *StateManager) NavigateRight(sessionID string) {
 	}
 }
 
+// MoveAppLeft swaps the selected app with the one to its left
+func (sm *StateManager) MoveAppLeft(sessionID string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil || s.SelectedIndex <= 0 {
+		return false
+	}
+	i := s.SelectedIndex
+	s.Apps[i], s.Apps[i-1] = s.Apps[i-1], s.Apps[i]
+	s.SelectedIndex--
+	return true
+}
+
+// MoveAppRight swaps the selected app with the one to its right
+func (sm *StateManager) MoveAppRight(sessionID string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil || s.SelectedIndex >= len(s.Apps)-1 {
+		return false
+	}
+	i := s.SelectedIndex
+	s.Apps[i], s.Apps[i+1] = s.Apps[i+1], s.Apps[i]
+	s.SelectedIndex++
+	return true
+}
+
 // SelectApp sets the selected app index
 func (sm *StateManager) SelectApp(sessionID string, index int) {
 	sm.mu.Lock()

@@ -344,6 +344,26 @@ func Run(assets embed.FS) {
 		return navigateJS(state, sid)
 	})
 
+	// Move app left — swap with neighbor, JS-only DOM swap to preserve iframes
+	app.Action("app.move.left", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		if !sm.MoveAppLeft(sid) {
+			return "/* noop */"
+		}
+		state := sm.Get(sid)
+		return moveAppJS(state, sid, "left")
+	})
+
+	// Move app right — swap with neighbor, JS-only DOM swap to preserve iframes
+	app.Action("app.move.right", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		if !sm.MoveAppRight(sid) {
+			return "/* noop */"
+		}
+		state := sm.Get(sid)
+		return moveAppJS(state, sid, "right")
+	})
+
 	// Resize app to specific width — JS-only update to preserve iframes
 	app.Action("app.resize", func(ctx *r.Context) string {
 		sid := extractSID(ctx)

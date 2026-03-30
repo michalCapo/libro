@@ -108,6 +108,25 @@ app.on('web-contents-created', (event, contents) => {
 
     const key = (input.key || '').toLowerCase()
 
+    // Meta+Ctrl shortcuts: h, l (move app left/right)
+    const code = (input.code || '').toLowerCase()
+    if (input.meta && input.control && ['keyh', 'keyl'].includes(code)) {
+      e.preventDefault()
+      if (mainWindow) {
+        const safeCode = (input.code || '').replace(/'/g, "\\'")
+        mainWindow.webContents.executeJavaScript(`
+          document.dispatchEvent(new KeyboardEvent('keydown', {
+            code: '${safeCode}',
+            metaKey: true,
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true
+          }));
+        `)
+      }
+      return
+    }
+
     // Meta (Super/Win) shortcuts: h, l, j, k, d, /
     if (input.meta && ['h', 'l', 'j', 'k', 'd', '/'].includes(key)) {
       e.preventDefault()

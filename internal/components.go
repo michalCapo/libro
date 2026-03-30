@@ -369,11 +369,11 @@ setTimeout(function(){
 func renderAppStrip(state *AppState, sid string) *r.Node {
 	// Build strip children: left spacer + apps + right spacer
 	stripChildren := make([]*r.Node, 0, len(state.Apps)+2)
-	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0"))
+	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0").Attr("style", "order:-1"))
 	for i, app := range state.Apps {
 		stripChildren = append(stripChildren, renderAppFrame(app, i, i == state.SelectedIndex, sid))
 	}
-	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0"))
+	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0").Attr("style", "order:99999"))
 
 	strip := r.Div("flex-1 min-w-0 flex items-stretch h-full overflow-x-auto overflow-y-hidden gap-4 p-0.5").
 		ID(stripID(state.ActiveProject)).
@@ -398,18 +398,13 @@ func centerSelectedJS(selectedIndex int, totalApps int, projectName string) stri
 					var strip = document.getElementById('%s');
 					if (!strip || %d === 0) return;
 					var idx = %d;
-					var app = strip.children[idx + 1];
+					var sorted = window.__libroSortedApps ? window.__libroSortedApps(strip) : Array.from(strip.querySelectorAll(':scope > [data-app-id]'));
+					var app = sorted[idx];
 					if (app) {
-						var appLeft = 0;
-						for (var c = 0; c < idx + 1; c++) {
-							var ch = strip.children[c];
-							if (ch) {
-								var style = window.getComputedStyle(ch);
-								appLeft += ch.offsetWidth + parseFloat(style.marginLeft || 0) + parseFloat(style.marginRight || 0);
-							}
-						}
-						appLeft += idx * 16;
-						strip.scrollLeft = Math.max(0, appLeft);
+						var stripRect = strip.getBoundingClientRect();
+						var appRect = app.getBoundingClientRect();
+						var scrollOffset = appRect.left - stripRect.left + strip.scrollLeft;
+						strip.scrollLeft = Math.max(0, scrollOffset);
 					}
 				});
 			});
@@ -417,17 +412,30 @@ func centerSelectedJS(selectedIndex int, totalApps int, projectName string) stri
 	`, stripID(projectName), totalApps, selectedIndex)
 }
 
+// moveAppJS reorders app frames visually using CSS order (no DOM moves,
+// so Electron webviews are preserved). Then runs navigateJS for selection visuals.
+func moveAppJS(state *AppState, sid string, _ string) string {
+	return navigateJS(state, sid)
+}
+
 func navigateJS(state *AppState, sid string) string {
+	// Build JS to set CSS order on all app frames (keeps DOM stable for webviews)
+	var orderJS strings.Builder
+	for i, app := range state.Apps {
+		fmt.Fprintf(&orderJS, "var e=document.querySelector('[data-app-id=\"%s\"]');if(e)e.style.order='%d';", app.ID, i)
+	}
+
 	return fmt.Sprintf(`
 		(function() {
+			%s
 			var strip = document.getElementById('%s');
 			if (!strip) return;
 			var selectedIdx = %d;
 			var totalApps = %d;
-			var offset = 1;
+			var sorted = window.__libroSortedApps ? window.__libroSortedApps(strip) : Array.from(strip.querySelectorAll(':scope > [data-app-id]'));
 
 			for (var i = 0; i < totalApps; i++) {
-				var child = strip.children[i + offset];
+				var child = sorted[i];
 				if (!child) continue;
 				if (i === selectedIdx) {
 					// Add selection dot in toolbar if not present
@@ -492,26 +500,18 @@ func navigateJS(state *AppState, sid string) string {
 				}
 			}
 
-			var selected = strip.children[selectedIdx + offset];
+			var selected = sorted[selectedIdx];
 			if (selected) {
-				// Compute position of app within the strip and set scrollLeft directly
-				var appLeft = 0;
-				for (var c = 0; c < selectedIdx + offset; c++) {
-					var ch = strip.children[c];
-					if (ch) {
-						var style = window.getComputedStyle(ch);
-						appLeft += ch.offsetWidth + parseFloat(style.marginLeft || 0) + parseFloat(style.marginRight || 0);
-					}
-				}
-				// Account for gap (strip uses gap-4 = 16px)
-				appLeft += selectedIdx * 16;
-				strip.scrollLeft = Math.max(0, appLeft);
+				var stripRect = strip.getBoundingClientRect();
+				var appRect = selected.getBoundingClientRect();
+				var scrollOffset = appRect.left - stripRect.left + strip.scrollLeft;
+				strip.scrollLeft = Math.max(0, scrollOffset);
 				if (window.__libroFocusApp) {
 					setTimeout(function() { window.__libroFocusApp(selectedIdx); }, 100);
 				}
 			}
 		})();
-	`, stripID(state.ActiveProject), state.SelectedIndex, len(state.Apps), sid)
+	`, orderJS.String(), stripID(state.ActiveProject), state.SelectedIndex, len(state.Apps), sid)
 }
 
 func flashCSS() string {
@@ -676,6 +676,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 
 	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
 		Attr("data-app-id", app.ID).
+		Attr("style", fmt.Sprintf("order:%d", index)).
 		Render(
 			toolbar,
 			r.Div("relative flex-1 min-h-0").Render(
@@ -727,25 +728,10 @@ func renderIframe(app Application, frameID, iframeSrc string) *r.Node {
 
 // insertAppJS returns JS that inserts a new app frame into the existing strip.
 // The node is compiled to JS and inserted after the left spacer (prepend) or before the right spacer (append).
-func insertAppJS(node *r.Node, prepend bool, projectName string) string {
-	sid := stripID(projectName)
-	if prepend {
-		return node.ToJSAppend(sid) + fmt.Sprintf(`
-(function(){
-	var strip=document.getElementById('%s');
-	if(!strip||strip.children.length<3)return;
-	var newApp=strip.lastChild;
-	strip.insertBefore(newApp,strip.children[1]);
-})();`, sid)
-	}
-	return node.ToJSAppend(sid) + fmt.Sprintf(`
-(function(){
-	var strip=document.getElementById('%s');
-	if(!strip||strip.children.length<3)return;
-	var newApp=strip.lastChild;
-	var rightSpacer=strip.children[strip.children.length-2];
-	strip.insertBefore(newApp,rightSpacer);
-})();`, sid)
+func insertAppJS(node *r.Node, _ bool, projectName string) string {
+	// CSS order on the app frame (set in renderAppFrame) handles visual positioning,
+	// so we just append to the strip — no DOM repositioning needed.
+	return node.ToJSAppend(stripID(projectName))
 }
 
 // hideAllProjectsJS returns JS that hides all project divs inside the wrapper.
@@ -1265,6 +1251,8 @@ func renderShortcutsDialog() *r.Node {
 	shortcuts := []shortcut{
 		{"⌘ + H", "Navigate left"},
 		{"⌘ + L", "Navigate right"},
+		{"⌘ + Ctrl + H", "Move app left"},
+		{"⌘ + Ctrl + L", "Move app right"},
 		{"Ctrl + 1–9", "Select app by index"},
 		{"⌘ + J", "Next project"},
 		{"⌘ + K", "Previous project"},
@@ -1671,6 +1659,14 @@ func keyboardShortcutsJS(sid string) string {
 			if (window.__libroKbRegistered) return;
 			window.__libroKbRegistered = true;
 
+			window.__libroSortedApps = function(strip) {
+				var apps = Array.from(strip.querySelectorAll(':scope > [data-app-id]'));
+				apps.sort(function(a, b) {
+					return (parseInt(a.style.order) || 0) - (parseInt(b.style.order) || 0);
+				});
+				return apps;
+			};
+
 			window.__libroFocusApp = function(idx) {
 				// Find the visible strip (parent project div has display != none)
 				var strips = document.querySelectorAll('[id^="app-strip-"]');
@@ -1683,7 +1679,8 @@ func keyboardShortcutsJS(sid string) string {
 					}
 				}
 				if (!strip) return;
-				var container = strip.children[idx + 1];
+				var sorted = window.__libroSortedApps(strip);
+				var container = sorted[idx];
 				if (!container) return;
 
 				// Blur all other iframes and webviews first
@@ -1718,6 +1715,18 @@ func keyboardShortcutsJS(sid string) string {
 			};
 
 			function libroKeyHandler(e) {
+				if (e.metaKey && e.ctrlKey && e.code === 'KeyH') {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					__ws.call('app.move.left', {"sid": "%s"});
+					return;
+				}
+				if (e.metaKey && e.ctrlKey && e.code === 'KeyL') {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					__ws.call('app.move.right', {"sid": "%s"});
+					return;
+				}
 				if (e.metaKey && (e.key === 'h' || e.key === 'H')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
@@ -1803,5 +1812,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-	`, sid, sid, sid, sid, sid, sid)
+	`, sid, sid, sid, sid, sid, sid, sid, sid)
 }
