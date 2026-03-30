@@ -98,6 +98,52 @@ function createWindow() {
   })
 }
 
+// Intercept keyboard shortcuts from webview guest pages in the main process.
+// The renderer-side <webview> before-input-event is unreliable — this catches
+// input at the webContents level before the guest page can consume it.
+app.on('web-contents-created', (event, contents) => {
+  contents.on('before-input-event', (e, input) => {
+    if (contents.getType() !== 'webview') return
+    if (input.type !== 'keyDown') return
+
+    const key = (input.key || '').toLowerCase()
+
+    // Meta (Super/Win) shortcuts: h, l, j, k, d, /
+    if (input.meta && ['h', 'l', 'j', 'k', 'd', '/'].includes(key)) {
+      e.preventDefault()
+      if (mainWindow) {
+        const safeKey = input.key.replace(/'/g, "\\'")
+        const safeCode = (input.code || '').replace(/'/g, "\\'")
+        mainWindow.webContents.executeJavaScript(`
+          document.dispatchEvent(new KeyboardEvent('keydown', {
+            key: '${safeKey}',
+            code: '${safeCode}',
+            metaKey: true,
+            bubbles: true,
+            cancelable: true
+          }));
+        `)
+      }
+    }
+
+    // Ctrl+1–9 shortcuts
+    if (input.control && key >= '1' && key <= '9') {
+      e.preventDefault()
+      if (mainWindow) {
+        mainWindow.webContents.executeJavaScript(`
+          document.dispatchEvent(new KeyboardEvent('keydown', {
+            key: '${key}',
+            code: '${input.code || ''}',
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true
+          }));
+        `)
+      }
+    }
+  })
+})
+
 app.on('ready', async () => {
   Menu.setApplicationMenu(null)
   const alreadyRunning = await isServerRunning()

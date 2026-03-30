@@ -54,6 +54,10 @@ function initWebview(wv) {
 			if (loading.parentNode) loading.remove();
 		});
 	}
+
+	// Keyboard shortcut interception is handled in the main process
+	// (electron/main.js) via webContents before-input-event, which is
+	// more reliable than the renderer-side <webview> DOM event.
 }
 
 function initAll() {
