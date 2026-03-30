@@ -397,13 +397,19 @@ func centerSelectedJS(selectedIndex int, totalApps int, projectName string) stri
 				requestAnimationFrame(function() {
 					var strip = document.getElementById('%s');
 					if (!strip || %d === 0) return;
-					var app = strip.children[%d + 1];
+					var idx = %d;
+					var app = strip.children[idx + 1];
 					if (app) {
-						var stripRect = strip.getBoundingClientRect();
-						var appRect = app.getBoundingClientRect();
-						if (appRect.left < stripRect.left || appRect.right > stripRect.right) {
-							app.scrollIntoView({block: 'nearest', inline: 'center'});
+						var appLeft = 0;
+						for (var c = 0; c < idx + 1; c++) {
+							var ch = strip.children[c];
+							if (ch) {
+								var style = window.getComputedStyle(ch);
+								appLeft += ch.offsetWidth + parseFloat(style.marginLeft || 0) + parseFloat(style.marginRight || 0);
+							}
 						}
+						appLeft += idx * 16;
+						strip.scrollLeft = Math.max(0, appLeft);
 					}
 				});
 			});
@@ -454,7 +460,18 @@ func navigateJS(state *AppState, sid string) string {
 
 			var selected = strip.children[selectedIdx + offset];
 			if (selected) {
-				selected.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'nearest'});
+				// Compute position of app within the strip and set scrollLeft directly
+				var appLeft = 0;
+				for (var c = 0; c < selectedIdx + offset; c++) {
+					var ch = strip.children[c];
+					if (ch) {
+						var style = window.getComputedStyle(ch);
+						appLeft += ch.offsetWidth + parseFloat(style.marginLeft || 0) + parseFloat(style.marginRight || 0);
+					}
+				}
+				// Account for gap (strip uses gap-4 = 16px)
+				appLeft += selectedIdx * 16;
+				strip.scrollLeft = Math.max(0, appLeft);
 				if (window.__libroFocusApp) {
 					setTimeout(function() { window.__libroFocusApp(selectedIdx); }, 100);
 				}
@@ -1624,17 +1641,27 @@ func keyboardShortcutsJS(sid string) string {
 				if (!strip) return;
 				var container = strip.children[idx + 1];
 				if (!container) return;
-				var iframe = container.querySelector('iframe');
-				if (!iframe) return;
-				// Blur all other iframes first
+
+				// Blur all other iframes and webviews first
 				var allIframes = document.querySelectorAll('iframe');
 				for (var i = 0; i < allIframes.length; i++) {
-					if (allIframes[i] !== iframe) {
-						try { allIframes[i].contentWindow.blur(); } catch(err) {}
-						allIframes[i].blur();
-					}
+					try { allIframes[i].contentWindow.blur(); } catch(err) {}
+					allIframes[i].blur();
 				}
-				// Focus target iframe and click into it so xterm.js picks up focus
+				var allWebviews = document.querySelectorAll('webview');
+				for (var i = 0; i < allWebviews.length; i++) {
+					allWebviews[i].blur();
+				}
+
+				// Try to focus a webview first, then fall back to iframe
+				var webview = container.querySelector('webview');
+				if (webview) {
+					webview.focus();
+					return;
+				}
+
+				var iframe = container.querySelector('iframe');
+				if (!iframe) return;
 				iframe.focus();
 				try {
 					iframe.contentWindow.focus();
