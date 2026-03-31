@@ -250,7 +250,7 @@ func renderMainArea(state *AppState, sid string) *r.Node {
 
 // renderEmptyState renders the saved apps list with "+ Add New" button
 func renderEmptyState(state *AppState, sid string) *r.Node {
-	savedApps := DBLoadAllSavedApps()
+	savedApps := DBLoadSavedApps(state.ActiveProject)
 	appButtons := make([]*r.Node, 0, len(savedApps))
 	for i, app := range savedApps {
 		appButtons = append(appButtons, renderSavedAppButton(app, i, sid))
