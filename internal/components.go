@@ -551,8 +551,8 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 				Data: sidData(sid, "id", app.ID, "width", string(w)),
 			}))
 	}
-	badges = append(badges, r.Button(badgeBase+" text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 ml-1").
-		Text("CLOSE").
+	badges = append(badges, r.Button(badgeBase+" text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 ml-1 flex items-center justify-center").
+		Render(r.I("material-icons-round text-[10px] leading-none block").Text("close")).
 		OnClick(&r.Action{
 			Name: "app.close",
 			Data: sidData(sid, "id", app.ID),
