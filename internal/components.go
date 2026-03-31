@@ -1357,7 +1357,7 @@ func renderCloseDialog(sid string) *r.Node {
 							Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.add('hidden');if(window.__electronCloseAbort)window.__electronCloseAbort();", CloseDialogID)),
 						r.Button("px-3 py-1.5 text-sm rounded-md bg-red-500 hover:bg-red-600 text-white cursor-pointer").
 							Text("Yes, close all").
-							Attr("onclick", fmt.Sprintf("__ws.call('app.close.all',{sid:'%s'});", sid)),
+							Attr("onclick", fmt.Sprintf("__ws.callSilent('app.close.all',{sid:'%s'});document.getElementById('%s').classList.add('hidden');if(window.libroElectron)window.libroElectron.forceClose();else window.close();", sid, CloseDialogID)),
 					),
 				),
 		)
@@ -1531,6 +1531,13 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 					Render(
 						r.I("material-icons-round text-base").Text("keyboard"),
 						r.Span("").Text("Shortcuts"),
+					),
+				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
+					Attr("title", "Developer console").
+					Attr("onclick", "if(window.libroElectron&&window.libroElectron.toggleDevTools)window.libroElectron.toggleDevTools();").
+					Render(
+						r.I("material-icons-round text-base").Text("code"),
+						r.Span("").Text("Console"),
 					),
 				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
 					Attr("title", "Toggle fullscreen").
