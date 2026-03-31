@@ -129,9 +129,8 @@ A close button is available on each application to remove it from the strip.
 ### Keyboard Shortcuts
 - `Win/Meta+H` — navigate left (previous app)
 - `Win/Meta+L` — navigate right (next app)
-- `Ctrl+1..9` — select app by position
-- `Win/Meta+J` — switch to next project
-- `Win/Meta+K` — switch to previous project
+- `Ctrl+1..9` — switch to project by index
+- `Ctrl+0` — switch to last project where an app was created
 - `Win/Meta+/` — open fuzzy search launcher
 - `Win/Meta+D` — close the currently selected app
 - `Ctrl+L` — focus the URL bar of the selected app

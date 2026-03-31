@@ -151,8 +151,8 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, j, k, d, /, n
-    if (input.meta && (['h', 'l', 'j', 'k', 'd', 'n'].includes(key) || code === 'keyn')) {
+    // Meta (Super/Win) shortcuts: h, l, d, n
+    if (input.meta && (['h', 'l', 'd', 'n'].includes(key) || code === 'keyn')) {
       e.preventDefault()
       if (mainWindow) {
         const safeKey = input.key.replace(/'/g, "\\'")
@@ -188,8 +188,8 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Ctrl+1–9 shortcuts
-    if (input.control && key >= '1' && key <= '9') {
+    // Ctrl+0–9 shortcuts (project switching)
+    if (input.control && key >= '0' && key <= '9') {
       e.preventDefault()
       if (mainWindow) {
         mainWindow.webContents.executeJavaScript(`

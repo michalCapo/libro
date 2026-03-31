@@ -1264,9 +1264,8 @@ func renderShortcutsDialog() *r.Node {
 		{"⌘ + L", "Navigate right"},
 		{"⌘ + Ctrl + H", "Move app left"},
 		{"⌘ + Ctrl + L", "Move app right"},
-		{"Ctrl + 1–9", "Select app by index"},
-		{"⌘ + J", "Next project"},
-		{"⌘ + K", "Previous project"},
+		{"Ctrl + 1–9", "Switch to project by index"},
+		{"Ctrl + 0", "Switch to last app-created project"},
 		{"⌘ + D", "Close current app"},
 		{"Ctrl + L", "Select browser URL bar"},
 		{"Ctrl + R", "Reload browser page"},
@@ -1384,20 +1383,41 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 func renderProjectBar(state *AppState, sid string) *r.Node {
 	buttons := make([]*r.Node, 0, len(state.Projects)+1)
 
-	for _, proj := range state.Projects {
-		cls := "px-3 py-1.5 text-xs font-mono rounded-md cursor-pointer transition-colors duration-75 "
+	for i, proj := range state.Projects {
+		cls := "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono rounded-md cursor-pointer transition-colors duration-75 "
 		if proj.Name == state.ActiveProject {
 			cls += "bg-teal-600 text-white"
 		} else {
 			cls += "bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-300 dark:hover:bg-zinc-700"
 		}
+
+		// Shortcut label: 1-9 for first 9 projects, 0 = last-app-created project
+		shortcutLabel := ""
+		if i < 9 {
+			shortcutLabel = fmt.Sprintf("%d", i+1)
+		}
+
 		projBtn := r.Button(cls).
-			Text(proj.Name).
 			Attr("title", proj.Path).
 			OnClick(r.JS(fmt.Sprintf(
 				"history.replaceState(null,'','#%s');__ws.call('project.switch',{sid:'%s',name:'%s'});",
 				proj.Name, sid, proj.Name,
 			)))
+
+		if shortcutLabel != "" {
+			badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none "
+			if proj.Name == state.ActiveProject {
+				badgeCls += "bg-teal-500 text-teal-100"
+			} else {
+				badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500"
+			}
+			projBtn.Render(
+				r.Span(badgeCls).Text(shortcutLabel),
+				r.Span("").Text(proj.Name),
+			)
+		} else {
+			projBtn.Text(proj.Name)
+		}
 
 		buttons = append(buttons, projBtn)
 	}
@@ -1753,18 +1773,12 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					var idx = parseInt(e.key) - 1;
-					__ws.call('app.select', {"sid": "%s", "index": idx});
-					window.__libroFocusApp(idx);
+					__ws.call('project.select', {"sid": "%s", "index": idx});
 				}
-				if (e.metaKey && (e.key === 'j' || e.key === 'J')) {
+				if (e.ctrlKey && e.key === '0') {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					__ws.call('project.navigate.next', {"sid": "%s"});
-				}
-				if (e.metaKey && (e.key === 'k' || e.key === 'K')) {
-					e.preventDefault();
-					e.stopImmediatePropagation();
-					__ws.call('project.navigate.prev', {"sid": "%s"});
+					__ws.call('project.select.last', {"sid": "%s"});
 				}
 				if (e.metaKey && e.ctrlKey && (e.key === 'n' || e.key === 'N' || e.code === 'KeyN')) {
 					e.preventDefault();
@@ -1868,5 +1882,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-	`, sid, sid, sid, sid, sid, sid, sid, sid)
+	`, sid, sid, sid, sid, sid, sid, sid)
 }
