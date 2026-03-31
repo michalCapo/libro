@@ -22,12 +22,13 @@ func jsString(s string) string {
 
 // dbSaveApp persists an app definition to the database for the given project.
 // If editDBID > 0, it updates the app with that DB ID; otherwise it appends.
-func dbSaveApp(projectName string, editDBID int64, appType, urlOrCmd, width, name string, writable bool) {
+func dbSaveApp(projectName string, editDBID int64, appType, urlOrCmd, width, name string, writable, projectSpecific bool) {
 	app := SavedApp{
-		Type:     appType,
-		Width:    width,
-		Writable: writable,
-		Name:     name,
+		Type:            appType,
+		Width:           width,
+		Writable:        writable,
+		Name:            name,
+		ProjectSpecific: projectSpecific,
 	}
 	if appType == "terminal" {
 		app.Command = urlOrCmd
@@ -113,6 +114,11 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		editDBID := state.EditDBID
 
+		projectSpecific := false
+		if val, ok := data["app-project-specific"].(bool); ok {
+			projectSpecific = val
+		}
+
 		if appType == "terminal" {
 			command, _ := data["app-command"].(string)
 			command = strings.TrimSpace(command)
@@ -125,7 +131,7 @@ func Run(assets embed.FS) {
 				writable = val
 			}
 
-			dbSaveApp(state.ActiveProject, editDBID, "terminal", command, string(width), name, writable)
+			dbSaveApp(state.ActiveProject, editDBID, "terminal", command, string(width), name, writable, projectSpecific)
 		} else {
 			url, _ := data["app-url"].(string)
 			url = strings.TrimSpace(url)
@@ -134,7 +140,7 @@ func Run(assets embed.FS) {
 			}
 			url = ensureScheme(url)
 
-			dbSaveApp(state.ActiveProject, editDBID, "url", url, string(width), name, false)
+			dbSaveApp(state.ActiveProject, editDBID, "url", url, string(width), name, false, projectSpecific)
 		}
 
 		sm.CloseDialog(sid)
