@@ -791,7 +791,7 @@ func Run(assets embed.FS) {
 			jsString(html.String()), CloseDialogID)
 	})
 
-	// Close all running apps and signal the window to close
+	// Close all running apps — the client handles window close separately
 	app.Action("app.close.all", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		projectApps := sm.GetAllRunningApps(sid)
@@ -805,7 +805,7 @@ func Run(assets embed.FS) {
 			}
 		}
 
-		return fmt.Sprintf(`document.getElementById('%s').classList.add('hidden');if(window.libroElectron)window.libroElectron.forceClose();else window.close();`, CloseDialogID)
+		return ""
 	})
 
 	registerTtydProxy(app)

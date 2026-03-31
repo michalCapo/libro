@@ -6,5 +6,8 @@ const { ipcRenderer, contextBridge } = require('electron')
 contextBridge.exposeInMainWorld('libroElectron', {
   forceClose: function () {
     ipcRenderer.send('libro-force-close')
+  },
+  toggleDevTools: function () {
+    ipcRenderer.send('libro-toggle-devtools')
   }
 })

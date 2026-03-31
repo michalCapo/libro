@@ -93,9 +93,7 @@ function createWindow() {
   mainWindow.loadURL(serverURL)
 
   // Intercept close to show confirmation dialog when apps are running
-  let forceClose = false
   mainWindow.on('close', (e) => {
-    if (forceClose) return // allow close after user confirmed
     e.preventDefault()
     // Ask the renderer to check for running apps
     mainWindow.webContents.executeJavaScript(`
@@ -105,8 +103,11 @@ function createWindow() {
 
   // Renderer signals that user confirmed close (or no apps were running)
   ipcMain.on('libro-force-close', () => {
-    forceClose = true
-    if (mainWindow) mainWindow.close()
+    if (mainWindow) mainWindow.destroy()
+  })
+
+  ipcMain.on('libro-toggle-devtools', () => {
+    if (mainWindow) mainWindow.webContents.toggleDevTools()
   })
 
   mainWindow.on('closed', () => {
