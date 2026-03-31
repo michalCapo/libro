@@ -150,8 +150,9 @@ func (sm *StateManager) NextAppID() string {
 	return fmt.Sprintf("app-%d", sm.nextID)
 }
 
-// addApp is the internal helper that inserts a URL app at the given position
-func (sm *StateManager) addApp(sessionID, url string, width Width, name string, prepend bool) {
+// addApp is the internal helper that inserts a URL app at the given position.
+// index < 0 means append to end; otherwise insert at that index.
+func (sm *StateManager) addApp(sessionID, url string, width Width, name string, index int) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -172,28 +173,31 @@ func (sm *StateManager) addApp(sessionID, url string, width Width, name string, 
 		Width: width,
 		Name:  name,
 	}
-	if prepend {
-		s.Apps = append([]Application{app}, s.Apps...)
-		s.SelectedIndex = 0
-	} else {
+	if index < 0 || index >= len(s.Apps) {
 		s.Apps = append(s.Apps, app)
 		s.SelectedIndex = len(s.Apps) - 1
+	} else {
+		s.Apps = append(s.Apps, Application{})
+		copy(s.Apps[index+1:], s.Apps[index:])
+		s.Apps[index] = app
+		s.SelectedIndex = index
 	}
 }
 
 // AddApp adds a new URL application to the end of the session's app list
 func (sm *StateManager) AddApp(sessionID, url string, width Width, name string) {
-	sm.addApp(sessionID, url, width, name, false)
+	sm.addApp(sessionID, url, width, name, -1)
 }
 
-// PrependApp adds a new URL application to the beginning of the session's app list
-func (sm *StateManager) PrependApp(sessionID, url string, width Width, name string) {
-	sm.addApp(sessionID, url, width, name, true)
+// InsertApp inserts a new URL application at the given index
+func (sm *StateManager) InsertApp(sessionID, url string, width Width, name string, index int) {
+	sm.addApp(sessionID, url, width, name, index)
 }
 
 // addTerminalApp is the internal helper that inserts a terminal app at the given position.
 // appID must be pre-generated via NextAppID to avoid race conditions with TtydManager.
-func (sm *StateManager) addTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string, prepend bool) {
+// index < 0 means append to end; otherwise insert at that index.
+func (sm *StateManager) addTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string, index int) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -217,23 +221,25 @@ func (sm *StateManager) addTerminalApp(sessionID string, appID string, command s
 		Name:     name,
 		IconURL:  iconURL,
 	}
-	if prepend {
-		s.Apps = append([]Application{app}, s.Apps...)
-		s.SelectedIndex = 0
-	} else {
+	if index < 0 || index >= len(s.Apps) {
 		s.Apps = append(s.Apps, app)
 		s.SelectedIndex = len(s.Apps) - 1
+	} else {
+		s.Apps = append(s.Apps, Application{})
+		copy(s.Apps[index+1:], s.Apps[index:])
+		s.Apps[index] = app
+		s.SelectedIndex = index
 	}
 }
 
 // AddTerminalApp adds a new terminal application to the end of the session's app list
 func (sm *StateManager) AddTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string) {
-	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL, false)
+	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL, -1)
 }
 
-// PrependTerminalApp adds a new terminal application to the beginning of the session's app list
-func (sm *StateManager) PrependTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string) {
-	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL, true)
+// InsertTerminalApp inserts a new terminal application at the given index
+func (sm *StateManager) InsertTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string, index int) {
+	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL, index)
 }
 
 // RemoveApp removes an application by index and returns it (for cleanup)
@@ -314,6 +320,17 @@ func (sm *StateManager) SetAppURLByID(sessionID, appID, newURL string) int {
 		}
 	}
 	return -1
+}
+
+// SelectedIndex returns the currently selected app index for the session
+func (sm *StateManager) SelectedIndex(sessionID string) int {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return 0
+	}
+	return s.SelectedIndex
 }
 
 // NavigateLeft shifts focus to the previous app

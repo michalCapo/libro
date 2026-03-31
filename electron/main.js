@@ -103,14 +103,38 @@ function createWindow() {
 // input at the webContents level before the guest page can consume it.
 app.on('web-contents-created', (event, contents) => {
   contents.on('before-input-event', (e, input) => {
-    if (contents.getType() !== 'webview') return
     if (input.type !== 'keyDown') return
 
     const key = (input.key || '').toLowerCase()
-
-    // Meta+Ctrl shortcuts: h, l (move app left/right)
     const code = (input.code || '').toLowerCase()
-    if (input.meta && input.control && ['keyh', 'keyl'].includes(code)) {
+    const isWebview = contents.getType() === 'webview'
+
+    // For main window content: directly invoke JS for Super+N shortcuts
+    // (native keydown may be intercepted by the desktop environment on Linux)
+    if (!isWebview) {
+      if (input.meta && input.control && code === 'keyn') {
+        e.preventDefault()
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            if (window.__libroOpenSearch) window.__libroOpenSearch('left');
+          `)
+        }
+        return
+      }
+      if (input.meta && !input.control && code === 'keyn') {
+        e.preventDefault()
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            if (window.__libroOpenSearch) window.__libroOpenSearch('right');
+          `)
+        }
+        return
+      }
+      return
+    }
+
+    // Meta+Ctrl shortcuts: h, l (move app left/right), n (new app left)
+    if (input.meta && input.control && ['keyh', 'keyl', 'keyn'].includes(code)) {
       e.preventDefault()
       if (mainWindow) {
         const safeCode = (input.code || '').replace(/'/g, "\\'")
@@ -127,8 +151,8 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, j, k, d, /
-    if (input.meta && ['h', 'l', 'j', 'k', 'd', '/'].includes(key)) {
+    // Meta (Super/Win) shortcuts: h, l, j, k, d, /, n
+    if (input.meta && (['h', 'l', 'j', 'k', 'd', 'n'].includes(key) || code === 'keyn')) {
       e.preventDefault()
       if (mainWindow) {
         const safeKey = input.key.replace(/'/g, "\\'")
