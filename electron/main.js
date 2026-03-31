@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, session } = require('electron')
+const { app, BrowserWindow, Menu, session, ipcMain } = require('electron')
 const { spawn } = require('child_process')
 const path = require('path')
 const http = require('http')
@@ -91,6 +91,23 @@ function createWindow() {
   mainWindow.show()
 
   mainWindow.loadURL(serverURL)
+
+  // Intercept close to show confirmation dialog when apps are running
+  let forceClose = false
+  mainWindow.on('close', (e) => {
+    if (forceClose) return // allow close after user confirmed
+    e.preventDefault()
+    // Ask the renderer to check for running apps
+    mainWindow.webContents.executeJavaScript(`
+      if (window.__libroShowCloseDialog) window.__libroShowCloseDialog();
+    `)
+  })
+
+  // Renderer signals that user confirmed close (or no apps were running)
+  ipcMain.on('libro-force-close', () => {
+    forceClose = true
+    if (mainWindow) mainWindow.close()
+  })
 
   mainWindow.on('closed', () => {
     mainWindow = null

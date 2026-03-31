@@ -622,6 +622,36 @@ func (sm *StateManager) GetActiveProjectPath(sessionID string) string {
 	return defaultHomeDir()
 }
 
+// ProjectApps holds the running apps for a single project
+type ProjectApps struct {
+	Name string
+	Apps []Application
+}
+
+// GetAllRunningApps returns all running apps across all projects (active + snapshots),
+// ordered by project list order.
+func (sm *StateManager) GetAllRunningApps(sessionID string) []ProjectApps {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return nil
+	}
+	var result []ProjectApps
+	for _, p := range s.Projects {
+		var apps []Application
+		if p.Name == s.ActiveProject {
+			apps = s.Apps
+		} else if snap, ok := s.snapshots[p.Name]; ok {
+			apps = snap.Apps
+		}
+		if len(apps) > 0 {
+			result = append(result, ProjectApps{Name: p.Name, Apps: apps})
+		}
+	}
+	return result
+}
+
 // OpenProjectDialog sets the project dialog open flag
 func (sm *StateManager) OpenProjectDialog(sessionID string) {
 	sm.mu.Lock()

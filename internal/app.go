@@ -746,6 +746,59 @@ func Run(assets embed.FS) {
 		return ""
 	})
 
+	// Check if there are running apps before closing — returns JS to show dialog or force close
+	app.Action("app.close.check", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		projectApps := sm.GetAllRunningApps(sid)
+
+		// No running apps — close immediately
+		if len(projectApps) == 0 {
+			return `if(window.libroElectron)window.libroElectron.forceClose();else window.close();`
+		}
+
+		// Build tree HTML: project > apps
+		var html strings.Builder
+		for _, pa := range projectApps {
+			html.WriteString(fmt.Sprintf(`<div class="mb-2"><div class="flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-1"><span class="material-icons-round text-sm">folder</span>%s</div>`, pa.Name))
+			for _, a := range pa.Apps {
+				icon := "language"
+				label := a.Name
+				if a.Type == AppTypeTerminal {
+					icon = "terminal"
+					if label == "" {
+						label = a.Command
+					}
+				} else {
+					if label == "" {
+						label = a.URL
+					}
+				}
+				html.WriteString(fmt.Sprintf(`<div class="flex items-center gap-1.5 ml-5 py-0.5 text-xs text-gray-500 dark:text-zinc-500"><span class="material-icons-round text-xs">%s</span><span class="truncate">%s</span></div>`, icon, label))
+			}
+			html.WriteString(`</div>`)
+		}
+
+		return fmt.Sprintf(`(function(){var el=document.getElementById('close-dialog-apps');if(el)el.innerHTML=%s;document.getElementById('%s').classList.remove('hidden');})();`,
+			jsString(html.String()), CloseDialogID)
+	})
+
+	// Close all running apps and signal the window to close
+	app.Action("app.close.all", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		projectApps := sm.GetAllRunningApps(sid)
+
+		// Stop all terminal processes across all projects
+		for _, pa := range projectApps {
+			for _, a := range pa.Apps {
+				if a.Type == AppTypeTerminal {
+					tm.Stop(a.ID)
+				}
+			}
+		}
+
+		return fmt.Sprintf(`document.getElementById('%s').classList.add('hidden');if(window.libroElectron)window.libroElectron.forceClose();else window.close();`, CloseDialogID)
+	})
+
 	registerTtydProxy(app)
 	app.Listen(":" + Port())
 }
