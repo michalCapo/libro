@@ -212,12 +212,15 @@ func Run(assets embed.FS) {
 			insertIdx = sm.SelectedIndex(sid) + 1
 		}
 
+		pwd := sm.GetActiveProjectPath(sid)
+
 		if appType == "terminal" {
 			command, _ := data["command"].(string)
 			command = strings.TrimSpace(command)
 			if command == "" {
 				command = "bash"
 			}
+			command = strings.ReplaceAll(command, "__dir__", pwd)
 
 			writable := true
 			if val, ok := data["writable"].(bool); ok {
@@ -230,7 +233,6 @@ func Run(assets embed.FS) {
 			stateBefore := sm.Get(sid)
 			hadApps := len(stateBefore.Apps)
 
-			pwd := sm.GetActiveProjectPath(sid)
 			appID := sm.NextAppID()
 			port := sm.NextPort()
 			if err := tm.Start(appID, port, command, writable, pwd); err != nil {
@@ -257,6 +259,7 @@ func Run(assets embed.FS) {
 		if url == "" {
 			return r.Notify("error", "URL is required")
 		}
+		url = strings.ReplaceAll(url, "__dir__", pwd)
 		url = ensureScheme(url)
 
 		// Check if strip already exists
