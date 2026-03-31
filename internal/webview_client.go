@@ -27,6 +27,8 @@ var browserShortcutsScript = '(' + function(){
 		if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(ae&&ae.isContentEditable)) return;
 		var handled = true;
 		switch(e.key) {
+			case 'g': window.scrollTo({top: 0, behavior: 'smooth'}); break;
+			case 'G': window.scrollTo({top: document.documentElement.scrollHeight, behavior: 'smooth'}); break;
 			case 'j': window.scrollBy({top: 480, behavior: 'smooth'}); break;
 			case 'k': window.scrollBy({top: -480, behavior: 'smooth'}); break;
 			case 'h': window.scrollBy({left: -480, behavior: 'smooth'}); break;
@@ -38,9 +40,7 @@ var browserShortcutsScript = '(' + function(){
 			case 'p': console.log('__libro:findprev'); break;
 			case 'Escape': console.log('__libro:searchclear'); break;
 			case 'Enter':
-				if(ae && ae !== document.body && ae !== document.documentElement) {
-					ae.click();
-				}
+				console.log('__libro:enter');
 				break;
 			default: handled = false;
 		}
@@ -89,7 +89,7 @@ function getOrCreateSearchBar(appID) {
 	bar.appendChild(closeBtn);
 	wrapper.appendChild(bar);
 
-	var state = {query: '', barEl: bar, inputEl: input, countEl: countLabel, findActive: false};
+	var state = {query: '', barEl: bar, inputEl: input, countEl: countLabel, findActive: false, matchRect: null};
 	searchState[appID] = state;
 
 	function doFind(forward) {
@@ -136,6 +136,9 @@ function getOrCreateSearchBar(appID) {
 	wv.addEventListener('found-in-page', function(e) {
 		if (e.result && searchState[appID]) {
 			searchState[appID].countEl.textContent = e.result.activeMatchOrdinal + '/' + e.result.matches;
+			if (e.result.selectionArea) {
+				searchState[appID].matchRect = e.result.selectionArea;
+			}
 		}
 	});
 
@@ -157,6 +160,7 @@ function clearSearch(appID) {
 	state.barEl.style.display = 'none';
 	state.query = '';
 	state.findActive = false;
+	state.matchRect = null;
 	state.countEl.textContent = '';
 	state.inputEl.value = '';
 	var wv = window.__libroWebviews[appID];
@@ -184,6 +188,36 @@ function findInPagePrev(appID) {
 	}
 	var wv = window.__libroWebviews[appID];
 	if (wv) wv.findInPage(state.query, {forward: false, findNext: true});
+}
+
+function handleEnter(appID) {
+	var wv = window.__libroWebviews[appID];
+	if (!wv) return;
+	var state = searchState[appID];
+	if (state && state.findActive && state.matchRect) {
+		var r = state.matchRect;
+		var cx = Math.round(r.x + r.width / 2);
+		var cy = Math.round(r.y + r.height / 2);
+		wv.executeJavaScript(
+			'(function(){' +
+			'var el=document.elementFromPoint(' + cx + ',' + cy + ');' +
+			'while(el){' +
+			'var tn=el.tagName?el.tagName.toUpperCase():"";' +
+			'if(tn==="A"){el.click();return;}' +
+			'if(tn==="BUTTON"){el.click();return;}' +
+			'if(el.getAttribute&&(el.getAttribute("role")==="link"||el.getAttribute("role")==="button")){el.click();return;}' +
+			'el=el.parentElement;' +
+			'}' +
+			'})()'
+		).catch(function(){});
+	} else {
+		wv.executeJavaScript(
+			'(function(){' +
+			'var ae=document.activeElement;' +
+			'if(ae&&ae!==document.body&&ae!==document.documentElement)ae.click();' +
+			'})()'
+		).catch(function(){});
+	}
 }
 
 // --- End browser shortcuts / find-in-page ---
@@ -231,6 +265,7 @@ function initWebview(wv) {
 		else if (msg === '__libro:findnext') findInPageNext(appID);
 		else if (msg === '__libro:findprev') findInPagePrev(appID);
 		else if (msg === '__libro:searchclear') clearSearch(appID);
+		else if (msg === '__libro:enter') handleEnter(appID);
 	});
 
 	// Loading indicator removal
@@ -307,7 +342,7 @@ window.__libroWvNavigate = function(appID, url) {
 	var wv = window.__libroWebviews[appID];
 	if (!wv) return;
 	if (ready[appID]) {
-		wv.loadURL(url);
+		wv.loadURL(url).catch(function(){});
 	} else {
 		// Not ready yet — set src attribute to trigger initial load
 		wv.setAttribute('src', url);

@@ -1290,6 +1290,7 @@ func renderShortcutsDialog() *r.Node {
 			{"Ctrl + -", "Zoom out"},
 		}},
 		{"Browser (disabled in input fields)", []shortcut{
+			{"g / G", "Go to top / bottom of page"},
 			{"j / k", "Scroll down / up"},
 			{"h / l", "Scroll left / right"},
 			{"/", "Find in page"},
