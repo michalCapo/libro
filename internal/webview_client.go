@@ -29,8 +29,8 @@ var browserShortcutsScript = '(' + function(){
 		switch(e.key) {
 			case 'g': window.scrollTo({top: 0, behavior: 'smooth'}); break;
 			case 'G': window.scrollTo({top: document.documentElement.scrollHeight, behavior: 'smooth'}); break;
-			case 'j': window.scrollBy({top: 480, behavior: 'smooth'}); break;
-			case 'k': window.scrollBy({top: -480, behavior: 'smooth'}); break;
+			case 'j': window.scrollBy({top: 800, behavior: 'smooth'}); break;
+			case 'k': window.scrollBy({top: -800, behavior: 'smooth'}); break;
 			case 'h': window.scrollBy({left: -480, behavior: 'smooth'}); break;
 			case 'l': window.scrollBy({left: 480, behavior: 'smooth'}); break;
 			case 'b': history.back(); break;
