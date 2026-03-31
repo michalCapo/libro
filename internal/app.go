@@ -787,7 +787,7 @@ func Run(assets embed.FS) {
 			html.WriteString(`</div>`)
 		}
 
-		return fmt.Sprintf(`(function(){var el=document.getElementById('close-dialog-apps');if(el)el.innerHTML=%s;document.getElementById('%s').classList.remove('hidden');})();`,
+		return fmt.Sprintf(`(function(){var el=document.getElementById('close-dialog-apps');if(el)el.innerHTML=%s;document.getElementById('%s').classList.remove('hidden');var cb=document.getElementById('close-dialog-confirm');if(cb)cb.focus();})();`,
 			jsString(html.String()), CloseDialogID)
 	})
 
