@@ -12,6 +12,7 @@ import (
 
 // SavedApp represents a persisted application definition (no runtime state like Port/ID).
 type SavedApp struct {
+	DBID     int64  // database row ID (used for edit/delete operations)
 	Type     string // "url" or "terminal"
 	URL      string
 	Command  string
@@ -177,7 +178,7 @@ func DBLoadSavedApps(projectName string) []SavedApp {
 	defer dbMu.Unlock()
 
 	rows, err := db.Query(
-		"SELECT type, url, command, width, writable, name, icon_url FROM saved_apps WHERE project_name = ? ORDER BY position, id",
+		"SELECT id, type, url, command, width, writable, name, icon_url FROM saved_apps WHERE project_name = ? ORDER BY position, id",
 		projectName,
 	)
 	if err != nil {
@@ -190,7 +191,7 @@ func DBLoadSavedApps(projectName string) []SavedApp {
 	for rows.Next() {
 		var a SavedApp
 		var writable int
-		if err := rows.Scan(&a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL); err != nil {
+		if err := rows.Scan(&a.DBID, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL); err != nil {
 			continue
 		}
 		a.Writable = writable != 0
@@ -204,7 +205,7 @@ func DBLoadAllSavedApps() []SavedApp {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
-	rows, err := db.Query("SELECT type, url, command, width, writable, name, icon_url FROM saved_apps ORDER BY position, id")
+	rows, err := db.Query("SELECT id, type, url, command, width, writable, name, icon_url FROM saved_apps ORDER BY position, id")
 	if err != nil {
 		log.Printf("db: load all saved apps: %v", err)
 		return nil
@@ -215,7 +216,7 @@ func DBLoadAllSavedApps() []SavedApp {
 	for rows.Next() {
 		var a SavedApp
 		var writable int
-		if err := rows.Scan(&a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL); err != nil {
+		if err := rows.Scan(&a.DBID, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL); err != nil {
 			continue
 		}
 		a.Writable = writable != 0
@@ -298,6 +299,35 @@ func DBRemoveSavedApp(projectName string, index int) {
 	_, err := db.Exec("DELETE FROM saved_apps WHERE id=?", id)
 	if err != nil {
 		log.Printf("db: remove saved app at %d: %v", index, err)
+	}
+}
+
+// DBRemoveSavedAppByID removes a saved app by its database row ID.
+func DBRemoveSavedAppByID(id int64) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	_, err := db.Exec("DELETE FROM saved_apps WHERE id=?", id)
+	if err != nil {
+		log.Printf("db: remove saved app by id %d: %v", id, err)
+	}
+}
+
+// DBUpdateSavedAppByID updates a saved app by its database row ID.
+func DBUpdateSavedAppByID(id int64, app SavedApp) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	writable := 0
+	if app.Writable {
+		writable = 1
+	}
+	_, err := db.Exec(
+		"UPDATE saved_apps SET type=?, url=?, command=?, width=?, writable=?, name=?, icon_url=? WHERE id=?",
+		app.Type, app.URL, app.Command, app.Width, writable, app.Name, app.IconURL, id,
+	)
+	if err != nil {
+		log.Printf("db: update saved app by id %d: %v", id, err)
 	}
 }
 

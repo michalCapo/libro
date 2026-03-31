@@ -55,6 +55,8 @@ type AppState struct {
 
 	// EditIndex tracks which saved app is being edited (-1 = new app)
 	EditIndex int
+	// EditDBID tracks the database row ID of the saved app being edited (-1 = new app)
+	EditDBID int64
 }
 
 // StateManager manages per-session app states

@@ -21,8 +21,8 @@ func jsString(s string) string {
 }
 
 // dbSaveApp persists an app definition to the database for the given project.
-// If editIndex >= 0, it updates the app at that index; otherwise it appends.
-func dbSaveApp(projectName string, editIndex int, appType, urlOrCmd, width, name string, writable bool) {
+// If editDBID > 0, it updates the app with that DB ID; otherwise it appends.
+func dbSaveApp(projectName string, editDBID int64, appType, urlOrCmd, width, name string, writable bool) {
 	app := SavedApp{
 		Type:     appType,
 		Width:    width,
@@ -38,8 +38,8 @@ func dbSaveApp(projectName string, editIndex int, appType, urlOrCmd, width, name
 	} else {
 		app.URL = urlOrCmd
 	}
-	if editIndex >= 0 {
-		DBUpdateSavedApp(projectName, editIndex, app)
+	if editDBID > 0 {
+		DBUpdateSavedAppByID(editDBID, app)
 	} else {
 		DBAddSavedApp(projectName, app)
 	}
@@ -111,7 +111,7 @@ func Run(assets embed.FS) {
 		}
 
 		state := sm.Get(sid)
-		editIdx := state.EditIndex
+		editDBID := state.EditDBID
 
 		if appType == "terminal" {
 			command, _ := data["app-command"].(string)
@@ -125,7 +125,7 @@ func Run(assets embed.FS) {
 				writable = val
 			}
 
-			dbSaveApp(state.ActiveProject, editIdx, "terminal", command, string(width), name, writable)
+			dbSaveApp(state.ActiveProject, editDBID, "terminal", command, string(width), name, writable)
 		} else {
 			url, _ := data["app-url"].(string)
 			url = strings.TrimSpace(url)
@@ -134,11 +134,11 @@ func Run(assets embed.FS) {
 			}
 			url = ensureScheme(url)
 
-			dbSaveApp(state.ActiveProject, editIdx, "url", url, string(width), name, false)
+			dbSaveApp(state.ActiveProject, editDBID, "url", url, string(width), name, false)
 		}
 
 		sm.CloseDialog(sid)
-		sm.Get(sid).EditIndex = -1
+		sm.Get(sid).EditDBID = -1
 
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
@@ -661,29 +661,29 @@ func Run(assets embed.FS) {
 	app.Action("app.saved.delete", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
-		idx := -1
-		if v, ok := data["index"].(float64); ok {
-			idx = int(v)
+		var dbid int64
+		if v, ok := data["dbid"].(float64); ok {
+			dbid = int64(v)
 		}
-		if idx < 0 {
+		if dbid <= 0 {
 			return ""
 		}
+		DBRemoveSavedAppByID(dbid)
 		state := sm.Get(sid)
-		DBRemoveSavedApp(state.ActiveProject, idx)
 		// Re-render the empty state / main area to refresh saved apps list
 		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
 	})
 
-	// Set edit index for editing a saved app
+	// Set edit DB ID for editing a saved app
 	app.Action("app.saved.edit", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
-		idx := -1
-		if v, ok := data["index"].(float64); ok {
-			idx = int(v)
+		var dbid int64
+		if v, ok := data["dbid"].(float64); ok {
+			dbid = int64(v)
 		}
 		state := sm.Get(sid)
-		state.EditIndex = idx
+		state.EditDBID = dbid
 		return ""
 	})
 
