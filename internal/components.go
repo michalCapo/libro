@@ -251,7 +251,7 @@ func renderMainArea(state *AppState, sid string) *r.Node {
 
 // renderEmptyState renders the saved apps list with "+ Add New" button
 func renderEmptyState(state *AppState, sid string) *r.Node {
-	savedApps := DBLoadAllSavedApps()
+	savedApps := DBLoadVisibleSavedApps(state.ActiveProject)
 	appButtons := make([]*r.Node, 0, len(savedApps))
 	for _, app := range savedApps {
 		appButtons = append(appButtons, renderSavedAppButton(app, sid))
@@ -362,8 +362,9 @@ setTimeout(function(){
 	}
 	var nm=document.getElementById('app-name');if(nm)nm.value=%s;
 	var wr=document.getElementById('width-'+((%s)||'md'));if(wr)wr.checked=true;
+	var ps=document.getElementById('app-project-specific');if(ps)ps.checked=%v;
 },100);
-`, jsString(app.Type), jsString(app.Command), app.Writable, jsString(app.URL), jsString(app.Name), jsString(app.Width))
+`, jsString(app.Type), jsString(app.Command), app.Writable, jsString(app.URL), jsString(app.Name), jsString(app.Width), app.ProjectSpecific)
 }
 
 // renderAppStrip renders the horizontal strip of applications with navigation
@@ -382,9 +383,9 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 
 	mainArea := r.Div("flex-1 flex items-stretch overflow-hidden relative p-2").ID(projectMainID(state.ActiveProject)).
 		Render(
-			renderSideLauncher(sid, "left"),
+			renderSideLauncher(sid, "left", state.ActiveProject),
 			strip,
-			renderSideLauncher(sid, "right"),
+			renderSideLauncher(sid, "right", state.ActiveProject),
 		)
 	mainArea.JS(centerSelectedJS(state.SelectedIndex, len(state.Apps), state.ActiveProject))
 
@@ -793,8 +794,8 @@ func removeAppJS(appID string) string {
 
 // renderSideLauncher renders a vertical icon dock: saved app icons + "+" button.
 // Now server-rendered from DB instead of client-side localStorage.
-func renderSideLauncher(sid, side string) *r.Node {
-	savedApps := DBLoadAllSavedApps()
+func renderSideLauncher(sid, side, activeProject string) *r.Node {
+	savedApps := DBLoadVisibleSavedApps(activeProject)
 
 	tipPos := "left-full ml-2"
 	if side == "right" {
@@ -918,7 +919,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 		`, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab)
 	}
 
-	collectIDs := []string{"app-url", "app-command", "app-writable", "app-type", "app-name", "width-md"}
+	collectIDs := []string{"app-url", "app-command", "app-writable", "app-type", "app-name", "width-md", "app-project-specific"}
 
 	inputCls := "w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-1 focus:ring-teal-500 focus:border-teal-500 outline-none transition-colors"
 
@@ -978,6 +979,14 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 					r.Div("mb-5").Render(
 						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Width"),
 						r.Div("flex flex-wrap gap-1.5").Render(widthOptions...),
+					),
+
+					r.Div("mb-5").Render(
+						r.Label("flex items-center gap-2 cursor-pointer").Render(
+							r.ICheckbox("accent-teal-500 cursor-pointer w-4 h-4").
+								ID("app-project-specific"),
+							r.Span("text-sm text-gray-600 dark:text-zinc-400").Text("Project specific"),
+						),
 					),
 
 					r.Div("flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-zinc-800").Render(

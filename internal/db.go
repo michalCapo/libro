@@ -12,14 +12,15 @@ import (
 
 // SavedApp represents a persisted application definition (no runtime state like Port/ID).
 type SavedApp struct {
-	DBID     int64  // database row ID (used for edit/delete operations)
-	Type     string // "url" or "terminal"
-	URL      string
-	Command  string
-	Width    string
-	Writable bool
-	Name     string
-	IconURL  string // cached icon URL discovered via web search
+	DBID            int64  // database row ID (used for edit/delete operations)
+	Type            string // "url" or "terminal"
+	URL             string
+	Command         string
+	Width           string
+	Writable        bool
+	Name            string
+	IconURL         string // cached icon URL discovered via web search
+	ProjectSpecific bool   // if true, only visible in the project it was saved to
 }
 
 var (
@@ -93,6 +94,8 @@ func createTables() {
 func migrateTables() {
 	// Add icon_url column if it doesn't exist (added for icon discovery feature)
 	_, _ = db.Exec("ALTER TABLE saved_apps ADD COLUMN icon_url TEXT NOT NULL DEFAULT ''")
+	// Add project_specific column (app visible only in its project when true)
+	_, _ = db.Exec("ALTER TABLE saved_apps ADD COLUMN project_specific INTEGER NOT NULL DEFAULT 0")
 }
 
 func ensureHomeProject() {
@@ -178,7 +181,7 @@ func DBLoadSavedApps(projectName string) []SavedApp {
 	defer dbMu.Unlock()
 
 	rows, err := db.Query(
-		"SELECT id, type, url, command, width, writable, name, icon_url FROM saved_apps WHERE project_name = ? ORDER BY position, id",
+		"SELECT id, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps WHERE project_name = ? ORDER BY position, id",
 		projectName,
 	)
 	if err != nil {
@@ -190,11 +193,12 @@ func DBLoadSavedApps(projectName string) []SavedApp {
 	var apps []SavedApp
 	for rows.Next() {
 		var a SavedApp
-		var writable int
-		if err := rows.Scan(&a.DBID, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL); err != nil {
+		var writable, projectSpecific int
+		if err := rows.Scan(&a.DBID, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL, &projectSpecific); err != nil {
 			continue
 		}
 		a.Writable = writable != 0
+		a.ProjectSpecific = projectSpecific != 0
 		apps = append(apps, a)
 	}
 	return apps
@@ -205,7 +209,7 @@ func DBLoadAllSavedApps() []SavedApp {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
-	rows, err := db.Query("SELECT id, type, url, command, width, writable, name, icon_url FROM saved_apps ORDER BY position, id")
+	rows, err := db.Query("SELECT id, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps ORDER BY position, id")
 	if err != nil {
 		log.Printf("db: load all saved apps: %v", err)
 		return nil
@@ -215,11 +219,42 @@ func DBLoadAllSavedApps() []SavedApp {
 	var apps []SavedApp
 	for rows.Next() {
 		var a SavedApp
-		var writable int
-		if err := rows.Scan(&a.DBID, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL); err != nil {
+		var writable, projectSpecific int
+		if err := rows.Scan(&a.DBID, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL, &projectSpecific); err != nil {
 			continue
 		}
 		a.Writable = writable != 0
+		a.ProjectSpecific = projectSpecific != 0
+		apps = append(apps, a)
+	}
+	return apps
+}
+
+// DBLoadVisibleSavedApps returns saved apps visible in a project:
+// all non-project-specific apps plus project-specific apps belonging to this project.
+func DBLoadVisibleSavedApps(projectName string) []SavedApp {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	rows, err := db.Query(
+		"SELECT id, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps WHERE project_specific = 0 OR project_name = ? ORDER BY position, id",
+		projectName,
+	)
+	if err != nil {
+		log.Printf("db: load visible saved apps for %s: %v", projectName, err)
+		return nil
+	}
+	defer rows.Close()
+
+	var apps []SavedApp
+	for rows.Next() {
+		var a SavedApp
+		var writable, projectSpecific int
+		if err := rows.Scan(&a.DBID, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL, &projectSpecific); err != nil {
+			continue
+		}
+		a.Writable = writable != 0
+		a.ProjectSpecific = projectSpecific != 0
 		apps = append(apps, a)
 	}
 	return apps
@@ -237,9 +272,13 @@ func DBAddSavedApp(projectName string, app SavedApp) {
 	if app.Writable {
 		writable = 1
 	}
+	projectSpecific := 0
+	if app.ProjectSpecific {
+		projectSpecific = 1
+	}
 	_, err := db.Exec(
-		"INSERT INTO saved_apps (project_name, type, url, command, width, writable, name, icon_url, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		projectName, app.Type, app.URL, app.Command, app.Width, writable, app.Name, app.IconURL, maxPos+1,
+		"INSERT INTO saved_apps (project_name, type, url, command, width, writable, name, icon_url, position, project_specific) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		projectName, app.Type, app.URL, app.Command, app.Width, writable, app.Name, app.IconURL, maxPos+1, projectSpecific,
 	)
 	if err != nil {
 		log.Printf("db: add saved app: %v", err)
@@ -261,9 +300,13 @@ func DBUpdateSavedApp(projectName string, index int, app SavedApp) {
 	if app.Writable {
 		writable = 1
 	}
+	projectSpecific := 0
+	if app.ProjectSpecific {
+		projectSpecific = 1
+	}
 	_, err := db.Exec(
-		"UPDATE saved_apps SET type=?, url=?, command=?, width=?, writable=?, name=?, icon_url=? WHERE id=?",
-		app.Type, app.URL, app.Command, app.Width, writable, app.Name, app.IconURL, id,
+		"UPDATE saved_apps SET type=?, url=?, command=?, width=?, writable=?, name=?, icon_url=?, project_specific=? WHERE id=?",
+		app.Type, app.URL, app.Command, app.Width, writable, app.Name, app.IconURL, projectSpecific, id,
 	)
 	if err != nil {
 		log.Printf("db: update saved app at %d: %v", index, err)
@@ -322,9 +365,13 @@ func DBUpdateSavedAppByID(id int64, app SavedApp) {
 	if app.Writable {
 		writable = 1
 	}
+	projectSpecific := 0
+	if app.ProjectSpecific {
+		projectSpecific = 1
+	}
 	_, err := db.Exec(
-		"UPDATE saved_apps SET type=?, url=?, command=?, width=?, writable=?, name=?, icon_url=? WHERE id=?",
-		app.Type, app.URL, app.Command, app.Width, writable, app.Name, app.IconURL, id,
+		"UPDATE saved_apps SET type=?, url=?, command=?, width=?, writable=?, name=?, icon_url=?, project_specific=? WHERE id=?",
+		app.Type, app.URL, app.Command, app.Width, writable, app.Name, app.IconURL, projectSpecific, id,
 	)
 	if err != nil {
 		log.Printf("db: update saved app by id %d: %v", id, err)
