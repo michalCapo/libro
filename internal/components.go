@@ -250,10 +250,10 @@ func renderMainArea(state *AppState, sid string) *r.Node {
 
 // renderEmptyState renders the saved apps list with "+ Add New" button
 func renderEmptyState(state *AppState, sid string) *r.Node {
-	savedApps := DBLoadSavedApps(state.ActiveProject)
+	savedApps := DBLoadAllSavedApps()
 	appButtons := make([]*r.Node, 0, len(savedApps))
-	for i, app := range savedApps {
-		appButtons = append(appButtons, renderSavedAppButton(app, i, sid))
+	for _, app := range savedApps {
+		appButtons = append(appButtons, renderSavedAppButton(app, sid))
 	}
 
 	// Guide text for empty projects (no saved apps yet)
@@ -283,7 +283,7 @@ func renderEmptyState(state *AppState, sid string) *r.Node {
 }
 
 // renderSavedAppButton renders a single saved app button (server-side, from DB data).
-func renderSavedAppButton(app SavedApp, index int, sid string) *r.Node {
+func renderSavedAppButton(app SavedApp, sid string) *r.Node {
 	var iconNode *r.Node
 	label := app.Name
 
@@ -331,11 +331,11 @@ func renderSavedAppButton(app SavedApp, index int, sid string) *r.Node {
 			r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Type),
 			r.I("material-icons-round text-xl cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-200").
 				Text("edit").
-				Attr("onclick", fmt.Sprintf(`event.stopPropagation();__ws.callSilent('app.saved.edit',{sid:'%s',index:%d});__ws.call('app.dialog.open',{sid:'%s'});`, sid, index, sid)+
-					savedAppEditFillJS(app, index)),
+				Attr("onclick", fmt.Sprintf(`event.stopPropagation();__ws.callSilent('app.saved.edit',{sid:'%s',dbid:%d});__ws.call('app.dialog.open',{sid:'%s'});`, sid, app.DBID, sid)+
+					savedAppEditFillJS(app)),
 			r.I("material-icons-round text-xl cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400").
 				Text("close").
-				Attr("onclick", fmt.Sprintf(`event.stopPropagation();__ws.call('app.saved.delete',{sid:'%s',index:%d});`, sid, index)),
+				Attr("onclick", fmt.Sprintf(`event.stopPropagation();__ws.call('app.saved.delete',{sid:'%s',dbid:%d});`, sid, app.DBID)),
 		).
 		OnClick(&r.Action{Name: "app.start", Data: map[string]any{
 			"sid": sid, "type": app.Type, "url": app.URL,
@@ -348,7 +348,7 @@ func renderSavedAppButton(app SavedApp, index int, sid string) *r.Node {
 }
 
 // savedAppEditFillJS returns JS that fills the add dialog with saved app data for editing.
-func savedAppEditFillJS(app SavedApp, _ int) string {
+func savedAppEditFillJS(app SavedApp) string {
 	return fmt.Sprintf(`
 setTimeout(function(){
 	if(%s==='terminal'){
