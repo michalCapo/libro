@@ -951,6 +951,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 							ID("app-url").
 							Attr("placeholder", "https://example.com").
 							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-add').click();}"),
+						r.P("text-xs text-gray-400 dark:text-zinc-500 mt-1").Text("Use __dir__ as a placeholder for the project directory."),
 					),
 
 					r.Div("mb-5").ID("tab-terminal-content").Render(
@@ -960,6 +961,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 								ID("app-command").
 								Attr("placeholder", "bash").
 								Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-add').click();}"),
+							r.P("text-xs text-gray-400 dark:text-zinc-500 mt-1").Text("Use __dir__ as a placeholder for the project directory."),
 						),
 						r.Label("flex items-center gap-2 cursor-pointer").Render(
 							r.ICheckbox("accent-teal-500 cursor-pointer w-4 h-4").

@@ -1,3 +1,0 @@
---project
-when creating project user can select how many rows will project layout contains, default is one (current implementation). when user defined 2 rows. new applications will be created to row which user has selected. user can select rows by win+j/k shortcut. update shortcut popup. Make a new button do display all project list (next to shortcut button). should looks like app list popup. where user can edit project, delete project, or other feature included. add note for user that he needs to restart application in after he change rows count to make this change be effective.
-Make row selection (for 2 and more rows) to be visually visible. make the row background to have different color like other row have (not apply for one row setup)
