@@ -1020,8 +1020,7 @@ func renderSearchDialog(sid string) *r.Node {
 					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
 						r.Div("flex items-center gap-4").Render(
 							r.Span("").Text("↑↓ navigate"),
-							r.Span("").Text("Enter open right"),
-							r.Span("").Text("Ctrl+Enter open left"),
+							r.Span("").Text("Enter open"),
 							r.Span("").Text("Esc close"),
 						),
 						r.Span("cursor-pointer hover:text-red-400 transition-colors").
@@ -1131,7 +1130,7 @@ func searchDialogJS(sid string) string {
 				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+(app.width||'lg')+'</span>'
 				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+typeBadge+'</span>';
 			row.onmouseenter=function(){selIdx=i;render();};
-			row.onclick=function(e){launch(e.ctrlKey?'left':'right');};
+			row.onclick=function(){launch();};
 			res.appendChild(row);
 		});
 		var sel=res.children[selIdx];
@@ -1194,8 +1193,11 @@ func searchDialogJS(sid string) string {
 		render();
 	}
 
-	function launch(side){
+	var pendingSide='right';
+
+	function launch(){
 		if(filtered.length===0)return;
+		var side=pendingSide;
 		var item=filtered[selIdx];
 		var app=item.app;
 		dlg.classList.add('hidden');
@@ -1213,7 +1215,8 @@ func searchDialogJS(sid string) string {
 		__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false,name:app.name||'',iconUrl:app.iconUrl||'',side:side});
 	}
 
-	function openSearch(){
+	function openSearch(side){
+		pendingSide=side||'right';
 		dlg.classList.remove('hidden');
 		inp.value='';
 		filter();
@@ -1236,7 +1239,7 @@ func searchDialogJS(sid string) string {
 			if(selIdx>0){selIdx--;render();}
 		}else if(e.key==='Enter'){
 			e.preventDefault();
-			launch(e.ctrlKey?'left':'right');
+			launch();
 		}else if(e.key==='Escape'){
 			e.preventDefault();
 			closeSearch();
@@ -1255,6 +1258,8 @@ func renderShortcutsDialog() *r.Node {
 		desc string
 	}
 	shortcuts := []shortcut{
+		{"⌘ + N", "New app (right of current)"},
+		{"⌘ + Ctrl + N", "New app (left of current)"},
 		{"⌘ + H", "Navigate left"},
 		{"⌘ + L", "Navigate right"},
 		{"⌘ + Ctrl + H", "Move app left"},
@@ -1262,7 +1267,6 @@ func renderShortcutsDialog() *r.Node {
 		{"Ctrl + 1–9", "Select app by index"},
 		{"⌘ + J", "Next project"},
 		{"⌘ + K", "Previous project"},
-		{"⌘ + /", "Open search"},
 		{"⌘ + D", "Close current app"},
 		{"Ctrl + L", "Select browser URL bar"},
 		{"Ctrl + R", "Reload browser page"},
@@ -1762,10 +1766,17 @@ func keyboardShortcutsJS(sid string) string {
 					e.stopImmediatePropagation();
 					__ws.call('project.navigate.prev', {"sid": "%s"});
 				}
-				if (e.metaKey && e.key === '/') {
+				if (e.metaKey && e.ctrlKey && (e.key === 'n' || e.key === 'N' || e.code === 'KeyN')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					if (window.__libroOpenSearch) window.__libroOpenSearch();
+					if (window.__libroOpenSearch) window.__libroOpenSearch('left');
+					return;
+				}
+				if (e.metaKey && (e.key === 'n' || e.key === 'N' || e.code === 'KeyN')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenSearch) window.__libroOpenSearch('right');
+					return;
 				}
 				if (e.metaKey && (e.key === 'd' || e.key === 'D')) {
 					e.preventDefault();

@@ -198,7 +198,13 @@ func Run(assets embed.FS) {
 		}
 		name, _ := data["name"].(string)
 		side, _ := data["side"].(string)
-		prepend := side == "left"
+		// Compute insertion index relative to currently selected app
+		insertIdx := -1 // default: append
+		if side == "left" {
+			insertIdx = sm.SelectedIndex(sid)
+		} else if side == "right" {
+			insertIdx = sm.SelectedIndex(sid) + 1
+		}
 
 		if appType == "terminal" {
 			command, _ := data["command"].(string)
@@ -225,11 +231,7 @@ func Run(assets embed.FS) {
 				return r.Notify("error", "Failed to start ttyd: "+err.Error())
 			}
 
-			if prepend {
-				sm.PrependTerminalApp(sid, appID, command, port, writable, width, name, iconURL)
-			} else {
-				sm.AddTerminalApp(sid, appID, command, port, writable, width, name, iconURL)
-			}
+			sm.InsertTerminalApp(sid, appID, command, port, writable, width, name, iconURL, insertIdx)
 			state := sm.Get(sid)
 			newApp := &state.Apps[state.SelectedIndex]
 
@@ -237,7 +239,7 @@ func Run(assets embed.FS) {
 
 			if hadApps > 0 {
 				frame := renderAppFrame(*newApp, state.SelectedIndex, true, sid)
-				return insertAppJS(frame, prepend, state.ActiveProject) + navigateJS(state, sid)
+				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid)
 			}
 
 			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
@@ -255,17 +257,13 @@ func Run(assets embed.FS) {
 		stateBefore := sm.Get(sid)
 		hadApps := len(stateBefore.Apps)
 
-		if prepend {
-			sm.PrependApp(sid, url, width, name)
-		} else {
-			sm.AddApp(sid, url, width, name)
-		}
+		sm.InsertApp(sid, url, width, name, insertIdx)
 		state := sm.Get(sid)
 
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
 			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
-			return insertAppJS(frame, prepend, state.ActiveProject) + navigateJS(state, sid)
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid)
 		}
 
 		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
@@ -401,22 +399,24 @@ func Run(assets embed.FS) {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		side, _ := data["side"].(string)
-		prepend := side == "left"
+		// Compute insertion index relative to currently selected app
+		insertIdx := -1 // default: append
+		if side == "left" {
+			insertIdx = sm.SelectedIndex(sid)
+		} else if side == "right" {
+			insertIdx = sm.SelectedIndex(sid) + 1
+		}
 
 		stateBefore := sm.Get(sid)
 		hadApps := len(stateBefore.Apps)
 
-		if prepend {
-			sm.PrependApp(sid, "", WidthLG, "New Tab")
-		} else {
-			sm.AddApp(sid, "", WidthLG, "New Tab")
-		}
+		sm.InsertApp(sid, "", WidthLG, "New Tab", insertIdx)
 		state := sm.Get(sid)
 
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
 			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
-			return insertAppJS(frame, prepend, state.ActiveProject) + navigateJS(state, sid) +
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) +
 				fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, newApp.ID)
 		}
 
