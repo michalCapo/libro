@@ -53,6 +53,9 @@ type AppState struct {
 	snapshots         map[string]*projectSnapshot
 	renderedProjects  map[string]bool // tracks which projects have DOM divs
 
+	// LastAppCreatedProject tracks the project where the last app was created (for Ctrl+0)
+	LastAppCreatedProject string
+
 	// EditIndex tracks which saved app is being edited (-1 = new app)
 	EditIndex int
 	// EditDBID tracks the database row ID of the saved app being edited (-1 = new app)
@@ -182,6 +185,7 @@ func (sm *StateManager) addApp(sessionID, url string, width Width, name string, 
 		s.Apps[index] = app
 		s.SelectedIndex = index
 	}
+	s.LastAppCreatedProject = s.ActiveProject
 }
 
 // AddApp adds a new URL application to the end of the session's app list
@@ -230,6 +234,7 @@ func (sm *StateManager) addTerminalApp(sessionID string, appID string, command s
 		s.Apps[index] = app
 		s.SelectedIndex = index
 	}
+	s.LastAppCreatedProject = s.ActiveProject
 }
 
 // AddTerminalApp adds a new terminal application to the end of the session's app list
@@ -558,6 +563,28 @@ func (sm *StateManager) PrevProject(sessionID string) string {
 		}
 	}
 	return ""
+}
+
+// ProjectByIndex returns the project name at the given index (0-based), or "" if out of range
+func (sm *StateManager) ProjectByIndex(sessionID string, index int) string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil || index < 0 || index >= len(s.Projects) {
+		return ""
+	}
+	return s.Projects[index].Name
+}
+
+// LastAppProject returns the project where the last app was created, or ""
+func (sm *StateManager) LastAppProject(sessionID string) string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return ""
+	}
+	return s.LastAppCreatedProject
 }
 
 // IsProjectRendered checks if a project's DOM div has been created.

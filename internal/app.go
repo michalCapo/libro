@@ -610,6 +610,65 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
+	// Select project by index (Ctrl+1-9)
+	app.Action("project.select", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		idx := 0
+		if v, ok := data["index"].(float64); ok {
+			idx = int(v)
+		}
+		name := sm.ProjectByIndex(sid, idx)
+		if name == "" {
+			return "/* noop */"
+		}
+		if !sm.SwitchProject(sid, name) {
+			return "/* noop */"
+		}
+		state := sm.Get(sid)
+
+		var jsSwitch string
+		if sm.IsProjectRendered(sid, name) {
+			jsSwitch = switchProjectJS(name, nil)
+		} else {
+			jsSwitch = switchProjectJS(name, renderMainArea(state, sid))
+		}
+
+		return r.NewResponse().
+			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Add(jsSwitch).
+			Add(updateHashJS(name)).
+			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Build()
+	})
+
+	// Select project where last app was created (Ctrl+0)
+	app.Action("project.select.last", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		name := sm.LastAppProject(sid)
+		if name == "" {
+			return "/* noop */"
+		}
+		if !sm.SwitchProject(sid, name) {
+			return "/* noop */"
+		}
+		state := sm.Get(sid)
+
+		var jsSwitch string
+		if sm.IsProjectRendered(sid, name) {
+			jsSwitch = switchProjectJS(name, nil)
+		} else {
+			jsSwitch = switchProjectJS(name, renderMainArea(state, sid))
+		}
+
+		return r.NewResponse().
+			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Add(jsSwitch).
+			Add(updateHashJS(name)).
+			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Build()
+	})
+
 	// Remove a project
 	app.Action("project.remove", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
