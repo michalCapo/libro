@@ -13,7 +13,8 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderProjectDialog(state.ProjectDialogOpen, sid),
 		renderSearchDialog(sid),
 		renderShortcutsDialog(),
+		renderCloseDialog(sid),
 	)
-	page.JS(flashCSS() + termIconSetupJS() + keyboardShortcutsJS(sid) + savedAppsJS() + initHashJS(sid) + searchDialogJS(sid) + shortcutsDialogJS() + webviewClientJS())
+	page.JS(flashCSS() + termIconSetupJS() + keyboardShortcutsJS(sid) + savedAppsJS() + initHashJS(sid) + searchDialogJS(sid) + shortcutsDialogJS() + closeDialogJS(sid) + webviewClientJS())
 	return page
 }
