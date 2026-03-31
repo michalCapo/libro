@@ -1450,7 +1450,7 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 					),
 				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
 					Attr("title", "Toggle fullscreen").
-					Attr("onclick", "if(document.fullscreenElement){document.exitFullscreen();this.querySelector('i').textContent='fullscreen';this.querySelector('span').textContent='Fullscreen';}else{document.documentElement.requestFullscreen();this.querySelector('i').textContent='fullscreen_exit';this.querySelector('span').textContent='Exit';}").
+					Attr("onclick", "if(document.fullscreenElement){if(navigator.keyboard&&navigator.keyboard.unlock)navigator.keyboard.unlock();document.exitFullscreen();this.querySelector('i').textContent='fullscreen';this.querySelector('span').textContent='Fullscreen';}else{document.documentElement.requestFullscreen().then(function(){if(navigator.keyboard&&navigator.keyboard.lock)navigator.keyboard.lock(['Escape']);});this.querySelector('i').textContent='fullscreen_exit';this.querySelector('span').textContent='Exit';}").
 					Render(
 						r.I("material-icons-round text-base").Text("fullscreen"),
 						r.Span("").Text("Fullscreen"),
@@ -1806,6 +1806,12 @@ func keyboardShortcutsJS(sid string) string {
 			}
 
 			document.addEventListener('keydown', libroKeyHandler, true);
+
+			document.addEventListener('fullscreenchange', function() {
+				if (!document.fullscreenElement) {
+					if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock();
+				}
+			});
 
 			function attachIframeListeners() {
 				var iframes = document.querySelectorAll('iframe');
