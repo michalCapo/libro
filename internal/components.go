@@ -600,7 +600,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			Attr("value", app.URL).
 			Attr("spellcheck", "false").
 			Attr("autocomplete", "off").
-			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value;if(u&&!u.startsWith('http://')&&!u.startsWith('https://'))u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;window.__libroWvNavigate('%s',u);__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});}`, app.ID, sid, app.ID)))
+			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value;if(u&&!u.startsWith('http://')&&!u.startsWith('https://'))u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;window.__libroWvNavigate('%s',u);__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});event.target.blur();var wv=document.querySelector('[data-webview-app="%s"]');if(wv)wv.focus();}`, app.ID, sid, app.ID, app.ID)))
 
 		// Globe icon
 		globe := r.I("material-icons-round text-sm text-gray-400 dark:text-zinc-500 shrink-0 leading-none").Text("language")
@@ -1269,30 +1269,50 @@ func renderShortcutsDialog() *r.Node {
 		keys string
 		desc string
 	}
-	shortcuts := []shortcut{
-		{"⌘ + N", "New app (right of current)"},
-		{"⌘ + Ctrl + N", "New app (left of current)"},
-		{"⌘ + H", "Navigate left"},
-		{"⌘ + L", "Navigate right"},
-		{"⌘ + Ctrl + H", "Move app left"},
-		{"⌘ + Ctrl + L", "Move app right"},
-		{"Ctrl + 1–9", "Switch to project by index"},
-		{"Ctrl + 0", "Switch to last app-created project"},
-		{"⌘ + D", "Close current app"},
-		{"Ctrl + L", "Select browser URL bar"},
-		{"Ctrl + R", "Reload browser page"},
-		{"Ctrl + +", "Zoom in"},
-		{"Ctrl + -", "Zoom out"},
+	type section struct {
+		title     string
+		shortcuts []shortcut
+	}
+	sections := []section{
+		{"General", []shortcut{
+			{"⌘ + N", "New app (right of current)"},
+			{"⌘ + Ctrl + N", "New app (left of current)"},
+			{"⌘ + H", "Navigate left"},
+			{"⌘ + L", "Navigate right"},
+			{"⌘ + Ctrl + H", "Move app left"},
+			{"⌘ + Ctrl + L", "Move app right"},
+			{"Ctrl + 1–9", "Switch to project by index"},
+			{"Ctrl + 0", "Switch to last app-created project"},
+			{"⌘ + D", "Close current app"},
+			{"Ctrl + L", "Select browser URL bar"},
+			{"Ctrl + R", "Reload browser page"},
+			{"Ctrl + +", "Zoom in"},
+			{"Ctrl + -", "Zoom out"},
+		}},
+		{"Browser (disabled in input fields)", []shortcut{
+			{"j / k", "Scroll down / up"},
+			{"h / l", "Scroll left / right"},
+			{"/", "Find in page"},
+			{"n / p", "Find next / previous"},
+			{"Esc", "Clear search"},
+			{"b / f", "Page back / forward"},
+			{"Enter", "Follow link / click button"},
+		}},
 	}
 
-	rows := make([]*r.Node, 0, len(shortcuts))
-	for _, s := range shortcuts {
+	rows := make([]*r.Node, 0)
+	for _, sec := range sections {
 		rows = append(rows,
-			r.Div("flex items-center justify-between py-2 px-1 border-b border-gray-100 dark:border-zinc-800 last:border-0").Render(
-				r.Span("text-sm text-gray-700 dark:text-zinc-300").Text(s.desc),
-				r.Span("text-xs font-mono px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400").Text(s.keys),
-			),
+			r.Div("pt-2 pb-1 px-1 text-[10px] font-medium uppercase tracking-wider text-gray-400 dark:text-zinc-500").Text(sec.title),
 		)
+		for _, s := range sec.shortcuts {
+			rows = append(rows,
+				r.Div("flex items-center justify-between py-2 px-1 border-b border-gray-100 dark:border-zinc-800 last:border-0").Render(
+					r.Span("text-sm text-gray-700 dark:text-zinc-300").Text(s.desc),
+					r.Span("text-xs font-mono px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400").Text(s.keys),
+				),
+			)
+		}
 	}
 
 	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
@@ -1308,7 +1328,7 @@ func renderShortcutsDialog() *r.Node {
 							Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", ShortcutsDialogID)).
 							Render(r.I("material-icons-round text-base").Text("close")),
 					),
-					r.Div("px-4 py-2").Render(rows...),
+					r.Div("px-4 py-2 max-h-[60vh] overflow-y-auto").Render(rows...),
 					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
 						r.Span("").Text("Esc to close"),
 					),
