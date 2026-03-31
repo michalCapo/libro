@@ -8,3 +8,4 @@ b/f will go one page back/forward
 enter will follow link/click button, submit form
 when focus is in input component disable all shortctuw above for browser
 update shortcut popup
+

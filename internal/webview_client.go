@@ -3,6 +3,8 @@ package libro
 // webviewClientJS returns the JavaScript that manages Electron webview elements.
 // It initializes webview tags, handles navigation events, and provides
 // back/forward/reload/navigate functions via the webview DOM API.
+// It also injects browser-mode keyboard shortcuts (j/k/h/l/b/f/Enter)
+// into webview guest pages and provides find-in-page support (/, n, p).
 func webviewClientJS() string {
 	return webviewClientScript
 }
@@ -13,6 +15,178 @@ window.__libroWebviews = window.__libroWebviews || {};
 var ready = {};       // appID -> true when dom-ready has fired
 var queued = {};      // appID -> [fn, fn, ...] calls waiting for dom-ready
 var initialized = {};
+
+// --- Browser shortcuts script injected into webview guest pages ---
+var browserShortcutsScript = '(' + function(){
+	if(window.__libroBrowserShortcuts) return;
+	window.__libroBrowserShortcuts = true;
+	document.addEventListener('keydown', function(e) {
+		if(e.metaKey || e.ctrlKey || e.altKey) return;
+		var ae = document.activeElement;
+		var tag = ae ? ae.tagName.toUpperCase() : '';
+		if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(ae&&ae.isContentEditable)) return;
+		var handled = true;
+		switch(e.key) {
+			case 'j': window.scrollBy({top: 480, behavior: 'smooth'}); break;
+			case 'k': window.scrollBy({top: -480, behavior: 'smooth'}); break;
+			case 'h': window.scrollBy({left: -480, behavior: 'smooth'}); break;
+			case 'l': window.scrollBy({left: 480, behavior: 'smooth'}); break;
+			case 'b': history.back(); break;
+			case 'f': history.forward(); break;
+			case '/': console.log('__libro:search'); break;
+			case 'n': console.log('__libro:findnext'); break;
+			case 'p': console.log('__libro:findprev'); break;
+			case 'Escape': console.log('__libro:searchclear'); break;
+			case 'Enter':
+				if(ae && ae !== document.body && ae !== document.documentElement) {
+					ae.click();
+				}
+				break;
+			default: handled = false;
+		}
+		if(handled) { e.preventDefault(); e.stopPropagation(); }
+	}, true);
+} + ')()';
+
+// --- Find-in-page state per webview ---
+var searchState = {}; // appID -> {query, barEl, inputEl, countEl}
+
+function injectBrowserShortcuts(wv, appID) {
+	try { wv.executeJavaScript(browserShortcutsScript); } catch(err) {}
+}
+
+function getOrCreateSearchBar(appID) {
+	if (searchState[appID] && searchState[appID].barEl && searchState[appID].barEl.parentNode) {
+		return searchState[appID];
+	}
+	var wv = window.__libroWebviews[appID];
+	if (!wv) return null;
+
+	var container = wv.closest('[data-app-id]');
+	if (!container) return null;
+	var wrapper = container.children[1];
+	if (!wrapper) return null;
+
+	var bar = document.createElement('div');
+	bar.className = 'absolute top-2 right-2 z-50 flex items-center gap-1.5 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-600 rounded-md shadow-lg px-2 py-1.5';
+	bar.style.display = 'none';
+
+	var input = document.createElement('input');
+	input.type = 'text';
+	input.placeholder = 'Find in page…';
+	input.className = 'text-xs font-mono bg-transparent outline-none text-gray-700 dark:text-zinc-300 placeholder-gray-400 dark:placeholder-zinc-500';
+	input.style.width = '180px';
+
+	var countLabel = document.createElement('span');
+	countLabel.className = 'text-[10px] text-gray-400 dark:text-zinc-500 font-mono whitespace-nowrap';
+
+	var closeBtn = document.createElement('button');
+	closeBtn.className = 'flex items-center justify-center text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 cursor-pointer';
+	closeBtn.innerHTML = '<span class="material-icons-round text-sm">close</span>';
+
+	bar.appendChild(input);
+	bar.appendChild(countLabel);
+	bar.appendChild(closeBtn);
+	wrapper.appendChild(bar);
+
+	var state = {query: '', barEl: bar, inputEl: input, countEl: countLabel, findActive: false};
+	searchState[appID] = state;
+
+	function doFind(forward) {
+		var q = input.value;
+		if (!q) return;
+		var isSame = (q === state.query && state.findActive);
+		state.query = q;
+		state.findActive = true;
+		wv.findInPage(q, {forward: forward, findNext: isSame});
+	}
+
+	input.addEventListener('keydown', function(e) {
+		e.stopPropagation();
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			doFind(!e.shiftKey);
+			// Hide bar but keep search active — n/p will continue navigating
+			state.barEl.style.display = 'none';
+			wv.focus();
+		}
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			clearSearch(appID);
+		}
+	});
+
+	input.addEventListener('input', function() {
+		var q = input.value;
+		if (q) {
+			state.query = q;
+			state.findActive = true;
+			wv.findInPage(q, {forward: true, findNext: false});
+		} else {
+			state.findActive = false;
+			state.countEl.textContent = '';
+			try { wv.stopFindInPage('clearSelection'); } catch(err) {}
+		}
+	});
+
+	closeBtn.addEventListener('click', function() {
+		clearSearch(appID);
+	});
+
+	wv.addEventListener('found-in-page', function(e) {
+		if (e.result && searchState[appID]) {
+			searchState[appID].countEl.textContent = e.result.activeMatchOrdinal + '/' + e.result.matches;
+		}
+	});
+
+	return state;
+}
+
+function showSearchBar(appID) {
+	var state = getOrCreateSearchBar(appID);
+	if (!state) return;
+	state.barEl.style.display = 'flex';
+	state.inputEl.value = state.query || '';
+	state.inputEl.focus();
+	state.inputEl.select();
+}
+
+function clearSearch(appID) {
+	var state = searchState[appID];
+	if (!state) return;
+	state.barEl.style.display = 'none';
+	state.query = '';
+	state.findActive = false;
+	state.countEl.textContent = '';
+	state.inputEl.value = '';
+	var wv = window.__libroWebviews[appID];
+	if (wv) {
+		try { wv.stopFindInPage('clearSelection'); } catch(err) {}
+		wv.focus();
+	}
+}
+
+function findInPageNext(appID) {
+	var state = searchState[appID];
+	if (!state || !state.query || !state.findActive) {
+		showSearchBar(appID);
+		return;
+	}
+	var wv = window.__libroWebviews[appID];
+	if (wv) wv.findInPage(state.query, {forward: true, findNext: true});
+}
+
+function findInPagePrev(appID) {
+	var state = searchState[appID];
+	if (!state || !state.query || !state.findActive) {
+		showSearchBar(appID);
+		return;
+	}
+	var wv = window.__libroWebviews[appID];
+	if (wv) wv.findInPage(state.query, {forward: false, findNext: true});
+}
+
+// --- End browser shortcuts / find-in-page ---
 
 function whenReady(appID, fn) {
 	if (ready[appID]) { fn(); return; }
@@ -31,6 +205,7 @@ function initWebview(wv) {
 		ready[appID] = true;
 		var q = queued[appID];
 		if (q) { queued[appID] = null; q.forEach(function(fn){ fn(); }); }
+		injectBrowserShortcuts(wv, appID);
 	});
 
 	// Update URL bar on navigation
@@ -42,6 +217,20 @@ function initWebview(wv) {
 		if (!e.isMainFrame) return;
 		var inp = document.getElementById('urlinput-' + appID);
 		if (inp && e.url) inp.value = e.url;
+	});
+
+	// Re-inject browser shortcuts after full page navigation
+	wv.addEventListener('did-finish-load', function() {
+		injectBrowserShortcuts(wv, appID);
+	});
+
+	// Listen for browser shortcut messages from injected script
+	wv.addEventListener('console-message', function(e) {
+		var msg = e.message;
+		if (msg === '__libro:search') showSearchBar(appID);
+		else if (msg === '__libro:findnext') findInPageNext(appID);
+		else if (msg === '__libro:findprev') findInPagePrev(appID);
+		else if (msg === '__libro:searchclear') clearSearch(appID);
 	});
 
 	// Loading indicator removal
@@ -82,6 +271,7 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 					delete initialized[id];
 					delete ready[id];
 					delete queued[id];
+					delete searchState[id];
 				}
 			});
 			if (node.tagName === 'WEBVIEW' && node.getAttribute('data-webview-app')) {
@@ -90,6 +280,7 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 				delete initialized[id];
 				delete ready[id];
 				delete queued[id];
+				delete searchState[id];
 			}
 		});
 	});
