@@ -921,7 +921,7 @@ func renderSideLauncher(sid, side, activeProject string) *r.Node {
 		btn := r.Button(btnCls).
 			Render(
 				iconNode,
-				r.Span(tipCls).Text(label+" ("+app.Width+")"),
+				r.Span(tipCls).Text(label),
 			).
 			OnClick(&r.Action{Name: "app.start", Data: map[string]any{
 				"sid": sid, "type": app.Type, "url": app.URL,
@@ -1217,7 +1217,13 @@ func searchDialogJS(sid string) string {
 				+'</div>'
 				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+(app.width||'lg')+'</span>'
 				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+typeBadge+'</span>';
-			row.onmouseenter=function(){selIdx=i;render();};
+			row.onmouseenter=function(){
+				if(selIdx===i)return;
+				var prev=res.children[selIdx];
+				if(prev)prev.className=prev.className.replace(/bg-teal-900\/30|bg-teal-50/g,'').replace(/border-teal-500/g,'border-transparent')+(dk?' hover:bg-zinc-800':' hover:bg-gray-50');
+				selIdx=i;
+				row.className=row.className.replace(/hover:bg-zinc-800|hover:bg-gray-50/g,'').replace(/border-transparent/g,'border-teal-500')+(dk?' bg-teal-900/30':' bg-teal-50');
+			};
 			row.onclick=function(){launch();};
 			res.appendChild(row);
 		});
@@ -1347,25 +1353,30 @@ func renderShortcutsDialog() *r.Node {
 	}
 	type section struct {
 		title     string
+		subtitle  string
 		shortcuts []shortcut
 	}
 	sections := []section{
-		{"General", []shortcut{
+		{"Apps", "", []shortcut{
 			{"⌘ + N", "New app (right of current)"},
 			{"⌘ + Ctrl + N", "New app (left of current)"},
+			{"⌘ + D", "Close current app"},
+		}},
+		{"Navigation", "", []shortcut{
 			{"⌘ + H", "Navigate left"},
 			{"⌘ + L", "Navigate right"},
 			{"⌘ + Ctrl + H", "Move app left"},
 			{"⌘ + Ctrl + L", "Move app right"},
 			{"Ctrl + 1–9", "Switch to project by index"},
 			{"Ctrl + 0", "Switch to last app-created project"},
-			{"⌘ + D", "Close current app"},
+		}},
+		{"Browser", "", []shortcut{
 			{"Ctrl + L", "Select browser URL bar"},
 			{"Ctrl + R", "Reload browser page"},
 			{"Ctrl + +", "Zoom in"},
 			{"Ctrl + -", "Zoom out"},
 		}},
-		{"Browser (disabled in input fields)", []shortcut{
+		{"Browser", "Vim keys — disabled in input fields", []shortcut{
 			{"g / G", "Go to top / bottom of page"},
 			{"j / k", "Scroll down / up"},
 			{"h / l", "Scroll left / right"},
@@ -1378,18 +1389,33 @@ func renderShortcutsDialog() *r.Node {
 	}
 
 	rows := make([]*r.Node, 0)
-	for _, sec := range sections {
-		rows = append(rows,
-			r.Div("pt-2 pb-1 px-1 text-[10px] font-medium uppercase tracking-wider text-gray-400 dark:text-zinc-500").Text(sec.title),
-		)
+	for i, sec := range sections {
+		mt := "mt-10"
+		if i == 0 {
+			mt = "mt-0"
+		}
+		sectionRows := make([]*r.Node, 0, len(sec.shortcuts))
 		for _, s := range sec.shortcuts {
-			rows = append(rows,
-				r.Div("flex items-center justify-between py-2 px-1 border-b border-gray-100 dark:border-zinc-800 last:border-0").Render(
+			sectionRows = append(sectionRows,
+				r.Div("flex items-center justify-between py-2 px-1").Render(
 					r.Span("text-sm text-gray-700 dark:text-zinc-300").Text(s.desc),
-					r.Span("text-xs font-mono px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400").Text(s.keys),
+					r.Span("text-xs font-mono px-2 py-0.5 rounded bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400").Text(s.keys),
 				),
 			)
 		}
+		header := []*r.Node{
+			r.Div("px-1 pb-1 text-lg font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-400").Text(sec.title),
+		}
+		if sec.subtitle != "" {
+			header = append(header,
+				r.Div("px-1 pb-1 text-xs text-gray-400 dark:text-zinc-500").Text(sec.subtitle),
+			)
+		}
+		rows = append(rows,
+			r.Div(mt).Render(
+				append(header, r.Div("").Render(sectionRows...))...,
+			),
+		)
 	}
 
 	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
