@@ -725,6 +725,20 @@ func Run(assets embed.FS) {
 		return resp.Build()
 	})
 
+	// Open manage apps page — replaces main area with app management view
+	app.Action("app.manage.open", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		state := sm.Get(sid)
+		return renderManageAppsPage(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+	})
+
+	// Close manage apps page — return to normal main area
+	app.Action("app.manage.close", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		state := sm.Get(sid)
+		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+	})
+
 	// Delete a saved app from DB
 	app.Action("app.saved.delete", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
@@ -738,8 +752,8 @@ func Run(assets embed.FS) {
 		}
 		DBRemoveSavedAppByID(dbid)
 		state := sm.Get(sid)
-		// Re-render the empty state / main area to refresh saved apps list
-		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+		// Re-render the manage apps page to reflect the deletion
+		return renderManageAppsPage(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
 	})
 
 	// Set edit DB ID for editing a saved app
