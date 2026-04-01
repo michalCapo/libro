@@ -323,20 +323,13 @@ func renderSavedAppButton(app SavedApp, sid string) *r.Node {
 
 	writable := app.Writable
 
-	// Launch button
+	// Launch button (simplified - edit/delete moved to Manage Apps dialog)
 	btn := r.Button("w-full flex items-center gap-3 px-4 py-3 bg-white dark:bg-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-zinc-700/40 hover:border-gray-300 dark:hover:border-zinc-600 rounded-lg cursor-pointer text-left transition-colors duration-75 shadow-sm dark:shadow-none").
 		Render(
 			iconNode,
 			r.Span("flex-1 truncate text-sm text-gray-800 dark:text-zinc-200").Text(label),
 			r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Width),
 			r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Type),
-			r.I("material-icons-round text-xl cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-200").
-				Text("edit").
-				Attr("onclick", fmt.Sprintf(`event.stopPropagation();__ws.callSilent('app.saved.edit',{sid:'%s',dbid:%d});__ws.call('app.dialog.open',{sid:'%s'});`, sid, app.DBID, sid)+
-					savedAppEditFillJS(app)),
-			r.I("material-icons-round text-xl cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400").
-				Text("close").
-				Attr("onclick", fmt.Sprintf(`event.stopPropagation();__ws.call('app.saved.delete',{sid:'%s',dbid:%d});`, sid, app.DBID)),
 		).
 		OnClick(&r.Action{Name: "app.start", Data: map[string]any{
 			"sid": sid, "type": app.Type, "url": app.URL,
@@ -1508,6 +1501,109 @@ func closeDialogJS(sid string) string {
 `, sid, CloseDialogID)
 }
 
+// renderManageAppsPage renders a full-page view for managing saved apps.
+func renderManageAppsPage(state *AppState, sid string) *r.Node {
+	savedApps := DBLoadVisibleSavedApps(state.ActiveProject)
+
+	rows := make([]*r.Node, 0, len(savedApps))
+	for _, app := range savedApps {
+		rows = append(rows, renderManageAppRow(app, sid))
+	}
+
+	var listNode *r.Node
+	if len(rows) == 0 {
+		listNode = r.Div("flex-1 flex items-center justify-center").Render(
+			r.P("text-sm font-mono text-gray-400 dark:text-zinc-500").Text("No saved apps yet"),
+		)
+	} else {
+		listNode = r.Div("flex-1 overflow-y-auto").Render(
+			r.Div("max-w-2xl mx-auto w-full").Render(rows...),
+		)
+	}
+
+	return r.Div("flex-1 flex flex-col overflow-hidden").ID(projectMainID(state.ActiveProject)).Render(
+		// Header bar
+		r.Div("shrink-0 flex items-center gap-3 px-6 py-4 border-b border-gray-200 dark:border-zinc-800").Render(
+			r.Button("flex items-center gap-1 px-3 py-1.5 text-sm font-mono text-gray-600 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200 hover:bg-gray-200 dark:hover:bg-zinc-800 rounded-md cursor-pointer transition-colors").
+				Render(r.I("material-icons-round text-base").Text("arrow_back"), r.Span("").Text("Back")).
+				OnClick(&r.Action{Name: "app.manage.close", Data: sidData(sid)}),
+			r.Span("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100").Text("Manage Apps"),
+			r.Div("ml-auto").Render(
+				r.Button("flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors").
+					Render(r.I("material-icons-round text-[16px]").Text("add"), r.Span("").Text("Add New")).
+					OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
+			),
+		),
+		// App list
+		listNode,
+	)
+}
+
+// renderManageAppRow renders a single row in the manage apps page.
+func renderManageAppRow(app SavedApp, sid string) *r.Node {
+	var iconNode *r.Node
+	label := app.Name
+
+	if app.Type == "terminal" {
+		if label == "" {
+			label = app.Command
+		}
+		if info := lookupTermIcon(app.Command); info != nil {
+			if info.URL != "" {
+				iconNode = r.Img("w-6 h-6 shrink-0 rounded-sm").Attr("src", info.URL)
+			} else {
+				iconNode = r.I("material-icons-round text-xl shrink-0 text-gray-400 dark:text-zinc-500").Text(info.MaterialIcon)
+			}
+		} else if app.IconURL != "" {
+			iconNode = r.Img("w-6 h-6 shrink-0 rounded-sm").Attr("src", app.IconURL)
+		} else {
+			iconNode = r.I("material-icons-round text-xl shrink-0 text-gray-400 dark:text-zinc-500").Text("terminal")
+		}
+	} else {
+		if label == "" {
+			label = app.URL
+		}
+		iconNode = r.I("material-icons-round text-xl shrink-0 text-gray-400 dark:text-zinc-500").Text("language")
+		if app.URL != "" {
+			if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
+				iconNode = r.Img("w-6 h-6 shrink-0 rounded-sm").
+					Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=32")
+				if label == app.URL {
+					h := strings.TrimPrefix(u.Hostname(), "www.")
+					label = h
+				}
+			}
+		}
+	}
+
+	badges := []*r.Node{
+		r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Width),
+		r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Type),
+	}
+	if app.ProjectSpecific {
+		badges = append(badges,
+			r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400").Text("project"),
+		)
+	}
+
+	editBtn := r.Button("flex items-center justify-center w-8 h-8 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors").
+		Render(r.I("material-icons-round text-lg").Text("edit")).
+		Attr("onclick", fmt.Sprintf(`__ws.callSilent('app.saved.edit',{sid:'%s',dbid:%d});__ws.call('app.dialog.open',{sid:'%s'});`, sid, app.DBID, sid)+
+			savedAppEditFillJS(app))
+
+	deleteBtn := r.Button("flex items-center justify-center w-8 h-8 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors").
+		Render(r.I("material-icons-round text-lg").Text("delete")).
+		OnClick(&r.Action{Name: "app.saved.delete", Data: sidData(sid, "dbid", float64(app.DBID))})
+
+	children := []*r.Node{iconNode}
+	children = append(children, r.Span("flex-1 truncate text-sm text-gray-800 dark:text-zinc-200").Text(label))
+	children = append(children, badges...)
+	children = append(children, editBtn, deleteBtn)
+
+	return r.Div("flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors").
+		Render(children...)
+}
+
 // resizeJS returns JS that updates an app frame's width without replacing the DOM
 func resizeJS(_ *AppState, width Width, appID string) string {
 	// Build a map of width value -> container classes
@@ -1652,6 +1748,13 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 			}(),
 			r.Div("ml-auto flex items-center gap-1").Render(
 				r.Span("text-xs text-gray-400 dark:text-gray-500 font-mono select-none").Text("v"+version.Version),
+				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
+					Attr("title", "Manage saved apps").
+					OnClick(&r.Action{Name: "app.manage.open", Data: sidData(sid)}).
+					Render(
+						r.I("material-icons-round text-base").Text("apps"),
+						r.Span("").Text("Apps"),
+					),
 				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
 					Attr("title", "Keyboard shortcuts").
 					Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.toggle('hidden');", ShortcutsDialogID)).
