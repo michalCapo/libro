@@ -3,6 +3,8 @@ package libro
 import (
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -153,9 +155,22 @@ func (sm *StateManager) NextAppID() string {
 	return fmt.Sprintf("app-%d", sm.nextID)
 }
 
-// addApp is the internal helper that inserts a URL app at the given position.
-// index < 0 means append to end; otherwise insert at that index.
-func (sm *StateManager) addApp(sessionID, url string, width Width, name string, index int) {
+// sortAppsByName sorts apps alphabetically by name (case-insensitive) and
+// updates SelectedIndex to point to the app with the given ID.
+func sortAppsByName(s *AppState, selectedAppID string) {
+	sort.SliceStable(s.Apps, func(i, j int) bool {
+		return strings.ToLower(s.Apps[i].Name) < strings.ToLower(s.Apps[j].Name)
+	})
+	for i, app := range s.Apps {
+		if app.ID == selectedAppID {
+			s.SelectedIndex = i
+			break
+		}
+	}
+}
+
+// addApp is the internal helper that adds a URL app and sorts by name.
+func (sm *StateManager) addApp(sessionID, url string, width Width, name string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -176,32 +191,24 @@ func (sm *StateManager) addApp(sessionID, url string, width Width, name string, 
 		Width: width,
 		Name:  name,
 	}
-	if index < 0 || index >= len(s.Apps) {
-		s.Apps = append(s.Apps, app)
-		s.SelectedIndex = len(s.Apps) - 1
-	} else {
-		s.Apps = append(s.Apps, Application{})
-		copy(s.Apps[index+1:], s.Apps[index:])
-		s.Apps[index] = app
-		s.SelectedIndex = index
-	}
+	s.Apps = append(s.Apps, app)
+	sortAppsByName(s, app.ID)
 	s.LastAppCreatedProject = s.ActiveProject
 }
 
-// AddApp adds a new URL application to the end of the session's app list
+// AddApp adds a new URL application, sorted by name.
 func (sm *StateManager) AddApp(sessionID, url string, width Width, name string) {
-	sm.addApp(sessionID, url, width, name, -1)
+	sm.addApp(sessionID, url, width, name)
 }
 
-// InsertApp inserts a new URL application at the given index
+// InsertApp adds a new URL application, sorted by name (index is ignored).
 func (sm *StateManager) InsertApp(sessionID, url string, width Width, name string, index int) {
-	sm.addApp(sessionID, url, width, name, index)
+	sm.addApp(sessionID, url, width, name)
 }
 
-// addTerminalApp is the internal helper that inserts a terminal app at the given position.
+// addTerminalApp is the internal helper that adds a terminal app and sorts by name.
 // appID must be pre-generated via NextAppID to avoid race conditions with TtydManager.
-// index < 0 means append to end; otherwise insert at that index.
-func (sm *StateManager) addTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string, index int) {
+func (sm *StateManager) addTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -225,26 +232,19 @@ func (sm *StateManager) addTerminalApp(sessionID string, appID string, command s
 		Name:     name,
 		IconURL:  iconURL,
 	}
-	if index < 0 || index >= len(s.Apps) {
-		s.Apps = append(s.Apps, app)
-		s.SelectedIndex = len(s.Apps) - 1
-	} else {
-		s.Apps = append(s.Apps, Application{})
-		copy(s.Apps[index+1:], s.Apps[index:])
-		s.Apps[index] = app
-		s.SelectedIndex = index
-	}
+	s.Apps = append(s.Apps, app)
+	sortAppsByName(s, app.ID)
 	s.LastAppCreatedProject = s.ActiveProject
 }
 
-// AddTerminalApp adds a new terminal application to the end of the session's app list
+// AddTerminalApp adds a new terminal application, sorted by name.
 func (sm *StateManager) AddTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string) {
-	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL, -1)
+	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL)
 }
 
-// InsertTerminalApp inserts a new terminal application at the given index
+// InsertTerminalApp adds a new terminal application, sorted by name (index is ignored).
 func (sm *StateManager) InsertTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string, index int) {
-	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL, index)
+	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL)
 }
 
 // RemoveApp removes an application by index and returns it (for cleanup)
