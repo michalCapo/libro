@@ -204,9 +204,39 @@ func (sm *StateManager) AddApp(sessionID, url string, width Width, name string) 
 	sm.addApp(sessionID, url, width, name)
 }
 
-// InsertApp adds a new URL application, sorted by name (index is ignored).
+// InsertApp adds a new URL application at the given index position.
+// If index is out of range, it falls back to append + sort by name.
 func (sm *StateManager) InsertApp(sessionID, url string, width Width, name string, index int) {
-	sm.addApp(sessionID, url, width, name)
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		s = &AppState{
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
+			EditIndex:     -1,
+		}
+		sm.states[sessionID] = s
+	}
+	sm.nextID++
+	app := Application{
+		ID:    fmt.Sprintf("app-%d", sm.nextID),
+		Type:  AppTypeURL,
+		URL:   url,
+		Width: width,
+		Name:  name,
+	}
+	if index < 0 || index > len(s.Apps) {
+		s.Apps = append(s.Apps, app)
+		sortAppsByName(s, app.ID)
+	} else {
+		s.Apps = append(s.Apps, Application{})
+		copy(s.Apps[index+1:], s.Apps[index:])
+		s.Apps[index] = app
+		s.SelectedIndex = index
+	}
+	s.LastAppCreatedProject = s.ActiveProject
 }
 
 // addTerminalApp is the internal helper that adds a terminal app and sorts by name.
@@ -245,9 +275,42 @@ func (sm *StateManager) AddTerminalApp(sessionID string, appID string, command s
 	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL)
 }
 
-// InsertTerminalApp adds a new terminal application, sorted by name (index is ignored).
+// InsertTerminalApp adds a new terminal application at the given index position.
+// If index is out of range, it falls back to append + sort by name.
 func (sm *StateManager) InsertTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string, index int) {
-	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL)
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		s = &AppState{
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
+			EditIndex:     -1,
+		}
+		sm.states[sessionID] = s
+	}
+	app := Application{
+		ID:       appID,
+		Type:     AppTypeTerminal,
+		URL:      fmt.Sprintf("/ttyd/%d/", port),
+		Command:  command,
+		Width:    width,
+		Port:     port,
+		Writable: writable,
+		Name:     name,
+		IconURL:  iconURL,
+	}
+	if index < 0 || index > len(s.Apps) {
+		s.Apps = append(s.Apps, app)
+		sortAppsByName(s, app.ID)
+	} else {
+		s.Apps = append(s.Apps, Application{})
+		copy(s.Apps[index+1:], s.Apps[index:])
+		s.Apps[index] = app
+		s.SelectedIndex = index
+	}
+	s.LastAppCreatedProject = s.ActiveProject
 }
 
 // RemoveApp removes an application by index and returns it (for cleanup)
