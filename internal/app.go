@@ -303,8 +303,9 @@ func Run(assets embed.FS) {
 		state = sm.Get(sid)
 
 		// If no apps left, full replace to show empty state
+		// Pool the webview first so it survives the DOM replace
 		if len(state.Apps) == 0 || hadApps <= 1 {
-			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
 		}
 
 		// Otherwise, remove just the app frame and update navigation
@@ -330,7 +331,7 @@ func Run(assets embed.FS) {
 
 		state = sm.Get(sid)
 		if len(state.Apps) == 0 || hadApps <= 1 {
-			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
 		}
 		return removeAppJS(appID) + navigateJS(state, sid)
 	})
@@ -725,10 +726,15 @@ func Run(assets embed.FS) {
 		return resp.Build()
 	})
 
-	// Open manage apps page — replaces main area with app management view
+	// Toggle manage apps page
 	app.Action("app.manage.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		state := sm.Get(sid)
+		if state.ManageOpen {
+			state.ManageOpen = false
+			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+		}
+		state.ManageOpen = true
 		return renderManageAppsPage(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
 	})
 
@@ -736,6 +742,7 @@ func Run(assets embed.FS) {
 	app.Action("app.manage.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		state := sm.Get(sid)
+		state.ManageOpen = false
 		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
 	})
 

@@ -237,7 +237,7 @@ func DBLoadVisibleSavedApps(projectName string) []SavedApp {
 	defer dbMu.Unlock()
 
 	rows, err := db.Query(
-		"SELECT id, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps WHERE project_specific = 0 OR project_name = ? ORDER BY position, id",
+		"SELECT id, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps WHERE project_specific = 0 OR project_name = ? ORDER BY LOWER(COALESCE(NULLIF(name,''), command, url)), id",
 		projectName,
 	)
 	if err != nil {
