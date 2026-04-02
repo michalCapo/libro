@@ -231,10 +231,55 @@ function whenReady(appID, fn) {
 function initWebview(wv) {
 	var appID = wv.getAttribute('data-webview-app');
 	if (!appID || initialized[appID]) return;
+
+	// Check pool for a webview with the same origin — reuse it to preserve session state
+	var pool = document.getElementById('webview-pool');
+	if (pool && !wv.getAttribute('data-pool-origin')) {
+		var newSrc = wv.getAttribute('src') || '';
+		var newOrigin = '';
+		try { var u = new URL(newSrc); newOrigin = u.origin; } catch(e) {}
+		if (newOrigin && newOrigin !== 'null') {
+			var pooled = pool.querySelector('webview[data-pool-origin="' + newOrigin + '"]');
+			if (pooled) {
+				// Transfer the pooled webview into the new app frame
+				var oldAppID = pooled.getAttribute('data-webview-app');
+				pooled.removeAttribute('data-pool-origin');
+				pooled.setAttribute('data-webview-app', appID);
+				pooled.setAttribute('id', wv.id || '');
+				pooled.style.display = '';
+				wv.parentNode.replaceChild(pooled, wv);
+				// Migrate JS state from old app ID to new one
+				if (oldAppID && oldAppID !== appID) {
+					delete window.__libroWebviews[oldAppID];
+					delete initialized[oldAppID];
+					delete ready[oldAppID];
+					delete queued[oldAppID];
+					delete searchState[oldAppID];
+				}
+				window.__libroWebviews[appID] = pooled;
+				initialized[appID] = true;
+				ready[appID] = true;
+				// Remove loading indicator since the webview is already loaded
+				var loading = pooled.parentNode && pooled.parentNode.querySelector('[data-webview-loading]');
+				if (loading && loading.parentNode) loading.remove();
+				// Update URL bar with current webview URL
+				var inp = document.getElementById('urlinput-' + appID);
+				if (inp) {
+					try { inp.value = pooled.getURL() || newSrc; } catch(e) { inp.value = newSrc; }
+				}
+				// Re-bind events for the new app ID
+				bindWebviewEvents(pooled, appID);
+				return;
+			}
+		}
+	}
+
 	initialized[appID] = true;
-
 	window.__libroWebviews[appID] = wv;
+	bindWebviewEvents(wv, appID);
+}
 
+function bindWebviewEvents(wv, appID) {
 	wv.addEventListener('dom-ready', function() {
 		ready[appID] = true;
 		var q = queued[appID];
@@ -285,7 +330,7 @@ function initWebview(wv) {
 }
 
 function initAll() {
-	document.querySelectorAll('webview[data-webview-app]').forEach(initWebview);
+	document.querySelectorAll('webview[data-webview-app]:not([data-pool-origin])').forEach(initWebview);
 }
 
 initAll();
@@ -293,13 +338,16 @@ initAll();
 var bodyObserver = new MutationObserver(function() { initAll(); });
 bodyObserver.observe(document.body, { childList: true, subtree: true });
 
-// Cleanup when webview removed from DOM
+// Cleanup when webview removed from DOM (skip pooled webviews)
 var cleanupObserver = new MutationObserver(function(mutations) {
+	var pool = document.getElementById('webview-pool');
 	mutations.forEach(function(m) {
 		m.removedNodes.forEach(function(node) {
 			if (node.nodeType !== 1) return;
 			var wvs = node.querySelectorAll ? node.querySelectorAll('webview[data-webview-app]') : [];
 			wvs.forEach(function(wv) {
+				// Skip cleanup if webview was moved to pool
+				if (pool && pool.contains(wv)) return;
 				var id = wv.getAttribute('data-webview-app');
 				if (id) {
 					delete window.__libroWebviews[id];
@@ -310,6 +358,7 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 				}
 			});
 			if (node.tagName === 'WEBVIEW' && node.getAttribute('data-webview-app')) {
+				if (pool && pool.contains(node)) return;
 				var id = node.getAttribute('data-webview-app');
 				delete window.__libroWebviews[id];
 				delete initialized[id];

@@ -238,6 +238,10 @@ func projectMainID(projectName string) string {
 func renderMainAreaWrapper(state *AppState, sid string) *r.Node {
 	return r.Div("flex-1 flex flex-col overflow-hidden relative").ID(MainAreaID).Render(
 		renderMainArea(state, sid),
+		// Hidden pool to keep webview elements alive when their app tab is closed.
+		// This preserves session state (cookies, WebSocket connections) for sites
+		// like Discord that invalidate tokens when the webview process is destroyed.
+		r.Div("hidden").ID("webview-pool"),
 	)
 }
 
@@ -853,11 +857,46 @@ setTimeout(function(){
 }
 
 // removeAppJS returns JS that removes an app frame by its app ID from the strip.
+// For URL apps with webviews, the webview element is moved to a hidden pool
+// so its session state (cookies, WebSocket connections) stays alive.
 func removeAppJS(appID string) string {
 	return fmt.Sprintf(`
 (function(){
 	var el=document.querySelector('[data-app-id="%s"]');
-	if(el)el.remove();
+	if(!el)return;
+	var wv=el.querySelector('webview[data-webview-app]');
+	var pool=document.getElementById('webview-pool');
+	if(wv&&pool){
+		var origin='';
+		try{var u=new URL(wv.src||wv.getAttribute('src'));origin=u.origin;}catch(e){}
+		if(origin&&origin!=='null'){
+			wv.setAttribute('data-pool-origin',origin);
+			wv.style.display='none';
+			pool.appendChild(wv);
+		}
+	}
+	el.remove();
+})();`, appID)
+}
+
+// poolWebviewJS returns JS that moves a specific app's webview to the hidden pool
+// before a full DOM replace would destroy it. Used when closing the last app.
+func poolWebviewJS(appID string) string {
+	return fmt.Sprintf(`
+(function(){
+	var el=document.querySelector('[data-app-id="%s"]');
+	if(!el)return;
+	var wv=el.querySelector('webview[data-webview-app]');
+	var pool=document.getElementById('webview-pool');
+	if(wv&&pool){
+		var origin='';
+		try{var u=new URL(wv.src||wv.getAttribute('src'));origin=u.origin;}catch(e){}
+		if(origin&&origin!=='null'){
+			wv.setAttribute('data-pool-origin',origin);
+			wv.style.display='none';
+			pool.appendChild(wv);
+		}
+	}
 })();`, appID)
 }
 
@@ -1523,15 +1562,14 @@ func renderManageAppsPage(state *AppState, sid string) *r.Node {
 
 	return r.Div("flex-1 flex flex-col overflow-hidden").ID(projectMainID(state.ActiveProject)).Render(
 		// Header bar
-		r.Div("shrink-0 flex items-center gap-3 px-6 py-4 border-b border-gray-200 dark:border-zinc-800").Render(
-			r.Button("flex items-center gap-1 px-3 py-1.5 text-sm font-mono text-gray-600 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200 hover:bg-gray-200 dark:hover:bg-zinc-800 rounded-md cursor-pointer transition-colors").
-				Render(r.I("material-icons-round text-base").Text("arrow_back"), r.Span("").Text("Back")).
-				OnClick(&r.Action{Name: "app.manage.close", Data: sidData(sid)}),
-			r.Span("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100").Text("Manage Apps"),
-			r.Div("ml-auto").Render(
-				r.Button("flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors").
-					Render(r.I("material-icons-round text-[16px]").Text("add"), r.Span("").Text("Add New")).
-					OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
+		r.Div("shrink-0 border-b border-gray-200 dark:border-zinc-800 py-4").Render(
+			r.Div("max-w-2xl mx-auto w-full flex items-center gap-3").Render(
+				r.Span("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100").Text("Manage Apps"),
+				r.Div("ml-auto").Render(
+					r.Button("flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors").
+						Render(r.I("material-icons-round text-[16px]").Text("add"), r.Span("").Text("Add New")).
+						OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
+				),
 			),
 		),
 		// App list

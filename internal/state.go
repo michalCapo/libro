@@ -62,6 +62,9 @@ type AppState struct {
 	EditIndex int
 	// EditDBID tracks the database row ID of the saved app being edited (-1 = new app)
 	EditDBID int64
+
+	// ManageOpen tracks whether the manage apps page is shown
+	ManageOpen bool
 }
 
 // StateManager manages per-session app states
