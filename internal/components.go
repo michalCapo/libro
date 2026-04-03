@@ -339,8 +339,8 @@ func renderSavedAppButton(app SavedApp, sid string) *r.Node {
 		Render(
 			iconNode,
 			r.Span("flex-1 truncate text-sm text-gray-800 dark:text-zinc-200").Text(label),
-			r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Width),
 			r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Type),
+			r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Width),
 		).
 		OnClick(&r.Action{Name: "app.start", Data: map[string]any{
 			"sid": sid, "type": app.Type, "url": app.URL,
@@ -1929,8 +1929,8 @@ func renderManageAppRow(app SavedApp, sid string) *r.Node {
 	}
 
 	badges := []*r.Node{
-		r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Width),
 		r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Type),
+		r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Width),
 	}
 	if app.ProjectSpecific {
 		badges = append(badges,
@@ -2090,6 +2090,16 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
 	)
 
+	// Manage apps button (icon style, matching other app icons)
+	appIcons = append(appIcons,
+		r.Button(btnCls).
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("apps"),
+				r.Span(tipCls).Text("Manage apps"),
+			).
+			OnClick(&r.Action{Name: "app.manage.open", Data: sidData(sid)}),
+	)
+
 	hdrBtnCls := "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors"
 
 	return r.Div("flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-200 dark:border-zinc-800 shrink-0").
@@ -2102,13 +2112,6 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			r.Div("flex items-center gap-0.5 ml-2").Render(appIcons...),
 			r.Div("ml-auto flex items-center gap-1").Render(
 				r.Span("text-xs text-gray-400 dark:text-gray-500 font-mono select-none").Text("v"+version.Version),
-				r.Button(hdrBtnCls).
-					Attr("title", "Manage saved apps").
-					OnClick(&r.Action{Name: "app.manage.open", Data: sidData(sid)}).
-					Render(
-						r.I("material-icons-round text-base").Text("apps"),
-						r.Span("").Text("Apps"),
-					),
 				r.Button(hdrBtnCls).
 					Attr("title", "Keyboard shortcuts").
 					Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.toggle('hidden');", ShortcutsDialogID)).
