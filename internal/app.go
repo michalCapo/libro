@@ -573,6 +573,16 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
+	// Toggle sidebar collapsed/expanded
+	app.Action("sidebar.toggle", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		sm.ToggleSidebar(sid)
+		state := sm.Get(sid)
+		return r.NewResponse().
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Build()
+	})
+
 	// Switch active project
 	app.Action("project.switch", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
@@ -628,6 +638,7 @@ func Run(assets embed.FS) {
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
+			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
 			Build()
 	})
@@ -653,6 +664,7 @@ func Run(assets embed.FS) {
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
+			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
 			Build()
 	})
@@ -693,6 +705,7 @@ func Run(assets embed.FS) {
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
+			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
 			Build()
 	})
@@ -720,6 +733,7 @@ func Run(assets embed.FS) {
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
+			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
 			Build()
 	})

@@ -543,7 +543,54 @@ func navigateJS(state *AppState, sid string) string {
 }
 
 func flashCSS() string {
-	return `(function(){if(!document.getElementById('libro-flash-css')){var s=document.createElement('style');s.id='libro-flash-css';s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}}';document.head.appendChild(s);}})();`
+	return `(function(){if(!document.getElementById('libro-flash-css')){var s=document.createElement('style');s.id='libro-flash-css';s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.92)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.96)}}';document.head.appendChild(s);}})();`
+}
+
+// projectToastJS returns JS that shows a brief centered toast with the project and branch.
+func projectToastJS(name string) string {
+	// Split virtual project names like "nisa/test" into project + branch
+	proj := name
+	branch := ""
+	if i := strings.Index(name, "/"); i >= 0 {
+		proj = name[:i]
+		branch = name[i+1:]
+	}
+	return fmt.Sprintf("if(window.__libroProjectToast)window.__libroProjectToast(%s,%s);", jsString(proj), jsString(branch))
+}
+
+// projectToastSetupJS returns JS that registers the global toast function.
+func projectToastSetupJS() string {
+	return `
+(function(){
+	if(window.__libroProjectToast)return;
+	var timer=null;
+	window.__libroProjectToast=function(proj,branch){
+		var el=document.getElementById('libro-project-toast');
+		if(!el){
+			el=document.createElement('div');
+			el.id='libro-project-toast';
+			el.style.cssText='position:fixed;top:38%;left:50%;transform:translate(-50%,-50%) scale(.92);z-index:9999;pointer-events:none;opacity:0;';
+			document.body.appendChild(el);
+		}
+		if(timer){clearTimeout(timer);timer=null;}
+		var dk=document.documentElement.classList.contains('dark');
+		var bg=dk?'rgba(24,24,37,.88)':'rgba(255,255,255,.92)';
+		var border=dk?'rgba(63,63,90,.5)':'rgba(200,200,220,.6)';
+		var fg=dk?'#e2e2e8':'#1a1a2e';
+		var dim=dk?'#7a7a8e':'#8a8a9e';
+		var html='<div style="background:'+bg+';border:1px solid '+border+';backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-radius:12px;padding:20px 36px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.18)">';
+		html+='<div style="font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,monospace;font-size:28px;font-weight:700;color:'+fg+';letter-spacing:-.02em;line-height:1.2">'+proj.replace(/</g,'&lt;')+'</div>';
+		if(branch){html+='<div style="font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,monospace;font-size:14px;color:'+dim+';margin-top:4px;letter-spacing:.02em"><span style="opacity:.5">&#8627;</span> '+branch.replace(/</g,'&lt;')+'</div>';}
+		html+='</div>';
+		el.innerHTML=html;
+		el.style.animation='libro-toast-in .12s ease-out forwards';
+		timer=setTimeout(function(){
+			el.style.animation='libro-toast-out .25s ease-in forwards';
+			timer=setTimeout(function(){el.style.opacity='0';timer=null;},260);
+		},600);
+	};
+})();
+`
 }
 
 // renderAppFrame renders a single application iframe with controls
@@ -1434,6 +1481,7 @@ func renderShortcutsDialog() *r.Node {
 			{"⌘ + L", "Navigate right"},
 			{"⌘ + Ctrl + H", "Move app left"},
 			{"⌘ + Ctrl + L", "Move app right"},
+			{"⌘ + B", "Toggle sidebar"},
 			{"Ctrl + 1–9", "Switch to assigned project"},
 			{"Ctrl + 0", "Switch to previous project"},
 			{"⌘ + G", "Git worktrees popup"},
@@ -2047,7 +2095,10 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 	return r.Div("flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-200 dark:border-zinc-800 shrink-0").
 		ID(TopBarID).
 		Render(
-			r.Img("w-7 h-7 shrink-0").Attr("src", "/assets/logo.svg").Attr("alt", "Libro"),
+			r.Button("shrink-0 cursor-pointer hover:opacity-70 transition-opacity duration-150").
+				Attr("title", "Toggle sidebar (⌘B)").
+				OnClick(&r.Action{Name: "sidebar.toggle", Data: sidData(sid)}).
+				Render(r.Img("w-7 h-7").Attr("src", "/assets/logo.svg").Attr("alt", "Libro")),
 			r.Div("flex items-center gap-0.5 ml-2").Render(appIcons...),
 			r.Div("ml-auto flex items-center gap-1").Render(
 				r.Span("text-xs text-gray-400 dark:text-gray-500 font-mono select-none").Text("v"+version.Version),
@@ -2086,6 +2137,10 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 
 // renderProjectSidebar renders the left sidebar with project tree and worktrees.
 func renderProjectSidebar(state *AppState, sid string) *r.Node {
+	if state.SidebarCollapsed {
+		return r.Div("w-0 shrink-0 overflow-hidden").ID(SidebarID)
+	}
+
 	items := make([]*r.Node, 0, len(state.Projects)+1)
 
 	for _, proj := range state.Projects {
@@ -2409,7 +2464,7 @@ func renderDirBrowser(currentPath string, sid string) *r.Node {
 
 // updateHashJS returns JS that updates the URL hash to the given project name
 func updateHashJS(name string) string {
-	return fmt.Sprintf("history.replaceState(null,'','#%s');", name)
+	return fmt.Sprintf("history.replaceState(null,'','#%s');document.title=%s;", name, jsString(name+" — Libro"))
 }
 
 // savedAppsJS returns JS that sets the global __libroSavedApps and __libroBrowsedURLs variables from DB data.
@@ -2446,6 +2501,8 @@ func initHashJS(sid string) string {
 		setTimeout(function(){__ws.call('project.switch',{sid:'%s',name:hash});},100);
 	}
 	if(!location.hash){history.replaceState(null,'','#home');}
+	var proj=location.hash.replace('#','')||'home';
+	document.title=proj+' \u2014 Libro';
 })();
 `, sid)
 }
@@ -2604,6 +2661,12 @@ func keyboardShortcutsJS(sid string) string {
 					if (window.__libroOpenSearch) window.__libroOpenSearch('right');
 					return;
 				}
+				if (e.metaKey && (e.key === 'b' || e.key === 'B') && !e.ctrlKey) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					__ws.call('sidebar.toggle', {"sid": "%s"});
+					return;
+				}
 				if (e.metaKey && (e.key === 'd' || e.key === 'D')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
@@ -2690,5 +2753,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-	`, sid, sid, sid, sid, sid, sid, sid)
+	`, sid, sid, sid, sid, sid, sid, sid, sid)
 }
