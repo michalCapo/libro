@@ -75,6 +75,9 @@ type AppState struct {
 	// WorktreeDialogOpen tracks whether the worktree popup is shown
 	WorktreeDialogOpen bool
 
+	// SidebarCollapsed tracks whether the project sidebar is collapsed
+	SidebarCollapsed bool
+
 	// NavSlots maps keyboard slot (2-9) → project name to switch to
 	NavSlots map[int]string
 	// NavProjectSlot maps root project name → assigned slot number
@@ -865,6 +868,16 @@ func (sm *StateManager) CloseWorktreeDialog(sessionID string) {
 	s := sm.states[sessionID]
 	if s != nil {
 		s.WorktreeDialogOpen = false
+	}
+}
+
+// ToggleSidebar flips the sidebar collapsed state
+func (sm *StateManager) ToggleSidebar(sessionID string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s != nil {
+		s.SidebarCollapsed = !s.SidebarCollapsed
 	}
 }
 
