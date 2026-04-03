@@ -149,6 +149,7 @@ func Run(assets embed.FS) {
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(DialogID, renderAddDialog(false, sid)).
+			Add(savedAppsJS()).
 			Build()
 	})
 
@@ -760,7 +761,7 @@ func Run(assets embed.FS) {
 		DBRemoveSavedAppByID(dbid)
 		state := sm.Get(sid)
 		// Re-render the manage apps page to reflect the deletion
-		return renderManageAppsPage(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+		return renderManageAppsPage(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + savedAppsJS()
 	})
 
 	// Set edit DB ID for editing a saved app

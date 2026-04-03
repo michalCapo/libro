@@ -451,14 +451,6 @@ func navigateJS(state *AppState, sid string) string {
 							urlInp.className = urlInp.className.replace(/bg-gray-100 dark:bg-zinc-800/g, 'bg-white/15').replace(/text-gray-600 dark:text-zinc-400/g, 'text-white').replace(/placeholder-gray-400 dark:placeholder-zinc-600/g, 'placeholder-teal-200/50');
 						}
 					}
-					// Add selection dot in toolbar if not present
-					if (toolbar && !toolbar.querySelector('[data-selection-dot]')) {
-						var dot = document.createElement('div');
-						dot.setAttribute('data-selection-dot', '');
-						dot.className = 'shrink-0 w-2 h-2 rounded-full bg-white ml-0.5';
-						dot.style.animation = 'libro-flash .5s ease-out forwards';
-						toolbar.insertBefore(dot, toolbar.firstChild);
-					}
 					// Update size badges for selected app
 					var badges = child.querySelector('[data-size-badges]');
 					if (badges) {
@@ -497,9 +489,6 @@ func navigateJS(state *AppState, sid string) string {
 							urlInp2.className = urlInp2.className.replace(/bg-white\/15/g, 'bg-gray-100 dark:bg-zinc-800').replace(/text-white/g, 'text-gray-600 dark:text-zinc-400').replace(/placeholder-teal-200\/50/g, 'placeholder-gray-400 dark:placeholder-zinc-600');
 						}
 					}
-					// Remove selection dot
-					var existingDot = child.querySelector('[data-selection-dot]');
-					if (existingDot) existingDot.remove();
 					// Revert size badges to default for unselected app
 					var badges2 = child.querySelector('[data-size-badges]');
 					if (badges2) {
@@ -607,9 +596,9 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		urlInputID := fmt.Sprintf("urlinput-%s", app.ID)
 		btnCls := "flex items-center justify-center w-6 h-6 rounded-sm transition-colors duration-75 cursor-pointer shrink-0"
 		if selected {
-			btnCls += " text-teal-100/70 hover:text-white hover:bg-white/15"
+			btnCls += " text-white/80 hover:text-white hover:bg-white/15"
 		} else {
-			btnCls += " text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700"
+			btnCls += " text-gray-600 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200 hover:bg-gray-200 dark:hover:bg-zinc-700"
 		}
 
 		// Back button
@@ -651,14 +640,17 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			Attr("autocomplete", "off").
 			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value;if(u&&!u.startsWith('http://')&&!u.startsWith('https://'))u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;window.__libroWvNavigate('%s',u);__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});event.target.blur();var wv=document.querySelector('[data-webview-app="%s"]');if(wv)wv.focus();}`, app.ID, sid, app.ID, app.ID)))
 
-		// Globe icon
-		globeCls := "material-icons-round text-sm shrink-0 leading-none"
+		// Globe icon in badge
+		globeBadgeCls := "inline-flex items-center justify-center w-6 h-6 rounded shrink-0"
+		globeIconCls := "material-icons-round text-sm leading-none"
 		if selected {
-			globeCls += " text-teal-100/70"
+			globeBadgeCls += " bg-white"
+			globeIconCls += " text-black"
 		} else {
-			globeCls += " text-gray-400 dark:text-zinc-500"
+			globeBadgeCls += " bg-gray-800 dark:bg-zinc-900"
+			globeIconCls += " text-white"
 		}
-		globe := r.I(globeCls).Text("language")
+		globe := r.Div(globeBadgeCls).Render(r.I(globeIconCls).Text("language"))
 
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
 			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn)
@@ -680,9 +672,9 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			} else if info.MaterialIcon != "" {
 				matIconCls := "material-icons-round text-sm shrink-0"
 				if selected {
-					matIconCls += " text-white"
+					matIconCls += " text-black"
 				} else {
-					matIconCls += " text-gray-500 dark:text-zinc-400"
+					matIconCls += " text-white"
 				}
 				iconNode = r.I(matIconCls).Text(info.MaterialIcon)
 			}
@@ -709,14 +701,19 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		}
 
 		termLabelCls := "text-[10px] font-mono tracking-wider uppercase truncate"
+		badgeCls := "inline-flex items-center gap-1 px-1.5 py-0.5 rounded"
 		if selected {
-			termLabelCls += " text-white"
+			termLabelCls += " text-black"
+			badgeCls += " bg-white"
 		} else {
-			termLabelCls += " text-gray-600 dark:text-zinc-300"
+			termLabelCls += " text-white"
+			badgeCls += " bg-gray-800 dark:bg-zinc-900"
 		}
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1.5").Render(
-			iconNode,
-			r.Span(termLabelCls).Text(labelText),
+			r.Div(badgeCls).Render(
+				iconNode,
+				r.Span(termLabelCls).Text(labelText),
+			),
 		)
 	}
 
@@ -729,14 +726,6 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 				Name: "app.select",
 				Data: sidData(sid, "index", index),
 			})
-	}
-
-	// Selection dot indicator (inline in toolbar, before left side content)
-	var selectionDot *r.Node
-	if selected {
-		selectionDot = r.Div("shrink-0 w-2 h-2 rounded-full bg-white ml-0.5").
-			Attr("data-selection-dot", "").
-			Attr("style", "animation:libro-flash .5s ease-out forwards")
 	}
 
 	// Toolbar: always visible, sits above the iframe
@@ -753,7 +742,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			Data: sidData(sid, "index", index),
 		})
 	}
-	toolbar = toolbar.Render(selectionDot, leftSide, rightButtons)
+	toolbar = toolbar.Render(leftSide, rightButtons)
 
 	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
 		Attr("data-app-id", app.ID).
@@ -784,7 +773,21 @@ func renderIframe(app Application, frameID, iframeSrc string) *r.Node {
 			Attr("style", "display:inline-flex;width:100%;height:100%")
 		// Force closing tag by adding empty text content
 		wv.Text("")
-		container := r.Div("w-full h-full absolute inset-0 z-30").Render(wv)
+		devToolsBtn := r.Button("absolute bottom-3 right-3 z-40 flex items-center gap-2 h-7 px-2.5 rounded-md bg-stone-100 dark:bg-stone-800 backdrop-blur-md shadow-sm border border-stone-300 dark:border-stone-600 hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors cursor-pointer opacity-0 group-hover:opacity-100").
+			ID(fmt.Sprintf("devtools-wrap-%s", app.ID)).
+			Attr("title", "Open DevTools").
+			Attr("onclick", fmt.Sprintf("var wv=window.__libroWebviews['%s'];if(wv){if(wv.isDevToolsOpened()){wv.closeDevTools();}else{wv.openDevTools();}}", app.ID)).
+			Render(
+				r.I("material-icons-round text-[14px] text-stone-600 dark:text-stone-300").Text("developer_mode"),
+				r.Span("hidden text-[11px] font-semibold tabular-nums text-red-500").
+					ID(fmt.Sprintf("devtools-errors-%s", app.ID)).
+					Text("0"),
+				r.Span("hidden text-[11px] font-semibold tabular-nums text-amber-500").
+					ID(fmt.Sprintf("devtools-warnings-%s", app.ID)).
+					Text("0"),
+			)
+
+		container := r.Div("w-full h-full absolute inset-0 z-30").Render(wv, devToolsBtn)
 		if app.URL == "" {
 			container.Render(
 				r.Div("absolute inset-0 flex items-center justify-center text-gray-400 dark:text-zinc-600 font-mono text-xs z-10 pointer-events-none").
@@ -1684,7 +1687,7 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 		btns.forEach(function(b){
 			var txt = b.textContent.trim();
 			if (sizeLabels.indexOf(txt) === -1) return;
-			var isSelected = el.querySelector('[data-selection-dot]') !== null;
+			var isSelected = el.children[0] && el.children[0].className.indexOf('bg-teal-600') !== -1;
 			if (txt === newWidth.toUpperCase()) {
 				b.className = activeBase + (isSelected ? ' bg-white/25 text-white' : ' bg-teal-600 text-white');
 			} else {
@@ -2133,34 +2136,24 @@ func keyboardShortcutsJS(sid string) string {
 					__ws.call('app.close.current', {"sid": "%s"});
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L')) {
-					var dot = document.querySelector('[data-selection-dot]');
-					if (dot) {
-						var appEl = dot.closest('[data-app-id]');
-						if (appEl) {
-							var wv = appEl.querySelector('webview');
-							if (wv) {
-								e.preventDefault();
-								e.stopImmediatePropagation();
-								var appId = appEl.getAttribute('data-app-id');
-								var inp = document.getElementById('urlinput-' + appId);
-								if (inp) { inp.focus(); inp.select(); }
-							}
-						}
+					var selToolbar = document.querySelector('.bg-teal-600.border-teal-700');
+					var appEl = selToolbar ? selToolbar.closest('[data-app-id]') : null;
+					if (appEl && appEl.querySelector('webview')) {
+						e.preventDefault();
+						e.stopImmediatePropagation();
+						var appId = appEl.getAttribute('data-app-id');
+						var inp = document.getElementById('urlinput-' + appId);
+						if (inp) { inp.focus(); inp.select(); }
 					}
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'r' || e.key === 'R')) {
-					var dot2 = document.querySelector('[data-selection-dot]');
-					if (dot2) {
-						var appEl2 = dot2.closest('[data-app-id]');
-						if (appEl2) {
-							var wv2 = appEl2.querySelector('webview');
-							if (wv2) {
-								e.preventDefault();
-								e.stopImmediatePropagation();
-								var appId2 = appEl2.getAttribute('data-app-id');
-								window.__libroWvReload(appId2);
-							}
-						}
+					var selToolbar2 = document.querySelector('.bg-teal-600.border-teal-700');
+					var appEl2 = selToolbar2 ? selToolbar2.closest('[data-app-id]') : null;
+					if (appEl2 && appEl2.querySelector('webview')) {
+						e.preventDefault();
+						e.stopImmediatePropagation();
+						var appId2 = appEl2.getAttribute('data-app-id');
+						window.__libroWvReload(appId2);
 					}
 				}
 			}
