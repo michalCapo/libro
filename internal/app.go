@@ -547,6 +547,7 @@ func Run(assets embed.FS) {
 
 		sm.CloseProjectDialog(sid)
 		sm.SwitchProject(sid, name)
+		sm.AssignNavSlot(sid, name)
 		sm.IsProjectRendered(sid, name) // mark as rendered
 		state := sm.Get(sid)
 
@@ -569,6 +570,11 @@ func Run(assets embed.FS) {
 
 		if !sm.SwitchProject(sid, name) {
 			return r.Notify("error", "Project not found")
+		}
+
+		// Assign nav slot when switching via sidebar click (not for home)
+		if name != "home" {
+			sm.AssignNavSlot(sid, name)
 		}
 
 		state := sm.Get(sid)
@@ -640,15 +646,23 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
-	// Select project by index (Ctrl+1-9)
+	// Select project by nav slot (Ctrl+1 = home, Ctrl+2-9 = assigned slots)
 	app.Action("project.select", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
-		idx := 0
+		slot := 0
 		if v, ok := data["index"].(float64); ok {
-			idx = int(v)
+			slot = int(v) + 1 // JS sends 0-based, convert to 1-based slot
 		}
-		name := sm.ProjectByIndex(sid, idx)
+
+		var name string
+		if slot == 1 {
+			// Ctrl+1 always goes to home
+			name = "home"
+		} else {
+			// Ctrl+2-9: look up from nav slots
+			name = sm.NavSlotProject(sid, slot)
+		}
 		if name == "" {
 			return "/* noop */"
 		}
@@ -672,10 +686,10 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
-	// Select project where last app was created (Ctrl+0)
+	// Select previous project (Ctrl+0)
 	app.Action("project.select.last", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
-		name := sm.LastAppProject(sid)
+		name := sm.PreviousProject(sid)
 		if name == "" {
 			return "/* noop */"
 		}
@@ -873,6 +887,9 @@ func Run(assets embed.FS) {
 		if !sm.SwitchProject(sid, vtName) {
 			return r.Notify("error", "Failed to switch to worktree")
 		}
+
+		// Assign nav slot for worktree switch (reuses parent project's slot)
+		sm.AssignNavSlot(sid, vtName)
 
 		state := sm.Get(sid)
 

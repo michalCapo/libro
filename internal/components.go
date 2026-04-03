@@ -1417,8 +1417,8 @@ func renderShortcutsDialog() *r.Node {
 			{"⌘ + L", "Navigate right"},
 			{"⌘ + Ctrl + H", "Move app left"},
 			{"⌘ + Ctrl + L", "Move app right"},
-			{"Ctrl + 1–9", "Switch to project by index"},
-			{"Ctrl + 0", "Switch to last app-created project"},
+			{"Ctrl + 1–9", "Switch to assigned project"},
+			{"Ctrl + 0", "Switch to previous project"},
 			{"⌘ + G", "Git worktrees popup"},
 		}},
 		{"Browser", "", []shortcut{
@@ -2073,7 +2073,7 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 func renderProjectSidebar(state *AppState, sid string) *r.Node {
 	items := make([]*r.Node, 0, len(state.Projects)+1)
 
-	for i, proj := range state.Projects {
+	for _, proj := range state.Projects {
 		// Skip virtual projects — they're shown as worktree sub-items under their parent
 		if proj.Virtual {
 			continue
@@ -2102,16 +2102,24 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 			iconName = "source"
 		}
 
-		// Shortcut badge
+		// Shortcut badge: home always shows "1", others show assigned nav slot
 		var badgeNode *r.Node
-		if i < 9 {
+		if proj.Name == "home" {
 			badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 "
 			if isActive || isParentOfActive {
 				badgeCls += "bg-blue-500 text-blue-100"
 			} else {
 				badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500"
 			}
-			badgeNode = r.Span(badgeCls).Text(fmt.Sprintf("%d", i+1))
+			badgeNode = r.Span(badgeCls).Text("1")
+		} else if slot := sm.GetNavSlotForProject(sid, proj.Name); slot > 0 {
+			badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 "
+			if isActive || isParentOfActive {
+				badgeCls += "bg-blue-500 text-blue-100"
+			} else {
+				badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500"
+			}
+			badgeNode = r.Span(badgeCls).Text(fmt.Sprintf("%d", slot))
 		}
 
 		projBtn := r.Button(projCls).
