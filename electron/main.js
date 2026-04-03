@@ -127,6 +127,21 @@ app.on('web-contents-created', (event, contents) => {
     const code = (input.code || '').toLowerCase()
     const isWebview = contents.getType() === 'webview'
 
+    // Win/Super + Plus/Minus: zoom whole application
+    if (input.meta && (key === '+' || key === '=' || key === '-')) {
+      e.preventDefault()
+      if (mainWindow) {
+        const wc = mainWindow.webContents
+        const current = wc.getZoomLevel()
+        if (key === '-') {
+          wc.setZoomLevel(current - 0.5)
+        } else {
+          wc.setZoomLevel(current + 0.5)
+        }
+      }
+      return
+    }
+
     // For main window content: directly invoke JS for Super+N shortcuts
     // (native keydown may be intercepted by the desktop environment on Linux)
     if (!isWebview) {
