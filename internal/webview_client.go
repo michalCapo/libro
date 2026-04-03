@@ -37,6 +37,7 @@ var browserShortcutsScript = '(' + function(){
 			case 'f': history.forward(); break;
 			case '/': console.log('__libro:search'); break;
 			case 'n': console.log('__libro:findnext'); break;
+			case 'N': console.log('__libro:findprev'); break;
 			case 'p': console.log('__libro:findprev'); break;
 			case 'Escape': console.log('__libro:searchclear'); break;
 			case 'Enter':
@@ -47,6 +48,38 @@ var browserShortcutsScript = '(' + function(){
 		if(handled) { e.preventDefault(); e.stopPropagation(); }
 	}, true);
 } + ')()';
+
+// --- Console error/warning counts per webview ---
+var consoleCounts = {}; // appID -> {errors, warnings}
+
+function updateConsoleBadges(appID) {
+	var c = consoleCounts[appID] || {errors: 0, warnings: 0};
+	var errEl = document.getElementById('devtools-errors-' + appID);
+	var warnEl = document.getElementById('devtools-warnings-' + appID);
+	var wrapEl = document.getElementById('devtools-wrap-' + appID);
+	if (errEl) {
+		if (c.errors > 0) {
+			errEl.style.display = 'inline';
+			errEl.textContent = c.errors;
+			if (wrapEl) wrapEl.style.opacity = '1';
+		} else {
+			errEl.style.display = 'none';
+		}
+	}
+	if (warnEl) {
+		if (c.warnings > 0) {
+			warnEl.style.display = 'inline';
+			warnEl.textContent = c.warnings;
+			if (wrapEl) wrapEl.style.opacity = '1';
+		} else {
+			warnEl.style.display = 'none';
+		}
+	}
+	// Restore hover-only if no issues
+	if (wrapEl && c.errors === 0 && c.warnings === 0) {
+		wrapEl.style.opacity = '';
+	}
+}
 
 // --- Find-in-page state per webview ---
 var searchState = {}; // appID -> {query, barEl, inputEl, countEl}
@@ -119,6 +152,10 @@ function getOrCreateSearchBar(appID) {
 	input.addEventListener('input', function() {
 		var q = input.value;
 		if (q) {
+			// Stop any active search before starting a new one to prevent freezing
+			if (state.findActive && q !== state.query) {
+				try { wv.stopFindInPage('clearSelection'); } catch(err) {}
+			}
 			state.query = q;
 			state.findActive = true;
 			wv.findInPage(q, {forward: true, findNext: false});
@@ -148,6 +185,12 @@ function getOrCreateSearchBar(appID) {
 function showSearchBar(appID) {
 	var state = getOrCreateSearchBar(appID);
 	if (!state) return;
+	// Stop previous search to prevent freeze when starting a new one
+	if (state.findActive) {
+		var wv = window.__libroWebviews[appID];
+		if (wv) { try { wv.stopFindInPage('clearSelection'); } catch(err) {} }
+		state.findActive = false;
+	}
 	state.barEl.style.display = 'flex';
 	state.inputEl.value = state.query || '';
 	state.inputEl.focus();
@@ -287,10 +330,12 @@ function bindWebviewEvents(wv, appID) {
 		injectBrowserShortcuts(wv, appID);
 	});
 
-	// Update URL bar on navigation
+	// Update URL bar on navigation and reset console counts
 	wv.addEventListener('did-navigate', function(e) {
 		var inp = document.getElementById('urlinput-' + appID);
 		if (inp && e.url) inp.value = e.url;
+		consoleCounts[appID] = {errors: 0, warnings: 0};
+		updateConsoleBadges(appID);
 	});
 	wv.addEventListener('did-navigate-in-page', function(e) {
 		if (!e.isMainFrame) return;
@@ -303,7 +348,8 @@ function bindWebviewEvents(wv, appID) {
 		injectBrowserShortcuts(wv, appID);
 	});
 
-	// Listen for browser shortcut messages from injected script
+	// Listen for browser shortcut messages and track errors/warnings
+	if (!consoleCounts[appID]) consoleCounts[appID] = {errors: 0, warnings: 0};
 	wv.addEventListener('console-message', function(e) {
 		var msg = e.message;
 		if (msg === '__libro:search') showSearchBar(appID);
@@ -311,6 +357,16 @@ function bindWebviewEvents(wv, appID) {
 		else if (msg === '__libro:findprev') findInPagePrev(appID);
 		else if (msg === '__libro:searchclear') clearSearch(appID);
 		else if (msg === '__libro:enter') handleEnter(appID);
+		else if (msg && !msg.startsWith('__libro:')) {
+			// level: 0=log, 1=warning, 2=error
+			if (e.level === 2) {
+				consoleCounts[appID].errors++;
+				updateConsoleBadges(appID);
+			} else if (e.level === 1) {
+				consoleCounts[appID].warnings++;
+				updateConsoleBadges(appID);
+			}
+		}
 	});
 
 	// Loading indicator removal
