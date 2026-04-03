@@ -33,6 +33,7 @@ const (
 	ShortcutsDialogID  = "shortcuts-dialog"
 	CloseDialogID      = "close-dialog"
 	WorktreeDialogID   = "worktree-dialog"
+	ManageDialogID     = "manage-dialog"
 )
 
 // termIconInfo stores the icon details for a known terminal command.
@@ -281,7 +282,7 @@ func renderEmptyState(state *AppState, sid string) *r.Node {
 			guideNode,
 			r.Div("flex flex-col gap-1.5 w-full").Render(appButtons...),
 			r.Div("flex gap-2 w-full mt-1").Render(
-				r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
+				r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
 					Render(r.I("material-icons-round text-[18px]").Text("add"), r.Span("").Text("Add New")).
 					OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
 				r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
@@ -444,15 +445,15 @@ func navigateJS(state *AppState, sid string) string {
 					var toolbar = child.children[0];
 					// Make toolbar red for selected app
 					if (toolbar) {
-						toolbar.className = 'flex items-center gap-2 px-1.5 py-1 border-b shrink-0 bg-teal-600 border-teal-700';
+						toolbar.className = 'flex items-center gap-2 px-1.5 py-1 border-b shrink-0 bg-blue-600 border-blue-700';
 						// Update nav buttons to white-on-red
 						toolbar.querySelectorAll('button[title]').forEach(function(btn){
-							btn.className = btn.className.replace(/text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700/g, 'text-teal-100/70 hover:text-white hover:bg-white/15');
+							btn.className = btn.className.replace(/text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700/g, 'text-blue-100/70 hover:text-white hover:bg-white/15');
 						});
 						// Update URL input
 						var urlInp = toolbar.querySelector('input[type=text]');
 						if (urlInp) {
-							urlInp.className = urlInp.className.replace(/bg-gray-100 dark:bg-zinc-800/g, 'bg-white/15').replace(/text-gray-600 dark:text-zinc-400/g, 'text-white').replace(/placeholder-gray-400 dark:placeholder-zinc-600/g, 'placeholder-teal-200/50');
+							urlInp.className = urlInp.className.replace(/bg-gray-100 dark:bg-zinc-800/g, 'bg-white/15').replace(/text-gray-600 dark:text-zinc-400/g, 'text-white').replace(/placeholder-gray-400 dark:placeholder-zinc-600/g, 'placeholder-blue-200/50');
 						}
 					}
 					// Update size badges for selected app
@@ -465,14 +466,14 @@ func navigateJS(state *AppState, sid string) string {
 							var txt = b.textContent.trim();
 							if (sizeLabels.indexOf(txt) === -1) {
 								// close button
-								b.className = activeBase + ' ml-1 flex items-center justify-center text-teal-100/70 hover:text-white hover:bg-white/15';
+								b.className = activeBase + ' ml-1 flex items-center justify-center text-blue-100/70 hover:text-white hover:bg-white/15';
 								return;
 							}
-							var isActive = b.className.indexOf('bg-teal-600') !== -1 || b.className.indexOf('bg-white/25') !== -1;
+							var isActive = b.className.indexOf('bg-blue-600') !== -1 || b.className.indexOf('bg-white/25') !== -1;
 							if (isActive) {
 								b.className = activeBase + ' bg-white/25 text-white';
 							} else {
-								b.className = activeBase + ' text-teal-100/70 hover:text-white hover:bg-white/15';
+								b.className = activeBase + ' text-blue-100/70 hover:text-white hover:bg-white/15';
 							}
 						});
 					}
@@ -485,12 +486,12 @@ func navigateJS(state *AppState, sid string) string {
 						toolbar2.className = 'flex items-center gap-2 px-1.5 py-1 border-b shrink-0 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-700/50';
 						// Revert nav buttons
 						toolbar2.querySelectorAll('button[title]').forEach(function(btn){
-							btn.className = btn.className.replace(/text-teal-100\/70 hover:text-white hover:bg-white\/15/g, 'text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700');
+							btn.className = btn.className.replace(/text-blue-100\/70 hover:text-white hover:bg-white\/15/g, 'text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700');
 						});
 						// Revert URL input
 						var urlInp2 = toolbar2.querySelector('input[type=text]');
 						if (urlInp2) {
-							urlInp2.className = urlInp2.className.replace(/bg-white\/15/g, 'bg-gray-100 dark:bg-zinc-800').replace(/text-white/g, 'text-gray-600 dark:text-zinc-400').replace(/placeholder-teal-200\/50/g, 'placeholder-gray-400 dark:placeholder-zinc-600');
+							urlInp2.className = urlInp2.className.replace(/bg-white\/15/g, 'bg-gray-100 dark:bg-zinc-800').replace(/text-white/g, 'text-gray-600 dark:text-zinc-400').replace(/placeholder-blue-200\/50/g, 'placeholder-gray-400 dark:placeholder-zinc-600');
 						}
 					}
 					// Revert size badges to default for unselected app
@@ -506,9 +507,9 @@ func navigateJS(state *AppState, sid string) string {
 								b.className = activeBase2 + ' ml-1 flex items-center justify-center text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10';
 								return;
 							}
-							var isActive = b.className.indexOf('bg-teal-600') !== -1 || b.className.indexOf('bg-white/25') !== -1;
+							var isActive = b.className.indexOf('bg-blue-600') !== -1 || b.className.indexOf('bg-white/25') !== -1;
 							if (isActive) {
-								b.className = activeBase2 + ' bg-teal-600 text-white';
+								b.className = activeBase2 + ' bg-blue-600 text-white';
 							} else {
 								b.className = activeBase2 + ' text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700';
 							}
@@ -562,11 +563,11 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			if w == app.Width {
 				cls = badgeBase + " bg-white/25 text-white"
 			} else {
-				cls = badgeBase + " text-teal-100/70 hover:text-white hover:bg-white/15"
+				cls = badgeBase + " text-blue-100/70 hover:text-white hover:bg-white/15"
 			}
 		} else {
 			if w == app.Width {
-				cls = badgeBase + " bg-teal-600 text-white"
+				cls = badgeBase + " bg-blue-600 text-white"
 			} else {
 				cls = badgeBase + " text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700"
 			}
@@ -580,7 +581,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 	}
 	closeBtnCls := badgeBase + " ml-1 flex items-center justify-center"
 	if selected {
-		closeBtnCls += " text-teal-100/70 hover:text-white hover:bg-white/15"
+		closeBtnCls += " text-blue-100/70 hover:text-white hover:bg-white/15"
 	} else {
 		closeBtnCls += " text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10"
 	}
@@ -632,7 +633,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		// URL input — on Enter, navigate webview and update server state
 		urlInputCls := "flex-1 min-w-0 rounded-sm text-[11px] font-mono outline-none px-2 h-6"
 		if selected {
-			urlInputCls += " bg-white/15 text-white placeholder-teal-200/50"
+			urlInputCls += " bg-white/15 text-white placeholder-blue-200/50"
 		} else {
 			urlInputCls += " bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 placeholder-gray-400 dark:placeholder-zinc-600"
 		}
@@ -735,7 +736,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 	// Toolbar: always visible, sits above the iframe
 	toolbarCls := "flex items-center gap-2 px-1.5 py-1 border-b shrink-0"
 	if selected {
-		toolbarCls += " bg-teal-600 border-teal-700"
+		toolbarCls += " bg-blue-600 border-blue-700"
 	} else {
 		toolbarCls += " bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-700/50"
 	}
@@ -907,6 +908,16 @@ func poolWebviewJS(appID string) string {
 })();`, appID)
 }
 
+// showManageOverlayJS returns JS that removes any existing overlay, then appends the new one to body.
+func showManageOverlayJS(node *r.Node) string {
+	return removeManageOverlayJS() + node.ToJS()
+}
+
+// removeManageOverlayJS returns JS that removes the manage overlay.
+func removeManageOverlayJS() string {
+	return fmt.Sprintf(`(function(){var el=document.getElementById('%s');if(el)el.remove();})();`, ManageDialogID)
+}
+
 // renderSideLauncher renders a vertical icon dock: saved app icons + "+" button.
 // Now server-rendered from DB instead of client-side localStorage.
 func renderSideLauncher(sid, side, activeProject string) *r.Node {
@@ -983,7 +994,7 @@ func renderSideLauncher(sid, side, activeProject string) *r.Node {
 	// Add button
 	addBtn := r.Button(btnCls).
 		Render(
-			r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-teal-600 dark:hover:text-teal-400 text-[18px]").Text("add"),
+			r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 text-[18px]").Text("add"),
 			r.Span(tipCls).Text("Add new"),
 		).
 		OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid, "side", side)})
@@ -1003,7 +1014,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 
 	widthOptions := make([]*r.Node, 0)
 	for _, w := range AllWidths() {
-		radio := r.IRadio("accent-teal-500 cursor-pointer").
+		radio := r.IRadio("accent-blue-500 cursor-pointer").
 			Attr("name", "app-width").
 			Attr("value", string(w)).
 			ID(fmt.Sprintf("width-%s", w))
@@ -1022,12 +1033,12 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 		return fmt.Sprintf(`
 			document.getElementById('tab-url-content').classList.toggle('hidden', '%s' !== 'url');
 			document.getElementById('tab-terminal-content').classList.toggle('hidden', '%s' !== 'terminal');
-			document.getElementById('tab-url-btn').classList.toggle('border-teal-500', '%s' === 'url');
-			document.getElementById('tab-url-btn').classList.toggle('text-teal-600', '%s' === 'url');
+			document.getElementById('tab-url-btn').classList.toggle('border-blue-500', '%s' === 'url');
+			document.getElementById('tab-url-btn').classList.toggle('text-blue-600', '%s' === 'url');
 			document.getElementById('tab-url-btn').classList.toggle('border-transparent', '%s' !== 'url');
 			document.getElementById('tab-url-btn').classList.toggle('text-gray-500', '%s' !== 'url');
-			document.getElementById('tab-terminal-btn').classList.toggle('border-teal-500', '%s' === 'terminal');
-			document.getElementById('tab-terminal-btn').classList.toggle('text-teal-600', '%s' === 'terminal');
+			document.getElementById('tab-terminal-btn').classList.toggle('border-blue-500', '%s' === 'terminal');
+			document.getElementById('tab-terminal-btn').classList.toggle('text-blue-600', '%s' === 'terminal');
 			document.getElementById('tab-terminal-btn').classList.toggle('border-transparent', '%s' !== 'terminal');
 			document.getElementById('tab-terminal-btn').classList.toggle('text-gray-500', '%s' !== 'terminal');
 			document.getElementById('app-type').value = '%s';
@@ -1036,7 +1047,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 
 	collectIDs := []string{"app-url", "app-command", "app-writable", "app-type", "app-name", "width-md", "app-project-specific"}
 
-	inputCls := "w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-1 focus:ring-teal-500 focus:border-teal-500 outline-none transition-colors"
+	inputCls := "w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
 
 	return r.Div("fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75"+hiddenClass).
 		ID(DialogID).
@@ -1050,7 +1061,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 					r.IHidden("").ID("app-type").Attr("value", "terminal"),
 
 					r.Div("flex border-b border-gray-200 dark:border-zinc-700/50 mb-4").Render(
-						r.Button("px-4 py-2 text-sm font-mono border-b-2 border-teal-500 text-teal-600 cursor-pointer transition-colors").
+						r.Button("px-4 py-2 text-sm font-mono border-b-2 border-blue-500 text-blue-600 cursor-pointer transition-colors").
 							ID("tab-terminal-btn").
 							Text("Terminal").
 							OnClick(r.JS(tabSwitchJS("terminal"))),
@@ -1079,7 +1090,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 							r.P("text-xs text-gray-400 dark:text-zinc-500 mt-1").Text("Use __dir__ as a placeholder for the project directory."),
 						),
 						r.Label("flex items-center gap-2 cursor-pointer").Render(
-							r.ICheckbox("accent-teal-500 cursor-pointer w-4 h-4").
+							r.ICheckbox("accent-blue-500 cursor-pointer w-4 h-4").
 								ID("app-writable").
 								Attr("checked", "checked"),
 							r.Span("text-sm text-gray-600 dark:text-zinc-400").Text("Writable (allow input)"),
@@ -1100,7 +1111,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 
 					r.Div("mb-5").Render(
 						r.Label("flex items-center gap-2 cursor-pointer").Render(
-							r.ICheckbox("accent-teal-500 cursor-pointer w-4 h-4").
+							r.ICheckbox("accent-blue-500 cursor-pointer w-4 h-4").
 								ID("app-project-specific"),
 							r.Span("text-sm text-gray-600 dark:text-zinc-400").Text("Project specific"),
 						),
@@ -1110,7 +1121,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 						r.Button("px-4 py-2 text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 font-mono text-sm rounded-md hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer").
 							Text("Cancel").
 							OnClick(&r.Action{Name: "app.dialog.close", Data: sidData(sid)}),
-						r.Button("px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md transition-colors cursor-pointer").
+						r.Button("px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md transition-colors cursor-pointer").
 							ID("btn-add").
 							Text("Save").
 							OnClick(&r.Action{
@@ -1209,14 +1220,14 @@ func searchDialogJS(sid string) string {
 			var row=document.createElement('div');
 			var sel=i===selIdx;
 			row.className='flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
-				+(sel?(dk?'bg-teal-900/30 border-l-2 border-teal-500':'bg-teal-50 border-l-2 border-teal-500')
+				+(sel?(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500')
 				:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'));
 			var iconHtml='';
 			var label='';
 			var sub='';
 			var app=item.app;
 			if(item.isBrowse){
-				iconHtml='<i class="material-icons-round text-teal-500 text-lg shrink-0">public</i>';
+				iconHtml='<i class="material-icons-round text-blue-500 text-lg shrink-0">public</i>';
 				label=app.name||app.url;
 				sub=app.url;
 			}else if(item.isHistory){
@@ -1259,9 +1270,9 @@ func searchDialogJS(sid string) string {
 			row.onmouseenter=function(){
 				if(selIdx===i)return;
 				var prev=res.children[selIdx];
-				if(prev)prev.className=prev.className.replace(/bg-teal-900\/30|bg-teal-50/g,'').replace(/border-teal-500/g,'border-transparent')+(dk?' hover:bg-zinc-800':' hover:bg-gray-50');
+				if(prev)prev.className=prev.className.replace(/bg-blue-900\/30|bg-blue-50/g,'').replace(/border-blue-500/g,'border-transparent')+(dk?' hover:bg-zinc-800':' hover:bg-gray-50');
 				selIdx=i;
-				row.className=row.className.replace(/hover:bg-zinc-800|hover:bg-gray-50/g,'').replace(/border-transparent/g,'border-teal-500')+(dk?' bg-teal-900/30':' bg-teal-50');
+				row.className=row.className.replace(/hover:bg-zinc-800|hover:bg-gray-50/g,'').replace(/border-transparent/g,'border-blue-500')+(dk?' bg-blue-900/30':' bg-blue-50');
 			};
 			row.onclick=function(){launch();};
 			res.appendChild(row);
@@ -1558,7 +1569,7 @@ func renderWorktreeDialog(sid string) *r.Node {
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
 					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
-						r.I("material-icons-round text-teal-600 dark:text-teal-400 text-lg").Text("alt_route"),
+						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("alt_route"),
 						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").ID("worktree-dialog-title").Text("Worktrees"),
 					),
 					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
@@ -1624,8 +1635,8 @@ func worktreeDialogJS(sid string) string {
 				// Show "create new worktree" option
 				var row=document.createElement('div');
 				row.className='flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
-					+(dk?'bg-teal-900/30 border-l-2 border-teal-500':'bg-teal-50 border-l-2 border-teal-500');
-				row.innerHTML='<i class="material-icons-round text-teal-500 text-lg">add</i>'
+					+(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500');
+				row.innerHTML='<i class="material-icons-round text-blue-500 text-lg">add</i>'
 					+'<div class="flex-1 min-w-0"><div class="text-sm '+(dk?'text-zinc-200':'text-gray-800')+'">Create worktree: <b>'+q+'</b></div></div>';
 				row.onclick=function(){createWorktree(q);};
 				res.appendChild(row);
@@ -1638,7 +1649,7 @@ func worktreeDialogJS(sid string) string {
 			var row=document.createElement('div');
 			var sel=i===selIdx;
 			row.className='flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
-				+(sel?(dk?'bg-teal-900/30 border-l-2 border-teal-500':'bg-teal-50 border-l-2 border-teal-500')
+				+(sel?(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500')
 				:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'));
 			var txtCls=dk?'text-zinc-200':'text-gray-800';
 			var subCls=dk?'text-zinc-500':'text-gray-400';
@@ -1648,9 +1659,9 @@ func worktreeDialogJS(sid string) string {
 			row.onmouseenter=function(){
 				if(selIdx===i)return;
 				var prev=res.children[selIdx];
-				if(prev)prev.className=prev.className.replace(/bg-teal-900\/30|bg-teal-50/g,'').replace(/border-teal-500/g,'border-transparent')+(dk?' hover:bg-zinc-800':' hover:bg-gray-50');
+				if(prev)prev.className=prev.className.replace(/bg-blue-900\/30|bg-blue-50/g,'').replace(/border-blue-500/g,'border-transparent')+(dk?' hover:bg-zinc-800':' hover:bg-gray-50');
 				selIdx=i;
-				row.className=row.className.replace(/hover:bg-zinc-800|hover:bg-gray-50/g,'').replace(/border-transparent/g,'border-teal-500')+(dk?' bg-teal-900/30':' bg-teal-50');
+				row.className=row.className.replace(/hover:bg-zinc-800|hover:bg-gray-50/g,'').replace(/border-transparent/g,'border-blue-500')+(dk?' bg-blue-900/30':' bg-blue-50');
 			};
 			row.onclick=function(){launch();};
 			res.appendChild(row);
@@ -1774,7 +1785,7 @@ func worktreesJS(state *AppState) string {
 	return fmt.Sprintf("window.__libroWorktrees=%s;", string(b))
 }
 
-// renderManageAppsPage renders a full-page view for managing saved apps.
+// renderManageAppsPage renders the manage apps page as a fixed overlay so running apps stay alive.
 func renderManageAppsPage(state *AppState, sid string) *r.Node {
 	savedApps := DBLoadVisibleSavedApps(state.ActiveProject)
 
@@ -1790,25 +1801,31 @@ func renderManageAppsPage(state *AppState, sid string) *r.Node {
 		)
 	} else {
 		listNode = r.Div("flex-1 overflow-y-auto").Render(
-			r.Div("max-w-2xl mx-auto w-full").Render(rows...),
+			r.Div("max-w-2xl mx-auto w-full px-4").Render(rows...),
 		)
 	}
 
-	return r.Div("flex-1 flex flex-col overflow-hidden").ID(projectMainID(state.ActiveProject)).Render(
-		// Header bar
-		r.Div("shrink-0 border-b border-gray-200 dark:border-zinc-800 py-4").Render(
-			r.Div("max-w-2xl mx-auto w-full flex items-center gap-3").Render(
-				r.Span("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100").Text("Manage Apps"),
-				r.Div("ml-auto").Render(
-					r.Button("flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors").
-						Render(r.I("material-icons-round text-[16px]").Text("add"), r.Span("").Text("Add New")).
-						OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
+	return r.Div("fixed inset-0 z-[55] flex flex-col bg-gray-100 dark:bg-zinc-900").
+		ID(ManageDialogID).
+		Render(
+			// Header bar
+			r.Div("shrink-0 border-b border-gray-200 dark:border-zinc-800 py-4 bg-white dark:bg-zinc-900").Render(
+				r.Div("max-w-2xl mx-auto w-full flex items-center gap-3 px-4").Render(
+					r.Span("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100").Text("Manage Apps"),
+					r.Div("ml-auto flex items-center gap-2").Render(
+						r.Button("flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors").
+							Render(r.I("material-icons-round text-[16px]").Text("add"), r.Span("").Text("Add New")).
+							OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
+						r.Button("flex items-center justify-center w-9 h-9 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors").
+							Attr("title", "Close").
+							OnClick(&r.Action{Name: "app.manage.close", Data: sidData(sid)}).
+							Render(r.I("material-icons-round text-xl").Text("close")),
+					),
 				),
 			),
-		),
-		// App list
-		listNode,
-	)
+			// App list
+			listNode,
+		)
 }
 
 // renderManageAppRow renders a single row in the manage apps page.
@@ -1918,11 +1935,11 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 		btns.forEach(function(b){
 			var txt = b.textContent.trim();
 			if (sizeLabels.indexOf(txt) === -1) return;
-			var isSelected = el.children[0] && el.children[0].className.indexOf('bg-teal-600') !== -1;
+			var isSelected = el.children[0] && el.children[0].className.indexOf('bg-blue-600') !== -1;
 			if (txt === newWidth.toUpperCase()) {
-				b.className = activeBase + (isSelected ? ' bg-white/25 text-white' : ' bg-teal-600 text-white');
+				b.className = activeBase + (isSelected ? ' bg-white/25 text-white' : ' bg-blue-600 text-white');
 			} else {
-				b.className = activeBase + (isSelected ? ' text-teal-100/70 hover:text-white hover:bg-white/15' : ' text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700');
+				b.className = activeBase + (isSelected ? ' text-blue-100/70 hover:text-white hover:bg-white/15' : ' text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700');
 			}
 		});
 	}
@@ -2004,7 +2021,7 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 	appIcons = append(appIcons,
 		r.Button(btnCls).
 			Render(
-				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-teal-600 dark:hover:text-teal-400 text-[18px]").Text("add"),
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 text-[18px]").Text("add"),
 				r.Span(tipCls).Text("Add new"),
 			).
 			OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
@@ -2074,8 +2091,8 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 
 		// Project button
 		projCls := "w-full flex items-center gap-2 px-3 py-2 text-sm font-mono rounded-md cursor-pointer transition-colors duration-75 group/proj "
-		if isActive {
-			projCls += "bg-teal-600 text-white"
+		if isActive || isParentOfActive {
+			projCls += "bg-blue-600 text-white"
 		} else {
 			projCls += "text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-800"
 		}
@@ -2089,8 +2106,8 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 		var badgeNode *r.Node
 		if i < 9 {
 			badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 "
-			if isActive {
-				badgeCls += "bg-teal-500 text-teal-100"
+			if isActive || isParentOfActive {
+				badgeCls += "bg-blue-500 text-blue-100"
 			} else {
 				badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500"
 			}
@@ -2115,8 +2132,8 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 		// Delete button (hidden until hover, not for home)
 		if proj.Name != "home" {
 			deleteCls := "flex items-center justify-center w-5 h-5 rounded cursor-pointer opacity-0 group-hover/proj:opacity-100 transition-opacity duration-75 shrink-0 "
-			if isActive {
-				deleteCls += "text-teal-200 hover:text-white hover:bg-white/15"
+			if isActive || isParentOfActive {
+				deleteCls += "text-blue-200 hover:text-white hover:bg-white/15"
 			} else {
 				deleteCls += "text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10"
 			}
@@ -2152,7 +2169,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 
 					wtCls := "w-full flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer transition-colors duration-75 "
 					if isWtActive {
-						wtCls += "bg-teal-500/20 text-teal-700 dark:text-teal-300"
+						wtCls += "bg-blue-500/20 text-blue-700 dark:text-blue-300"
 					} else {
 						wtCls += "text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-700 dark:hover:text-zinc-300"
 					}
@@ -2193,7 +2210,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 
 				// Add worktree button
 				wtItems = append(wtItems,
-					r.Button("w-full flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors duration-75").
+					r.Button("w-full flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors duration-75").
 						Attr("onclick", fmt.Sprintf("__ws.call('worktree.dialog.open',{sid:'%s',project:'%s'});", sid, proj.Name)).
 						Render(
 							r.I("material-icons-round text-sm shrink-0").Text("add"),
@@ -2206,7 +2223,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 				// Single worktree (or none) — still show add button
 				projItem.Render(
 					r.Div("mt-0.5").Render(
-						r.Button("w-full flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors duration-75").
+						r.Button("w-full flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors duration-75").
 							Attr("onclick", fmt.Sprintf("__ws.call('worktree.dialog.open',{sid:'%s',project:'%s'});", sid, proj.Name)).
 							Render(
 								r.I("material-icons-round text-sm shrink-0").Text("add"),
@@ -2222,7 +2239,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 
 	// Add project button
 	items = append(items,
-		r.Button("w-full flex items-center gap-2 px-3 py-2 text-sm font-mono text-gray-400 dark:text-zinc-600 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-md cursor-pointer transition-colors duration-75 mt-1").
+		r.Button("w-full flex items-center gap-2 px-3 py-2 text-sm font-mono text-gray-400 dark:text-zinc-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-md cursor-pointer transition-colors duration-75 mt-1").
 			OnClick(&r.Action{Name: "project.dialog.open", Data: sidData(sid)}).
 			Render(
 				r.I("material-icons-round text-base shrink-0").Text("add"),
@@ -2290,7 +2307,7 @@ func renderProjectDialog(visible bool, sid string) *r.Node {
 						r.Button("px-4 py-2 text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 font-mono text-sm rounded-md hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer").
 							Text("Cancel").
 							OnClick(&r.Action{Name: "project.dialog.close", Data: sidData(sid)}),
-						r.Button("px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white font-mono text-sm font-medium rounded-md transition-colors cursor-pointer").
+						r.Button("px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md transition-colors cursor-pointer").
 							ID("btn-create-project").
 							Text("Create").
 							OnClick(&r.Action{
@@ -2305,8 +2322,8 @@ func renderProjectDialog(visible bool, sid string) *r.Node {
 
 // renderDirBrowser renders the directory browser component
 func renderDirBrowser(currentPath string, sid string) *r.Node {
-	dirCls := "flex items-center gap-2 px-3 py-1.5 text-sm font-mono text-gray-700 dark:text-zinc-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded cursor-pointer transition-colors"
-	selectedCls := "flex items-center gap-2 px-3 py-1.5 text-sm font-mono text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/30 rounded font-medium"
+	dirCls := "flex items-center gap-2 px-3 py-1.5 text-sm font-mono text-gray-700 dark:text-zinc-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded cursor-pointer transition-colors"
+	selectedCls := "flex items-center gap-2 px-3 py-1.5 text-sm font-mono text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 rounded font-medium"
 
 	// Read directories
 	entries, err := os.ReadDir(currentPath)
@@ -2576,7 +2593,7 @@ func keyboardShortcutsJS(sid string) string {
 					return;
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L')) {
-					var selToolbar = document.querySelector('.bg-teal-600.border-teal-700');
+					var selToolbar = document.querySelector('.bg-blue-600.border-blue-700');
 					var appEl = selToolbar ? selToolbar.closest('[data-app-id]') : null;
 					if (appEl && appEl.querySelector('webview')) {
 						e.preventDefault();
@@ -2587,7 +2604,7 @@ func keyboardShortcutsJS(sid string) string {
 					}
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'r' || e.key === 'R')) {
-					var selToolbar2 = document.querySelector('.bg-teal-600.border-teal-700');
+					var selToolbar2 = document.querySelector('.bg-blue-600.border-blue-700');
 					var appEl2 = selToolbar2 ? selToolbar2.closest('[data-app-id]') : null;
 					if (appEl2 && appEl2.querySelector('webview')) {
 						e.preventDefault();
