@@ -58,8 +58,11 @@ type AppState struct {
 	snapshots         map[string]*projectSnapshot
 	renderedProjects  map[string]bool // tracks which projects have DOM divs
 
-	// LastAppCreatedProject tracks the project where the last app was created (for Ctrl+0)
+	// LastAppCreatedProject tracks the project where the last app was created
 	LastAppCreatedProject string
+
+	// PreviousProject tracks the previously active project (for Ctrl+0)
+	PreviousProject string
 
 	// EditIndex tracks which saved app is being edited (-1 = new app)
 	EditIndex int
@@ -71,6 +74,11 @@ type AppState struct {
 
 	// WorktreeDialogOpen tracks whether the worktree popup is shown
 	WorktreeDialogOpen bool
+
+	// NavSlots maps keyboard slot (2-9) → project name to switch to
+	NavSlots map[int]string
+	// NavProjectSlot maps root project name → assigned slot number
+	NavProjectSlot map[string]int
 }
 
 // StateManager manages per-session app states
@@ -118,6 +126,8 @@ func (sm *StateManager) NewSession() string {
 		snapshots:        make(map[string]*projectSnapshot),
 		renderedProjects: rendered,
 		EditIndex:        -1,
+		NavSlots:         make(map[int]string),
+		NavProjectSlot:   make(map[string]int),
 	}
 	return sid
 }
@@ -141,6 +151,8 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 		snapshots:        make(map[string]*projectSnapshot),
 		renderedProjects: rendered,
 		EditIndex:        -1,
+		NavSlots:         make(map[int]string),
+		NavProjectSlot:   make(map[string]int),
 	}
 	sm.states[sessionID] = s
 	return s
@@ -552,6 +564,7 @@ func (sm *StateManager) RemoveProject(sessionID, projectName string) ([]Applicat
 		delete(s.snapshots, projectName)
 	}
 	delete(s.renderedProjects, projectName)
+	sm.clearNavSlot(s, projectName)
 
 	if s.ActiveProject == projectName {
 		s.ActiveProject = "home"
@@ -584,6 +597,9 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 	if s.ActiveProject == projectName {
 		return true
 	}
+
+	// Track previous project for Ctrl+0
+	s.PreviousProject = s.ActiveProject
 
 	// Save current project's apps
 	s.snapshots[s.ActiveProject] = &projectSnapshot{
@@ -663,6 +679,17 @@ func (sm *StateManager) LastAppProject(sessionID string) string {
 		return ""
 	}
 	return s.LastAppCreatedProject
+}
+
+// PreviousProject returns the previously active project, or ""
+func (sm *StateManager) PreviousProject(sessionID string) string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return ""
+	}
+	return s.PreviousProject
 }
 
 // IsProjectRendered checks if a project's DOM div has been created.
@@ -812,6 +839,7 @@ func (sm *StateManager) RemoveVirtualProject(sessionID, name string) ([]Applicat
 		delete(s.snapshots, name)
 	}
 	delete(s.renderedProjects, name)
+	sm.clearNavSlot(s, name)
 
 	if s.ActiveProject == name {
 		s.ActiveProject = "home"
@@ -854,4 +882,80 @@ func (sm *StateManager) GetProjectPath(sessionID, projectName string) string {
 		}
 	}
 	return ""
+}
+
+// rootProjectName returns the parent project name for virtual projects,
+// or the project name itself for regular projects.
+func (sm *StateManager) rootProjectName(s *AppState, projectName string) string {
+	for _, p := range s.Projects {
+		if p.Name == projectName {
+			if p.Virtual && p.ParentProject != "" {
+				return p.ParentProject
+			}
+			return p.Name
+		}
+	}
+	return projectName
+}
+
+// AssignNavSlot assigns a keyboard nav slot (2-9) to a project.
+// If the root project already has a slot, it updates the slot target.
+// Otherwise it assigns the next available slot.
+func (sm *StateManager) AssignNavSlot(sessionID, projectName string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return
+	}
+
+	root := sm.rootProjectName(s, projectName)
+
+	// If root project already has a slot, update target
+	if slot, ok := s.NavProjectSlot[root]; ok {
+		s.NavSlots[slot] = projectName
+		return
+	}
+
+	// Find next available slot (2-9)
+	for i := 2; i <= 9; i++ {
+		if _, taken := s.NavSlots[i]; !taken {
+			s.NavSlots[i] = projectName
+			s.NavProjectSlot[root] = i
+			return
+		}
+	}
+	// All slots taken — no assignment
+}
+
+// NavSlotProject returns the project name for a given slot (2-9), or "".
+func (sm *StateManager) NavSlotProject(sessionID string, slot int) string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return ""
+	}
+	return s.NavSlots[slot]
+}
+
+// GetNavSlotForProject returns the slot number for a project (by root name), or 0 if unassigned.
+func (sm *StateManager) GetNavSlotForProject(sessionID, projectName string) int {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return 0
+	}
+	root := sm.rootProjectName(s, projectName)
+	return s.NavProjectSlot[root]
+}
+
+// clearNavSlot removes a project's nav slot assignment.
+func (sm *StateManager) clearNavSlot(s *AppState, projectName string) {
+	root := sm.rootProjectName(s, projectName)
+	if slot, ok := s.NavProjectSlot[root]; ok {
+		delete(s.NavSlots, slot)
+		delete(s.NavProjectSlot, root)
+	}
 }
