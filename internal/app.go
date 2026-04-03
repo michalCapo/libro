@@ -149,6 +149,7 @@ func Run(assets embed.FS) {
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(DialogID, renderAddDialog(false, sid)).
+			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(savedAppsJS()).
 			Build()
 	})
@@ -535,7 +536,7 @@ func Run(assets embed.FS) {
 		jsSwitch := switchProjectJS(name, renderMainArea(state, sid))
 
 		return r.NewResponse().
-			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Replace(ProjectDialogID, renderProjectDialog(false, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
@@ -564,7 +565,7 @@ func Run(assets embed.FS) {
 		}
 
 		return r.NewResponse().
-			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
@@ -589,7 +590,7 @@ func Run(assets embed.FS) {
 		}
 
 		return r.NewResponse().
-			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
@@ -614,7 +615,7 @@ func Run(assets embed.FS) {
 		}
 
 		return r.NewResponse().
-			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
@@ -646,7 +647,7 @@ func Run(assets embed.FS) {
 		}
 
 		return r.NewResponse().
-			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
@@ -673,7 +674,7 @@ func Run(assets embed.FS) {
 		}
 
 		return r.NewResponse().
-			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
@@ -716,7 +717,7 @@ func Run(assets embed.FS) {
 		DBRemoveProject(name)
 
 		resp := r.NewResponse().
-			Replace(ProjectBarID, renderProjectBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(fmt.Sprintf(`(function(){var el=document.getElementById('project-main-%s');if(el)el.remove();})();`, name))
 
 		if wasActive {
@@ -760,8 +761,12 @@ func Run(assets embed.FS) {
 		}
 		DBRemoveSavedAppByID(dbid)
 		state := sm.Get(sid)
-		// Re-render the manage apps page to reflect the deletion
-		return renderManageAppsPage(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + savedAppsJS()
+		// Re-render the manage apps page and top bar to reflect the deletion
+		return r.NewResponse().
+			Replace(projectMainID(state.ActiveProject), renderManageAppsPage(state, sid)).
+			Replace(TopBarID, renderTopBar(state, sid)).
+			Add(savedAppsJS()).
+			Build()
 	})
 
 	// Set edit DB ID for editing a saved app
@@ -828,6 +833,131 @@ func Run(assets embed.FS) {
 		}
 
 		return ""
+	})
+
+	// Switch to a worktree (creates virtual project if needed)
+	app.Action("worktree.switch", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		parentProject, _ := data["project"].(string)
+		wtPath, _ := data["path"].(string)
+		branch, _ := data["branch"].(string)
+		if parentProject == "" || wtPath == "" || branch == "" {
+			return ""
+		}
+
+		vtName := parentProject + "/" + branch
+
+		// Add virtual project if it doesn't exist
+		sm.AddVirtualProject(sid, vtName, wtPath, parentProject)
+
+		if !sm.SwitchProject(sid, vtName) {
+			return r.Notify("error", "Failed to switch to worktree")
+		}
+
+		state := sm.Get(sid)
+
+		var jsSwitch string
+		if sm.IsProjectRendered(sid, vtName) {
+			jsSwitch = switchProjectJS(vtName, nil)
+		} else {
+			jsSwitch = switchProjectJS(vtName, renderMainArea(state, sid))
+		}
+
+		return r.NewResponse().
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(jsSwitch).
+			Add(updateHashJS(vtName)).
+			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Build()
+	})
+
+	// Add a new worktree
+	app.Action("worktree.add", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		parentProject, _ := data["project"].(string)
+		branch, _ := data["branch"].(string)
+		branch = strings.TrimSpace(branch)
+		if parentProject == "" || branch == "" {
+			return r.Notify("error", "Branch name is required")
+		}
+
+		projectPath := sm.GetProjectPath(sid, parentProject)
+		if projectPath == "" {
+			return r.Notify("error", "Project not found")
+		}
+
+		// Create worktree at sibling directory: ../projectName-branchName
+		targetPath := filepath.Join(filepath.Dir(projectPath), filepath.Base(projectPath)+"-"+branch)
+
+		if err := GitAddWorktree(projectPath, branch, targetPath); err != nil {
+			return r.Notify("error", "Failed to add worktree: "+err.Error())
+		}
+
+		state := sm.Get(sid)
+		return r.NewResponse().
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(worktreesJS(state)).
+			Build()
+	})
+
+	// Remove a worktree
+	app.Action("worktree.remove", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		parentProject, _ := data["project"].(string)
+		wtPath, _ := data["path"].(string)
+		if parentProject == "" || wtPath == "" {
+			return ""
+		}
+
+		projectPath := sm.GetProjectPath(sid, parentProject)
+		if projectPath == "" {
+			return r.Notify("error", "Project not found")
+		}
+
+		// Find and remove virtual project for this worktree
+		state := sm.Get(sid)
+		for _, p := range state.Projects {
+			if p.Virtual && p.Path == wtPath {
+				wasActive := state.ActiveProject == p.Name
+				apps, ok := sm.RemoveVirtualProject(sid, p.Name)
+				if ok {
+					for _, a := range apps {
+						if a.Type == AppTypeTerminal {
+							tm.Stop(a.ID)
+						}
+					}
+				}
+				if wasActive {
+					sm.SwitchProject(sid, parentProject)
+				}
+				break
+			}
+		}
+
+		if err := GitRemoveWorktree(projectPath, wtPath); err != nil {
+			return r.Notify("error", "Failed to remove worktree: "+err.Error())
+		}
+
+		state = sm.Get(sid)
+		resp := r.NewResponse().
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(worktreesJS(state))
+
+		return resp.Build()
+	})
+
+	// Open worktree add dialog
+	app.Action("worktree.dialog.open", func(ctx *r.Context) string {
+		data := ctx.WsData()
+		project, _ := data["project"].(string)
+		if project == "" {
+			return ""
+		}
+		// Return JS to open the worktree dialog with project context
+		return fmt.Sprintf(`(function(){if(window.__libroOpenWorktreeDialog)window.__libroOpenWorktreeDialog(%s);})();`, jsString(project))
 	})
 
 	registerTtydProxy(app)

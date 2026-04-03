@@ -22,14 +22,17 @@ func urlParse(rawURL string) (*url.URL, error) {
 }
 
 const (
-	DialogID        = "add-dialog"
-	MainAreaID      = "main-area"
-	ProjectBarID    = "project-bar"
-	ProjectDialogID = "project-dialog"
-	DirBrowserID    = "dir-browser"
+	DialogID           = "add-dialog"
+	MainAreaID         = "main-area"
+	ProjectBarID       = "project-bar" // kept for backward compat references
+	TopBarID           = "top-bar"
+	SidebarID          = "project-sidebar"
+	ProjectDialogID    = "project-dialog"
+	DirBrowserID       = "dir-browser"
 	SearchDialogID     = "search-dialog"
 	ShortcutsDialogID  = "shortcuts-dialog"
 	CloseDialogID      = "close-dialog"
+	WorktreeDialogID   = "worktree-dialog"
 )
 
 // termIconInfo stores the icon details for a known terminal command.
@@ -233,15 +236,18 @@ func projectMainID(projectName string) string {
 	return "project-main-" + projectName
 }
 
-// renderMainAreaWrapper renders the wrapper that contains all per-project main area divs.
+// renderMainAreaWrapper renders the wrapper that contains the sidebar and all per-project main area divs.
 // Only the active project's div is visible; others are hidden to preserve state.
 func renderMainAreaWrapper(state *AppState, sid string) *r.Node {
-	return r.Div("flex-1 flex flex-col overflow-hidden relative").ID(MainAreaID).Render(
-		renderMainArea(state, sid),
-		// Hidden pool to keep webview elements alive when their app tab is closed.
-		// This preserves session state (cookies, WebSocket connections) for sites
-		// like Discord that invalidate tokens when the webview process is destroyed.
-		r.Div("hidden").ID("webview-pool"),
+	return r.Div("flex-1 flex flex-row overflow-hidden relative").Render(
+		renderProjectSidebar(state, sid),
+		r.Div("flex-1 flex flex-col overflow-hidden relative").ID(MainAreaID).Render(
+			renderMainArea(state, sid),
+			// Hidden pool to keep webview elements alive when their app tab is closed.
+			// This preserves session state (cookies, WebSocket connections) for sites
+			// like Discord that invalidate tokens when the webview process is destroyed.
+			r.Div("hidden").ID("webview-pool"),
+		),
 	)
 }
 
@@ -380,9 +386,7 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 
 	mainArea := r.Div("flex-1 flex items-stretch overflow-hidden relative p-2").ID(projectMainID(state.ActiveProject)).
 		Render(
-			renderSideLauncher(sid, "left", state.ActiveProject),
 			strip,
-			renderSideLauncher(sid, "right", state.ActiveProject),
 		)
 	mainArea.JS(centerSelectedJS(state.SelectedIndex, len(state.Apps), state.ActiveProject))
 
@@ -1404,6 +1408,7 @@ func renderShortcutsDialog() *r.Node {
 			{"⌘ + Ctrl + L", "Move app right"},
 			{"Ctrl + 1–9", "Switch to project by index"},
 			{"Ctrl + 0", "Switch to last app-created project"},
+			{"⌘ + G", "Git worktrees popup"},
 		}},
 		{"Browser", "", []shortcut{
 			{"Ctrl + L", "Select browser URL bar"},
@@ -1541,6 +1546,232 @@ func closeDialogJS(sid string) string {
 	},true);
 })();
 `, sid, CloseDialogID)
+}
+
+// renderWorktreeDialog renders the worktree add/switch popup dialog (hidden by default).
+func renderWorktreeDialog(sid string) *r.Node {
+	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
+		ID(WorktreeDialogID).
+		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", WorktreeDialogID))).
+		Render(
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
+				OnClick(r.JS("event.stopPropagation()")).
+				Render(
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
+						r.I("material-icons-round text-teal-600 dark:text-teal-400 text-lg").Text("alt_route"),
+						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").ID("worktree-dialog-title").Text("Worktrees"),
+					),
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
+						r.Input("w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
+							ID("worktree-input").
+							Attr("type", "text").
+							Attr("placeholder", "Search worktrees or type new branch name...").
+							Attr("autocomplete", "off").
+							Attr("spellcheck", "false"),
+					),
+					r.Div("max-h-80 overflow-y-auto").ID("worktree-results"),
+					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+						r.Span("").Text("↑↓ navigate"),
+						r.Span("").Text("Enter switch/create"),
+						r.Span("").Text("Esc close"),
+					),
+				),
+		)
+}
+
+// worktreeDialogJS returns JS that powers the worktree popup behavior.
+func worktreeDialogJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	if(window.__libroWtRegistered)return;
+	window.__libroWtRegistered=true;
+
+	var dlg=document.getElementById('%s');
+	var inp=document.getElementById('worktree-input');
+	var res=document.getElementById('worktree-results');
+	var title=document.getElementById('worktree-dialog-title');
+	var selIdx=0;
+	var filtered=[];
+	var currentProject='';
+
+	function fuzzyMatch(text,query){
+		text=text.toLowerCase();query=query.toLowerCase();
+		var ti=0,qi=0,score=0,lastMatch=-1;
+		while(ti<text.length&&qi<query.length){
+			if(text[ti]===query[qi]){
+				score+=1;
+				if(lastMatch===ti-1)score+=2;
+				if(ti===0||text[ti-1]===' '||text[ti-1]==='/'||text[ti-1]==='.')score+=3;
+				lastMatch=ti;qi++;
+			}
+			ti++;
+		}
+		return qi===query.length?score:0;
+	}
+
+	function getWorktrees(){
+		return (window.__libroWorktrees||[]).filter(function(wt){
+			return !currentProject||wt.project===currentProject;
+		});
+	}
+
+	function render(){
+		var dk=document.documentElement.classList.contains('dark');
+		res.innerHTML='';
+		if(filtered.length===0){
+			var q=inp.value.trim();
+			if(q&&currentProject){
+				// Show "create new worktree" option
+				var row=document.createElement('div');
+				row.className='flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
+					+(dk?'bg-teal-900/30 border-l-2 border-teal-500':'bg-teal-50 border-l-2 border-teal-500');
+				row.innerHTML='<i class="material-icons-round text-teal-500 text-lg">add</i>'
+					+'<div class="flex-1 min-w-0"><div class="text-sm '+(dk?'text-zinc-200':'text-gray-800')+'">Create worktree: <b>'+q+'</b></div></div>';
+				row.onclick=function(){createWorktree(q);};
+				res.appendChild(row);
+			} else {
+				res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No worktrees found</div>';
+			}
+			return;
+		}
+		filtered.forEach(function(item,i){
+			var row=document.createElement('div');
+			var sel=i===selIdx;
+			row.className='flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
+				+(sel?(dk?'bg-teal-900/30 border-l-2 border-teal-500':'bg-teal-50 border-l-2 border-teal-500')
+				:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'));
+			var txtCls=dk?'text-zinc-200':'text-gray-800';
+			var subCls=dk?'text-zinc-500':'text-gray-400';
+			row.innerHTML='<i class="material-icons-round '+(dk?'text-zinc-400':'text-gray-400')+' text-lg">alt_route</i>'
+				+'<div class="flex-1 min-w-0"><div class="text-sm truncate '+txtCls+'">'+item.branch+'</div>'
+				+'<div class="text-[11px] truncate '+subCls+'">'+item.project+' — '+item.path+'</div></div>';
+			row.onmouseenter=function(){
+				if(selIdx===i)return;
+				var prev=res.children[selIdx];
+				if(prev)prev.className=prev.className.replace(/bg-teal-900\/30|bg-teal-50/g,'').replace(/border-teal-500/g,'border-transparent')+(dk?' hover:bg-zinc-800':' hover:bg-gray-50');
+				selIdx=i;
+				row.className=row.className.replace(/hover:bg-zinc-800|hover:bg-gray-50/g,'').replace(/border-transparent/g,'border-teal-500')+(dk?' bg-teal-900/30':' bg-teal-50');
+			};
+			row.onclick=function(){launch();};
+			res.appendChild(row);
+		});
+		var sel=res.children[selIdx];
+		if(sel)sel.scrollIntoView({block:'nearest'});
+	}
+
+	function filter(){
+		var q=inp.value.trim();
+		var wts=getWorktrees();
+		if(!q){
+			filtered=wts.map(function(w){return{branch:w.branch,project:w.project,path:w.path,score:1};});
+		}else{
+			filtered=[];
+			wts.forEach(function(w){
+				var text=w.branch+' '+w.project+' '+w.path;
+				var score=fuzzyMatch(text,q);
+				if(score>0)filtered.push({branch:w.branch,project:w.project,path:w.path,score:score});
+			});
+			filtered.sort(function(a,b){return b.score-a.score;});
+		}
+		selIdx=0;
+		render();
+	}
+
+	function launch(){
+		if(filtered.length===0){
+			var q=inp.value.trim();
+			if(q&&currentProject){createWorktree(q);}
+			return;
+		}
+		var item=filtered[selIdx];
+		dlg.classList.add('hidden');
+		inp.value='';
+		__ws.call('worktree.switch',{sid:'%s',project:item.project,path:item.path,branch:item.branch});
+	}
+
+	function createWorktree(branch){
+		if(!currentProject)return;
+		dlg.classList.add('hidden');
+		inp.value='';
+		__ws.call('worktree.add',{sid:'%s',project:currentProject,branch:branch});
+	}
+
+	function openDialog(project){
+		currentProject=project||'';
+		if(project){
+			title.textContent='Worktrees — '+project;
+		}else{
+			title.textContent='Worktrees';
+		}
+		dlg.classList.remove('hidden');
+		inp.value='';
+		filter();
+		setTimeout(function(){inp.focus();},50);
+	}
+
+	function closeDialog(){
+		dlg.classList.add('hidden');
+		inp.value='';
+	}
+
+	inp.addEventListener('input',filter);
+	inp.addEventListener('keydown',function(e){
+		e.stopImmediatePropagation();
+		if(e.key==='ArrowDown'){
+			e.preventDefault();
+			if(selIdx<filtered.length-1){selIdx++;render();}
+		}else if(e.key==='ArrowUp'){
+			e.preventDefault();
+			if(selIdx>0){selIdx--;render();}
+		}else if(e.key==='Enter'){
+			e.preventDefault();
+			launch();
+		}else if(e.key==='Escape'){
+			e.preventDefault();
+			closeDialog();
+		}
+	});
+
+	window.__libroOpenWorktreeDialog=openDialog;
+})();
+`, WorktreeDialogID, sid, sid)
+}
+
+// worktreesJS returns JS that sets the global __libroWorktrees variable from all git projects.
+func worktreesJS(state *AppState) string {
+	if !GitAvailable() {
+		return "window.__libroWorktrees=[];"
+	}
+	type jsWorktree struct {
+		Project string `json:"project"`
+		Branch  string `json:"branch"`
+		Path    string `json:"path"`
+	}
+	var all []jsWorktree
+	for _, p := range state.Projects {
+		if !p.IsGitRepo || p.Virtual {
+			continue
+		}
+		wts, err := GitListWorktrees(p.Path)
+		if err != nil {
+			continue
+		}
+		for _, wt := range wts {
+			if wt.IsBare {
+				continue
+			}
+			all = append(all, jsWorktree{
+				Project: p.Name,
+				Branch:  wt.Branch,
+				Path:    wt.Path,
+			})
+		}
+	}
+	b, _ := json.Marshal(all)
+	if b == nil {
+		b = []byte("[]")
+	}
+	return fmt.Sprintf("window.__libroWorktrees=%s;", string(b))
 }
 
 // renderManageAppsPage renders a full-page view for managing saved apps.
@@ -1704,113 +1935,112 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 }
 
 // renderProjectBar renders the horizontal project switcher bar
-func renderProjectBar(state *AppState, sid string) *r.Node {
-	buttons := make([]*r.Node, 0, len(state.Projects)+1)
+// renderTopBar renders the top bar with saved app icons, browse/add buttons, and action buttons.
+func renderTopBar(state *AppState, sid string) *r.Node {
+	savedApps := DBLoadVisibleSavedApps(state.ActiveProject)
 
-	for i, proj := range state.Projects {
-		cls := "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono rounded-md cursor-pointer transition-colors duration-75 "
-		if proj.Name == state.ActiveProject {
-			cls += "bg-teal-600 text-white"
-		} else {
-			cls += "bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-300 dark:hover:bg-zinc-700"
-		}
+	btnCls := "w-9 h-9 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-gray-200 dark:hover:bg-zinc-700 relative group/ico"
+	tipCls := "absolute top-full mt-1 px-2 py-1 text-xs rounded bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg"
 
-		// Shortcut label: 1-9 for first 9 projects, 0 = last-app-created project
-		shortcutLabel := ""
-		if i < 9 {
-			shortcutLabel = fmt.Sprintf("%d", i+1)
-		}
+	appIcons := make([]*r.Node, 0, len(savedApps)+2)
+	for _, app := range savedApps {
+		var iconNode *r.Node
+		label := app.Name
 
-		projBtn := r.Button(cls).
-			Attr("title", proj.Path).
-			OnClick(r.JS(fmt.Sprintf(
-				"history.replaceState(null,'','#%s');__ws.call('project.switch',{sid:'%s',name:'%s'});",
-				proj.Name, sid, proj.Name,
-			)))
-
-		if shortcutLabel != "" {
-			badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none "
-			if proj.Name == state.ActiveProject {
-				badgeCls += "bg-teal-500 text-teal-100"
-			} else {
-				badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500"
+		if app.Type == "terminal" {
+			if label == "" {
+				label = app.Command
 			}
-			projBtn.Render(
-				r.Span(badgeCls).Text(shortcutLabel),
-				r.Span("").Text(proj.Name),
-			)
+			if info := lookupTermIcon(app.Command); info != nil {
+				if info.URL != "" {
+					iconNode = r.Img("w-6 h-6 rounded-sm").Attr("src", info.URL)
+				} else {
+					iconNode = r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-xl").Text(info.MaterialIcon)
+				}
+			} else if app.IconURL != "" {
+				iconNode = r.Img("w-6 h-6 rounded-sm").Attr("src", app.IconURL)
+			} else {
+				iconNode = r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-xl").Text("terminal")
+			}
 		} else {
-			projBtn.Text(proj.Name)
+			if label == "" {
+				label = app.URL
+			}
+			iconNode = r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-xl").Text("language")
+			if app.URL != "" {
+				if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
+					iconNode = r.Img("w-6 h-6 rounded-sm").
+						Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=32")
+					if label == app.URL {
+						h := strings.TrimPrefix(u.Hostname(), "www.")
+						label = h
+					}
+				}
+			}
 		}
 
-		buttons = append(buttons, projBtn)
+		btn := r.Button(btnCls).
+			Render(iconNode, r.Span(tipCls).Text(label)).
+			OnClick(&r.Action{Name: "app.start", Data: map[string]any{
+				"sid": sid, "type": app.Type, "url": app.URL,
+				"command": app.Command, "width": app.Width,
+				"writable": app.Writable, "name": app.Name,
+				"iconUrl": app.IconURL,
+			}})
+		appIcons = append(appIcons, btn)
 	}
 
-	// Add project button
-	buttons = append(buttons,
-		r.Button("flex items-center justify-center w-7 h-7 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-gray-200 dark:hover:bg-zinc-800 transition-colors duration-75").
-			Render(r.I("material-icons-round text-[18px]").Text("add")).
-			OnClick(&r.Action{
-				Name: "project.dialog.open",
-				Data: sidData(sid),
-			}),
+	// Browse button
+	appIcons = append(appIcons,
+		r.Button(btnCls).
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("language"),
+				r.Span(tipCls).Text("Quick browse"),
+			).
+			OnClick(&r.Action{Name: "app.browse.new", Data: sidData(sid)}),
 	)
 
-	// Show active project path
-	activePath := ""
-	for _, p := range state.Projects {
-		if p.Name == state.ActiveProject {
-			activePath = p.Path
-			break
-		}
-	}
+	// Add button
+	appIcons = append(appIcons,
+		r.Button(btnCls).
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-teal-600 dark:hover:text-teal-400 text-[18px]").Text("add"),
+				r.Span(tipCls).Text("Add new"),
+			).
+			OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
+	)
 
-	return r.Div("flex items-center gap-1.5 px-3 py-2 border-b border-gray-200 dark:border-zinc-800 shrink-0").
-		ID(ProjectBarID).
+	hdrBtnCls := "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors"
+
+	return r.Div("flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-200 dark:border-zinc-800 shrink-0").
+		ID(TopBarID).
 		Render(
 			r.Img("w-7 h-7 shrink-0").Attr("src", "/assets/logo.svg").Attr("alt", "Libro"),
-			r.Div("flex items-center gap-1.5").Render(buttons...),
-			func() *r.Node {
-				pathWrapper := r.Div("group ml-3 flex items-center gap-1").Render(
-					r.Span("text-[11px] font-mono text-gray-400 dark:text-zinc-600 truncate").Text(activePath),
-				)
-				if state.ActiveProject != "home" {
-					pathWrapper.Render(
-						r.Button("flex items-center justify-center w-4 h-4 rounded cursor-pointer text-red-500 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity duration-75").
-							Attr("title", "Remove project").
-							OnClick(&r.Action{
-								Name: "project.remove",
-								Data: map[string]any{"sid": sid, "name": state.ActiveProject},
-							}).
-							Render(r.I("material-icons-round text-[14px]").Text("close")),
-					)
-				}
-				return pathWrapper
-			}(),
+			r.Div("flex items-center gap-0.5 ml-2").Render(appIcons...),
 			r.Div("ml-auto flex items-center gap-1").Render(
 				r.Span("text-xs text-gray-400 dark:text-gray-500 font-mono select-none").Text("v"+version.Version),
-				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
+				r.Button(hdrBtnCls).
 					Attr("title", "Manage saved apps").
 					OnClick(&r.Action{Name: "app.manage.open", Data: sidData(sid)}).
 					Render(
 						r.I("material-icons-round text-base").Text("apps"),
 						r.Span("").Text("Apps"),
 					),
-				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
+				r.Button(hdrBtnCls).
 					Attr("title", "Keyboard shortcuts").
 					Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.toggle('hidden');", ShortcutsDialogID)).
 					Render(
 						r.I("material-icons-round text-base").Text("keyboard"),
 						r.Span("").Text("Shortcuts"),
 					),
-				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
+				r.Button(hdrBtnCls).
 					Attr("title", "Developer console").
 					Attr("onclick", "if(window.libroElectron&&window.libroElectron.toggleDevTools)window.libroElectron.toggleDevTools();").
 					Render(
 						r.I("material-icons-round text-base").Text("code"),
 						r.Span("").Text("Console"),
 					),
-				r.Button("inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors").
+				r.Button(hdrBtnCls).
 					Attr("title", "Toggle fullscreen").
 					Attr("onclick", "if(document.fullscreenElement){if(navigator.keyboard&&navigator.keyboard.unlock)navigator.keyboard.unlock();document.exitFullscreen();this.querySelector('i').textContent='fullscreen';this.querySelector('span').textContent='Fullscreen';}else{document.documentElement.requestFullscreen().then(function(){if(navigator.keyboard&&navigator.keyboard.lock)navigator.keyboard.lock(['Escape']);});this.querySelector('i').textContent='fullscreen_exit';this.querySelector('span').textContent='Exit';}").
 					Render(
@@ -1820,6 +2050,210 @@ func renderProjectBar(state *AppState, sid string) *r.Node {
 				r.ThemeSwitcher(),
 			),
 		)
+}
+
+// renderProjectSidebar renders the left sidebar with project tree and worktrees.
+func renderProjectSidebar(state *AppState, sid string) *r.Node {
+	items := make([]*r.Node, 0, len(state.Projects)+1)
+
+	for i, proj := range state.Projects {
+		// Skip virtual projects — they're shown as worktree sub-items under their parent
+		if proj.Virtual {
+			continue
+		}
+
+		isActive := proj.Name == state.ActiveProject
+		// Also check if active project is a virtual child of this project
+		isParentOfActive := false
+		for _, p := range state.Projects {
+			if p.Virtual && p.ParentProject == proj.Name && p.Name == state.ActiveProject {
+				isParentOfActive = true
+				break
+			}
+		}
+
+		// Project button
+		projCls := "w-full flex items-center gap-2 px-3 py-2 text-sm font-mono rounded-md cursor-pointer transition-colors duration-75 group/proj "
+		if isActive {
+			projCls += "bg-teal-600 text-white"
+		} else {
+			projCls += "text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-800"
+		}
+
+		iconName := "folder"
+		if proj.IsGitRepo {
+			iconName = "source"
+		}
+
+		// Shortcut badge
+		var badgeNode *r.Node
+		if i < 9 {
+			badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 "
+			if isActive {
+				badgeCls += "bg-teal-500 text-teal-100"
+			} else {
+				badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500"
+			}
+			badgeNode = r.Span(badgeCls).Text(fmt.Sprintf("%d", i+1))
+		}
+
+		projBtn := r.Button(projCls).
+			Attr("title", proj.Path).
+			OnClick(r.JS(fmt.Sprintf(
+				"history.replaceState(null,'','#%s');__ws.call('project.switch',{sid:'%s',name:'%s'});",
+				proj.Name, sid, proj.Name,
+			)))
+
+		btnChildren := []*r.Node{
+			r.I("material-icons-round text-base shrink-0").Text(iconName),
+		}
+		if badgeNode != nil {
+			btnChildren = append(btnChildren, badgeNode)
+		}
+		btnChildren = append(btnChildren, r.Span("truncate flex-1 text-left").Text(proj.Name))
+
+		// Delete button (hidden until hover, not for home)
+		if proj.Name != "home" {
+			deleteCls := "flex items-center justify-center w-5 h-5 rounded cursor-pointer opacity-0 group-hover/proj:opacity-100 transition-opacity duration-75 shrink-0 "
+			if isActive {
+				deleteCls += "text-teal-200 hover:text-white hover:bg-white/15"
+			} else {
+				deleteCls += "text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10"
+			}
+			btnChildren = append(btnChildren,
+				r.Button(deleteCls).
+					Attr("title", "Remove project").
+					Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('project.remove',{sid:'%s',name:'%s'});", sid, proj.Name)).
+					Render(r.I("material-icons-round text-[14px]").Text("close")),
+			)
+		}
+
+		projBtn.Render(btnChildren...)
+
+		projItem := r.Div("").Render(projBtn)
+
+		// Worktree sub-items for git repos
+		if proj.IsGitRepo && GitAvailable() {
+			worktrees, err := GitListWorktrees(proj.Path)
+			if err == nil && len(worktrees) > 1 {
+				wtItems := make([]*r.Node, 0, len(worktrees))
+				for _, wt := range worktrees {
+					if wt.IsBare {
+						continue
+					}
+					// Check if this worktree is the active virtual project
+					vtName := proj.Name + "/" + wt.Branch
+					isWtActive := state.ActiveProject == vtName
+					// Also highlight if main worktree path matches project path and project is active
+					isMainWt := wt.Path == proj.Path
+					if isMainWt && isActive {
+						isWtActive = true
+					}
+
+					wtCls := "w-full flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer transition-colors duration-75 "
+					if isWtActive {
+						wtCls += "bg-teal-500/20 text-teal-700 dark:text-teal-300"
+					} else {
+						wtCls += "text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-700 dark:hover:text-zinc-300"
+					}
+
+					var wtOnClick string
+					if isMainWt {
+						wtOnClick = fmt.Sprintf(
+							"history.replaceState(null,'','#%s');__ws.call('project.switch',{sid:'%s',name:'%s'});",
+							proj.Name, sid, proj.Name,
+						)
+					} else {
+						wtOnClick = fmt.Sprintf(
+							"__ws.call('worktree.switch',{sid:'%s',project:'%s',path:'%s',branch:'%s'});",
+							sid, proj.Name, wt.Path, wt.Branch,
+						)
+					}
+
+					wtBtn := r.Button(wtCls).
+						Attr("title", wt.Path).
+						OnClick(r.JS(wtOnClick)).
+						Render(
+							r.I("material-icons-round text-sm shrink-0").Text("alt_route"),
+							r.Span("truncate flex-1 text-left").Text(wt.Branch),
+						)
+
+					// Delete worktree button (not for main worktree)
+					if !isMainWt {
+						wtBtn.Render(
+							r.Button("flex items-center justify-center w-4 h-4 rounded cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover/proj:opacity-100 transition-opacity duration-75 shrink-0").
+								Attr("title", "Remove worktree").
+								Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('worktree.remove',{sid:'%s',project:'%s',path:'%s'});", sid, proj.Name, wt.Path)).
+								Render(r.I("material-icons-round text-[12px]").Text("close")),
+						)
+					}
+
+					wtItems = append(wtItems, wtBtn)
+				}
+
+				// Add worktree button
+				wtItems = append(wtItems,
+					r.Button("w-full flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors duration-75").
+						Attr("onclick", fmt.Sprintf("__ws.call('worktree.dialog.open',{sid:'%s',project:'%s'});", sid, proj.Name)).
+						Render(
+							r.I("material-icons-round text-sm shrink-0").Text("add"),
+							r.Span("").Text("Add worktree"),
+						),
+				)
+
+				projItem.Render(r.Div("mt-0.5").Render(wtItems...))
+			} else if err == nil && (isActive || isParentOfActive) {
+				// Single worktree (or none) — still show add button
+				projItem.Render(
+					r.Div("mt-0.5").Render(
+						r.Button("w-full flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors duration-75").
+							Attr("onclick", fmt.Sprintf("__ws.call('worktree.dialog.open',{sid:'%s',project:'%s'});", sid, proj.Name)).
+							Render(
+								r.I("material-icons-round text-sm shrink-0").Text("add"),
+								r.Span("").Text("Add worktree"),
+							),
+					),
+				)
+			}
+		}
+
+		items = append(items, projItem)
+	}
+
+	// Add project button
+	items = append(items,
+		r.Button("w-full flex items-center gap-2 px-3 py-2 text-sm font-mono text-gray-400 dark:text-zinc-600 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-md cursor-pointer transition-colors duration-75 mt-1").
+			OnClick(&r.Action{Name: "project.dialog.open", Data: sidData(sid)}).
+			Render(
+				r.I("material-icons-round text-base shrink-0").Text("add"),
+				r.Span("").Text("New Project"),
+			),
+	)
+
+	// Active project path display
+	activePath := ""
+	for _, p := range state.Projects {
+		if p.Name == state.ActiveProject {
+			activePath = p.Path
+			break
+		}
+	}
+
+	return r.Div("w-52 shrink-0 flex flex-col border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/50 overflow-hidden").
+		ID(SidebarID).
+		Render(
+			r.Div("flex-1 overflow-y-auto p-2 flex flex-col gap-0.5").Render(items...),
+			r.Div("px-3 py-2 border-t border-gray-200 dark:border-zinc-800").Render(
+				r.Span("text-[10px] font-mono text-gray-400 dark:text-zinc-600 truncate block").
+					Attr("title", activePath).
+					Text(activePath),
+			),
+		)
+}
+
+// renderProjectBar kept as alias for backward compatibility in action responses.
+func renderProjectBar(state *AppState, sid string) *r.Node {
+	return renderProjectSidebar(state, sid)
 }
 
 // renderProjectDialog renders the create project modal
@@ -2134,6 +2568,12 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					__ws.call('app.close.current', {"sid": "%s"});
+				}
+				if (e.metaKey && (e.key === 'g' || e.key === 'G')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenWorktreeDialog) window.__libroOpenWorktreeDialog();
+					return;
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L')) {
 					var selToolbar = document.querySelector('.bg-teal-600.border-teal-700');
