@@ -1426,6 +1426,8 @@ func renderShortcutsDialog() *r.Node {
 			{"⌘ + N", "New app (right of current)"},
 			{"⌘ + Ctrl + N", "New app (left of current)"},
 			{"⌘ + D", "Close current app"},
+			{"⌘ + +", "Zoom in (whole app)"},
+			{"⌘ + -", "Zoom out (whole app)"},
 		}},
 		{"Navigation", "", []shortcut{
 			{"⌘ + H", "Navigate left"},
@@ -1439,8 +1441,6 @@ func renderShortcutsDialog() *r.Node {
 		{"Browser", "", []shortcut{
 			{"Ctrl + L", "Select browser URL bar"},
 			{"Ctrl + R", "Reload browser page"},
-			{"Ctrl + +", "Zoom in"},
-			{"Ctrl + -", "Zoom out"},
 		}},
 		{"Browser", "Vim keys — disabled in input fields", []shortcut{
 			{"g / G", "Go to top / bottom of page"},
