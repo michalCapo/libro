@@ -83,7 +83,13 @@ func Run(assets embed.FS) {
 			side = s
 		}
 		sm.OpenDialog(sid, side)
-		return r.Show(DialogID)
+		state := sm.Get(sid)
+		js := r.Show(DialogID)
+		if state.ManageOpen {
+			state.ManageOpen = false
+			js = removeManageOverlayJS() + js
+		}
+		return js
 	})
 
 	// Close add dialog
@@ -146,12 +152,24 @@ func Run(assets embed.FS) {
 		sm.CloseDialog(sid)
 		sm.Get(sid).EditDBID = -1
 
-		return r.NewResponse().
-			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
+		resp := r.NewResponse().
 			Replace(DialogID, renderAddDialog(false, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(savedAppsJS()).
-			Build()
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(savedAppsJS())
+
+		// Only replace main area when no apps are running (empty state),
+		// to avoid destroying live iframes/webviews.
+		if len(state.Apps) == 0 {
+			resp.Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid))
+		}
+
+		// Refresh manage overlay if it's open
+		if state.ManageOpen {
+			resp.Replace(ManageDialogID, renderManageAppsPage(state, sid))
+		}
+
+		return resp.Build()
 	})
 
 	// Quick browse - open URL or Google search
@@ -728,24 +746,24 @@ func Run(assets embed.FS) {
 		return resp.Build()
 	})
 
-	// Toggle manage apps page
+	// Toggle manage apps overlay
 	app.Action("app.manage.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		state := sm.Get(sid)
 		if state.ManageOpen {
 			state.ManageOpen = false
-			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+			return removeManageOverlayJS()
 		}
 		state.ManageOpen = true
-		return renderManageAppsPage(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+		return showManageOverlayJS(renderManageAppsPage(state, sid))
 	})
 
-	// Close manage apps page — return to normal main area
+	// Close manage apps overlay
 	app.Action("app.manage.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		state := sm.Get(sid)
 		state.ManageOpen = false
-		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+		return removeManageOverlayJS()
 	})
 
 	// Delete a saved app from DB
@@ -761,10 +779,11 @@ func Run(assets embed.FS) {
 		}
 		DBRemoveSavedAppByID(dbid)
 		state := sm.Get(sid)
-		// Re-render the manage apps page and top bar to reflect the deletion
+		// Re-render the manage overlay and top bar to reflect the deletion
 		return r.NewResponse().
-			Replace(projectMainID(state.ActiveProject), renderManageAppsPage(state, sid)).
+			Replace(ManageDialogID, renderManageAppsPage(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(savedAppsJS()).
 			Build()
 	})
