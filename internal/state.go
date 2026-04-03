@@ -31,8 +31,11 @@ type Application struct {
 
 // Project represents a named working directory
 type Project struct {
-	Name string
-	Path string
+	Name          string
+	Path          string
+	IsGitRepo     bool   // detected at load time, not persisted
+	Virtual       bool   // true for worktree-derived projects
+	ParentProject string // name of parent project (for virtual projects)
 }
 
 // projectSnapshot stores a project's apps while it is not active
@@ -65,6 +68,9 @@ type AppState struct {
 
 	// ManageOpen tracks whether the manage apps page is shown
 	ManageOpen bool
+
+	// WorktreeDialogOpen tracks whether the worktree popup is shown
+	WorktreeDialogOpen bool
 }
 
 // StateManager manages per-session app states
@@ -100,6 +106,7 @@ func (sm *StateManager) NewSession() string {
 	sid := fmt.Sprintf("session-%d", sm.nextID)
 
 	projects := DBLoadProjects()
+	detectGitRepos(projects)
 	rendered := make(map[string]bool)
 	if len(projects) > 0 {
 		rendered[projects[0].Name] = true
@@ -123,6 +130,7 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 		return s
 	}
 	projects := DBLoadProjects()
+	detectGitRepos(projects)
 	rendered := make(map[string]bool)
 	if len(projects) > 0 {
 		rendered[projects[0].Name] = true
@@ -507,7 +515,11 @@ func (sm *StateManager) AddProject(sessionID, name, path string) bool {
 			return false
 		}
 	}
-	s.Projects = append(s.Projects, Project{Name: name, Path: path})
+	p := Project{Name: name, Path: path}
+	if GitAvailable() {
+		p.IsGitRepo = GitIsRepo(path)
+	}
+	s.Projects = append(s.Projects, p)
 	return true
 }
 
@@ -736,4 +748,110 @@ func (sm *StateManager) CloseProjectDialog(sessionID string) {
 	if s != nil {
 		s.ProjectDialogOpen = false
 	}
+}
+
+// detectGitRepos sets IsGitRepo on each project by checking with git.
+func detectGitRepos(projects []Project) {
+	if !GitAvailable() {
+		return
+	}
+	for i := range projects {
+		projects[i].IsGitRepo = GitIsRepo(projects[i].Path)
+	}
+}
+
+// AddVirtualProject adds a worktree-derived virtual project to the session.
+// Virtual projects are not persisted to the database.
+func (sm *StateManager) AddVirtualProject(sessionID, name, path, parentProject string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return false
+	}
+	for _, p := range s.Projects {
+		if p.Name == name {
+			return false
+		}
+	}
+	s.Projects = append(s.Projects, Project{
+		Name:          name,
+		Path:          path,
+		IsGitRepo:     true,
+		Virtual:       true,
+		ParentProject: parentProject,
+	})
+	return true
+}
+
+// RemoveVirtualProject removes a virtual project and cleans up its snapshot/apps.
+func (sm *StateManager) RemoveVirtualProject(sessionID, name string) ([]Application, bool) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return nil, false
+	}
+
+	idx := -1
+	for i, p := range s.Projects {
+		if p.Name == name && p.Virtual {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return nil, false
+	}
+
+	s.Projects = append(s.Projects[:idx], s.Projects[idx+1:]...)
+
+	var apps []Application
+	if snap, ok := s.snapshots[name]; ok {
+		apps = snap.Apps
+		delete(s.snapshots, name)
+	}
+	delete(s.renderedProjects, name)
+
+	if s.ActiveProject == name {
+		s.ActiveProject = "home"
+	}
+
+	return apps, true
+}
+
+// OpenWorktreeDialog sets the worktree dialog open flag
+func (sm *StateManager) OpenWorktreeDialog(sessionID string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s != nil {
+		s.WorktreeDialogOpen = true
+	}
+}
+
+// CloseWorktreeDialog clears the worktree dialog open flag
+func (sm *StateManager) CloseWorktreeDialog(sessionID string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s != nil {
+		s.WorktreeDialogOpen = false
+	}
+}
+
+// GetProjectPath returns the path for a named project
+func (sm *StateManager) GetProjectPath(sessionID, projectName string) string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return ""
+	}
+	for _, p := range s.Projects {
+		if p.Name == projectName {
+			return p.Path
+		}
+	}
+	return ""
 }
