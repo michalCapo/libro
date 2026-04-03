@@ -7,48 +7,10 @@ A Go + Electron application using [g-sui](https://github.com/michalCapo/g-sui) t
 - **Backend**: Go with g-sui (server-rendered UI via WebSocket)
 - **Desktop Shell**: Electron with `<webview>` tag support for native web rendering
 - **Frontend**: Minimal client JS for webview lifecycle, navigation tracking, and input forwarding
-- **Styling**: Tailwind CSS classes (built into g-sui)
+- **Styling**: Tailwind CSS classes (built into g-sui) with full dark mode support
 - **State**: Server-side in-memory (application list, selected index, project snapshots)
-- **Persistence**: SQLite database (`~/.config/libro/libro.db`)
+- **Persistence**: SQLite database (`~/.local/share/libro/libro.db`)
 - **Communication**: WebSocket for UI interactions (g-sui)
-
-## Data Model
-
-### Application
-```go
-type Application struct {
-    ID       string
-    Type     AppType  // "url" or "terminal"
-    URL      string   // source URL (for terminals: http://localhost:<port>)
-    Command  string   // original command (terminal apps only)
-    Width    Width    // "sm" | "md" | "lg" | "xl" | "2xl" | "full"
-    Port     int      // ttyd port (terminal apps only)
-    Writable bool     // ttyd --writable flag (terminal apps only)
-    Name     string   // optional display name
-    IconURL  string   // cached icon URL (terminal apps only)
-}
-```
-
-### AppState (server-side, per-session)
-```go
-type AppState struct {
-    Apps              []Application
-    SelectedIndex     int
-    DialogOpen        bool
-    DialogSide        string // "left" or "right"
-    Projects          []Project
-    ActiveProject     string
-    ProjectDialogOpen bool
-}
-```
-
-### Project
-```go
-type Project struct {
-    Name string
-    Path string
-}
-```
 
 ## Width System
 
@@ -106,42 +68,60 @@ One application is always selected and centered. Clicking on a partially visible
 ### Multi-App Layout on Large Screens
 If the selected app doesn't fill the viewport, adjacent apps are shown partially or fully next to it. "+" buttons fill remaining space if no more apps to show.
 
-### State Management via WebSocket Actions
-- `app.add` - Add new application (receives URL + width from dialog)
-- `app.navigate.left` - Shift viewport left (show previous app)
-- `app.navigate.right` - Shift viewport right (show next app)
-- `app.select` - Select/focus a specific application by index
-- `app.dialog.open` - Open the add application dialog
-- `app.dialog.close` - Close the add application dialog
-- `app.url.set` - Change URL of a running application (navigates webview to new URL)
-- `app.browse.new` - Open a new empty browser panel with focus on the URL bar
-- `project.navigate.next` - Switch to the next project (wraps around)
-- `project.navigate.prev` - Switch to the previous project (wraps around)
+### Application Reordering
+Applications can be reordered within the strip using keyboard shortcuts (`⌘+Ctrl+H` to move left, `⌘+Ctrl+L` to move right). The selected app swaps position with its neighbor.
 
-All actions re-render the affected DOM sections via g-sui's Replace/Append.
+### Application Sorting
+Apps are sorted alphabetically by name (case-insensitive) when added. Manual reordering via move shortcuts overrides the sort order.
+
+### Manage Saved Apps
+A manage/edit overlay allows viewing all saved app definitions, editing existing saved apps (name, URL, command, width, etc.), and deleting saved app definitions from the database. Project-specific apps can be flagged to only appear in their associated project.
 
 ### Terminal Application Support (ttyd)
-Support for terminal-based applications via [ttyd](https://github.com/tsl0922/ttyd). When a user defines a terminal application, it starts on a new port using the `-p` parameter. Terminal applications are editable via the `--writable` parameter.
+Support for terminal-based applications via [ttyd](https://github.com/tsl0922/ttyd). When a user defines a terminal application, it starts on a new port using the `-p` parameter. Terminal applications are editable via the `--writable` parameter. Ports are allocated starting from 7681, automatically skipping any ports already in use.
 
 ### Close Application
-A close button is available on each application to remove it from the strip.
+A close button is available on each application to remove it from the strip. When closing the entire app with running applications, a confirmation dialog is shown to prevent accidental exit.
 
 ### Keyboard Shortcuts
-- `Win/Meta+H` — navigate left (previous app)
-- `Win/Meta+L` — navigate right (next app)
-- `Ctrl+1..9` — switch to project by index
-- `Ctrl+0` — switch to last project where an app was created
-- `Win/Meta+/` — open fuzzy search launcher
-- `Win/Meta+D` — close the currently selected app
-- `Ctrl+L` — focus the URL bar of the selected app
-- `Ctrl+R` — reload the selected app
+
+**Apps:**
+- `⌘ + N` — new app (right of current)
+- `⌘ + Ctrl + N` — new app (left of current)
+- `⌘ + D` — close current app
+- `⌘ + +` — zoom in (whole application)
+- `⌘ + -` — zoom out (whole application)
+
+**Navigation:**
+- `⌘ + H` — navigate left (previous app)
+- `⌘ + L` — navigate right (next app)
+- `⌘ + Ctrl + H` — move app left (reorder)
+- `⌘ + Ctrl + L` — move app right (reorder)
+- `⌘ + B` — toggle project sidebar
+- `Ctrl + 1–9` — switch to assigned project by slot
+- `Ctrl + 0` — switch to previous project
+- `⌘ + G` — git worktrees popup
+
+**Browser:**
+- `Ctrl + L` — focus the URL bar of the selected app
+- `Ctrl + R` — reload the selected app
+
+**Browser Vim Keys** (disabled in input fields):
+- `g / G` — go to top / bottom of page
+- `j / k` — scroll down / up
+- `h / l` — scroll left / right
+- `/` — find in page
+- `n / p` — find next / previous
+- `Esc` — clear search
+- `b / f` — page back / forward
+- `Enter` — follow link / click button
 
 Keyboard shortcuts from webview guest pages are intercepted at the Electron main process level (via `web-contents-created` + `before-input-event`) and forwarded to the host page as synthetic KeyboardEvents.
 
 When switching apps, the selected application scrolls into view only if it is off-screen (minimal scroll, no centering). Terminal (ttyd) iframes automatically receive focus when selected, including across project switches.
 
 ### Fuzzy Search Launcher
-Press `Win/Meta+/` to open a fuzzy search popup that lists all saved applications from the database. The user can type to filter the list — matching is fuzzy across app name, command, URL, and type, with scoring that prioritizes word boundaries and consecutive matches. Use arrow keys (Up/Down) to navigate the list, `Enter` to launch the selected app on the right side, `Ctrl+Enter` to launch on the left side, and `Escape` to close. The search is accessible from any context (with or without apps open, from any project).
+Press `⌘ + /` to open a fuzzy search popup that lists all saved applications from the database. The user can type to filter the list — matching is fuzzy across app name, command, URL, and type, with scoring that prioritizes word boundaries and consecutive matches. Use arrow keys (Up/Down) to navigate the list, `Enter` to launch the selected app on the right side, `Ctrl+Enter` to launch on the left side, and `Escape` to close. The search is accessible from any context (with or without apps open, from any project).
 
 A **Browser** entry is always available at the bottom of the list. Selecting it opens a new empty browser panel with the URL bar focused.
 
@@ -151,6 +131,9 @@ When typing a URL directly into the search box, a **Browse** entry appears at th
 - Local addresses: `localhost`, `127.0.0.1`, `0.0.0.0`, `[::1]`, `[::]`
 
 Local addresses (`localhost`, `127.0.0.1`, `0.0.0.0`, IPv6 loopback) automatically use `http://`. All other addresses default to `https://`.
+
+### Browsing History
+Browsed URLs are persisted to the database with timestamps and titles. History entries can be individually deleted or cleared entirely via WebSocket actions.
 
 ### Smart Terminal Icons
 Terminal applications display real brand icons for known commands instead of generic initials. Icons are resolved by matching the base command name (handling prefixes like `sudo`, `env`, and full paths). Known commands include neovim, vim, claude, node, python, docker, git, go, rust, ruby, kubernetes, terraform, tmux, and many more — sourced from Simple Icons CDN. Generic categories (shells, monitoring tools, build tools) use Material Design icons. Unknown commands fall back to the original colored gradient letter icon.
@@ -162,8 +145,20 @@ Projects can be removed by clicking the close button next to the project name in
 
 When switching between projects, applications from the previous project are kept alive but hidden. The app remembers position and size of applications per project. When returning to a project, its applications become visible again or are created if this is the first time opening the project in the session.
 
+### Project Sidebar
+The project sidebar lists all projects and can be collapsed/expanded with `⌘ + B`. Projects that are git repositories are automatically detected and marked. Each project can be assigned a keyboard navigation slot (Ctrl+2–9) for quick switching.
+
 ### Directory Picker for Projects
 When adding a new project, a directory picker is used to select the folder. The project name is determined from the folder path but can be changed by the user after selection.
+
+### Git Worktree Support
+For projects that are git repositories, a worktree dialog (`⌘ + G`) allows managing git worktrees:
+- **List** existing worktrees with their branch names
+- **Switch** to a worktree — creates a virtual project linked to the parent project
+- **Add** a new worktree for a branch (creates the branch if it doesn't exist)
+- **Remove** a worktree and its associated virtual project
+
+Virtual projects (created from worktrees) are not persisted to the database and share the keyboard nav slot of their parent project.
 
 ### Application State Preservation
 When opening new applications, existing applications (especially ttyd) are not reset and maintain their current state. Closing one application does not affect the state of other running applications.
@@ -173,6 +168,12 @@ When a single application is open in a project, it is centered horizontally. Whe
 
 ### Browse (Empty Browser)
 The "Browse" button (in both the empty state and side launchers) opens a new empty browser panel. The panel starts with a blank page and the URL bar focused, so the user can immediately type a URL or search query and press Enter to navigate. This behaves like opening a new browser tab.
+
+### Application Zoom
+The entire UI can be zoomed in (`⌘ + +`) or out (`⌘ + -`), handled at the Electron level with `webContents.setZoomLevel()`.
+
+### Dark Mode
+Full dark mode support using Tailwind `dark:` prefix classes throughout all components. System theme is detected and applied automatically.
 
 ### Version Display
 The current application version is shown in the header toolbar next to the shortcut buttons. In production builds, the version is injected at compile time via `-ldflags`. In development, it is read from the `VERSION` file at startup.
@@ -187,6 +188,7 @@ Libro runs as a desktop application using Electron. The Go backend starts an HTT
 ```bash
 libro              # starts server + opens Electron window
 libro --no-desktop # starts server only (no window)
+libro --version    # show version and exit (also -v)
 ```
 
 The Go binary launches Electron as a child process, passing the server port via `LIBRO_PORT`. If Electron is not installed locally, the Go binary runs `npm install` automatically. When the Electron window is closed, the Go process exits.
@@ -210,7 +212,9 @@ Development builds (`go build -tags dev`) use port `1439` instead of `8100`, so 
 
 Builds the Go binary for your OS/architecture and installs it to `~/.local/share/libro/` along with the Electron files (`package.json`, `electron/main.js`, `electron/preload.js`). Runs `npm install` to fetch Electron, then creates a symlink at `~/.local/bin/libro`. Works on Linux, macOS, and Windows (via MSYS/Cygwin).
 
-On **Linux**, it also installs a `.desktop` entry and sets a custom icon on the binary. On **Windows**, it embeds the icon into the `.exe` via `go-winres` (if installed).
+**Supported architectures:** x86_64 (amd64), aarch64/arm64.
+
+On **Linux**, it also installs a `.desktop` entry, sets a custom icon on the binary, and installs the app icon to `~/.local/share/icons/`. On **Windows**, it embeds the icon into the `.exe` via `go-winres` (if installed).
 
 ## Deploy
 
@@ -227,6 +231,8 @@ Reads the current version from `VERSION`, increments the patch number (e.g. `0.0
 2. **Viewport panning**: CSS `transform: translateX()` on the strip container, controlled by server state. The offset is calculated based on selected app index and total widths.
 3. **App container sizing**: Each app container gets a CSS class based on its width setting. Tailwind responsive utilities or inline styles computed server-side.
 4. **Session state**: g-sui's WebSocket connection context maintains per-user state. Each connected client has its own `AppState`.
-5. **SQLite persistence**: Application definitions and project config are stored in a SQLite database (`~/.config/libro/libro.db`) using a pure-Go driver (no CGO dependency).
+5. **SQLite persistence**: Application definitions and project config are stored in a SQLite database using a pure-Go driver (no CGO dependency). WAL mode enabled for concurrent reads.
 6. **Width classes**: Width enum maps to actual CSS max-width values. Uses Tailwind's responsive prefixes (sm:, md:, lg:, xl:, 2xl:).
 7. **Keyboard forwarding**: Electron's main process intercepts shortcuts from webview guest pages via `before-input-event` and forwards them as synthetic KeyboardEvents to the host page.
+8. **Virtual projects**: Git worktrees create temporary virtual projects that share nav slots with their parent project and are not persisted to the database.
+9. **Port allocation**: ttyd ports are allocated starting from 7681, automatically skipping occupied ports.
