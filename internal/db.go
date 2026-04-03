@@ -427,6 +427,17 @@ func DBSaveBrowsedURL(urlStr string) {
 	}
 }
 
+// DBDeleteBrowsedURL deletes a single URL from the browsed_urls table.
+func DBDeleteBrowsedURL(urlStr string) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	_, err := db.Exec("DELETE FROM browsed_urls WHERE url = ?", urlStr)
+	if err != nil {
+		log.Printf("db: delete browsed url: %v", err)
+	}
+}
+
 // DBClearBrowsedURLs deletes all entries from the browsed_urls table.
 func DBClearBrowsedURLs() {
 	dbMu.Lock()

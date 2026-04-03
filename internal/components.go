@@ -1261,12 +1261,27 @@ func searchDialogJS(sid string) string {
 			var subCls=dk?'text-zinc-500':'text-gray-400';
 			var badgeCls=dk?'bg-zinc-700 text-zinc-400':'bg-gray-200 text-gray-500';
 			var typeBadge=item.isBrowse?'browser':item.isHistory?'history':app.type;
+			var deleteBtn='';
+			if(item.isHistory){
+				deleteBtn='<i class="material-icons-round text-sm shrink-0 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity '+(dk?'text-zinc-500 hover:text-red-400':'text-gray-400 hover:text-red-500')+'" data-delete-url="'+app.url.replace(/"/g,'&quot;')+'">close</i>';
+			}
+			row.className+=' group';
 			row.innerHTML=iconHtml
 				+'<div class="flex-1 min-w-0"><div class="text-sm truncate '+txtCls+'">'+label+'</div>'
 				+(sub!==label?'<div class="text-[11px] truncate '+subCls+'">'+sub+'</div>':'')
 				+'</div>'
+				+deleteBtn
 				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+(app.width||'lg')+'</span>'
 				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+typeBadge+'</span>';
+			if(item.isHistory){
+				var delEl=row.querySelector('[data-delete-url]');
+				if(delEl){
+					delEl.onclick=function(e){
+						e.stopPropagation();
+						__ws.call('history.delete',{sid:'%s',url:app.url});
+					};
+				}
+			}
 			row.onmouseenter=function(){
 				if(selIdx===i)return;
 				var prev=res.children[selIdx];
@@ -1392,7 +1407,7 @@ func searchDialogJS(sid string) string {
 
 	window.__libroOpenSearch=openSearch;
 })();
-`, SearchDialogID, sid, sid, sid)
+`, SearchDialogID, sid, sid, sid, sid)
 }
 
 // renderShortcutsDialog renders the keyboard shortcuts popup (hidden by default).

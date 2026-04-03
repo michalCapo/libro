@@ -480,6 +480,17 @@ func Run(assets embed.FS) {
 		return fmt.Sprintf(`(function(){window.__libroWvNavigate(%s,%s);var inp=document.getElementById('urlinput-'+%s);if(inp)inp.value=%s;})();`, jsString(appID), jsString(newURL), jsString(appID), jsString(newURL))
 	})
 
+	// Delete single history item
+	app.Action("history.delete", func(ctx *r.Context) string {
+		data := ctx.WsData()
+		urlStr, _ := data["url"].(string)
+		if urlStr == "" {
+			return ""
+		}
+		DBDeleteBrowsedURL(urlStr)
+		return fmt.Sprintf(`(function(){var u=%s;window.__libroBrowsedURLs=window.__libroBrowsedURLs.filter(function(x){return x!==u;});if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}})();`, jsString(urlStr))
+	})
+
 	// Clear browsing history
 	app.Action("history.clear", func(ctx *r.Context) string {
 		DBClearBrowsedURLs()
