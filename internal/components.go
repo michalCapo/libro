@@ -2100,42 +2100,146 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			OnClick(&r.Action{Name: "app.manage.open", Data: sidData(sid)}),
 	)
 
-	hdrBtnCls := "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors"
+	// Action buttons in icon style (same as app icons)
+	appIcons = append(appIcons,
+		r.Button(btnCls).
+			Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.toggle('hidden');", ShortcutsDialogID)).
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("keyboard"),
+				r.Span(tipCls).Text("Shortcuts"),
+			),
+		r.Button(btnCls).
+			Attr("onclick", "if(window.libroElectron&&window.libroElectron.toggleDevTools)window.libroElectron.toggleDevTools();").
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("code"),
+				r.Span(tipCls).Text("Console"),
+			),
+		r.Button(btnCls).
+			Attr("onclick", "if(document.fullscreenElement){if(navigator.keyboard&&navigator.keyboard.unlock)navigator.keyboard.unlock();document.exitFullscreen();this.querySelector('.libro-fs-icon').textContent='fullscreen';}else{document.documentElement.requestFullscreen().then(function(){if(navigator.keyboard&&navigator.keyboard.lock)navigator.keyboard.lock(['Escape']);});this.querySelector('.libro-fs-icon').textContent='fullscreen_exit';}").
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl libro-fs-icon").Text("fullscreen"),
+				r.Span(tipCls).Text("Fullscreen"),
+			),
+	)
+
+	// Running apps preview strip
+	appPreview := renderAppPreview(state, sid)
 
 	return r.Div("flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-200 dark:border-zinc-800 shrink-0").
 		ID(TopBarID).
 		Render(
-			r.Button("shrink-0 cursor-pointer hover:opacity-70 transition-opacity duration-150").
+			r.Button("shrink-0 cursor-pointer hover:opacity-70 transition-opacity duration-150 flex items-center gap-1.5").
 				Attr("title", "Toggle sidebar (⌘B)").
 				OnClick(&r.Action{Name: "sidebar.toggle", Data: sidData(sid)}).
-				Render(r.Img("w-7 h-7").Attr("src", "/assets/logo.svg").Attr("alt", "Libro")),
+				Render(
+					r.Img("w-7 h-7").Attr("src", "/assets/logo.svg").Attr("alt", "Libro"),
+					r.Span("text-[10px] text-gray-400 dark:text-gray-500 font-mono select-none").Text("v"+version.Version),
+				),
 			r.Div("flex items-center gap-0.5 ml-2").Render(appIcons...),
-			r.Div("ml-auto flex items-center gap-1").Render(
-				r.Span("text-xs text-gray-400 dark:text-gray-500 font-mono select-none").Text("v"+version.Version),
-				r.Button(hdrBtnCls).
-					Attr("title", "Keyboard shortcuts").
-					Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.toggle('hidden');", ShortcutsDialogID)).
-					Render(
-						r.I("material-icons-round text-base").Text("keyboard"),
-						r.Span("").Text("Shortcuts"),
-					),
-				r.Button(hdrBtnCls).
-					Attr("title", "Developer console").
-					Attr("onclick", "if(window.libroElectron&&window.libroElectron.toggleDevTools)window.libroElectron.toggleDevTools();").
-					Render(
-						r.I("material-icons-round text-base").Text("code"),
-						r.Span("").Text("Console"),
-					),
-				r.Button(hdrBtnCls).
-					Attr("title", "Toggle fullscreen").
-					Attr("onclick", "if(document.fullscreenElement){if(navigator.keyboard&&navigator.keyboard.unlock)navigator.keyboard.unlock();document.exitFullscreen();this.querySelector('i').textContent='fullscreen';this.querySelector('span').textContent='Fullscreen';}else{document.documentElement.requestFullscreen().then(function(){if(navigator.keyboard&&navigator.keyboard.lock)navigator.keyboard.lock(['Escape']);});this.querySelector('i').textContent='fullscreen_exit';this.querySelector('span').textContent='Exit';}").
-					Render(
-						r.I("material-icons-round text-base").Text("fullscreen"),
-						r.Span("").Text("Fullscreen"),
-					),
-				r.ThemeSwitcher(),
-			),
+			r.Div("ml-auto flex items-center gap-1").Render(appPreview),
+			r.ThemeSwitcher(),
 		)
+}
+
+// renderAppPreview renders clickable mini-cards for each running app in the top bar.
+// This helps users see and switch between apps when the window is too small to show all of them.
+func renderAppPreview(state *AppState, sid string) *r.Node {
+	if len(state.Apps) == 0 {
+		return r.Div("")
+	}
+
+	cards := make([]*r.Node, 0, len(state.Apps))
+	for i, app := range state.Apps {
+		isSelected := i == state.SelectedIndex
+
+		// Build icon for this app
+		var iconNode *r.Node
+		if app.Type == AppTypeTerminal {
+			if info := lookupTermIcon(app.Command); info != nil {
+				if info.URL != "" {
+					iconNode = r.Img("w-3.5 h-3.5 rounded-sm shrink-0").Attr("src", info.URL)
+				} else if info.MaterialIcon != "" {
+					iconNode = r.I("material-icons-round text-[11px] shrink-0 opacity-70").Text(info.MaterialIcon)
+				}
+			} else if app.IconURL != "" {
+				iconNode = r.Img("w-3.5 h-3.5 rounded-sm shrink-0").Attr("src", app.IconURL)
+			}
+			if iconNode == nil {
+				iconNode = r.I("material-icons-round text-[11px] shrink-0 opacity-70").Text("terminal")
+			}
+		} else {
+			if app.URL != "" {
+				if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
+					iconNode = r.Img("w-3.5 h-3.5 rounded-sm shrink-0").
+						Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=16")
+				}
+			}
+			if iconNode == nil {
+				iconNode = r.I("material-icons-round text-[11px] shrink-0 opacity-70").Text("language")
+			}
+		}
+
+		// App label
+		label := app.Name
+		if label == "" {
+			if app.Type == AppTypeTerminal {
+				label = app.Command
+			} else {
+				label = app.URL
+				if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
+					label = strings.TrimPrefix(u.Hostname(), "www.")
+				}
+			}
+		}
+		if label == "" {
+			label = "untitled"
+		}
+
+		// Card styling
+		var cardCls string
+		if isSelected {
+			cardCls = "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-100 bg-blue-600 text-white shadow-sm"
+		} else {
+			cardCls = "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-100 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700 hover:text-gray-800 dark:hover:text-zinc-200"
+		}
+
+		card := r.Button(cardCls).
+			Attr("title", label).
+			OnClick(&r.Action{Name: "app.select", Data: sidData(sid, "index", i)}).
+			Render(
+				iconNode,
+				r.Span("text-[10px] font-medium truncate max-w-[120px] leading-tight whitespace-nowrap").Text(label),
+			)
+		cards = append(cards, card)
+	}
+
+	return r.Div("flex items-center gap-1 ml-3 overflow-x-auto scrollbar-none").
+		ID("app-preview-strip").
+		Attr("style", "scrollbar-width:none;-ms-overflow-style:none").
+		Render(cards...)
+}
+
+// updateAppPreviewJS returns JS that updates the selected state of preview cards
+// without re-rendering the entire top bar. Used for lightweight navigate/select actions.
+func updateAppPreviewJS(state *AppState) string {
+	selectedCls := "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-100 bg-blue-600 text-white shadow-sm"
+	normalCls := "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-100 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700 hover:text-gray-800 dark:hover:text-zinc-200"
+
+	return fmt.Sprintf(`
+		(function(){
+			var strip = document.getElementById('app-preview-strip');
+			if (!strip) return;
+			var btns = strip.querySelectorAll(':scope > button');
+			for (var i = 0; i < btns.length; i++) {
+				if (i === %d) {
+					btns[i].className = %s;
+					btns[i].scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});
+				} else {
+					btns[i].className = %s;
+				}
+			}
+		})();
+	`, state.SelectedIndex, jsString(selectedCls), jsString(normalCls))
 }
 
 // renderProjectSidebar renders the left sidebar with project tree and worktrees.
