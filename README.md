@@ -2,6 +2,10 @@
 
 A Go + Electron application using [g-sui](https://github.com/michalCapo/g-sui) that manages and displays web applications and terminal sessions in a horizontal strip layout. URL apps render natively via Electron `<webview>` tags, and terminals run via ttyd iframes.
 
+## Demo
+
+<video src="demo/demo.mp4" controls width="100%"></video>
+
 ## Architecture
 
 - **Backend**: Go with g-sui (server-rendered UI via WebSocket)
