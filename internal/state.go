@@ -336,6 +336,72 @@ func (sm *StateManager) InsertTerminalApp(sessionID string, appID string, comman
 	s.LastAppCreatedProject = s.ActiveProject
 }
 
+// InsertTerminal adds a running terminal with command and port at the given index.
+func (sm *StateManager) InsertTerminal(sessionID, appID string, width Width, command string, port int, index int) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		s = &AppState{
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
+			EditIndex:     -1,
+		}
+		sm.states[sessionID] = s
+	}
+	app := Application{
+		ID:       appID,
+		Type:     AppTypeTerminal,
+		Width:    width,
+		Command:  command,
+		Port:     port,
+		URL:      fmt.Sprintf("/ttyd/%d/", port),
+		Writable: true,
+	}
+	if index < 0 || index > len(s.Apps) {
+		s.Apps = append(s.Apps, app)
+		s.SelectedIndex = len(s.Apps) - 1
+	} else {
+		s.Apps = append(s.Apps, Application{})
+		copy(s.Apps[index+1:], s.Apps[index:])
+		s.Apps[index] = app
+		s.SelectedIndex = index
+	}
+	s.LastAppCreatedProject = s.ActiveProject
+}
+
+// InsertPendingTerminal adds a terminal placeholder (no ttyd yet) at the given index.
+func (sm *StateManager) InsertPendingTerminal(sessionID, appID string, width Width, index int) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		s = &AppState{
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
+			EditIndex:     -1,
+		}
+		sm.states[sessionID] = s
+	}
+	app := Application{
+		ID:    appID,
+		Type:  AppTypeTerminal,
+		Width: width,
+	}
+	if index < 0 || index > len(s.Apps) {
+		s.Apps = append(s.Apps, app)
+		s.SelectedIndex = len(s.Apps) - 1
+	} else {
+		s.Apps = append(s.Apps, Application{})
+		copy(s.Apps[index+1:], s.Apps[index:])
+		s.Apps[index] = app
+		s.SelectedIndex = index
+	}
+	s.LastAppCreatedProject = s.ActiveProject
+}
+
 // RemoveApp removes an application by index and returns it (for cleanup)
 func (sm *StateManager) RemoveApp(sessionID string, index int) *Application {
 	sm.mu.Lock()

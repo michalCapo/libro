@@ -22,18 +22,18 @@ func urlParse(rawURL string) (*url.URL, error) {
 }
 
 const (
-	DialogID           = "add-dialog"
-	MainAreaID         = "main-area"
-	ProjectBarID       = "project-bar" // kept for backward compat references
-	TopBarID           = "top-bar"
-	SidebarID          = "project-sidebar"
-	ProjectDialogID    = "project-dialog"
-	DirBrowserID       = "dir-browser"
-	SearchDialogID     = "search-dialog"
-	ShortcutsDialogID  = "shortcuts-dialog"
-	CloseDialogID      = "close-dialog"
-	WorktreeDialogID   = "worktree-dialog"
-	ManageDialogID     = "manage-dialog"
+	DialogID          = "add-dialog"
+	MainAreaID        = "main-area"
+	ProjectBarID      = "project-bar" // kept for backward compat references
+	TopBarID          = "top-bar"
+	SidebarID         = "project-sidebar"
+	ProjectDialogID   = "project-dialog"
+	DirBrowserID      = "dir-browser"
+	SearchDialogID    = "search-dialog"
+	ShortcutsDialogID = "shortcuts-dialog"
+	CloseDialogID     = "close-dialog"
+	WorktreeDialogID  = "worktree-dialog"
+	ManageDialogID    = "manage-dialog"
 )
 
 // termIconInfo stores the icon details for a known terminal command.
@@ -47,49 +47,49 @@ type termIconInfo struct {
 // knownTermIcons maps command base names to their icon info.
 // Uses Simple Icons CDN (https://cdn.simpleicons.org/{name}/{color}) for brand icons.
 var knownTermIcons = map[string]termIconInfo{
-	"nvim":       {URL: "https://cdn.simpleicons.org/neovim/57A143"},
-	"neovim":     {URL: "https://cdn.simpleicons.org/neovim/57A143"},
-	"vim":        {URL: "https://cdn.simpleicons.org/vim/019733"},
-	"vi":         {URL: "https://cdn.simpleicons.org/vim/019733"},
-	"claude":     {URL: "https://cdn.simpleicons.org/anthropic/d4a27f"},
-	"node":       {URL: "https://cdn.simpleicons.org/nodedotjs/5FA04E"},
-	"npm":        {URL: "https://cdn.simpleicons.org/npm/CB3837"},
-	"npx":        {URL: "https://cdn.simpleicons.org/npm/CB3837"},
-	"bun":        {URL: "https://cdn.simpleicons.org/bun/FBF0DF"},
-	"deno":       {URL: "https://cdn.simpleicons.org/deno/FFFFFF"},
-	"python":     {URL: "https://cdn.simpleicons.org/python/3776AB"},
-	"python3":    {URL: "https://cdn.simpleicons.org/python/3776AB"},
-	"pip":        {URL: "https://cdn.simpleicons.org/python/3776AB"},
-	"docker":     {URL: "https://cdn.simpleicons.org/docker/2496ED"},
-	"git":        {URL: "https://cdn.simpleicons.org/git/F05032"},
-	"go":         {URL: "https://cdn.simpleicons.org/go/00ADD8"},
-	"cargo":      {URL: "https://cdn.simpleicons.org/rust/DEA584"},
-	"rustc":      {URL: "https://cdn.simpleicons.org/rust/DEA584"},
-	"ruby":       {URL: "https://cdn.simpleicons.org/ruby/CC342D"},
-	"irb":        {URL: "https://cdn.simpleicons.org/ruby/CC342D"},
-	"lua":        {URL: "https://cdn.simpleicons.org/lua/2C2D72"},
-	"java":       {URL: "https://cdn.simpleicons.org/openjdk/FFFFFF"},
-	"kotlin":     {URL: "https://cdn.simpleicons.org/kotlin/7F52FF"},
-	"swift":      {URL: "https://cdn.simpleicons.org/swift/F05138"},
-	"redis-cli":  {URL: "https://cdn.simpleicons.org/redis/FF4438"},
-	"psql":       {URL: "https://cdn.simpleicons.org/postgresql/4169E1"},
-	"mysql":      {URL: "https://cdn.simpleicons.org/mysql/4479A1"},
-	"mongosh":    {URL: "https://cdn.simpleicons.org/mongodb/47A248"},
-	"kubectl":    {URL: "https://cdn.simpleicons.org/kubernetes/326CE5"},
-	"terraform":  {URL: "https://cdn.simpleicons.org/terraform/844FBA"},
-	"ansible":    {URL: "https://cdn.simpleicons.org/ansible/EE0000"},
-	"tmux":       {URL: "https://cdn.simpleicons.org/tmux/1BB91F"},
-	"bash":       {MaterialIcon: "terminal"},
-	"zsh":        {MaterialIcon: "terminal"},
-	"sh":         {MaterialIcon: "terminal"},
-	"fish":       {MaterialIcon: "terminal"},
-	"ssh":        {MaterialIcon: "vpn_key"},
-	"htop":       {MaterialIcon: "monitoring"},
-	"btop":       {MaterialIcon: "monitoring"},
-	"top":        {MaterialIcon: "monitoring"},
-	"make":       {MaterialIcon: "build"},
-	"cmake":      {MaterialIcon: "build"},
-	"gradle":     {MaterialIcon: "build"},
+	"nvim":      {URL: "https://cdn.simpleicons.org/neovim/57A143"},
+	"neovim":    {URL: "https://cdn.simpleicons.org/neovim/57A143"},
+	"vim":       {URL: "https://cdn.simpleicons.org/vim/019733"},
+	"vi":        {URL: "https://cdn.simpleicons.org/vim/019733"},
+	"claude":    {URL: "https://cdn.simpleicons.org/anthropic/d4a27f"},
+	"node":      {URL: "https://cdn.simpleicons.org/nodedotjs/5FA04E"},
+	"npm":       {URL: "https://cdn.simpleicons.org/npm/CB3837"},
+	"npx":       {URL: "https://cdn.simpleicons.org/npm/CB3837"},
+	"bun":       {URL: "https://cdn.simpleicons.org/bun/FBF0DF"},
+	"deno":      {URL: "https://cdn.simpleicons.org/deno/FFFFFF"},
+	"python":    {URL: "https://cdn.simpleicons.org/python/3776AB"},
+	"python3":   {URL: "https://cdn.simpleicons.org/python/3776AB"},
+	"pip":       {URL: "https://cdn.simpleicons.org/python/3776AB"},
+	"docker":    {URL: "https://cdn.simpleicons.org/docker/2496ED"},
+	"git":       {URL: "https://cdn.simpleicons.org/git/F05032"},
+	"go":        {URL: "https://cdn.simpleicons.org/go/00ADD8"},
+	"cargo":     {URL: "https://cdn.simpleicons.org/rust/DEA584"},
+	"rustc":     {URL: "https://cdn.simpleicons.org/rust/DEA584"},
+	"ruby":      {URL: "https://cdn.simpleicons.org/ruby/CC342D"},
+	"irb":       {URL: "https://cdn.simpleicons.org/ruby/CC342D"},
+	"lua":       {URL: "https://cdn.simpleicons.org/lua/2C2D72"},
+	"java":      {URL: "https://cdn.simpleicons.org/openjdk/FFFFFF"},
+	"kotlin":    {URL: "https://cdn.simpleicons.org/kotlin/7F52FF"},
+	"swift":     {URL: "https://cdn.simpleicons.org/swift/F05138"},
+	"redis-cli": {URL: "https://cdn.simpleicons.org/redis/FF4438"},
+	"psql":      {URL: "https://cdn.simpleicons.org/postgresql/4169E1"},
+	"mysql":     {URL: "https://cdn.simpleicons.org/mysql/4479A1"},
+	"mongosh":   {URL: "https://cdn.simpleicons.org/mongodb/47A248"},
+	"kubectl":   {URL: "https://cdn.simpleicons.org/kubernetes/326CE5"},
+	"terraform": {URL: "https://cdn.simpleicons.org/terraform/844FBA"},
+	"ansible":   {URL: "https://cdn.simpleicons.org/ansible/EE0000"},
+	"tmux":      {URL: "https://cdn.simpleicons.org/tmux/1BB91F"},
+	"bash":      {MaterialIcon: "terminal"},
+	"zsh":       {MaterialIcon: "terminal"},
+	"sh":        {MaterialIcon: "terminal"},
+	"fish":      {MaterialIcon: "terminal"},
+	"ssh":       {MaterialIcon: "vpn_key"},
+	"htop":      {MaterialIcon: "monitoring"},
+	"btop":      {MaterialIcon: "monitoring"},
+	"top":       {MaterialIcon: "monitoring"},
+	"make":      {MaterialIcon: "build"},
+	"cmake":     {MaterialIcon: "build"},
+	"gradle":    {MaterialIcon: "build"},
 }
 
 // lookupTermIcon resolves the icon for a terminal command.
@@ -260,7 +260,7 @@ func renderMainArea(state *AppState, sid string) *r.Node {
 	return renderAppStrip(state, sid)
 }
 
-// renderEmptyState renders the saved apps list with "+ Add New" button
+// renderEmptyState renders the saved apps list with "+ Add App" button
 func renderEmptyState(state *AppState, sid string) *r.Node {
 	savedApps := DBLoadVisibleSavedApps(state.ActiveProject)
 	appButtons := make([]*r.Node, 0, len(savedApps))
@@ -283,11 +283,11 @@ func renderEmptyState(state *AppState, sid string) *r.Node {
 			r.Div("flex flex-col gap-1.5 w-full").Render(appButtons...),
 			r.Div("flex gap-2 w-full mt-1").Render(
 				r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
-					Render(r.I("material-icons-round text-[18px]").Text("add"), r.Span("").Text("Add New")).
+					Render(r.I("material-icons-round text-[18px]").Text("add"), r.Span("").Text("Add App")).
 					OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
 				r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
-					Render(r.I("material-icons-round text-[18px]").Text("language"), r.Span("").Text("Browse")).
-					OnClick(&r.Action{Name: "app.browse.new", Data: sidData(sid)}),
+					Render(r.I("material-icons-round text-[18px]").Text("search"), r.Span("").Text("Quick Launch")).
+					OnClick(&r.Action{Name: "app.run.new", Data: sidData(sid)}),
 			),
 		),
 	)
@@ -563,6 +563,7 @@ func projectToastSetupJS() string {
 	return `
 (function(){
 	if(window.__libroProjectToast)return;
+	if(window.__libroShowToast)return;
 	var timer=null;
 	window.__libroProjectToast=function(proj,branch){
 		var el=document.getElementById('libro-project-toast');
@@ -589,8 +590,46 @@ func projectToastSetupJS() string {
 			timer=setTimeout(function(){el.style.opacity='0';timer=null;},260);
 		},600);
 	};
+	// Configurable toast with custom message and duration
+	window.__libroShowToast=function(title,subtitle,durationMs){
+		var dur=durationMs||3000;
+		var el=document.getElementById('libro-project-toast');
+		if(!el){
+			el=document.createElement('div');
+			el.id='libro-project-toast';
+			el.style.cssText='position:fixed;top:38%;left:50%;transform:translate(-50%,-50%) scale(.92);z-index:9999;pointer-events:none;opacity:0;';
+			document.body.appendChild(el);
+		}
+		if(timer){clearTimeout(timer);timer=null;}
+		var dk=document.documentElement.classList.contains('dark');
+		var bg=dk?'rgba(24,24,37,.88)':'rgba(255,255,255,.92)';
+		var border=dk?'rgba(63,63,90,.5)':'rgba(200,200,220,.6)';
+		var fg=dk?'#e2e2e8':'#1a1a2e';
+		var dim=dk?'#7a7a8e':'#8a8a9e';
+		var html='<div style="background:'+bg+';border:1px solid '+border+';backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-radius:12px;padding:20px 36px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.18)">';
+		html+='<div style="font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,monospace;font-size:22px;font-weight:600;color:'+fg+';letter-spacing:-.02em;line-height:1.3">'+title.replace(/</g,'&lt;')+'</div>';
+		if(subtitle){html+='<div style="font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,monospace;font-size:14px;color:'+dim+';margin-top:6px;letter-spacing:.02em;max-width:400px;line-height:1.4">'+subtitle.replace(/</g,'&lt;')+'</div>';}
+		html+='</div>';
+		el.innerHTML=html;
+		el.style.animation='libro-toast-in .12s ease-out forwards';
+		timer=setTimeout(function(){
+			el.style.animation='libro-toast-out .25s ease-in forwards';
+			timer=setTimeout(function(){el.style.opacity='0';timer=null;},260);
+		},dur);
+	};
 })();
 `
+}
+
+// showToastJS returns JS that displays a configurable toast message.
+// title: main message (required)
+// subtitle: secondary message (optional, can be empty)
+// durationMs: visibility duration in milliseconds (default 3000)
+func showToastJS(title, subtitle string, durationMs int) string {
+	if durationMs <= 0 {
+		durationMs = 3000
+	}
+	return fmt.Sprintf("if(window.__libroShowToast)window.__libroShowToast(%s,%s,%d);", jsString(title), jsString(subtitle), durationMs)
 }
 
 // renderAppFrame renders a single application iframe with controls
@@ -706,6 +745,36 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
 			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn)
+	} else if app.Type == AppTypeTerminal && app.Command == "" {
+		// Pending terminal — show command input
+		cmdInputID := fmt.Sprintf("cmdinput-%s", app.ID)
+		termBadgeCls := "inline-flex items-center justify-center w-6 h-6 rounded shrink-0"
+		termIconCls := "material-icons-round text-sm leading-none"
+		if selected {
+			termBadgeCls += " bg-white"
+			termIconCls += " text-black"
+		} else {
+			termBadgeCls += " bg-gray-800 dark:bg-zinc-900"
+			termIconCls += " text-white"
+		}
+		termBadge := r.Div(termBadgeCls).Render(r.I(termIconCls).Text("terminal"))
+
+		cmdInputCls := "flex-1 min-w-0 rounded-sm text-[11px] font-mono outline-none px-2 h-6"
+		if selected {
+			cmdInputCls += " bg-white/15 text-white placeholder-blue-200/50"
+		} else {
+			cmdInputCls += " bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 placeholder-gray-400 dark:placeholder-zinc-600"
+		}
+		cmdInput := r.Input(cmdInputCls).
+			ID(cmdInputID).
+			Attr("type", "text").
+			Attr("placeholder", "Enter command...").
+			Attr("spellcheck", "false").
+			Attr("autocomplete", "off").
+			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var cmd=event.target.value.trim();if(cmd){__ws.call('app.run.start',{"sid":"%s","id":"%s","command":cmd});}}`, sid, app.ID)))
+
+		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
+			Render(termBadge, cmdInput)
 	} else if app.Type == AppTypeTerminal {
 		labelText := app.Command
 		if app.Name != "" {
@@ -797,6 +866,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 	toolbar = toolbar.Render(leftSide, rightButtons)
 
 	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
+		ID(fmt.Sprintf("frame-%s", app.ID)).
 		Attr("data-app-id", app.ID).
 		Attr("style", fmt.Sprintf("order:%d", index)).
 		Render(
@@ -834,9 +904,6 @@ func renderIframe(app Application, frameID, iframeSrc string) *r.Node {
 				r.Span("hidden text-[11px] font-semibold tabular-nums text-red-500").
 					ID(fmt.Sprintf("devtools-errors-%s", app.ID)).
 					Text("0"),
-				r.Span("hidden text-[11px] font-semibold tabular-nums text-amber-500").
-					ID(fmt.Sprintf("devtools-warnings-%s", app.ID)).
-					Text("0"),
 			)
 
 		container := r.Div("w-full h-full absolute inset-0 z-30").Render(wv, devToolsBtn)
@@ -848,6 +915,15 @@ func renderIframe(app Application, frameID, iframeSrc string) *r.Node {
 			)
 		}
 		return container
+	}
+	// Pending terminal — show placeholder
+	if app.Type == AppTypeTerminal && app.Command == "" {
+		return r.Div("w-full h-full flex items-center justify-center bg-gray-50 dark:bg-zinc-950").Render(
+			r.Div("flex flex-col items-center gap-2 text-gray-400 dark:text-zinc-600").Render(
+				r.I("material-icons-round text-3xl").Text("terminal"),
+				r.Span("font-mono text-xs").Text("Enter a command above"),
+			),
+		)
 	}
 	// Terminal apps use iframe (for ttyd)
 	sandbox := "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin"
@@ -1029,20 +1105,20 @@ func renderSideLauncher(sid, side, activeProject string) *r.Node {
 		children = append(children, btn)
 	}
 
-	// Browse button
-	browseBtn := r.Button(btnCls).
+	// Quick launch button (combined browse + run)
+	launchBtn := r.Button(btnCls).
 		Render(
-			r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-2xl").Text("language"),
-			r.Span(tipCls).Text("Quick browse"),
+			r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-2xl").Text("search"),
+			r.Span(tipCls).Text("Quick launch"),
 		).
-		OnClick(&r.Action{Name: "app.browse.new", Data: sidData(sid, "side", side)})
-	children = append(children, browseBtn)
+		OnClick(&r.Action{Name: "app.run.new", Data: sidData(sid, "side", side)})
+	children = append(children, launchBtn)
 
 	// Add button
 	addBtn := r.Button(btnCls).
 		Render(
 			r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 text-[18px]").Text("add"),
-			r.Span(tipCls).Text("Add new"),
+			r.Span(tipCls).Text("Add app"),
 		).
 		OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid, "side", side)})
 	children = append(children, addBtn)
@@ -1096,7 +1172,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 
 	inputCls := "w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
 
-	return r.Div("fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75"+hiddenClass).
+	return r.Div("fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
 		ID(DialogID).
 		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden')", DialogID))).
 		Render(
@@ -1209,7 +1285,7 @@ func renderSearchDialog(sid string) *r.Node {
 							r.Span("").Text("Esc close"),
 						),
 						r.Span("cursor-pointer hover:text-red-400 transition-colors").
-							Attr("onclick", "event.stopPropagation();__ws.call('history.clear',{sid:'"+sid+"'});").
+							Attr("onclick", "event.stopPropagation();__ws.call('history.clear',{sid:'"+sid+"'});__ws.call('run.history.clear',{sid:'"+sid+"'});").
 							Text("clear history"),
 					),
 				),
@@ -1256,6 +1332,12 @@ func searchDialogJS(sid string) string {
 		});
 	}
 
+	function getRunHistory(){
+		return (window.__libroRunCommands||[]).map(function(c){
+			return {app:{type:'terminal',command:c,name:c,width:'lg',writable:true},isRunHistory:true};
+		});
+	}
+
 	function render(){
 		var dk=document.documentElement.classList.contains('dark');
 		res.innerHTML='';
@@ -1273,7 +1355,15 @@ func searchDialogJS(sid string) string {
 			var label='';
 			var sub='';
 			var app=item.app;
-			if(item.isBrowse){
+			if(item.isRun){
+				iconHtml='<i class="material-icons-round text-emerald-500 text-lg shrink-0">terminal</i>';
+				label=app.name;
+				sub='';
+			}else if(item.isRunHistory){
+				iconHtml='<i class="material-icons-round text-gray-400 dark:text-zinc-500 text-lg shrink-0">terminal</i>';
+				label=app.command;
+				sub='';
+			}else if(item.isBrowse){
 				iconHtml='<i class="material-icons-round text-blue-500 text-lg shrink-0">public</i>';
 				label=app.name||app.url;
 				sub=app.url;
@@ -1307,10 +1397,13 @@ func searchDialogJS(sid string) string {
 			var txtCls=dk?'text-zinc-200':'text-gray-800';
 			var subCls=dk?'text-zinc-500':'text-gray-400';
 			var badgeCls=dk?'bg-zinc-700 text-zinc-400':'bg-gray-200 text-gray-500';
-			var typeBadge=item.isBrowse?'browser':item.isHistory?'history':app.type;
+			var typeBadge=item.isRun?'run':item.isRunHistory?'history':item.isBrowse?'browser':item.isHistory?'history':app.type;
 			var deleteBtn='';
 			if(item.isHistory){
 				deleteBtn='<i class="material-icons-round text-sm shrink-0 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity '+(dk?'text-zinc-500 hover:text-red-400':'text-gray-400 hover:text-red-500')+'" data-delete-url="'+app.url.replace(/"/g,'&quot;')+'">close</i>';
+			}
+			if(item.isRunHistory){
+				deleteBtn='<i class="material-icons-round text-sm shrink-0 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity '+(dk?'text-zinc-500 hover:text-red-400':'text-gray-400 hover:text-red-500')+'" data-delete-cmd="'+app.command.replace(/"/g,'&quot;')+'">close</i>';
 			}
 			row.className+=' group';
 			row.innerHTML=iconHtml
@@ -1326,6 +1419,15 @@ func searchDialogJS(sid string) string {
 					delEl.onclick=function(e){
 						e.stopPropagation();
 						__ws.call('history.delete',{sid:'%s',url:app.url});
+					};
+				}
+			}
+			if(item.isRunHistory){
+				var delCmd=row.querySelector('[data-delete-cmd]');
+				if(delCmd){
+					delCmd.onclick=function(e){
+						e.stopPropagation();
+						__ws.call('run.history.delete',{sid:'%s',command:app.command});
 					};
 				}
 			}
@@ -1357,13 +1459,19 @@ func searchDialogJS(sid string) string {
 		var q=inp.value.trim();
 		var apps=getApps();
 		var history=getBrowsedURLs();
+		var runHistory=getRunHistory();
 		// Build a set of saved app URLs to avoid duplicates from history
 		var savedURLs={};
 		apps.forEach(function(a){if(a.url)savedURLs[a.url]=true;});
 		var uniqueHistory=history.filter(function(h){return !savedURLs[h.app.url];});
+		// Build set of saved terminal commands to avoid duplicates from run history
+		var savedCmds={};
+		apps.forEach(function(a){if(a.command)savedCmds[a.command]=true;});
+		var uniqueRunHistory=runHistory.filter(function(h){return !savedCmds[h.app.command];});
 		if(!q){
 			filtered=apps.map(function(a){return{app:a,score:1};});
 			uniqueHistory.forEach(function(h){filtered.push({app:h.app,score:0.5,isHistory:true});});
+			uniqueRunHistory.forEach(function(h){filtered.push({app:h.app,score:0.4,isRunHistory:true});});
 			filtered.push(browserEntry);
 		}else if(isURL(q)){
 			// URL typed — show "Browse <url>" at top, then matching saved apps + history
@@ -1382,6 +1490,8 @@ func searchDialogJS(sid string) string {
 			filtered.sort(function(a,b){return b.score-a.score;});
 		}else{
 			filtered=[];
+			// Always show "Run: <query>" at top for non-URL text
+			filtered.push({app:{type:'terminal',command:q,name:'Run: '+q,width:'lg',writable:true},score:99999,isRun:true});
 			apps.forEach(function(a){
 				var text=(a.name||'')+' '+(a.command||'')+' '+(a.url||'')+' '+a.type;
 				var score=fuzzyMatch(text,q);
@@ -1391,7 +1501,14 @@ func searchDialogJS(sid string) string {
 				var score=fuzzyMatch(h.app.url+' '+h.app.name,q);
 				if(score>0)filtered.push({app:h.app,score:score,isHistory:true});
 			});
+			uniqueRunHistory.forEach(function(h){
+				var score=fuzzyMatch(h.app.command,q);
+				if(score>0)filtered.push({app:h.app,score:score,isRunHistory:true});
+			});
 			filtered.sort(function(a,b){return b.score-a.score;});
+			// Keep "Run: <query>" at top regardless of sort
+			var runIdx=filtered.findIndex(function(f){return f.isRun;});
+			if(runIdx>0){var r=filtered.splice(runIdx,1)[0];filtered.unshift(r);}
 			// Add browser if "browser" fuzzy matches query
 			if(fuzzyMatch('browser',q)>0)filtered.push(browserEntry);
 		}
@@ -1408,6 +1525,11 @@ func searchDialogJS(sid string) string {
 		var app=item.app;
 		dlg.classList.add('hidden');
 		inp.value='';
+		// Run command — execute terminal directly
+		if(item.isRun||item.isRunHistory){
+			__ws.call('app.run.execute',{sid:'%s',command:app.command,side:side});
+			return;
+		}
 		// Empty browser — use app.browse.new to open blank tab with URL bar focused
 		if(item.isBrowse&&!app.url){
 			__ws.call('app.browse.new',{sid:'%s',side:side});
@@ -1454,7 +1576,7 @@ func searchDialogJS(sid string) string {
 
 	window.__libroOpenSearch=openSearch;
 })();
-`, SearchDialogID, sid, sid, sid, sid)
+`, SearchDialogID, sid, sid, sid, sid, sid, sid)
 }
 
 // renderShortcutsDialog renders the keyboard shortcuts popup (hidden by default).
@@ -1877,7 +1999,7 @@ func renderManageAppsPage(state *AppState, sid string) *r.Node {
 					r.Span("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100").Text("Manage Apps"),
 					r.Div("ml-auto flex items-center gap-2").Render(
 						r.Button("flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors").
-							Render(r.I("material-icons-round text-[16px]").Text("add"), r.Span("").Text("Add New")).
+							Render(r.I("material-icons-round text-[16px]").Text("add"), r.Span("").Text("Add App")).
 							OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
 						r.Button("flex items-center justify-center w-9 h-9 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors").
 							Attr("title", "Close").
@@ -2070,14 +2192,14 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		appIcons = append(appIcons, btn)
 	}
 
-	// Browse button
+	// Quick launch button (combined browse + run)
 	appIcons = append(appIcons,
 		r.Button(btnCls).
 			Render(
-				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("language"),
-				r.Span(tipCls).Text("Quick browse"),
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("search"),
+				r.Span(tipCls).Text("Quick launch"),
 			).
-			OnClick(&r.Action{Name: "app.browse.new", Data: sidData(sid)}),
+			OnClick(&r.Action{Name: "app.run.new", Data: sidData(sid)}),
 	)
 
 	// Add button
@@ -2085,7 +2207,7 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		r.Button(btnCls).
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 text-[18px]").Text("add"),
-				r.Span(tipCls).Text("Add new"),
+				r.Span(tipCls).Text("Add app"),
 			).
 			OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
 	)
@@ -2470,7 +2592,7 @@ func renderProjectDialog(visible bool, sid string) *r.Node {
 		homeDir = "/"
 	}
 
-	return r.Div("fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75"+hiddenClass).
+	return r.Div("fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
 		ID(ProjectDialogID).
 		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden')", ProjectDialogID))).
 		Render(
@@ -2575,8 +2697,9 @@ func updateHashJS(name string) string {
 }
 
 // savedAppsJS returns JS that sets the global __libroSavedApps and __libroBrowsedURLs variables from DB data.
-func savedAppsJS() string {
-	apps := DBLoadAllSavedApps()
+// Only apps visible in the given project are included (global + project-specific for this project).
+func savedAppsJS(activeProject string) string {
+	apps := DBLoadVisibleSavedApps(activeProject)
 	type jsApp struct {
 		Type     string `json:"type"`
 		URL      string `json:"url,omitempty"`
@@ -2594,7 +2717,17 @@ func savedAppsJS() string {
 
 	browsedURLs := DBLoadBrowsedURLs()
 	bu, _ := json.Marshal(browsedURLs)
-	return fmt.Sprintf("window.__libroSavedApps=%s;window.__libroBrowsedURLs=%s;", string(b), string(bu))
+
+	runCmds := DBLoadRunCommands()
+	rc, _ := json.Marshal(runCmds)
+	return fmt.Sprintf("window.__libroSavedApps=%s;window.__libroBrowsedURLs=%s;window.__libroRunCommands=%s;", string(b), string(bu), string(rc))
+}
+
+// runCommandsJS returns JS that updates the global __libroRunCommands variable from DB data.
+func runCommandsJS() string {
+	cmds := DBLoadRunCommands()
+	b, _ := json.Marshal(cmds)
+	return fmt.Sprintf("window.__libroRunCommands=%s;", string(b))
 }
 
 // initHashJS handles hash-based project navigation on page load.
