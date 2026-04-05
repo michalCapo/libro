@@ -50,12 +50,11 @@ var browserShortcutsScript = '(' + function(){
 } + ')()';
 
 // --- Console error/warning counts per webview ---
-var consoleCounts = {}; // appID -> {errors, warnings}
+var consoleCounts = {}; // appID -> {errors}
 
 function updateConsoleBadges(appID) {
-	var c = consoleCounts[appID] || {errors: 0, warnings: 0};
+	var c = consoleCounts[appID] || {errors: 0};
 	var errEl = document.getElementById('devtools-errors-' + appID);
-	var warnEl = document.getElementById('devtools-warnings-' + appID);
 	var wrapEl = document.getElementById('devtools-wrap-' + appID);
 	if (errEl) {
 		if (c.errors > 0) {
@@ -66,17 +65,8 @@ function updateConsoleBadges(appID) {
 			errEl.style.display = 'none';
 		}
 	}
-	if (warnEl) {
-		if (c.warnings > 0) {
-			warnEl.style.display = 'inline';
-			warnEl.textContent = c.warnings;
-			if (wrapEl) wrapEl.style.opacity = '1';
-		} else {
-			warnEl.style.display = 'none';
-		}
-	}
-	// Restore hover-only if no issues
-	if (wrapEl && c.errors === 0 && c.warnings === 0) {
+	// Restore hover-only if no errors
+	if (wrapEl && c.errors === 0) {
 		wrapEl.style.opacity = '';
 	}
 }
@@ -334,7 +324,7 @@ function bindWebviewEvents(wv, appID) {
 	wv.addEventListener('did-navigate', function(e) {
 		var inp = document.getElementById('urlinput-' + appID);
 		if (inp && e.url) inp.value = e.url;
-		consoleCounts[appID] = {errors: 0, warnings: 0};
+		consoleCounts[appID] = {errors: 0};
 		updateConsoleBadges(appID);
 	});
 	wv.addEventListener('did-navigate-in-page', function(e) {
@@ -349,7 +339,7 @@ function bindWebviewEvents(wv, appID) {
 	});
 
 	// Listen for browser shortcut messages and track errors/warnings
-	if (!consoleCounts[appID]) consoleCounts[appID] = {errors: 0, warnings: 0};
+	if (!consoleCounts[appID]) consoleCounts[appID] = {errors: 0};
 	wv.addEventListener('console-message', function(e) {
 		var msg = e.message;
 		if (msg === '__libro:search') showSearchBar(appID);
@@ -361,9 +351,6 @@ function bindWebviewEvents(wv, appID) {
 			// level: 0=log, 1=warning, 2=error
 			if (e.level === 2) {
 				consoleCounts[appID].errors++;
-				updateConsoleBadges(appID);
-			} else if (e.level === 1) {
-				consoleCounts[appID].warnings++;
 				updateConsoleBadges(appID);
 			}
 		}

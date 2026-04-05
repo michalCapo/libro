@@ -86,7 +86,6 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		js := r.Show(DialogID)
 		if state.ManageOpen {
-			state.ManageOpen = false
 			js = removeManageOverlayJS() + js
 		}
 		return js
@@ -96,7 +95,12 @@ func Run(assets embed.FS) {
 	app.Action("app.dialog.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		sm.CloseDialog(sid)
-		return r.Hide(DialogID)
+		state := sm.Get(sid)
+		js := r.Hide(DialogID)
+		if state.ManageOpen {
+			js += showManageOverlayJS(renderManageAppsPage(state, sid))
+		}
+		return js
 	})
 
 	// Add application (URL or Terminal)
@@ -156,7 +160,7 @@ func Run(assets embed.FS) {
 			Replace(DialogID, renderAddDialog(false, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Add(savedAppsJS())
+			Add(savedAppsJS(state.ActiveProject))
 
 		// Only replace main area when no apps are running (empty state),
 		// to avoid destroying live iframes/webviews.
@@ -164,9 +168,9 @@ func Run(assets embed.FS) {
 			resp.Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid))
 		}
 
-		// Refresh manage overlay if it's open
+		// Re-show manage overlay if it was open before editing
 		if state.ManageOpen {
-			resp.Replace(ManageDialogID, renderManageAppsPage(state, sid))
+			resp.Add(showManageOverlayJS(renderManageAppsPage(state, sid)))
 		}
 
 		return resp.Build()
@@ -462,6 +466,71 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
+	// Quick run - open search dialog for command input
+	app.Action("app.run.new", func(ctx *r.Context) string {
+		data := ctx.WsData()
+		side, _ := data["side"].(string)
+		if side == "" {
+			side = "right"
+		}
+		return fmt.Sprintf(`if(window.__libroOpenSearch)window.__libroOpenSearch('%s');`, side)
+	})
+
+	// Execute a terminal command directly (called from search dialog)
+	app.Action("app.run.execute", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		command, _ := data["command"].(string)
+		command = strings.TrimSpace(command)
+		side, _ := data["side"].(string)
+		if command == "" {
+			return ""
+		}
+
+		insertIdx := -1
+		if side == "left" {
+			insertIdx = sm.SelectedIndex(sid)
+		} else if side == "right" {
+			insertIdx = sm.SelectedIndex(sid) + 1
+		}
+
+		stateBefore := sm.Get(sid)
+		hadApps := len(stateBefore.Apps)
+
+		appID := sm.NextAppID()
+		port := sm.NextPort()
+		pwd := sm.GetActiveProjectPath(sid)
+
+		if err := tm.Start(appID, port, command, true, pwd); err != nil {
+			return r.Notify("error", "Failed to start: "+err.Error())
+		}
+
+		// Save to run history
+		go DBSaveRunCommand(command)
+
+		time.Sleep(500 * time.Millisecond)
+
+		// Insert a fully running terminal (not pending)
+		sm.InsertTerminal(sid, appID, WidthLG, command, port, insertIdx)
+		state := sm.Get(sid)
+
+		// Update run commands JS
+		runCmdsJS := runCommandsJS()
+
+		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
+		if hadApps > 0 {
+			newApp := state.Apps[state.SelectedIndex]
+			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + runCmdsJS
+		}
+
+		return r.NewResponse().
+			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
+			Replace(TopBarID, renderTopBar(state, sid)).
+			Add(runCmdsJS).
+			Build()
+	})
+
 	// Set URL for an app — navigates the iframe to a new URL
 	app.Action("app.url.set", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
@@ -501,6 +570,23 @@ func Run(assets embed.FS) {
 	app.Action("history.clear", func(ctx *r.Context) string {
 		DBClearBrowsedURLs()
 		return `window.__libroBrowsedURLs=[];if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}`
+	})
+
+	// Delete single run history item
+	app.Action("run.history.delete", func(ctx *r.Context) string {
+		data := ctx.WsData()
+		command, _ := data["command"].(string)
+		if command == "" {
+			return ""
+		}
+		DBDeleteRunCommand(command)
+		return fmt.Sprintf(`(function(){var c=%s;window.__libroRunCommands=(window.__libroRunCommands||[]).filter(function(x){return x!==c;});if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}})();`, jsString(command))
+	})
+
+	// Clear run history
+	app.Action("run.history.clear", func(ctx *r.Context) string {
+		DBClearRunCommands()
+		return `window.__libroRunCommands=[];if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}`
 	})
 
 	// Browse directories for project picker
@@ -622,6 +708,7 @@ func Run(assets embed.FS) {
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Add(savedAppsJS(state.ActiveProject)).
 			Build()
 	})
 
@@ -649,6 +736,7 @@ func Run(assets embed.FS) {
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Add(savedAppsJS(state.ActiveProject)).
 			Build()
 	})
 
@@ -676,6 +764,7 @@ func Run(assets embed.FS) {
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Add(savedAppsJS(state.ActiveProject)).
 			Build()
 	})
 
@@ -718,6 +807,7 @@ func Run(assets embed.FS) {
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Add(savedAppsJS(state.ActiveProject)).
 			Build()
 	})
 
@@ -747,6 +837,7 @@ func Run(assets embed.FS) {
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Add(savedAppsJS(state.ActiveProject)).
 			Build()
 	})
 
@@ -836,7 +927,7 @@ func Run(assets embed.FS) {
 			Replace(ManageDialogID, renderManageAppsPage(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Add(savedAppsJS()).
+			Add(savedAppsJS(state.ActiveProject)).
 			Build()
 	})
 

@@ -71,6 +71,11 @@ func createTables() {
 			title      TEXT NOT NULL DEFAULT '',
 			visited_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
+		CREATE TABLE IF NOT EXISTS run_history (
+			id     INTEGER PRIMARY KEY AUTOINCREMENT,
+			command TEXT NOT NULL UNIQUE,
+			run_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
 		CREATE TABLE IF NOT EXISTS saved_apps (
 			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			project_name TEXT NOT NULL DEFAULT 'home',
@@ -470,4 +475,63 @@ func DBLoadBrowsedURLs() []string {
 		urls = append(urls, u)
 	}
 	return urls
+}
+
+// DBSaveRunCommand upserts a command into the run_history table.
+func DBSaveRunCommand(command string) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	_, err := db.Exec(
+		"INSERT INTO run_history (command, run_at) VALUES (?, CURRENT_TIMESTAMP) ON CONFLICT(command) DO UPDATE SET run_at=CURRENT_TIMESTAMP",
+		command,
+	)
+	if err != nil {
+		log.Printf("db: save run command: %v", err)
+	}
+}
+
+// DBDeleteRunCommand deletes a single command from the run_history table.
+func DBDeleteRunCommand(command string) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	_, err := db.Exec("DELETE FROM run_history WHERE command = ?", command)
+	if err != nil {
+		log.Printf("db: delete run command: %v", err)
+	}
+}
+
+// DBClearRunCommands deletes all entries from the run_history table.
+func DBClearRunCommands() {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	_, err := db.Exec("DELETE FROM run_history")
+	if err != nil {
+		log.Printf("db: clear run commands: %v", err)
+	}
+}
+
+// DBLoadRunCommands returns all run history commands ordered by most recently run.
+func DBLoadRunCommands() []string {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	rows, err := db.Query("SELECT command FROM run_history ORDER BY run_at DESC LIMIT 200")
+	if err != nil {
+		log.Printf("db: load run commands: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var cmds []string
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			continue
+		}
+		cmds = append(cmds, c)
+	}
+	return cmds
 }

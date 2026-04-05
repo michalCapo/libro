@@ -33,7 +33,7 @@ Each app uses its configured fixed pixel width. FULL takes 100% of the viewport.
 Full-height flex container as a single page app. One route (`/`) renders the application strip. The entire viewport is the application strip with a neutral background to distinguish from app content.
 
 ### Empty State
-When no applications exist, "Add New" and "Browse" buttons are displayed centered. If the project has no saved applications yet, a short gray guide text explains how to get started — add web apps by URL or terminal commands, use Browse for quick web lookups, and check shortcuts for a productivity boost.
+When no applications exist, "Add App" and "Quick Launch" buttons are displayed centered. If the project has no saved applications yet, a short gray guide text explains how to get started — add web apps by URL or terminal commands, use Quick Launch for quick web lookups and terminal commands, and check shortcuts for a productivity boost.
 
 ### Add Application Dialog
 Modal/dialog overlay triggered by "+" button click. Contains a URL input field (required) and width selection via radio buttons (SM, MD, LG, XL, 2XL, FULL). On submit, validates the URL is not empty, adds the application to state, closes the dialog, and re-renders the strip.
@@ -132,8 +132,15 @@ When typing a URL directly into the search box, a **Browse** entry appears at th
 
 Local addresses (`localhost`, `127.0.0.1`, `0.0.0.0`, IPv6 loopback) automatically use `http://`. All other addresses default to `https://`.
 
+When typing a non-URL command (e.g. `ls`, `htop`, `npm start`), a **Run** entry appears at the top. Selecting it opens a terminal panel that executes the command directly. After the command finishes, the terminal drops into an interactive shell so output remains visible.
+
+The "Quick Launch" button in the top bar, side launcher, and empty state all open this same search popup, providing a single entry point for browsing URLs and running commands.
+
 ### Browsing History
 Browsed URLs are persisted to the database with timestamps and titles. History entries can be individually deleted or cleared entirely via WebSocket actions.
+
+### Command History
+Terminal commands executed via the search launcher are persisted to the database. Run history entries appear in the search popup alongside browsed URL history and saved apps, and can be individually deleted or cleared.
 
 ### Smart Terminal Icons
 Terminal applications display real brand icons for known commands instead of generic initials. Icons are resolved by matching the base command name (handling prefixes like `sudo`, `env`, and full paths). Known commands include neovim, vim, claude, node, python, docker, git, go, rust, ruby, kubernetes, terraform, tmux, and many more — sourced from Simple Icons CDN. Generic categories (shells, monitoring tools, build tools) use Material Design icons. Unknown commands fall back to the original colored gradient letter icon.
@@ -167,7 +174,7 @@ When opening new applications, existing applications (especially ttyd) are not r
 When a single application is open in a project, it is centered horizontally. When two or more applications are open, they start from the left side.
 
 ### Browse (Empty Browser)
-The "Browse" button (in both the empty state and side launchers) opens a new empty browser panel. The panel starts with a blank page and the URL bar focused, so the user can immediately type a URL or search query and press Enter to navigate. This behaves like opening a new browser tab.
+The "Browser" entry in the search launcher opens a new empty browser panel. The panel starts with a blank page and the URL bar focused, so the user can immediately type a URL or search query and press Enter to navigate. This behaves like opening a new browser tab.
 
 ### Application Zoom
 The entire UI can be zoomed in (`⌘ + +`) or out (`⌘ + -`), handled at the Electron level with `webContents.setZoomLevel()`.
