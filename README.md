@@ -4,7 +4,7 @@ A Go + Electron application using [g-sui](https://github.com/michalCapo/g-sui) t
 
 ## Demo
 
-<video src="demo/demo.mp4" controls width="100%"></video>
+https://github.com/michalCapo/libro/raw/main/demo/demo.mp4
 
 ## Architecture
 
