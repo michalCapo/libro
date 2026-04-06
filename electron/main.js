@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, session, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, session, ipcMain, shell } = require('electron')
 const { spawn } = require('child_process')
 const path = require('path')
 const http = require('http')
@@ -73,7 +73,63 @@ function waitForServer(retries = 50) {
 
 function createWindow() {
   // Persistent partition for webview sessions (shared cookies across webviews)
-  session.fromPartition('persist:libro')
+  const libroSession = session.fromPartition('persist:libro')
+
+  // Handle file downloads from webviews — auto-save to Downloads, show toast
+  let nextDownloadId = 1
+  const activeDownloads = new Map() // id -> DownloadItem
+
+  libroSession.on('will-download', (event, item) => {
+    const id = nextDownloadId++
+    const filename = item.getFilename()
+    const downloadsDir = app.getPath('downloads')
+    const savePath = path.join(downloadsDir, filename)
+    item.setSavePath(savePath)
+    activeDownloads.set(id, item)
+
+    const safeFilename = JSON.stringify(filename)
+    const totalBytes = item.getTotalBytes()
+
+    // Show downloading toast with cancel button
+    if (mainWindow) {
+      mainWindow.webContents.executeJavaScript(`
+        if (window.__libroShowDownloadProgress) window.__libroShowDownloadProgress(${id}, ${safeFilename}, 0, ${totalBytes});
+      `)
+    }
+
+    item.on('updated', (e, state) => {
+      if (!mainWindow) return
+      if (state === 'progressing' && !item.isPaused()) {
+        mainWindow.webContents.executeJavaScript(`
+          if (window.__libroUpdateDownloadProgress) window.__libroUpdateDownloadProgress(${id}, ${item.getReceivedBytes()}, ${totalBytes});
+        `)
+      }
+    })
+
+    item.once('done', (e, state) => {
+      activeDownloads.delete(id)
+      if (!mainWindow) return
+      if (state === 'completed') {
+        const safePath = JSON.stringify(savePath)
+        mainWindow.webContents.executeJavaScript(`
+          if (window.__libroShowDownloadToast) window.__libroShowDownloadToast(${id}, ${safeFilename}, ${safePath});
+        `)
+      } else if (state === 'cancelled') {
+        mainWindow.webContents.executeJavaScript(`
+          if (window.__libroRemoveDownloadToast) window.__libroRemoveDownloadToast(${id});
+        `)
+      } else {
+        mainWindow.webContents.executeJavaScript(`
+          if (window.__libroShowDownloadFailed) window.__libroShowDownloadFailed(${id}, ${safeFilename});
+        `)
+      }
+    })
+  })
+
+  ipcMain.on('libro-cancel-download', (event, id) => {
+    const item = activeDownloads.get(id)
+    if (item) item.cancel()
+  })
 
   mainWindow = new BrowserWindow({
     width: 1920,
@@ -112,6 +168,10 @@ function createWindow() {
 
   ipcMain.on('libro-set-fullscreen', (event, flag) => {
     if (mainWindow) mainWindow.setFullScreen(!!flag)
+  })
+
+  ipcMain.on('libro-open-path', (event, filePath) => {
+    shell.openPath(filePath)
   })
 
   mainWindow.on('closed', () => {

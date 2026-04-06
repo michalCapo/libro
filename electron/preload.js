@@ -12,5 +12,11 @@ contextBridge.exposeInMainWorld('libroElectron', {
   },
   setFullScreen: function (flag) {
     ipcRenderer.send('libro-set-fullscreen', !!flag)
+  },
+  openPath: function (filePath) {
+    ipcRenderer.send('libro-open-path', filePath)
+  },
+  cancelDownload: function (id) {
+    ipcRenderer.send('libro-cancel-download', id)
   }
 })
