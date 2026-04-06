@@ -956,13 +956,13 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		Render(
 			toolbar,
 			r.Div("relative flex-1 min-h-0").Render(
-				renderIframe(app, frameID, iframeSrc),
+				renderIframe(app, frameID, iframeSrc, sid),
 				clickOverlay,
 			),
 		)
 }
 
-func renderIframe(app Application, frameID, iframeSrc string) *r.Node {
+func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 	if app.Type == AppTypeURL {
 		// Electron webview: native rendering, no screencast needed.
 		// z-30 to sit above the click overlay (z-20)
@@ -973,6 +973,7 @@ func renderIframe(app Application, frameID, iframeSrc string) *r.Node {
 		wv := r.El("webview", "").
 			ID(frameID).
 			Attr("data-webview-app", app.ID).
+			Attr("data-sid", sid).
 			Attr("src", webviewSrc).
 			Attr("partition", "persist:libro").
 			Attr("allowpopups", "").
