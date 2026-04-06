@@ -46,6 +46,8 @@ Modal/dialog overlay triggered by "+" button click. Contains a URL input field (
 
 **URL apps** render natively using Electron's `<webview>` tag with a shared persistent session (`partition="persist:libro"`). This provides full browser-quality rendering without the X-Frame-Options and CSP restrictions that block iframe embedding. Each webview gets real mouse, keyboard, and scroll input — no screencasting or input forwarding needed.
 
+Links opened with `target="_blank"` (new tab/window) are intercepted and opened as a new browser app in the strip, keeping everything inside Libro.
+
 **Terminal apps** render via ttyd iframes, unchanged from the terminal support described below.
 
 ### Browser-Like Toolbar
@@ -56,6 +58,8 @@ Each application frame has a non-overlapping toolbar above the content, similar 
 - **Right side (all apps)**: Width size badges (SM, MD, LG, XL, 2XL, FULL) and close button
 
 Users can see the current URL, copy it to clipboard, edit it and press Enter to navigate to a new URL, or reload the page. Back and forward buttons navigate the browser history. The URL bar automatically updates when the user navigates within the webview, reflecting the current page URL in real time (via `did-navigate` and `did-navigate-in-page` events). The URL is automatically prefixed with `https://` if no scheme is provided.
+
+Each webview has a **per-app DevTools button** that appears on hover (bottom-right corner). It opens Electron DevTools for that specific webview and shows a red error count badge when console errors occur.
 
 ### Horizontal Strip Layout
 Applications are arranged in a horizontal flexbox row. The currently selected application is centered in the viewport. Applications that don't fit extend beyond the viewport (off-screen left/right). The strip takes the full height of the viewport.
@@ -69,6 +73,9 @@ When applications overflow the viewport, left (`<`) and right (`>`) arrows appea
 ### Application Selection / Focus
 One application is always selected and centered. Clicking on a partially visible app selects and centers it. The selected app is marked with a small teal dot on the top-left corner (absolute positioned with a subtle glow), rather than a border change.
 
+### App Preview Strip
+The top bar includes a horizontal strip of clickable mini-cards representing all running apps in the current project. Each card shows the app's favicon (for URLs) or terminal icon and a truncated label. The currently selected app is highlighted. Clicking a card selects and scrolls to that app — useful when the window is too small to see all apps at once.
+
 ### Multi-App Layout on Large Screens
 If the selected app doesn't fill the viewport, adjacent apps are shown partially or fully next to it. "+" buttons fill remaining space if no more apps to show.
 
@@ -80,6 +87,9 @@ Apps are sorted alphabetically by name (case-insensitive) when added. Manual reo
 
 ### Manage Saved Apps
 A manage/edit overlay allows viewing all saved app definitions, editing existing saved apps (name, URL, command, width, etc.), and deleting saved app definitions from the database. Project-specific apps can be flagged to only appear in their associated project.
+
+### Browser Downloads
+File downloads initiated from webviews are automatically saved to the system Downloads folder. A toast notification shows real-time download progress with a cancel button. When complete, the toast displays the filename as a clickable link that opens the file using the system default application. Failed or cancelled downloads show appropriate notifications.
 
 ### Terminal Application Support (ttyd)
 Support for terminal-based applications via [ttyd](https://github.com/tsl0922/ttyd). When a user defines a terminal application, it starts on a new port using the `-p` parameter. Terminal applications are editable via the `--writable` parameter. Ports are allocated starting from 7681, automatically skipping any ports already in use.
@@ -192,6 +202,9 @@ The entire UI can be zoomed in (`⌘ + +`) or out (`⌘ + -`), handled at the El
 
 ### Dark Mode
 Full dark mode support using Tailwind `dark:` prefix classes throughout all components. System theme is detected and applied automatically.
+
+### Developer Console
+A developer tools button in the top bar opens the Electron DevTools for the main Libro window, useful for debugging the host application.
 
 ### Version Display
 The current application version is shown in the header toolbar next to the shortcut buttons. In production builds, the version is injected at compile time via `-ldflags`. In development, it is read from the `VERSION` file at startup.
