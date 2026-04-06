@@ -2,7 +2,12 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# deploy — Version-bump, build, commit, and tag libro
+# release — Version-bump, build cross-platform binaries, tag, push,
+#            and create a GitHub Release with attached binaries
+#
+# Usage:
+#   ./release              # bump patch, build, tag, push, create release
+#   ./release --dry-run    # preview without making any changes
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,7 +24,7 @@ for arg in "$@"; do
             ;;
         *)
             echo "Unknown flag: $arg"
-            echo "Usage: ./deploy [--dry-run]"
+            echo "Usage: ./release [--dry-run]"
             exit 1
             ;;
     esac
@@ -43,6 +48,11 @@ if [[ ! -f "$VERSION_FILE" ]]; then
     exit 1
 fi
 
+if ! command -v gh &>/dev/null; then
+    err "GitHub CLI (gh) is required. Install: https://cli.github.com"
+    exit 1
+fi
+
 # ---------------------------------------------------------------------------
 # Read current version and auto-bump patch
 # ---------------------------------------------------------------------------
@@ -53,11 +63,27 @@ info "Current version: $CURRENT_VERSION"
 IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
 PATCH=$((PATCH + 1))
 NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+TAG="v${NEW_VERSION}"
 
 info "New version:     $NEW_VERSION"
 
 # ---------------------------------------------------------------------------
-# Dry-run mode — show what would happen and exit
+# Build matrix
+# ---------------------------------------------------------------------------
+
+PLATFORMS=(
+    "linux/amd64"
+    "linux/arm64"
+    "darwin/amd64"
+    "darwin/arm64"
+    "windows/amd64"
+)
+
+LDFLAGS="-X ${MODULE}/internal/version.Version=${NEW_VERSION}"
+BUILD_DIR="$SCRIPT_DIR/dist"
+
+# ---------------------------------------------------------------------------
+# Dry-run mode
 # ---------------------------------------------------------------------------
 
 if [[ "$DRY_RUN" == true ]]; then
@@ -66,17 +92,25 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "  Version bump:  $CURRENT_VERSION → $NEW_VERSION"
     echo "  VERSION file:  $VERSION_FILE"
     echo ""
-    echo "  Build:         go build -ldflags \"-X $MODULE/internal/version.Version=$NEW_VERSION\" -o libro ."
+    echo "  Builds:"
+    for platform in "${PLATFORMS[@]}"; do
+        OS="${platform%/*}"
+        ARCH="${platform#*/}"
+        EXT=""; [[ "$OS" == "windows" ]] && EXT=".exe"
+        echo "    ${MODULE}-${OS}-${ARCH}${EXT}"
+    done
     echo ""
-    echo "  Git commit:    git add VERSION && git commit -m \"v$NEW_VERSION\""
-    echo "  Git tag:       git tag v$NEW_VERSION"
+    echo "  Git commit:    git add VERSION && git commit -m \"$TAG\""
+    echo "  Git tag:       git tag $TAG"
     echo "  Git push:      git push && git push --tags"
+    echo ""
+    echo "  GitHub release: gh release create $TAG --generate-notes <binaries...>"
     echo ""
     exit 0
 fi
 
 # ---------------------------------------------------------------------------
-# Cleanup
+# Cleanup & tidy
 # ---------------------------------------------------------------------------
 
 info "Cleaning up..."
@@ -92,24 +126,34 @@ echo "$NEW_VERSION" > "$VERSION_FILE"
 ok "VERSION file updated to $NEW_VERSION"
 
 # ---------------------------------------------------------------------------
-# Build
+# Build all platforms
 # ---------------------------------------------------------------------------
 
-LDFLAGS="-X ${MODULE}/internal/version.Version=${NEW_VERSION}"
+rm -rf "$BUILD_DIR"
+mkdir -p "$BUILD_DIR"
 
-# Embed Windows resources if go-winres is available
-if command -v go-winres &>/dev/null; then
-    info "Embedding Windows resources..."
-    (cd "$SCRIPT_DIR" && go-winres make --product-version="${NEW_VERSION}" --file-version="${NEW_VERSION}")
-    ok "Windows resources generated"
-fi
+for platform in "${PLATFORMS[@]}"; do
+    OS="${platform%/*}"
+    ARCH="${platform#*/}"
+    EXT=""
+    [[ "$OS" == "windows" ]] && EXT=".exe"
 
-info "Building libro (production, port 8100)..."
-go build -ldflags "$LDFLAGS" -o "$SCRIPT_DIR/libro" .
-ok "libro built"
+    OUTPUT="${BUILD_DIR}/${MODULE}-${OS}-${ARCH}${EXT}"
+    info "Building ${OS}/${ARCH}..."
 
-# Cleanup .syso files
-rm -f "$SCRIPT_DIR/"*.syso
+    # Embed Windows resources if building for Windows and go-winres is available
+    if [[ "$OS" == "windows" ]] && command -v go-winres &>/dev/null; then
+        (cd "$SCRIPT_DIR" && go-winres make --product-version="${NEW_VERSION}" --file-version="${NEW_VERSION}")
+    fi
+
+    CGO_ENABLED=0 GOOS="$OS" GOARCH="$ARCH" \
+        go build -ldflags "$LDFLAGS" -o "$OUTPUT" .
+
+    # Cleanup .syso files after Windows build
+    [[ "$OS" == "windows" ]] && rm -f "$SCRIPT_DIR/"*.syso
+done
+
+ok "All binaries built in $BUILD_DIR"
 
 # ---------------------------------------------------------------------------
 # Git commit, tag, and push
@@ -117,9 +161,9 @@ rm -f "$SCRIPT_DIR/"*.syso
 
 info "Committing version bump..."
 git add "$VERSION_FILE"
-git commit -m "v${NEW_VERSION}"
-git tag "v${NEW_VERSION}"
-ok "Committed and tagged v${NEW_VERSION}"
+git commit -m "${TAG}"
+git tag "${TAG}"
+ok "Committed and tagged ${TAG}"
 
 info "Pushing to remote..."
 git push
@@ -127,12 +171,33 @@ git push --tags
 ok "Pushed"
 
 # ---------------------------------------------------------------------------
-# Summary
+# Create GitHub Release
 # ---------------------------------------------------------------------------
+
+info "Creating GitHub release ${TAG}..."
+
+ASSETS=()
+for f in "$BUILD_DIR"/*; do
+    ASSETS+=("$f")
+done
+
+gh release create "${TAG}" "${ASSETS[@]}" \
+    --title "${TAG}" \
+    --generate-notes
+
+ok "GitHub release created: ${TAG}"
+
+# ---------------------------------------------------------------------------
+# Cleanup
+# ---------------------------------------------------------------------------
+
+rm -rf "$BUILD_DIR"
+ok "Build artifacts cleaned up"
 
 echo ""
 echo "============================================"
-echo "  Deploy complete"
+echo "  Release complete"
 echo "  $CURRENT_VERSION → $NEW_VERSION"
+echo "  https://github.com/michalCapo/libro/releases/tag/${TAG}"
 echo "============================================"
 echo ""
