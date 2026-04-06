@@ -78,6 +78,9 @@ type AppState struct {
 	// SidebarCollapsed tracks whether the project sidebar is collapsed
 	SidebarCollapsed bool
 
+	// ZenMode hides everything except running applications (top bar, sidebar, toolbars)
+	ZenMode bool
+
 	// NavSlots maps keyboard slot (2-9) → project name to switch to
 	NavSlots map[int]string
 	// NavProjectSlot maps root project name → assigned slot number
@@ -944,6 +947,20 @@ func (sm *StateManager) ToggleSidebar(sessionID string) {
 	s := sm.states[sessionID]
 	if s != nil {
 		s.SidebarCollapsed = !s.SidebarCollapsed
+	}
+}
+
+// ToggleZenMode flips the zen mode state
+func (sm *StateManager) ToggleZenMode(sessionID string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s != nil {
+		s.ZenMode = !s.ZenMode
+		// In zen mode, always collapse sidebar
+		if s.ZenMode {
+			s.SidebarCollapsed = true
+		}
 	}
 }
 

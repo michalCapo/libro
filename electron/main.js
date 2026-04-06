@@ -110,6 +110,10 @@ function createWindow() {
     if (mainWindow) mainWindow.webContents.toggleDevTools()
   })
 
+  ipcMain.on('libro-set-fullscreen', (event, flag) => {
+    if (mainWindow) mainWindow.setFullScreen(!!flag)
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
     app.quit()
@@ -142,7 +146,7 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // For main window content: directly invoke JS for Super+N shortcuts
+    // For main window content: directly invoke JS for Super+N and Super+Z shortcuts
     // (native keydown may be intercepted by the desktop environment on Linux)
     if (!isWebview) {
       if (input.meta && input.control && code === 'keyn') {
@@ -159,6 +163,18 @@ app.on('web-contents-created', (event, contents) => {
         if (mainWindow) {
           mainWindow.webContents.executeJavaScript(`
             if (window.__libroOpenSearch) window.__libroOpenSearch('right');
+          `)
+        }
+        return
+      }
+      // Super+Z: zen mode toggle — must preventDefault to block browser Undo
+      if (input.meta && !input.control && code === 'keyz') {
+        e.preventDefault()
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            document.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'z', code: 'KeyZ', metaKey: true, bubbles: true, cancelable: true
+            }));
           `)
         }
         return
@@ -184,8 +200,8 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, d, n
-    if (input.meta && (['h', 'l', 'd', 'n'].includes(key) || code === 'keyn')) {
+    // Meta (Super/Win) shortcuts: h, l, d, n, z
+    if (input.meta && (['h', 'l', 'd', 'n', 'z'].includes(key) || code === 'keyn')) {
       e.preventDefault()
       if (mainWindow) {
         const safeKey = input.key.replace(/'/g, "\\'")

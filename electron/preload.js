@@ -9,5 +9,8 @@ contextBridge.exposeInMainWorld('libroElectron', {
   },
   toggleDevTools: function () {
     ipcRenderer.send('libro-toggle-devtools')
+  },
+  setFullScreen: function (flag) {
+    ipcRenderer.send('libro-set-fullscreen', !!flag)
   }
 })
