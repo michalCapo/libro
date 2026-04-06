@@ -105,7 +105,8 @@ A close button is available on each application to remove it from the strip. Whe
 - `Ctrl + 1–9` — switch to assigned project by slot
 - `Ctrl + 0` — switch to previous project
 - `⌘ + G` — git worktrees popup
-- `⌘ + Z` — toggle zen mode (fullscreen, hide all UI)
+- `⌘ + Z` — toggle zen mode (hide all UI)
+- `⌘ + F` — toggle fullscreen
 
 **Browser:**
 - `Ctrl + L` — focus the URL bar of the selected app
@@ -196,10 +197,10 @@ Full dark mode support using Tailwind `dark:` prefix classes throughout all comp
 The current application version is shown in the header toolbar next to the shortcut buttons. In production builds, the version is injected at compile time via `-ldflags`. In development, it is read from the `VERSION` file at startup.
 
 ### Fullscreen Mode
-A fullscreen toggle button is available in the top bar. It uses Electron's native `setFullScreen` via IPC to enter and exit fullscreen mode. The button icon updates dynamically to reflect the current state.
+A fullscreen toggle button is available in the top bar (`⌘ + F`). It uses Electron's native `setFullScreen` via IPC to enter and exit fullscreen mode. The button icon updates dynamically to reflect the current state.
 
 ### Zen Mode
-Zen mode (`⌘ + Z`) hides the top bar, project sidebar, and all application toolbars, leaving only the running applications visible. The app also enters fullscreen automatically. Users navigate entirely via keyboard shortcuts. Toggle zen mode again with `⌘ + Z` to restore the full UI and exit fullscreen. A zen mode button is also available in the top bar.
+Zen mode (`⌘ + Z`) hides the top bar, project sidebar, and all application toolbars, leaving only the running applications visible. Users navigate entirely via keyboard shortcuts. Toggle zen mode again with `⌘ + Z` to restore the full UI. A zen mode button is also available in the top bar.
 
 ## Desktop Mode
 
@@ -236,14 +237,14 @@ Builds the Go binary for your OS/architecture and installs it to `~/.local/share
 
 On **Linux**, it also installs a `.desktop` entry, sets a custom icon on the binary, and installs the app icon to `~/.local/share/icons/`. On **Windows**, it embeds the icon into the `.exe` via `go-winres` (if installed).
 
-## Deploy
+## Release
 
 ```bash
-./deploy           # bump version, build, commit, tag, push
-./deploy --dry-run # preview without changes
+./release           # bump version, build, tag, push, create GitHub release
+./release --dry-run # preview without changes
 ```
 
-Reads the current version from `VERSION`, increments the patch number (e.g. `0.0.1` → `0.0.2`), builds the binary, commits the version bump, tags it `vX.X.X`, and pushes to git.
+Reads the current version from `VERSION`, increments the patch number (e.g. `0.0.1` → `0.0.2`), builds cross-platform binaries (linux/darwin/windows, amd64/arm64), commits the version bump, tags it `vX.X.X`, pushes to git, and creates a GitHub Release with all binaries attached.
 
 ## Key Technical Decisions
 
