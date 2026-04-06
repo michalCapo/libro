@@ -543,7 +543,7 @@ func navigateJS(state *AppState, sid string) string {
 }
 
 func flashCSS() string {
-	return `(function(){if(!document.getElementById('libro-flash-css')){var s=document.createElement('style');s.id='libro-flash-css';s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.92)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.96)}}';document.head.appendChild(s);}})();`
+	return `(function(){if(!document.getElementById('libro-flash-css')){var s=document.createElement('style');s.id='libro-flash-css';s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.92)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.96)}} @keyframes libro-toast-slide-up{0%{transform:translateY(100%);opacity:0}100%{transform:translateY(0);opacity:1}} @keyframes libro-toast-slide-down{0%{transform:translateY(0);opacity:1}100%{transform:translateY(100%);opacity:0}}';document.head.appendChild(s);}})();`
 }
 
 // projectToastJS returns JS that shows a brief centered toast with the project and branch.
@@ -616,6 +616,90 @@ func projectToastSetupJS() string {
 			el.style.animation='libro-toast-out .25s ease-in forwards';
 			timer=setTimeout(function(){el.style.opacity='0';timer=null;},260);
 		},dur);
+	};
+	// --- Download toast helpers ---
+	function dlTheme(){
+		var dk=document.documentElement.classList.contains('dark');
+		return{bg:dk?'#1e1e2e':'#f8f8fa',border:dk?'rgba(63,63,90,.6)':'rgba(200,200,220,.7)',fg:dk?'#e2e2e8':'#1a1a2e',dim:dk?'#7a7a8e':'#8a8a9e',accent:dk?'#89b4fa':'#3b82f6',bar:dk?'rgba(63,63,90,.4)':'rgba(200,200,220,.4)'};
+	}
+	function dlBase(id){
+		var el=document.getElementById('libro-dl-'+id);
+		if(el)return el;
+		el=document.createElement('div');
+		el.id='libro-dl-'+id;
+		var t=dlTheme();
+		el.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:8px 16px;background:'+t.bg+';border-top:1px solid '+t.border+';display:flex;align-items:center;gap:10px;font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,monospace;font-size:13px;animation:libro-toast-slide-up .15s ease-out forwards;';
+		document.body.appendChild(el);
+		return el;
+	}
+	function dlDismiss(el){
+		el.style.animation='libro-toast-slide-down .15s ease-in forwards';
+		setTimeout(function(){if(el.parentNode)el.remove();},160);
+	}
+	function formatBytes(b){
+		if(b<=0)return '0 B';
+		var u=['B','KB','MB','GB'];var i=Math.floor(Math.log(b)/Math.log(1024));
+		return (b/Math.pow(1024,i)).toFixed(i?1:0)+' '+u[i];
+	}
+
+	// Show progress bar with cancel button while downloading
+	window.__libroShowDownloadProgress=function(id,filename,received,total){
+		var el=dlBase(id);
+		var t=dlTheme();
+		var pct=total>0?Math.round(received/total*100):0;
+		var sizeText=total>0?formatBytes(received)+' / '+formatBytes(total):'';
+		el.innerHTML='<span class="material-icons-round" style="font-size:18px;color:'+t.accent+';animation:spin 1s linear infinite">downloading</span>'+
+			'<span style="color:'+t.fg+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px">'+filename.replace(/</g,'&lt;')+'</span>'+
+			'<span style="color:'+t.dim+';font-size:11px;white-space:nowrap">'+sizeText+'</span>'+
+			'<div style="flex:1;height:4px;border-radius:2px;background:'+t.bar+';min-width:80px;max-width:200px;overflow:hidden"><div data-dl-bar style="width:'+pct+'%;height:100%;background:'+t.accent+';border-radius:2px;transition:width .2s"></div></div>'+
+			'<span data-dl-cancel style="cursor:pointer;color:'+t.dim+';font-size:18px;line-height:1" class="material-icons-round" title="Cancel download">close</span>';
+		el.querySelector('[data-dl-cancel]').addEventListener('click',function(){
+			if(window.libroElectron&&window.libroElectron.cancelDownload)window.libroElectron.cancelDownload(id);
+		});
+	};
+
+	// Update progress bar
+	window.__libroUpdateDownloadProgress=function(id,received,total){
+		var el=document.getElementById('libro-dl-'+id);
+		if(!el)return;
+		var bar=el.querySelector('[data-dl-bar]');
+		if(bar&&total>0)bar.style.width=Math.round(received/total*100)+'%';
+		var spans=el.querySelectorAll('span');
+		// Update size text (third span-like element)
+		var sizeEl=el.children[2];
+		if(sizeEl&&total>0)sizeEl.textContent=formatBytes(received)+' / '+formatBytes(total);
+	};
+
+	// Download complete — show clickable filename
+	window.__libroShowDownloadToast=function(id,filename,filePath){
+		var el=dlBase(id);
+		var t=dlTheme();
+		el.innerHTML='<span class="material-icons-round" style="font-size:18px;color:'+t.accent+'">download_done</span>'+
+			'<a href="#" style="color:'+t.accent+';text-decoration:none;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:400px" title="Open '+filename.replace(/"/g,'&quot;')+'">'+filename.replace(/</g,'&lt;')+'</a>'+
+			'<span style="margin-left:auto;cursor:pointer;color:'+t.dim+';font-size:18px;line-height:1" class="material-icons-round">close</span>';
+		el.querySelector('a').addEventListener('click',function(e){
+			e.preventDefault();
+			if(window.libroElectron&&window.libroElectron.openPath)window.libroElectron.openPath(filePath);
+		});
+		el.querySelector('span:last-child').addEventListener('click',function(){dlDismiss(el);});
+		setTimeout(function(){if(el.parentNode)dlDismiss(el);},8000);
+	};
+
+	// Download failed
+	window.__libroShowDownloadFailed=function(id,filename){
+		var el=dlBase(id);
+		var t=dlTheme();
+		el.innerHTML='<span class="material-icons-round" style="font-size:18px;color:#ef4444">error</span>'+
+			'<span style="color:'+t.fg+'">Download failed: '+filename.replace(/</g,'&lt;')+'</span>'+
+			'<span style="margin-left:auto;cursor:pointer;color:'+t.dim+';font-size:18px;line-height:1" class="material-icons-round">close</span>';
+		el.querySelector('span:last-child').addEventListener('click',function(){dlDismiss(el);});
+		setTimeout(function(){if(el.parentNode)dlDismiss(el);},5000);
+	};
+
+	// Remove toast (on cancel)
+	window.__libroRemoveDownloadToast=function(id){
+		var el=document.getElementById('libro-dl-'+id);
+		if(el)dlDismiss(el);
 	};
 })();
 `
