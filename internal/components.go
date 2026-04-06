@@ -381,11 +381,11 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 	}
 	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0").Attr("style", "order:99999"))
 
-	strip := r.Div("flex-1 min-w-0 flex items-stretch h-full overflow-x-auto overflow-y-hidden gap-4 p-0.5").
+	strip := r.Div("flex-1 min-w-0 flex items-stretch h-full overflow-x-auto overflow-y-hidden gap-0.5 p-0.5").
 		ID(stripID(state.ActiveProject)).
 		Render(stripChildren...)
 
-	mainArea := r.Div("flex-1 flex items-stretch overflow-hidden relative p-2").ID(projectMainID(state.ActiveProject)).
+	mainArea := r.Div("flex-1 flex items-stretch overflow-hidden relative p-0.5").ID(projectMainID(state.ActiveProject)).
 		Render(
 			strip,
 		)

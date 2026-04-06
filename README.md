@@ -196,7 +196,7 @@ Full dark mode support using Tailwind `dark:` prefix classes throughout all comp
 The current application version is shown in the header toolbar next to the shortcut buttons. In production builds, the version is injected at compile time via `-ldflags`. In development, it is read from the `VERSION` file at startup.
 
 ### Fullscreen Mode
-A fullscreen toggle button is available in the project bar next to the theme switcher. It uses the browser's Fullscreen API to enter and exit fullscreen mode. The button label and icon update dynamically to reflect the current state ("Fullscreen" / "Exit").
+A fullscreen toggle button is available in the top bar. It uses Electron's native `setFullScreen` via IPC to enter and exit fullscreen mode. The button icon updates dynamically to reflect the current state.
 
 ### Zen Mode
 Zen mode (`⌘ + Z`) hides the top bar, project sidebar, and all application toolbars, leaving only the running applications visible. The app also enters fullscreen automatically. Users navigate entirely via keyboard shortcuts. Toggle zen mode again with `⌘ + Z` to restore the full UI and exit fullscreen. A zen mode button is also available in the top bar.
