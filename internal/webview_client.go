@@ -359,6 +359,21 @@ function bindWebviewEvents(wv, appID) {
 		}
 	});
 
+	// Show error page on load failure
+	wv.addEventListener('did-fail-load', function(e) {
+		// Ignore aborted loads (e.g. navigation interrupted by another navigation)
+		if (e.errorCode === -3) return;
+		var errorDesc = e.errorDescription || 'Unknown error';
+		var failedUrl = e.validatedURL || '';
+		var html = '<html><body style="display:flex;align-items:center;justify-content:center;height:100%;margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333">' +
+			'<div style="text-align:center;max-width:400px;padding:2rem">' +
+			'<div style="font-size:2rem;margin-bottom:1rem">&#9888;</div>' +
+			'<div style="font-size:14px;font-weight:600;margin-bottom:0.5rem">' + errorDesc + '</div>' +
+			'<div style="font-size:12px;color:#888;word-break:break-all">' + failedUrl.replace(/</g,'&lt;') + '</div>' +
+			'</div></body></html>';
+		try { wv.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html)); } catch(err) {}
+	});
+
 	// Loading indicator removal
 	var loading = wv.parentNode && wv.parentNode.querySelector('[data-webview-loading]');
 	if (loading) {
@@ -432,6 +447,12 @@ window.__libroWvReload = function(appID) {
 	var wv = window.__libroWebviews[appID];
 	if (!wv) return;
 	whenReady(appID, function() { wv.reload(); });
+};
+window.__libroOpenNewTab = function(url) {
+	// Find the sid from any webview with a data-sid attribute
+	var wv = document.querySelector('webview[data-sid]');
+	var sid = wv ? wv.getAttribute('data-sid') : 'default';
+	__ws.call('app.start', {sid: sid, type: 'url', url: url, width: 'lg', side: 'right'});
 };
 window.__libroWvNavigate = function(appID, url) {
 	var wv = window.__libroWebviews[appID];

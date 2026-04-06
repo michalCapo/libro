@@ -184,6 +184,19 @@ function createWindow() {
 // The renderer-side <webview> before-input-event is unreliable — this catches
 // input at the webContents level before the guest page can consume it.
 app.on('web-contents-created', (event, contents) => {
+  // Intercept new window requests from webviews — open as a new browser app
+  if (contents.getType() === 'webview') {
+    contents.setWindowOpenHandler(({ url }) => {
+      if (url && url !== 'about:blank' && mainWindow) {
+        const safeUrl = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+        mainWindow.webContents.executeJavaScript(`
+          if (window.__libroOpenNewTab) window.__libroOpenNewTab('${safeUrl}');
+        `)
+      }
+      return { action: 'deny' }
+    })
+  }
+
   contents.on('before-input-event', (e, input) => {
     if (input.type !== 'keyDown') return
 
