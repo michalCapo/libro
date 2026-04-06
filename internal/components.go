@@ -2413,6 +2413,31 @@ func updateAppPreviewJS(state *AppState) string {
 	`, state.SelectedIndex, jsString(selectedCls), jsString(normalCls))
 }
 
+// runningAppCount returns the number of running apps for a given project name.
+func runningAppCount(state *AppState, projectName string) int {
+	if projectName == state.ActiveProject {
+		return len(state.Apps)
+	}
+	if snap, ok := state.snapshots[projectName]; ok {
+		return len(snap.Apps)
+	}
+	return 0
+}
+
+// renderAppCountBadge renders a small count badge for running apps. Returns nil if count is 0.
+func renderAppCountBadge(count int, active bool) *r.Node {
+	if count == 0 {
+		return nil
+	}
+	cls := "inline-flex items-center justify-center min-w-[16px] h-4 rounded-full text-[10px] font-bold leading-none shrink-0 px-1 "
+	if active {
+		cls += "bg-white text-blue-600"
+	} else {
+		cls += "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+	}
+	return r.Span(cls).Text(fmt.Sprintf("%d", count))
+}
+
 // renderProjectSidebar renders the left sidebar with project tree and worktrees.
 func renderProjectSidebar(state *AppState, sid string) *r.Node {
 	if state.SidebarCollapsed {
@@ -2485,6 +2510,13 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 		}
 		btnChildren = append(btnChildren, r.Span("truncate flex-1 text-left").Text(proj.Name))
 
+		// Running app count badge for non-git projects (git repos show counts on worktree sub-items)
+		if !proj.IsGitRepo {
+			if badge := renderAppCountBadge(runningAppCount(state, proj.Name), isActive || isParentOfActive); badge != nil {
+				btnChildren = append(btnChildren, badge)
+			}
+		}
+
 		// Delete button (hidden until hover, not for home)
 		if proj.Name != "home" {
 			deleteCls := "flex items-center justify-center w-5 h-5 rounded cursor-pointer opacity-0 group-hover/proj:opacity-100 transition-opacity duration-75 shrink-0 "
@@ -2543,13 +2575,25 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 						)
 					}
 
+					// Determine running app count for this worktree
+					wtProjectName := vtName
+					if isMainWt {
+						wtProjectName = proj.Name
+					}
+					wtAppCount := runningAppCount(state, wtProjectName)
+
+					wtBtnChildren := []*r.Node{
+						r.I("material-icons-round text-sm shrink-0").Text("alt_route"),
+						r.Span("truncate flex-1 text-left").Text(wt.Branch),
+					}
+					if badge := renderAppCountBadge(wtAppCount, isWtActive); badge != nil {
+						wtBtnChildren = append(wtBtnChildren, badge)
+					}
+
 					wtBtn := r.Button(wtCls).
 						Attr("title", wt.Path).
 						OnClick(r.JS(wtOnClick)).
-						Render(
-							r.I("material-icons-round text-sm shrink-0").Text("alt_route"),
-							r.Span("truncate flex-1 text-left").Text(wt.Branch),
-						)
+						Render(wtBtnChildren...)
 
 					// Delete worktree button (not for main worktree)
 					if !isMainWt {
