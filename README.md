@@ -116,7 +116,7 @@ A close button is available on each application to remove it from the strip. Whe
 - `h / l` — scroll left / right
 - `/` — find in page
 - `n / p` — find next / previous
-- `Esc` — clear search
+- `Esc` — clear search (in input fields: blur/unfocus the field)
 - `b / f` — page back / forward
 - `Enter` — follow link / click button
 
@@ -136,9 +136,14 @@ When typing a URL directly into the search box, a **Browse** entry appears at th
 
 Local addresses (`localhost`, `127.0.0.1`, `0.0.0.0`, IPv6 loopback) automatically use `http://`. All other addresses default to `https://`.
 
-When typing a non-URL command (e.g. `ls`, `htop`, `npm start`), a **Run** entry appears at the top. Selecting it opens a terminal panel that executes the command directly. After the command finishes, the terminal drops into an interactive shell so output remains visible.
+The search box supports prefix modes for quick actions:
+- **`:query`** — Internet search. A **Search** entry appears at the top that opens a Google search for the query in a browser panel.
+- **`!command`** — Run terminal command. A **Run** entry appears at the top that executes the command in a terminal panel. After the command finishes, the terminal drops into an interactive shell so output remains visible.
+- **Plain text** — Fuzzy-matches saved apps, browsing history, and run history only (no auto-run entry).
 
-The "Quick Launch" button in the top bar, side launcher, and empty state all open this same search popup, providing a single entry point for browsing URLs and running commands.
+When typing a URL directly into the search box, a **Browse** entry still appears at the top for quick navigation.
+
+The "Quick Launch" button in the top bar, side launcher, and empty state all open this same search popup, providing a single entry point for browsing URLs, searching the web, and running commands.
 
 ### Browsing History
 Browsed URLs are persisted to the database with timestamps and titles. History entries can be individually deleted or cleared entirely via WebSocket actions.

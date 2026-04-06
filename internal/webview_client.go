@@ -24,7 +24,10 @@ var browserShortcutsScript = '(' + function(){
 		if(e.metaKey || e.ctrlKey || e.altKey) return;
 		var ae = document.activeElement;
 		var tag = ae ? ae.tagName.toUpperCase() : '';
-		if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(ae&&ae.isContentEditable)) return;
+		if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(ae&&ae.isContentEditable)) {
+			if(e.key==='Escape' && ae) { ae.blur(); e.preventDefault(); e.stopPropagation(); }
+			return;
+		}
 		var handled = true;
 		switch(e.key) {
 			case 'g': window.scrollTo({top: 0, behavior: 'smooth'}); break;

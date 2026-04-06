@@ -1355,7 +1355,11 @@ func searchDialogJS(sid string) string {
 			var label='';
 			var sub='';
 			var app=item.app;
-			if(item.isRun){
+			if(item.isSearch){
+				iconHtml='<i class="material-icons-round text-blue-500 text-lg shrink-0">search</i>';
+				label=app.name;
+				sub=app.url;
+			}else if(item.isRun){
 				iconHtml='<i class="material-icons-round text-emerald-500 text-lg shrink-0">terminal</i>';
 				label=app.name;
 				sub='';
@@ -1397,7 +1401,7 @@ func searchDialogJS(sid string) string {
 			var txtCls=dk?'text-zinc-200':'text-gray-800';
 			var subCls=dk?'text-zinc-500':'text-gray-400';
 			var badgeCls=dk?'bg-zinc-700 text-zinc-400':'bg-gray-200 text-gray-500';
-			var typeBadge=item.isRun?'run':item.isRunHistory?'history':item.isBrowse?'browser':item.isHistory?'history':app.type;
+			var typeBadge=item.isSearch?'search':item.isRun?'run':item.isRunHistory?'history':item.isBrowse?'browser':item.isHistory?'history':app.type;
 			var deleteBtn='';
 			if(item.isHistory){
 				deleteBtn='<i class="material-icons-round text-sm shrink-0 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity '+(dk?'text-zinc-500 hover:text-red-400':'text-gray-400 hover:text-red-500')+'" data-delete-url="'+app.url.replace(/"/g,'&quot;')+'">close</i>';
@@ -1488,10 +1492,49 @@ func searchDialogJS(sid string) string {
 				if(score>0)filtered.push({app:h.app,score:score,isHistory:true});
 			});
 			filtered.sort(function(a,b){return b.score-a.score;});
-		}else{
+		}else if(q.charAt(0)===':'){
+			// Colon prefix — internet search
+			var searchQ=q.substring(1).trim();
 			filtered=[];
-			// Always show "Run: <query>" at top for non-URL text
-			filtered.push({app:{type:'terminal',command:q,name:'Run: '+q,width:'lg',writable:true},score:99999,isRun:true});
+			if(searchQ){
+				filtered.push({app:{type:'url',url:'https://www.google.com/search?q='+encodeURIComponent(searchQ),name:'Search: '+searchQ,width:'lg'},score:99999,isSearch:true});
+			}
+			apps.forEach(function(a){
+				var text=(a.name||'')+' '+(a.command||'')+' '+(a.url||'')+' '+a.type;
+				var score=fuzzyMatch(text,searchQ||q);
+				if(score>0)filtered.push({app:a,score:score});
+			});
+			uniqueHistory.forEach(function(h){
+				var score=fuzzyMatch(h.app.url+' '+h.app.name,searchQ||q);
+				if(score>0)filtered.push({app:h.app,score:score,isHistory:true});
+			});
+			filtered.sort(function(a,b){return b.score-a.score;});
+			// Keep search at top
+			var sIdx=filtered.findIndex(function(f){return f.isSearch;});
+			if(sIdx>0){var s=filtered.splice(sIdx,1)[0];filtered.unshift(s);}
+		}else if(q.charAt(0)==='!'){
+			// Exclamation prefix — run terminal command
+			var runQ=q.substring(1).trim();
+			filtered=[];
+			if(runQ){
+				filtered.push({app:{type:'terminal',command:runQ,name:'Run: '+runQ,width:'lg',writable:true},score:99999,isRun:true});
+			}
+			apps.forEach(function(a){
+				var text=(a.name||'')+' '+(a.command||'')+' '+(a.url||'')+' '+a.type;
+				var score=fuzzyMatch(text,runQ||q);
+				if(score>0)filtered.push({app:a,score:score});
+			});
+			uniqueRunHistory.forEach(function(h){
+				var score=fuzzyMatch(h.app.command,runQ||q);
+				if(score>0)filtered.push({app:h.app,score:score,isRunHistory:true});
+			});
+			filtered.sort(function(a,b){return b.score-a.score;});
+			// Keep "Run:" at top
+			var runIdx=filtered.findIndex(function(f){return f.isRun;});
+			if(runIdx>0){var r=filtered.splice(runIdx,1)[0];filtered.unshift(r);}
+		}else{
+			// Plain text — search saved apps and history only
+			filtered=[];
 			apps.forEach(function(a){
 				var text=(a.name||'')+' '+(a.command||'')+' '+(a.url||'')+' '+a.type;
 				var score=fuzzyMatch(text,q);
@@ -1506,9 +1549,6 @@ func searchDialogJS(sid string) string {
 				if(score>0)filtered.push({app:h.app,score:score,isRunHistory:true});
 			});
 			filtered.sort(function(a,b){return b.score-a.score;});
-			// Keep "Run: <query>" at top regardless of sort
-			var runIdx=filtered.findIndex(function(f){return f.isRun;});
-			if(runIdx>0){var r=filtered.splice(runIdx,1)[0];filtered.unshift(r);}
 			// Add browser if "browser" fuzzy matches query
 			if(fuzzyMatch('browser',q)>0)filtered.push(browserEntry);
 		}
@@ -1525,6 +1565,11 @@ func searchDialogJS(sid string) string {
 		var app=item.app;
 		dlg.classList.add('hidden');
 		inp.value='';
+		// Internet search — open browser with search URL
+		if(item.isSearch){
+			__ws.call('app.start',{sid:'%s',type:'url',url:app.url,command:'',width:app.width||'lg',writable:true,name:'',iconUrl:'',side:side});
+			return;
+		}
 		// Run command — execute terminal directly
 		if(item.isRun||item.isRunHistory){
 			__ws.call('app.run.execute',{sid:'%s',command:app.command,side:side});
@@ -1576,7 +1621,7 @@ func searchDialogJS(sid string) string {
 
 	window.__libroOpenSearch=openSearch;
 })();
-`, SearchDialogID, sid, sid, sid, sid, sid, sid)
+`, SearchDialogID, sid, sid, sid, sid, sid, sid, sid)
 }
 
 // renderShortcutsDialog renders the keyboard shortcuts popup (hidden by default).
@@ -1608,6 +1653,10 @@ func renderShortcutsDialog() *r.Node {
 			{"Ctrl + 0", "Switch to previous project"},
 			{"⌘ + G", "Git worktrees popup"},
 		}},
+		{"Search", "⌘ + N or ⌘ + Ctrl + N to open", []shortcut{
+			{": query", "Search the internet"},
+			{"! command", "Run terminal command"},
+		}},
 		{"Browser", "", []shortcut{
 			{"Ctrl + L", "Select browser URL bar"},
 			{"Ctrl + R", "Reload browser page"},
@@ -1618,7 +1667,7 @@ func renderShortcutsDialog() *r.Node {
 			{"h / l", "Scroll left / right"},
 			{"/", "Find in page"},
 			{"n / p", "Find next / previous"},
-			{"Esc", "Clear search"},
+			{"Esc", "Clear search / blur input"},
 			{"b / f", "Page back / forward"},
 			{"Enter", "Follow link / click button"},
 		}},
