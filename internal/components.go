@@ -1737,7 +1737,8 @@ func renderShortcutsDialog() *r.Node {
 			{"Ctrl + 1–9", "Switch to assigned project"},
 			{"Ctrl + 0", "Switch to previous project"},
 			{"⌘ + G", "Git worktrees popup"},
-			{"⌘ + Z", "Toggle zen mode (fullscreen, hide UI)"},
+			{"⌘ + Z", "Toggle zen mode (hide UI)"},
+			{"⌘ + F", "Toggle fullscreen"},
 		}},
 		{"Search", "⌘ + N or ⌘ + Ctrl + N to open", []shortcut{
 			{": query", "Search the internet"},
@@ -3115,6 +3116,12 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					__ws.call('zen.toggle', {"sid": "%s"});
+					return;
+				}
+				if (e.metaKey && (e.key === 'f' || e.key === 'F') && !e.ctrlKey) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if(window.libroElectron&&window.libroElectron.setFullScreen){var fs=window.__libroIsFullscreen;window.__libroIsFullscreen=!fs;window.libroElectron.setFullScreen(!fs);var ic=document.querySelector('.libro-fs-icon');if(ic)ic.textContent=(!fs?'fullscreen_exit':'fullscreen');}
 					return;
 				}
 				if (e.metaKey && (e.key === 'g' || e.key === 'G')) {

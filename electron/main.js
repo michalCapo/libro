@@ -240,6 +240,18 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
+      // Super+F: fullscreen toggle
+      if (input.meta && !input.control && code === 'keyf') {
+        e.preventDefault()
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            document.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'f', code: 'KeyF', metaKey: true, bubbles: true, cancelable: true
+            }));
+          `)
+        }
+        return
+      }
       // Super+Z: zen mode toggle — must preventDefault to block browser Undo
       if (input.meta && !input.control && code === 'keyz') {
         e.preventDefault()
