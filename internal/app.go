@@ -676,6 +676,25 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
+	// Toggle zen mode — hides top bar, sidebar, and app toolbars; enters fullscreen
+	app.Action("zen.toggle", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		sm.ToggleZenMode(sid)
+		state := sm.Get(sid)
+		resp := r.NewResponse().
+			Replace(TopBarID, renderTopBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid))
+		// Toggle toolbar visibility on all app frames
+		if state.ZenMode {
+			resp.Add(`document.querySelectorAll('[data-app-toolbar]').forEach(function(t){t.style.display='none';});`)
+			resp.Add(`if(window.libroElectron&&window.libroElectron.setFullScreen)window.libroElectron.setFullScreen(true);`)
+		} else {
+			resp.Add(`document.querySelectorAll('[data-app-toolbar]').forEach(function(t){t.style.display='';});`)
+			resp.Add(`if(window.libroElectron&&window.libroElectron.setFullScreen)window.libroElectron.setFullScreen(false);`)
+		}
+		return resp.Build()
+	})
+
 	// Switch active project
 	app.Action("project.switch", func(ctx *r.Context) string {
 		sid := extractSID(ctx)

@@ -863,7 +863,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			Data: sidData(sid, "index", index),
 		})
 	}
-	toolbar = toolbar.Render(leftSide, rightButtons)
+	toolbar = toolbar.Attr("data-app-toolbar", "").Render(leftSide, rightButtons)
 
 	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
 		ID(fmt.Sprintf("frame-%s", app.ID)).
@@ -1652,6 +1652,7 @@ func renderShortcutsDialog() *r.Node {
 			{"Ctrl + 1–9", "Switch to assigned project"},
 			{"Ctrl + 0", "Switch to previous project"},
 			{"⌘ + G", "Git worktrees popup"},
+			{"⌘ + Z", "Toggle zen mode (fullscreen, hide UI)"},
 		}},
 		{"Search", "⌘ + N or ⌘ + Ctrl + N to open", []shortcut{
 			{": query", "Search the internet"},
@@ -2286,15 +2287,35 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 				r.Span(tipCls).Text("Console"),
 			),
 		r.Button(btnCls).
-			Attr("onclick", "if(document.fullscreenElement){if(navigator.keyboard&&navigator.keyboard.unlock)navigator.keyboard.unlock();document.exitFullscreen();this.querySelector('.libro-fs-icon').textContent='fullscreen';}else{document.documentElement.requestFullscreen().then(function(){if(navigator.keyboard&&navigator.keyboard.lock)navigator.keyboard.lock(['Escape']);});this.querySelector('.libro-fs-icon').textContent='fullscreen_exit';}").
+			Attr("onclick", "if(window.libroElectron&&window.libroElectron.setFullScreen){var fs=document.fullscreenElement||window.__libroIsFullscreen;window.__libroIsFullscreen=!fs;window.libroElectron.setFullScreen(!fs);this.querySelector('.libro-fs-icon').textContent=(!fs?'fullscreen_exit':'fullscreen');}").
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl libro-fs-icon").Text("fullscreen"),
 				r.Span(tipCls).Text("Fullscreen"),
 			),
 	)
 
+	// Zen mode button
+	appIcons = append(appIcons,
+		r.Button(btnCls).
+			OnClick(&r.Action{Name: "zen.toggle", Data: sidData(sid)}).
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400 text-xl libro-zen-icon").Text(func() string {
+					if state.ZenMode {
+						return "visibility"
+					}
+					return "self_improvement"
+				}()),
+				r.Span(tipCls).Text("Zen mode"),
+			),
+	)
+
 	// Running apps preview strip
 	appPreview := renderAppPreview(state, sid)
+
+	// In zen mode, hide the top bar content
+	if state.ZenMode {
+		return r.Div("shrink-0").ID(TopBarID)
+	}
 
 	return r.Div("flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-200 dark:border-zinc-800 shrink-0").
 		ID(TopBarID).
@@ -3005,6 +3026,12 @@ func keyboardShortcutsJS(sid string) string {
 					e.stopImmediatePropagation();
 					__ws.call('app.close.current', {"sid": "%s"});
 				}
+				if (e.metaKey && (e.key === 'z' || e.key === 'Z') && !e.ctrlKey) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					__ws.call('zen.toggle', {"sid": "%s"});
+					return;
+				}
 				if (e.metaKey && (e.key === 'g' || e.key === 'G')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
@@ -3086,5 +3113,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-	`, sid, sid, sid, sid, sid, sid, sid, sid)
+	`, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }

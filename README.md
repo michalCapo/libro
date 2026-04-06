@@ -105,6 +105,7 @@ A close button is available on each application to remove it from the strip. Whe
 - `Ctrl + 1–9` — switch to assigned project by slot
 - `Ctrl + 0` — switch to previous project
 - `⌘ + G` — git worktrees popup
+- `⌘ + Z` — toggle zen mode (fullscreen, hide all UI)
 
 **Browser:**
 - `Ctrl + L` — focus the URL bar of the selected app
@@ -196,6 +197,9 @@ The current application version is shown in the header toolbar next to the short
 
 ### Fullscreen Mode
 A fullscreen toggle button is available in the project bar next to the theme switcher. It uses the browser's Fullscreen API to enter and exit fullscreen mode. The button label and icon update dynamically to reflect the current state ("Fullscreen" / "Exit").
+
+### Zen Mode
+Zen mode (`⌘ + Z`) hides the top bar, project sidebar, and all application toolbars, leaving only the running applications visible. The app also enters fullscreen automatically. Users navigate entirely via keyboard shortcuts. Toggle zen mode again with `⌘ + Z` to restore the full UI and exit fullscreen. A zen mode button is also available in the top bar.
 
 ## Desktop Mode
 
