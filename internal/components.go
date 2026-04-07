@@ -443,11 +443,11 @@ func navigateJS(state *AppState, sid string) string {
 				var child = sorted[i];
 				if (!child) continue;
 				if (i === selectedIdx) {
-					// Zen mode: show blue top border on selected app
+					// Zen mode: show blue border around selected app
 					if (zenMode) {
-						child.className = child.className.replace(/\bborder\b/, 'border-l border-r border-b').replace(/border-t-2 border-t-blue-500/g, '') + ' border-t-2 border-t-blue-500';
+						child.className = child.className.replace(/\bborder\b/, '').replace(/border-2 border-blue-500/g, '') + ' border-2 border-blue-500';
 					} else {
-						child.className = child.className.replace(/border-l border-r border-b/g, 'border').replace(/ ?border-t-2 border-t-blue-500/g, '');
+						child.className = child.className.replace(/ ?border-2 border-blue-500/g, '').replace(/\bborder\b/g, '') + ' border';
 					}
 					var toolbar = child.children[0];
 					// Make toolbar blue for selected app
@@ -487,8 +487,8 @@ func navigateJS(state *AppState, sid string) string {
 					var overlay = child.querySelector('[data-click-overlay]');
 					if (overlay) overlay.remove();
 				} else {
-					// Zen mode: remove blue top border from unselected app
-					child.className = child.className.replace(/border-l border-r border-b/g, 'border').replace(/ ?border-t-2 border-t-blue-500/g, '');
+					// Zen mode: remove blue border from unselected app
+					child.className = child.className.replace(/ ?border-2 border-blue-500/g, '').replace(/\bborder\b/g, '') + ' border';
 					var toolbar2 = child.children[0];
 					// Revert toolbar to default for unselected app
 					if (toolbar2) {
@@ -730,7 +730,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string, zenMo
 	zen := len(zenMode) > 0 && zenMode[0]
 	borderClass := "border border-gray-200 dark:border-zinc-700/50"
 	if zen && selected {
-		borderClass = "border-l border-r border-b border-gray-200 dark:border-zinc-700/50 border-t-2 border-t-blue-500"
+		borderClass = "border-2 border-blue-500"
 	}
 
 	frameID := fmt.Sprintf("frame-%s", app.ID)
