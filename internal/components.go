@@ -377,7 +377,7 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 	stripChildren := make([]*r.Node, 0, len(state.Apps)+2)
 	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0").Attr("style", "order:-1"))
 	for i, app := range state.Apps {
-		stripChildren = append(stripChildren, renderAppFrame(app, i, i == state.SelectedIndex, sid))
+		stripChildren = append(stripChildren, renderAppFrame(app, i, i == state.SelectedIndex, sid, state.ZenMode))
 	}
 	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0").Attr("style", "order:99999"))
 
@@ -436,14 +436,21 @@ func navigateJS(state *AppState, sid string) string {
 			if (!strip) return;
 			var selectedIdx = %d;
 			var totalApps = %d;
+			var zenMode = %v;
 			var sorted = window.__libroSortedApps ? window.__libroSortedApps(strip) : Array.from(strip.querySelectorAll(':scope > [data-app-id]'));
 
 			for (var i = 0; i < totalApps; i++) {
 				var child = sorted[i];
 				if (!child) continue;
 				if (i === selectedIdx) {
+					// Zen mode: show blue top border on selected app
+					if (zenMode) {
+						child.className = child.className.replace(/\bborder\b/, 'border-l border-r border-b').replace(/border-t-2 border-t-blue-500/g, '') + ' border-t-2 border-t-blue-500';
+					} else {
+						child.className = child.className.replace(/border-l border-r border-b/g, 'border').replace(/ ?border-t-2 border-t-blue-500/g, '');
+					}
 					var toolbar = child.children[0];
-					// Make toolbar red for selected app
+					// Make toolbar blue for selected app
 					if (toolbar) {
 						toolbar.className = 'flex items-center gap-2 px-1.5 py-1 border-b shrink-0 bg-blue-600 border-blue-700';
 						// Update nav buttons to white-on-red
@@ -480,6 +487,8 @@ func navigateJS(state *AppState, sid string) string {
 					var overlay = child.querySelector('[data-click-overlay]');
 					if (overlay) overlay.remove();
 				} else {
+					// Zen mode: remove blue top border from unselected app
+					child.className = child.className.replace(/border-l border-r border-b/g, 'border').replace(/ ?border-t-2 border-t-blue-500/g, '');
 					var toolbar2 = child.children[0];
 					// Revert toolbar to default for unselected app
 					if (toolbar2) {
@@ -539,7 +548,7 @@ func navigateJS(state *AppState, sid string) string {
 				}
 			}
 		})();
-	`, orderJS.String(), stripID(state.ActiveProject), state.SelectedIndex, len(state.Apps), sid)
+	`, orderJS.String(), stripID(state.ActiveProject), state.SelectedIndex, len(state.Apps), state.ZenMode, sid)
 }
 
 func flashCSS() string {
@@ -717,8 +726,12 @@ func showToastJS(title, subtitle string, durationMs int) string {
 }
 
 // renderAppFrame renders a single application iframe with controls
-func renderAppFrame(app Application, index int, selected bool, sid string) *r.Node {
+func renderAppFrame(app Application, index int, selected bool, sid string, zenMode ...bool) *r.Node {
+	zen := len(zenMode) > 0 && zenMode[0]
 	borderClass := "border border-gray-200 dark:border-zinc-700/50"
+	if zen && selected {
+		borderClass = "border-l border-r border-b border-gray-200 dark:border-zinc-700/50 border-t-2 border-t-blue-500"
+	}
 
 	frameID := fmt.Sprintf("frame-%s", app.ID)
 
@@ -813,7 +826,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 			Attr("value", app.URL).
 			Attr("spellcheck", "false").
 			Attr("autocomplete", "off").
-			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value;if(u&&!u.startsWith('http://')&&!u.startsWith('https://'))u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;window.__libroWvNavigate('%s',u);__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});event.target.blur();var wv=document.querySelector('[data-webview-app="%s"]');if(wv)wv.focus();}`, app.ID, sid, app.ID, app.ID)))
+			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value.trim();if(u&&!u.startsWith('http://')&&!u.startsWith('https://')){if(/\s/.test(u)||(!u.includes('.')&&!u.includes(':'))){u='https://www.google.com/search?q='+encodeURIComponent(u);}else{u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;}}event.target.value=u;window.__libroWvNavigate('%s',u);__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});event.target.blur();var wv=document.querySelector('[data-webview-app="%s"]');if(wv)wv.focus();}`, app.ID, sid, app.ID, app.ID)))
 
 		// Globe icon in badge
 		globeBadgeCls := "inline-flex items-center justify-center w-6 h-6 rounded shrink-0"
@@ -948,6 +961,9 @@ func renderAppFrame(app Application, index int, selected bool, sid string) *r.No
 		})
 	}
 	toolbar = toolbar.Attr("data-app-toolbar", "").Render(leftSide, rightButtons)
+	if zen {
+		toolbar = toolbar.Attr("style", "display:none")
+	}
 
 	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
 		ID(fmt.Sprintf("frame-%s", app.ID)).

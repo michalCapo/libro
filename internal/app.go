@@ -206,14 +206,15 @@ func Run(assets embed.FS) {
 		sm.AddApp(sid, target, WidthLG, query)
 		state := sm.Get(sid)
 
+		sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
 		if hadApps > 0 {
 			lastApp := state.Apps[len(state.Apps)-1]
 			newIndex := len(state.Apps) - 1
-			frame := renderAppFrame(lastApp, newIndex, true, sid)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid)
+			frame := renderAppFrame(lastApp, newIndex, true, sid, state.ZenMode)
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + sidebarJS
 		}
 
-		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject))
+		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + sidebarJS
 	})
 
 	// Start a saved/predefined application
@@ -270,12 +271,13 @@ func Run(assets embed.FS) {
 			time.Sleep(500 * time.Millisecond)
 
 			topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
+			sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
 			if hadApps > 0 {
-				frame := renderAppFrame(*newApp, state.SelectedIndex, true, sid)
-				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS
+				frame := renderAppFrame(*newApp, state.SelectedIndex, true, sid, state.ZenMode)
+				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + sidebarJS
 			}
 
-			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS
+			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + sidebarJS
 		}
 
 		// URL app
@@ -295,13 +297,14 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
+		sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
-			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS
+			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid, state.ZenMode)
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + sidebarJS
 		}
 
-		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS
+		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + sidebarJS
 	})
 
 	// Close/remove application
@@ -328,15 +331,16 @@ func Run(assets embed.FS) {
 
 		state = sm.Get(sid)
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
+		sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
 
 		// If no apps left, full replace to show empty state
 		// Pool the webview first so it survives the DOM replace
 		if len(state.Apps) == 0 || hadApps <= 1 {
-			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS
+			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + sidebarJS
 		}
 
 		// Otherwise, remove just the app frame and update navigation
-		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS
+		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + sidebarJS
 	})
 
 	// Close current (selected) app — no app ID needed from client
@@ -358,10 +362,11 @@ func Run(assets embed.FS) {
 
 		state = sm.Get(sid)
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
+		sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
 		if len(state.Apps) == 0 || hadApps <= 1 {
-			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS
+			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + sidebarJS
 		}
-		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS
+		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + sidebarJS
 	})
 
 	// Navigate left - JS-only update to preserve iframes
@@ -452,16 +457,18 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
+		sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
-			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS +
+			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid, state.ZenMode)
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + sidebarJS +
 				fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, newApp.ID)
 		}
 
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, state.Apps[state.SelectedIndex].ID)).
 			Build()
 	})
@@ -518,15 +525,17 @@ func Run(assets embed.FS) {
 		runCmdsJS := runCommandsJS()
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
+		sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
-			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + runCmdsJS
+			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid, state.ZenMode)
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + sidebarJS + runCmdsJS
 		}
 
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(runCmdsJS).
 			Build()
 	})
@@ -684,12 +693,14 @@ func Run(assets embed.FS) {
 		resp := r.NewResponse().
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Replace(SidebarID, renderProjectSidebar(state, sid))
-		// Toggle toolbar visibility on all app frames
+		// Toggle toolbar visibility on all app frames and update zen borders
 		if state.ZenMode {
 			resp.Add(`document.querySelectorAll('[data-app-toolbar]').forEach(function(t){t.style.display='none';});`)
 		} else {
 			resp.Add(`document.querySelectorAll('[data-app-toolbar]').forEach(function(t){t.style.display='';});`)
 		}
+		// navigateJS handles zen border classes on selected/unselected apps
+		resp.Add(navigateJS(state, sid))
 		return resp.Build()
 	})
 
@@ -1156,7 +1167,25 @@ func ensureScheme(u string) string {
 		strings.HasPrefix(u, "[::1]") || strings.HasPrefix(u, "[::0]") || strings.HasPrefix(u, "[::]") {
 		return "http://" + u
 	}
+	// If it doesn't look like a URL, treat it as a Google search query
+	if looksLikeSearchQuery(u) {
+		return "https://www.google.com/search?q=" + url.QueryEscape(u)
+	}
 	return "https://" + u
+}
+
+// looksLikeSearchQuery returns true if the input doesn't look like a valid URL
+// (e.g. contains spaces, has no dot, or no valid TLD-like segment).
+func looksLikeSearchQuery(u string) bool {
+	// Contains spaces → almost certainly a search query
+	if strings.Contains(u, " ") {
+		return true
+	}
+	// No dot and no colon (port) → not a domain
+	if !strings.Contains(u, ".") && !strings.Contains(u, ":") {
+		return true
+	}
+	return false
 }
 
 // extractSID gets the session ID from the action data payload
