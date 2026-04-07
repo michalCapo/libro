@@ -102,7 +102,7 @@ A close button is available on each application to remove it from the strip. Whe
 **Apps:**
 - `⌘ + N` — new app (right of current)
 - `⌘ + Ctrl + N` — new app (left of current)
-- `⌘ + D` — close current app
+- `⌘ + Q` — close current app
 - `⌘ + +` — zoom in (whole application)
 - `⌘ + -` — zoom out (whole application)
 
@@ -117,9 +117,10 @@ A close button is available on each application to remove it from the strip. Whe
 - `⌘ + G` — git worktrees popup
 - `⌘ + Z` — toggle zen mode (hide all UI)
 - `⌘ + F` — toggle fullscreen
+- `Ctrl + Shift + Q` — quit Libro
 
 **Browser:**
-- `Ctrl + L` — focus the URL bar of the selected app
+- `Ctrl + L` — URL / search popup (works in zen mode)
 - `Ctrl + R` — reload the selected app
 
 **Browser Vim Keys** (disabled in input fields):

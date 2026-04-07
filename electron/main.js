@@ -10,6 +10,11 @@ const serverURL = `http://localhost:${port}`
 let goProcess = null
 let mainWindow = null
 
+// Track input focus state per webview webContents for browser shortcut key handling.
+// When an input/textarea/select/contentEditable is focused inside a webview,
+// we must NOT intercept plain keys (j/k/h/l etc.) so the user can type.
+const webviewInputFocused = new Map()
+
 // Find the Go binary — look next to the electron dir, or in PATH
 function findGoBinary() {
   const fs = require('fs')
@@ -186,6 +191,21 @@ function createWindow() {
 app.on('web-contents-created', (event, contents) => {
   // Intercept new window requests from webviews — open as a new browser app
   if (contents.getType() === 'webview') {
+    // Track input focus state via console messages from the injected browserShortcutsScript.
+    // This lets the main process know whether to intercept plain keys (j/k/h/l etc.)
+    // or let them through to text input fields.
+    contents.on('console-message', (e, level, message) => {
+      if (message === '__libro:inputfocus') webviewInputFocused.set(contents.id, true)
+      else if (message === '__libro:inputblur') webviewInputFocused.set(contents.id, false)
+    })
+    // Reset focus tracking on navigation (old page is unloaded)
+    contents.on('did-start-navigation', () => {
+      webviewInputFocused.set(contents.id, false)
+    })
+    contents.on('destroyed', () => {
+      webviewInputFocused.delete(contents.id)
+    })
+
     contents.setWindowOpenHandler(({ url }) => {
       if (url && url !== 'about:blank' && mainWindow) {
         const safeUrl = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
@@ -264,6 +284,16 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
+      // Ctrl+Shift+Q: close Libro (show confirmation dialog)
+      if (input.control && input.shift && code === 'keyq') {
+        e.preventDefault()
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            if (window.__libroShowCloseDialog) window.__libroShowCloseDialog();
+          `)
+        }
+        return
+      }
       return
     }
 
@@ -285,8 +315,8 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, d, n, z, b, f, g
-    if (input.meta && (['h', 'l', 'd', 'n', 'z', 'b', 'f', 'g'].includes(key) || code === 'keyn')) {
+    // Meta (Super/Win) shortcuts: h, l, q, n, z, b, f, g
+    if (input.meta && (['h', 'l', 'q', 'n', 'z', 'b', 'f', 'g'].includes(key) || code === 'keyn')) {
       e.preventDefault()
       if (mainWindow) {
         const safeKey = input.key.replace(/'/g, "\\'")
@@ -333,18 +363,20 @@ app.on('web-contents-created', (event, contents) => {
             }
           })();` : `
           (function() {
-            var selToolbar = document.querySelector('.bg-blue-600.border-blue-700');
-            if (!selToolbar) return;
-            var appEl = selToolbar.closest('[data-app-id]');
-            if (!appEl) return;
-            var webview = appEl.querySelector('webview[data-webview-app]');
-            if (!webview) return;
-            var appId = appEl.getAttribute('data-app-id');
-            var inp = document.getElementById('urlinput-' + appId);
-            if (inp) { inp.focus(); inp.select(); }
-            if (webview.focus) webview.focus();
+            if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();
           })();`
         mainWindow.webContents.executeJavaScript(reloadOrFocusJS)
+      }
+      return
+    }
+
+    // Ctrl+Shift+Q: close Libro (from webview)
+    if (input.control && input.shift && code === 'keyq') {
+      e.preventDefault()
+      if (mainWindow) {
+        mainWindow.webContents.executeJavaScript(`
+          if (window.__libroShowCloseDialog) window.__libroShowCloseDialog();
+        `)
       }
       return
     }
@@ -362,6 +394,32 @@ app.on('web-contents-created', (event, contents) => {
             cancelable: true
           }));
         `)
+      }
+    }
+
+    // Browser vim-style keys (j/k/h/l/g/G/b/f) for webview scrolling/navigation.
+    // Handled here in the main process so they work even while the page is loading,
+    // before the guest-injected browserShortcutsScript is active.
+    if (isWebview && !input.meta && !input.control && !input.alt && !webviewInputFocused.get(contents.id)) {
+      // Shift+G = scroll to bottom
+      if (input.shift && key === 'g') {
+        e.preventDefault()
+        contents.executeJavaScript("window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'})").catch(() => {})
+        return
+      }
+      const browserKeyActions = {
+        'j': "window.scrollBy({top:800,behavior:'smooth'})",
+        'k': "window.scrollBy({top:-800,behavior:'smooth'})",
+        'h': "window.scrollBy({left:-480,behavior:'smooth'})",
+        'l': "window.scrollBy({left:480,behavior:'smooth'})",
+        'g': "window.scrollTo({top:0,behavior:'smooth'})",
+        'b': "history.back()",
+        'f': "history.forward()",
+      }
+      if (!input.shift && browserKeyActions[key]) {
+        e.preventDefault()
+        contents.executeJavaScript(browserKeyActions[key]).catch(() => {})
+        return
       }
     }
   })

@@ -20,6 +20,21 @@ var initialized = {};
 var browserShortcutsScript = '(' + function(){
 	if(window.__libroBrowserShortcuts) return;
 	window.__libroBrowserShortcuts = true;
+	// Track input focus state — the Electron main process listens for these
+	// console messages to decide whether to intercept plain keys (j/k/h/l etc.)
+	// or let them through to text input fields.
+	document.addEventListener('focusin', function(e) {
+		var t = e.target.tagName ? e.target.tagName.toUpperCase() : '';
+		if(t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||(e.target&&e.target.isContentEditable)) {
+			console.log('__libro:inputfocus');
+		}
+	}, true);
+	document.addEventListener('focusout', function(e) {
+		var t = e.target.tagName ? e.target.tagName.toUpperCase() : '';
+		if(t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||(e.target&&e.target.isContentEditable)) {
+			console.log('__libro:inputblur');
+		}
+	}, true);
 	document.addEventListener('keydown', function(e) {
 		if(e.metaKey || e.ctrlKey || e.altKey) return;
 		var ae = document.activeElement;
@@ -359,12 +374,30 @@ function bindWebviewEvents(wv, appID) {
 		}
 	});
 
-	// Show error page on load failure
+	// Show error page on load failure — for DNS errors, redirect to Google search
 	wv.addEventListener('did-fail-load', function(e) {
 		// Ignore aborted loads (e.g. navigation interrupted by another navigation)
 		if (e.errorCode === -3) return;
-		var errorDesc = e.errorDescription || 'Unknown error';
 		var failedUrl = e.validatedURL || '';
+		// DNS resolution failure (-105 ERR_NAME_NOT_RESOLVED, -106 ERR_INTERNET_DISCONNECTED)
+		// Redirect to Google search using the hostname/path as query
+		if (e.errorCode === -105 && failedUrl) {
+			try {
+				var u = new URL(failedUrl);
+				var q = u.hostname + (u.pathname && u.pathname !== '/' ? u.pathname : '');
+				if (q) {
+					var searchUrl = 'https://www.google.com/search?q=' + encodeURIComponent(q);
+					wv.loadURL(searchUrl);
+					var inp = document.getElementById('urlinput-' + appID);
+					if (inp) inp.value = searchUrl;
+					// Update server state
+					var sidAttr = wv.getAttribute('data-sid');
+					if (sidAttr) __ws.call('app.url.set', {sid: sidAttr, id: appID, url: searchUrl});
+					return;
+				}
+			} catch(err) {}
+		}
+		var errorDesc = e.errorDescription || 'Unknown error';
 		var html = '<html><body style="display:flex;align-items:center;justify-content:center;height:100%;margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333">' +
 			'<div style="text-align:center;max-width:400px;padding:2rem">' +
 			'<div style="font-size:2rem;margin-bottom:1rem">&#9888;</div>' +
