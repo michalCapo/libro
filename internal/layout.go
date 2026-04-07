@@ -15,7 +15,8 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderShortcutsDialog(),
 		renderCloseDialog(sid),
 		renderWorktreeDialog(sid),
+		renderURLPopup(sid),
 	)
-	page.JS(flashCSS() + termIconSetupJS() + projectToastSetupJS() + keyboardShortcutsJS(sid) + savedAppsJS(state.ActiveProject) + initHashJS(sid) + searchDialogJS(sid) + shortcutsDialogJS() + closeDialogJS(sid) + webviewClientJS() + worktreeDialogJS(sid) + worktreesJS(state))
+	page.JS(flashCSS() + termIconSetupJS() + projectToastSetupJS() + keyboardShortcutsJS(sid) + savedAppsJS(state.ActiveProject) + initHashJS(sid) + searchDialogJS(sid) + shortcutsDialogJS() + closeDialogJS(sid) + webviewClientJS() + worktreeDialogJS(sid) + worktreesJS(state) + urlPopupJS(sid))
 	return page
 }

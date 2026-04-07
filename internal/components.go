@@ -34,6 +34,7 @@ const (
 	CloseDialogID     = "close-dialog"
 	WorktreeDialogID  = "worktree-dialog"
 	ManageDialogID    = "manage-dialog"
+	URLPopupID        = "url-popup"
 )
 
 // termIconInfo stores the icon details for a known terminal command.
@@ -445,9 +446,9 @@ func navigateJS(state *AppState, sid string) string {
 				if (i === selectedIdx) {
 					// Zen mode: show blue border around selected app
 					if (zenMode) {
-						child.className = child.className.replace(/\bborder\b/, '').replace(/border-2 border-blue-500/g, '') + ' border-2 border-blue-500';
+						child.className = child.className.replace(/border-\[3px\] border-blue-500/g, '').replace(/border-\[3px\] border-gray-300 dark:border-zinc-600/g, '').replace(/\bborder\b/g, '') + ' border-[3px] border-blue-500';
 					} else {
-						child.className = child.className.replace(/ ?border-2 border-blue-500/g, '').replace(/\bborder\b/g, '') + ' border';
+						child.className = child.className.replace(/border-\[3px\] border-blue-500/g, '').replace(/border-\[3px\] border-gray-300 dark:border-zinc-600/g, '').replace(/\bborder\b/g, '') + ' border';
 					}
 					var toolbar = child.children[0];
 					// Make toolbar blue for selected app
@@ -487,8 +488,8 @@ func navigateJS(state *AppState, sid string) string {
 					var overlay = child.querySelector('[data-click-overlay]');
 					if (overlay) overlay.remove();
 				} else {
-					// Zen mode: remove blue border from unselected app
-					child.className = child.className.replace(/ ?border-2 border-blue-500/g, '').replace(/\bborder\b/g, '') + ' border';
+					// Zen mode: gray border for unselected app, normal border otherwise
+					child.className = child.className.replace(/border-\[3px\] border-blue-500/g, '').replace(/border-\[3px\] border-gray-300 dark:border-zinc-600/g, '').replace(/\bborder\b/g, '') + (zenMode ? ' border-[3px] border-gray-300 dark:border-zinc-600' : ' border');
 					var toolbar2 = child.children[0];
 					// Revert toolbar to default for unselected app
 					if (toolbar2) {
@@ -729,8 +730,12 @@ func showToastJS(title, subtitle string, durationMs int) string {
 func renderAppFrame(app Application, index int, selected bool, sid string, zenMode ...bool) *r.Node {
 	zen := len(zenMode) > 0 && zenMode[0]
 	borderClass := "border border-gray-200 dark:border-zinc-700/50"
-	if zen && selected {
-		borderClass = "border-2 border-blue-500"
+	if zen {
+		if selected {
+			borderClass = "border-[3px] border-blue-500"
+		} else {
+			borderClass = "border-[3px] border-gray-300 dark:border-zinc-600"
+		}
 	}
 
 	frameID := fmt.Sprintf("frame-%s", app.ID)
@@ -1725,6 +1730,128 @@ func searchDialogJS(sid string) string {
 `, SearchDialogID, sid, sid, sid, sid, sid, sid, sid)
 }
 
+// renderURLPopup renders the URL/search popup for Ctrl+L (works in both zen and non-zen mode).
+func renderURLPopup(sid string) *r.Node {
+	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[20vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
+		ID(URLPopupID).
+		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", URLPopupID))).
+		Render(
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
+				OnClick(r.JS("event.stopPropagation()")).
+				Render(
+					r.Div("px-4 py-3 flex items-center gap-2").Render(
+						r.I("material-icons-round text-blue-500 text-lg").Text("language"),
+						r.Input("flex-1 bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
+							ID("url-popup-input").
+							Attr("type", "text").
+							Attr("placeholder", "Enter URL or search...").
+							Attr("autocomplete", "off").
+							Attr("spellcheck", "false"),
+					),
+					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+						r.Span("").Text("Enter navigate"),
+						r.Span("").Text("Esc close"),
+					),
+				),
+		)
+}
+
+// urlPopupJS returns JS that powers the Ctrl+L URL popup.
+func urlPopupJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	if(window.__libroURLPopupRegistered)return;
+	window.__libroURLPopupRegistered=true;
+
+	var dlg=document.getElementById('%s');
+	var inp=document.getElementById('url-popup-input');
+	var currentAppId='';
+
+	function findSelectedBrowserApp(){
+		var selToolbar=document.querySelector('.bg-blue-600.border-blue-700');
+		var appEl=selToolbar?selToolbar.closest('[data-app-id]'):null;
+		if(!appEl){
+			var strips=document.querySelectorAll('[id^="app-strip-"]');
+			for(var s=0;s<strips.length;s++){
+				var parent=strips[s].closest('[id^="project-main-"]');
+				if(parent&&parent.style.display!=='none'){
+					var sorted=window.__libroSortedApps?window.__libroSortedApps(strips[s]):Array.from(strips[s].querySelectorAll(':scope > [data-app-id]'));
+					for(var i=0;i<sorted.length;i++){
+						if(!sorted[i].querySelector('[data-click-overlay]')){
+							appEl=sorted[i];break;
+						}
+					}
+					break;
+				}
+			}
+		}
+		if(appEl&&appEl.querySelector('webview[data-webview-app]')){
+			return appEl.getAttribute('data-app-id');
+		}
+		return '';
+	}
+
+	function openPopup(){
+		var appId=findSelectedBrowserApp();
+		if(!appId)return;
+		currentAppId=appId;
+		var wv=window.__libroWebviews[appId];
+		var currentUrl='';
+		if(wv){try{currentUrl=wv.getURL()||'';}catch(e){}}
+		if(!currentUrl){
+			var urlInp=document.getElementById('urlinput-'+appId);
+			if(urlInp)currentUrl=urlInp.value||'';
+		}
+		dlg.classList.remove('hidden');
+		inp.value=currentUrl;
+		setTimeout(function(){inp.focus();inp.select();},50);
+	}
+
+	function closePopup(){
+		dlg.classList.add('hidden');
+		inp.value='';
+		currentAppId='';
+	}
+
+	function navigate(){
+		var u=inp.value.trim();
+		if(!u||!currentAppId)return;
+		if(!u.startsWith('http://')&&!u.startsWith('https://')){
+			if(/\s/.test(u)||(!u.includes('.')&&!u.includes(':'))){
+				u='https://www.google.com/search?q='+encodeURIComponent(u);
+			}else{
+				u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;
+			}
+		}
+		var appId=currentAppId;
+		closePopup();
+		window.__libroWvNavigate(appId,u);
+		var urlInp=document.getElementById('urlinput-'+appId);
+		if(urlInp)urlInp.value=u;
+		__ws.callSilent('app.url.set',{sid:'%s',id:appId,url:u});
+		// Delay focus to ensure popup overlay is fully removed from layout
+		setTimeout(function(){
+			var wv=window.__libroWebviews[appId];
+			if(wv)wv.focus();
+		},100);
+	}
+
+	inp.addEventListener('keydown',function(e){
+		e.stopImmediatePropagation();
+		if(e.key==='Enter'){
+			e.preventDefault();
+			navigate();
+		}else if(e.key==='Escape'){
+			e.preventDefault();
+			closePopup();
+		}
+	});
+
+	window.__libroOpenURLPopup=openPopup;
+})();
+`, URLPopupID, sid)
+}
+
 // renderShortcutsDialog renders the keyboard shortcuts popup (hidden by default).
 func renderShortcutsDialog() *r.Node {
 	type shortcut struct {
@@ -1740,7 +1867,7 @@ func renderShortcutsDialog() *r.Node {
 		{"Apps", "", []shortcut{
 			{"⌘ + N", "New app (right of current)"},
 			{"⌘ + Ctrl + N", "New app (left of current)"},
-			{"⌘ + D", "Close current app"},
+			{"⌘ + Q", "Close current app"},
 			{"⌘ + +", "Zoom in (whole app)"},
 			{"⌘ + -", "Zoom out (whole app)"},
 		}},
@@ -1755,13 +1882,14 @@ func renderShortcutsDialog() *r.Node {
 			{"⌘ + G", "Git worktrees popup"},
 			{"⌘ + Z", "Toggle zen mode (hide UI)"},
 			{"⌘ + F", "Toggle fullscreen"},
+			{"Ctrl + Shift + Q", "Quit Libro"},
 		}},
 		{"Search", "⌘ + N or ⌘ + Ctrl + N to open", []shortcut{
 			{": query", "Search the internet"},
 			{"! command", "Run terminal command"},
 		}},
 		{"Browser", "", []shortcut{
-			{"Ctrl + L", "Select browser URL bar"},
+			{"Ctrl + L", "URL / search popup"},
 			{"Ctrl + R", "Reload browser page"},
 		}},
 		{"Browser", "Vim keys — disabled in input fields", []shortcut{
@@ -3123,7 +3251,7 @@ func keyboardShortcutsJS(sid string) string {
 					__ws.call('sidebar.toggle', {"sid": "%s"});
 					return;
 				}
-				if (e.metaKey && (e.key === 'd' || e.key === 'D')) {
+				if (e.metaKey && (e.key === 'q' || e.key === 'Q') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					__ws.call('app.close.current', {"sid": "%s"});
@@ -3146,16 +3274,16 @@ func keyboardShortcutsJS(sid string) string {
 					if (window.__libroOpenWorktreeDialog) window.__libroOpenWorktreeDialog();
 					return;
 				}
+				if (e.ctrlKey && e.shiftKey && !e.metaKey && (e.key === 'q' || e.key === 'Q')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroShowCloseDialog) window.__libroShowCloseDialog();
+					return;
+				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L')) {
-					var selToolbar = document.querySelector('.bg-blue-600.border-blue-700');
-					var appEl = selToolbar ? selToolbar.closest('[data-app-id]') : null;
-					if (appEl && appEl.querySelector('webview')) {
-						e.preventDefault();
-						e.stopImmediatePropagation();
-						var appId = appEl.getAttribute('data-app-id');
-						var inp = document.getElementById('urlinput-' + appId);
-						if (inp) { inp.focus(); inp.select(); }
-					}
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'r' || e.key === 'R')) {
 					var selToolbar2 = document.querySelector('.bg-blue-600.border-blue-700');
