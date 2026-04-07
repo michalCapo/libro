@@ -59,7 +59,13 @@ var browserShortcutsScript = '(' + function(){
 			case 'p': console.log('__libro:findprev'); break;
 			case 'Escape': console.log('__libro:searchclear'); break;
 			case 'Enter':
-				console.log('__libro:enter');
+				var ae2=document.activeElement;
+				var tn2=ae2?ae2.tagName.toUpperCase():'';
+				if(tn2==='A'||tn2==='BUTTON'||(ae2&&ae2.getAttribute&&(ae2.getAttribute('role')==='link'||ae2.getAttribute('role')==='button'))){
+					handled=false;
+				}else{
+					console.log('__libro:enter');
+				}
 				break;
 			default: handled = false;
 		}
@@ -245,20 +251,24 @@ function handleEnter(appID) {
 	var wv = window.__libroWebviews[appID];
 	if (!wv) return;
 	var state = searchState[appID];
-	if (state && state.findActive && state.matchRect) {
-		var r = state.matchRect;
-		var cx = Math.round(r.x + r.width / 2);
-		var cy = Math.round(r.y + r.height / 2);
+	if (state && state.findActive) {
+		// Use the selection created by find-in-page to locate the parent link/button
 		wv.executeJavaScript(
 			'(function(){' +
-			'var el=document.elementFromPoint(' + cx + ',' + cy + ');' +
-			'while(el){' +
-			'var tn=el.tagName?el.tagName.toUpperCase():"";' +
-			'if(tn==="A"){el.click();return;}' +
-			'if(tn==="BUTTON"){el.click();return;}' +
-			'if(el.getAttribute&&(el.getAttribute("role")==="link"||el.getAttribute("role")==="button")){el.click();return;}' +
-			'el=el.parentElement;' +
+			'var sel=window.getSelection();' +
+			'var node=sel&&sel.rangeCount?sel.anchorNode:null;' +
+			'while(node){' +
+			'if(node.nodeType===1){' +
+			'var tn=node.tagName.toUpperCase();' +
+			'if(tn==="A"){node.click();return;}' +
+			'if(tn==="BUTTON"){node.click();return;}' +
+			'if(node.getAttribute&&(node.getAttribute("role")==="link"||node.getAttribute("role")==="button")){node.click();return;}' +
 			'}' +
+			'node=node.parentNode;' +
+			'}' +
+			// Fallback: click active element if it is clickable
+			'var ae=document.activeElement;' +
+			'if(ae&&ae!==document.body&&ae!==document.documentElement)ae.click();' +
 			'})()'
 		).catch(function(){});
 	} else {
