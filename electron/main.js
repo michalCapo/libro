@@ -285,8 +285,8 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, d, n, z
-    if (input.meta && (['h', 'l', 'd', 'n', 'z'].includes(key) || code === 'keyn')) {
+    // Meta (Super/Win) shortcuts: h, l, d, n, z, b, f, g
+    if (input.meta && (['h', 'l', 'd', 'n', 'z', 'b', 'f', 'g'].includes(key) || code === 'keyn')) {
       e.preventDefault()
       if (mainWindow) {
         const safeKey = input.key.replace(/'/g, "\\'")
@@ -309,6 +309,7 @@ app.on('web-contents-created', (event, contents) => {
       if (mainWindow) {
         const safeKey = input.key.replace(/'/g, "\\'")
         const safeCode = (input.code || '').replace(/'/g, "\\'")
+        // First try dispatching to document for compatibility
         mainWindow.webContents.executeJavaScript(`
           document.dispatchEvent(new KeyboardEvent('keydown', {
             key: '${safeKey}',
@@ -318,6 +319,32 @@ app.on('web-contents-created', (event, contents) => {
             cancelable: true
           }));
         `)
+        // Also directly access the selected webview to ensure the action works
+        // This handles cases where the main document event doesn't reach handlers
+        const reloadOrFocusJS = key === 'r' ? `
+          (function() {
+            var selToolbar = document.querySelector('.bg-blue-600.border-blue-700');
+            if (!selToolbar) return;
+            var appEl = selToolbar.closest('[data-app-id]');
+            if (!appEl) return;
+            var webview = appEl.querySelector('webview[data-webview-app]');
+            if (webview && webview.reload) {
+              webview.reload();
+            }
+          })();` : `
+          (function() {
+            var selToolbar = document.querySelector('.bg-blue-600.border-blue-700');
+            if (!selToolbar) return;
+            var appEl = selToolbar.closest('[data-app-id]');
+            if (!appEl) return;
+            var webview = appEl.querySelector('webview[data-webview-app]');
+            if (!webview) return;
+            var appId = appEl.getAttribute('data-app-id');
+            var inp = document.getElementById('urlinput-' + appId);
+            if (inp) { inp.focus(); inp.select(); }
+            if (webview.focus) webview.focus();
+          })();`
+        mainWindow.webContents.executeJavaScript(reloadOrFocusJS)
       }
       return
     }

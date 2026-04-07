@@ -156,21 +156,26 @@ func Run(assets embed.FS) {
 		sm.CloseDialog(sid)
 		sm.Get(sid).EditDBID = -1
 
+		// Re-fetch state to ensure we have latest state for rendering
+		state = sm.Get(sid)
+
+		// Ensure Manage Apps dialog is updated with the new app
+		var manageOverlayJS string
+		if state.ManageOpen {
+			manageOverlayJS = showManageOverlayJS(renderManageAppsPage(state, sid))
+		}
+
 		resp := r.NewResponse().
 			Replace(DialogID, renderAddDialog(false, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Add(savedAppsJS(state.ActiveProject))
+			Add(savedAppsJS(state.ActiveProject)).
+			Add(manageOverlayJS)
 
 		// Only replace main area when no apps are running (empty state),
 		// to avoid destroying live iframes/webviews.
 		if len(state.Apps) == 0 {
 			resp.Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid))
-		}
-
-		// Re-show manage overlay if it was open before editing
-		if state.ManageOpen {
-			resp.Add(showManageOverlayJS(renderManageAppsPage(state, sid)))
 		}
 
 		return resp.Build()
