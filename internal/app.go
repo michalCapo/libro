@@ -353,7 +353,7 @@ func Run(assets embed.FS) {
 		sid := extractSID(ctx)
 		state := sm.Get(sid)
 		if len(state.Apps) == 0 {
-			return ""
+			return "/* noop */"
 		}
 		appID := state.Apps[state.SelectedIndex].ID
 		hadApps := len(state.Apps)

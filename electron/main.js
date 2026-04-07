@@ -284,16 +284,6 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
-      // Ctrl+Shift+Q: close Libro (show confirmation dialog)
-      if (input.control && input.shift && code === 'keyq') {
-        e.preventDefault()
-        if (mainWindow) {
-          mainWindow.webContents.executeJavaScript(`
-            if (window.__libroShowCloseDialog) window.__libroShowCloseDialog();
-          `)
-        }
-        return
-      }
       return
     }
 
@@ -315,8 +305,8 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, q, n, z, b, f, g
-    if (input.meta && (['h', 'l', 'q', 'n', 'z', 'b', 'f', 'g'].includes(key) || code === 'keyn')) {
+    // Meta (Super/Win) shortcuts: h, l, q, w, n, z, b, f, g
+    if (input.meta && (['h', 'l', 'q', 'w', 'n', 'z', 'b', 'f', 'g'].includes(key) || code === 'keyn')) {
       e.preventDefault()
       if (mainWindow) {
         const safeKey = input.key.replace(/'/g, "\\'")
@@ -366,17 +356,6 @@ app.on('web-contents-created', (event, contents) => {
             if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();
           })();`
         mainWindow.webContents.executeJavaScript(reloadOrFocusJS)
-      }
-      return
-    }
-
-    // Ctrl+Shift+Q: close Libro (from webview)
-    if (input.control && input.shift && code === 'keyq') {
-      e.preventDefault()
-      if (mainWindow) {
-        mainWindow.webContents.executeJavaScript(`
-          if (window.__libroShowCloseDialog) window.__libroShowCloseDialog();
-        `)
       }
       return
     }

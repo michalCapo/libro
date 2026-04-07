@@ -1867,7 +1867,7 @@ func renderShortcutsDialog() *r.Node {
 		{"Apps", "", []shortcut{
 			{"⌘ + N", "New app (right of current)"},
 			{"⌘ + Ctrl + N", "New app (left of current)"},
-			{"⌘ + Q", "Close current app"},
+			{"⌘ + W", "Close current app"},
 			{"⌘ + +", "Zoom in (whole app)"},
 			{"⌘ + -", "Zoom out (whole app)"},
 		}},
@@ -1882,7 +1882,7 @@ func renderShortcutsDialog() *r.Node {
 			{"⌘ + G", "Git worktrees popup"},
 			{"⌘ + Z", "Toggle zen mode (hide UI)"},
 			{"⌘ + F", "Toggle fullscreen"},
-			{"Ctrl + Shift + Q", "Quit Libro"},
+			{"⌘ + Q", "Quit Libro"},
 		}},
 		{"Search", "⌘ + N or ⌘ + Ctrl + N to open", []shortcut{
 			{": query", "Search the internet"},
@@ -3254,7 +3254,14 @@ func keyboardShortcutsJS(sid string) string {
 				if (e.metaKey && (e.key === 'q' || e.key === 'Q') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
+					if (window.__libroShowCloseDialog) window.__libroShowCloseDialog();
+					return;
+				}
+				if (e.metaKey && (e.key === 'w' || e.key === 'W') && !e.ctrlKey) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
 					__ws.call('app.close.current', {"sid": "%s"});
+					return;
 				}
 				if (e.metaKey && (e.key === 'z' || e.key === 'Z') && !e.ctrlKey) {
 					e.preventDefault();
@@ -3272,12 +3279,6 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					if (window.__libroOpenWorktreeDialog) window.__libroOpenWorktreeDialog();
-					return;
-				}
-				if (e.ctrlKey && e.shiftKey && !e.metaKey && (e.key === 'q' || e.key === 'Q')) {
-					e.preventDefault();
-					e.stopImmediatePropagation();
-					if (window.__libroShowCloseDialog) window.__libroShowCloseDialog();
 					return;
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L')) {
