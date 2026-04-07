@@ -251,12 +251,15 @@ function handleEnter(appID) {
 	var wv = window.__libroWebviews[appID];
 	if (!wv) return;
 	var state = searchState[appID];
-	if (state && state.findActive) {
-		// Use the selection created by find-in-page to locate the parent link/button
+	if (state && state.findActive && state.matchRect) {
+		// Use elementFromPoint with the match rectangle from find-in-page
+		var r = state.matchRect;
+		var cx = r.x + Math.round(r.width / 2);
+		var cy = r.y + Math.round(r.height / 2);
 		wv.executeJavaScript(
 			'(function(){' +
-			'var sel=window.getSelection();' +
-			'var node=sel&&sel.rangeCount?sel.anchorNode:null;' +
+			'var el=document.elementFromPoint(' + cx + ',' + cy + ');' +
+			'var node=el;' +
 			'while(node){' +
 			'if(node.nodeType===1){' +
 			'var tn=node.tagName.toUpperCase();' +
@@ -266,9 +269,7 @@ function handleEnter(appID) {
 			'}' +
 			'node=node.parentNode;' +
 			'}' +
-			// Fallback: click active element if it is clickable
-			'var ae=document.activeElement;' +
-			'if(ae&&ae!==document.body&&ae!==document.documentElement)ae.click();' +
+			'if(el)el.click();' +
 			'})()'
 		).catch(function(){});
 	} else {
