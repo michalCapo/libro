@@ -247,6 +247,24 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
+      // Super+Ctrl+H/L: move app left/right — must preventDefault to avoid
+      // Chromium accelerators consuming the event before page JS sees it
+      if (input.meta && input.control && (code === 'keyh' || code === 'keyl')) {
+        e.preventDefault()
+        if (mainWindow) {
+          const safeCode = (input.code || '').replace(/'/g, "\\'")
+          mainWindow.webContents.executeJavaScript(`
+            document.dispatchEvent(new KeyboardEvent('keydown', {
+              code: '${safeCode}',
+              metaKey: true,
+              ctrlKey: true,
+              bubbles: true,
+              cancelable: true
+            }));
+          `)
+        }
+        return
+      }
       if (input.meta && !input.control && code === 'keyn') {
         e.preventDefault()
         if (mainWindow) {
