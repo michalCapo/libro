@@ -416,14 +416,14 @@ func Run(assets embed.FS) {
 		data := ctx.WsData()
 		appID, _ := data["id"].(string)
 		if appID == "" {
-			return ""
+			return "/* noop */"
 		}
 		width := WidthLG
 		if v, ok := data["width"].(string); ok && v != "" {
 			width = Width(v)
 		}
 		if sm.SetAppWidthByID(sid, appID, width) < 0 {
-			return ""
+			return "/* noop */"
 		}
 		state := sm.Get(sid)
 		return resizeJS(state, width, appID)
