@@ -171,10 +171,6 @@ function createWindow() {
     if (mainWindow) mainWindow.webContents.toggleDevTools()
   })
 
-  ipcMain.on('libro-set-fullscreen', (event, flag) => {
-    if (mainWindow) mainWindow.setFullScreen(!!flag)
-  })
-
   ipcMain.on('libro-open-path', (event, filePath) => {
     shell.openPath(filePath)
   })
@@ -256,18 +252,6 @@ app.on('web-contents-created', (event, contents) => {
         if (mainWindow) {
           mainWindow.webContents.executeJavaScript(`
             if (window.__libroOpenSearch) window.__libroOpenSearch('right');
-          `)
-        }
-        return
-      }
-      // Super+F: fullscreen toggle
-      if (input.meta && !input.control && code === 'keyf') {
-        e.preventDefault()
-        if (mainWindow) {
-          mainWindow.webContents.executeJavaScript(`
-            document.dispatchEvent(new KeyboardEvent('keydown', {
-              key: 'f', code: 'KeyF', metaKey: true, bubbles: true, cancelable: true
-            }));
           `)
         }
         return
@@ -365,6 +349,10 @@ app.on('web-contents-created', (event, contents) => {
             }
           })();` : `
           (function() {
+            var selToolbar = document.querySelector('.bg-blue-600.border-blue-700');
+            if (!selToolbar) return;
+            var appEl = selToolbar.closest('[data-app-id]');
+            if (!appEl || !appEl.querySelector('webview[data-webview-app]')) return;
             if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();
           })();`
         mainWindow.webContents.executeJavaScript(reloadOrFocusJS)
