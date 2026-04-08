@@ -407,10 +407,7 @@ func centerSelectedJS(selectedIndex int, totalApps int, projectName string) stri
 					var sorted = window.__libroSortedApps ? window.__libroSortedApps(strip) : Array.from(strip.querySelectorAll(':scope > [data-app-id]'));
 					var app = sorted[idx];
 					if (app) {
-						var stripRect = strip.getBoundingClientRect();
-						var appRect = app.getBoundingClientRect();
-						var scrollOffset = appRect.left - stripRect.left + strip.scrollLeft;
-						strip.scrollLeft = Math.max(0, scrollOffset);
+						app.scrollIntoView({behavior:'instant',block:'nearest',inline:'nearest'});
 					}
 				});
 			});
@@ -530,8 +527,8 @@ func navigateJS(state *AppState, sid string) string {
 						var ov = document.createElement('div');
 						ov.setAttribute('data-click-overlay', '');
 						ov.className = 'absolute inset-0 z-40 cursor-pointer';
-						ov.onclick = function(idx) {
-							return function() { __ws.call('app.select', {"sid": "%s", "index": idx}); };
+						ov.onmousedown = function(idx) {
+							return function(e) { e.preventDefault(); __ws.call('app.select', {"sid": "%s", "index": idx}); };
 						}(i);
 						var iframeWrap = child.children[1];
 						if (iframeWrap) { iframeWrap.appendChild(ov); } else { child.appendChild(ov); }
@@ -541,12 +538,12 @@ func navigateJS(state *AppState, sid string) string {
 
 			var selected = sorted[selectedIdx];
 			if (selected) {
-				var stripRect = strip.getBoundingClientRect();
-				var appRect = selected.getBoundingClientRect();
-				var scrollOffset = appRect.left - stripRect.left + strip.scrollLeft;
-				strip.scrollLeft = Math.max(0, scrollOffset);
+				selected.style.animation='none';
+				selected.offsetHeight;
+				selected.style.animation='libro-app-select .08s ease-out';
+				selected.scrollIntoView({behavior:'instant',block:'nearest',inline:'nearest'});
 				if (window.__libroFocusApp) {
-					setTimeout(function() { window.__libroFocusApp(selectedIdx); }, 100);
+					setTimeout(function() { window.__libroFocusApp(selectedIdx); }, 30);
 				}
 			}
 		})();
@@ -554,7 +551,7 @@ func navigateJS(state *AppState, sid string) string {
 }
 
 func flashCSS() string {
-	return `(function(){if(!document.getElementById('libro-flash-css')){var s=document.createElement('style');s.id='libro-flash-css';s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.92)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.96)}} @keyframes libro-toast-slide-up{0%{transform:translateY(100%);opacity:0}100%{transform:translateY(0);opacity:1}} @keyframes libro-toast-slide-down{0%{transform:translateY(0);opacity:1}100%{transform:translateY(100%);opacity:0}}';document.head.appendChild(s);}})();`
+	return `(function(){if(!document.getElementById('libro-flash-css')){var s=document.createElement('style');s.id='libro-flash-css';s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.98)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.98)}} @keyframes libro-toast-slide-up{0%{transform:translateY(100%);opacity:0}100%{transform:translateY(0);opacity:1}} @keyframes libro-toast-slide-down{0%{transform:translateY(0);opacity:1}100%{transform:translateY(100%);opacity:0}} .scroll-smooth{scroll-behavior:smooth} @keyframes libro-app-select{0%{outline:2px solid rgba(59,130,246,.5)}100%{outline:2px solid transparent}} @keyframes libro-project-switch{0%{opacity:0}100%{opacity:1}}';document.head.appendChild(s);}})();`
 }
 
 // projectToastJS returns JS that shows a brief centered toast with the project and branch.
@@ -595,10 +592,10 @@ func projectToastSetupJS() string {
 		if(branch){html+='<div style="font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,monospace;font-size:14px;color:'+dim+';margin-top:4px;letter-spacing:.02em"><span style="opacity:.5">&#8627;</span> '+branch.replace(/</g,'&lt;')+'</div>';}
 		html+='</div>';
 		el.innerHTML=html;
-		el.style.animation='libro-toast-in .12s ease-out forwards';
+		el.style.animation='libro-toast-in .04s ease-out forwards';
 		timer=setTimeout(function(){
-			el.style.animation='libro-toast-out .25s ease-in forwards';
-			timer=setTimeout(function(){el.style.opacity='0';timer=null;},260);
+			el.style.animation='libro-toast-out .05s ease-in forwards';
+			timer=setTimeout(function(){el.style.opacity='0';timer=null;},60);
 		},600);
 	};
 	// Configurable toast with custom message and duration
@@ -622,10 +619,10 @@ func projectToastSetupJS() string {
 		if(subtitle){html+='<div style="font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,monospace;font-size:14px;color:'+dim+';margin-top:6px;letter-spacing:.02em;max-width:400px;line-height:1.4">'+subtitle.replace(/</g,'&lt;')+'</div>';}
 		html+='</div>';
 		el.innerHTML=html;
-		el.style.animation='libro-toast-in .12s ease-out forwards';
+		el.style.animation='libro-toast-in .04s ease-out forwards';
 		timer=setTimeout(function(){
-			el.style.animation='libro-toast-out .25s ease-in forwards';
-			timer=setTimeout(function(){el.style.opacity='0';timer=null;},260);
+			el.style.animation='libro-toast-out .05s ease-in forwards';
+			timer=setTimeout(function(){el.style.opacity='0';timer=null;},60);
 		},dur);
 	};
 	// --- Download toast helpers ---
@@ -639,13 +636,13 @@ func projectToastSetupJS() string {
 		el=document.createElement('div');
 		el.id='libro-dl-'+id;
 		var t=dlTheme();
-		el.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:8px 16px;background:'+t.bg+';border-top:1px solid '+t.border+';display:flex;align-items:center;gap:10px;font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,monospace;font-size:13px;animation:libro-toast-slide-up .15s ease-out forwards;';
+		el.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:8px 16px;background:'+t.bg+';border-top:1px solid '+t.border+';display:flex;align-items:center;gap:10px;font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,monospace;font-size:13px;animation:libro-toast-slide-up .04s ease-out forwards;';
 		document.body.appendChild(el);
 		return el;
 	}
 	function dlDismiss(el){
-		el.style.animation='libro-toast-slide-down .15s ease-in forwards';
-		setTimeout(function(){if(el.parentNode)el.remove();},160);
+		el.style.animation='libro-toast-slide-down .04s ease-in forwards';
+		setTimeout(function(){if(el.parentNode)el.remove();},50);
 	}
 	function formatBytes(b){
 		if(b<=0)return '0 B';
@@ -946,7 +943,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string, zenMo
 	if !selected {
 		clickOverlay = r.Div("absolute inset-0 z-40 cursor-pointer").
 			Attr("data-click-overlay", "").
-			OnClick(&r.Action{
+			On("mousedown", &r.Action{
 				Name: "app.select",
 				Data: sidData(sid, "index", index),
 			})
@@ -971,16 +968,18 @@ func renderAppFrame(app Application, index int, selected bool, sid string, zenMo
 		toolbar = toolbar.Attr("style", "display:none")
 	}
 
-	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
+	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-all duration-50").
 		ID(fmt.Sprintf("frame-%s", app.ID)).
 		Attr("data-app-id", app.ID).
 		Attr("style", fmt.Sprintf("order:%d", index)).
 		Render(
 			toolbar,
-			r.Div("relative flex-1 min-h-0").Render(
-				renderIframe(app, frameID, iframeSrc, sid),
-				clickOverlay,
-			),
+			r.Div("relative flex-1 min-h-0").
+				Attr("data-app-content", app.ID).
+				Render(
+					renderIframe(app, frameID, iframeSrc, sid),
+					clickOverlay,
+				),
 		)
 }
 
@@ -1068,7 +1067,7 @@ func showProjectJS(projectName string) string {
 	return fmt.Sprintf(`
 (function(){
 	var el=document.getElementById('%s');
-	if(el)el.style.display='flex';
+	if(el){el.style.display='flex';el.style.animation='none';el.offsetHeight;el.style.animation='libro-project-switch .06s ease-out';}
 })();`, projectMainID(projectName))
 }
 
@@ -1091,7 +1090,7 @@ func focusSelectedAppJS(selectedIndex int) string {
 	return fmt.Sprintf(`
 setTimeout(function(){
 	if(window.__libroFocusApp) window.__libroFocusApp(%d);
-}, 150);`, selectedIndex)
+}, 30);`, selectedIndex)
 }
 
 // removeAppJS returns JS that removes an app frame by its app ID from the strip.
@@ -1733,7 +1732,7 @@ func searchDialogJS(sid string) string {
 
 // renderURLPopup renders the URL/search popup for Ctrl+L (works in both zen and non-zen mode).
 func renderURLPopup(sid string) *r.Node {
-	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[20vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
+	return r.Div("absolute inset-0 z-[60] flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
 		ID(URLPopupID).
 		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", URLPopupID))).
 		Render(
@@ -1749,8 +1748,10 @@ func renderURLPopup(sid string) *r.Node {
 							Attr("autocomplete", "off").
 							Attr("spellcheck", "false"),
 					),
+					r.Div("max-h-[40vh] overflow-y-auto").ID("url-popup-history"),
 					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
 						r.Span("").Text("Enter navigate"),
+						r.Span("").Text("↑↓ select"),
 						r.Span("").Text("Esc close"),
 					),
 				),
@@ -1761,12 +1762,13 @@ func renderURLPopup(sid string) *r.Node {
 func urlPopupJS(sid string) string {
 	return fmt.Sprintf(`
 (function(){
-	if(window.__libroURLPopupRegistered)return;
-	window.__libroURLPopupRegistered=true;
-
-	var dlg=document.getElementById('%s');
-	var inp=document.getElementById('url-popup-input');
 	var currentAppId='';
+	var selectedIdx=-1;
+	var filteredURLs=[];
+
+	function getDlg(){return document.getElementById('%s');}
+	function getInp(){return document.getElementById('url-popup-input');}
+	function getHistory(){return document.getElementById('url-popup-history');}
 
 	function findSelectedBrowserApp(){
 		var selToolbar=document.querySelector('.bg-blue-600.border-blue-700');
@@ -1792,10 +1794,59 @@ func urlPopupJS(sid string) string {
 		return '';
 	}
 
+	function renderHistory(query){
+		var historyContainer=getHistory();
+		var inp=getInp();
+		if(!historyContainer)return;
+		var urls=window.__libroBrowsedURLs||[];
+		var q=(query||'').trim().toLowerCase();
+		if(q){
+			filteredURLs=urls.filter(function(u){return u.toLowerCase().indexOf(q)!==-1;});
+		}else{
+			filteredURLs=urls.slice(0,20);
+		}
+		if(filteredURLs.length===0){
+			historyContainer.innerHTML='';
+			selectedIdx=-1;
+			return;
+		}
+		var dk=document.documentElement.classList.contains('dark');
+		var html='<div class="border-t border-gray-100 dark:border-zinc-800 py-1">';
+		for(var i=0;i<filteredURLs.length&&i<20;i++){
+			var u=filteredURLs[i];
+			var host='';try{host=new URL(u).hostname.replace(/^www\./,'');}catch(e){host=u;}
+			var sel=i===selectedIdx;
+			var bg=sel?(dk?'background:#2563eb22':'background:#2563eb15'):'';
+			var border=sel?'border-left:2px solid #3b82f6':'border-left:2px solid transparent';
+			html+='<div class="px-4 py-1.5 flex items-center gap-2 cursor-pointer text-sm hover:bg-gray-50 dark:hover:bg-zinc-800/50" style="'+bg+';'+border+'" data-url-idx="'+i+'">';
+			html+='<span class="material-icons-round text-gray-400 dark:text-zinc-500" style="font-size:14px">history</span>';
+			html+='<span class="text-gray-500 dark:text-zinc-400 truncate flex-1 font-mono text-xs">'+u.replace(/</g,'&lt;')+'</span>';
+			html+='<span class="text-gray-400 dark:text-zinc-600 text-[10px] shrink-0">'+host.replace(/</g,'&lt;')+'</span>';
+			html+='</div>';
+		}
+		html+='</div>';
+		historyContainer.innerHTML=html;
+		historyContainer.querySelectorAll('[data-url-idx]').forEach(function(el){
+			el.addEventListener('mousedown',function(e){
+				e.preventDefault();
+				var idx=parseInt(el.getAttribute('data-url-idx'));
+				if(filteredURLs[idx]&&inp){
+					inp.value=filteredURLs[idx];
+					navigate();
+				}
+			});
+		});
+	}
+
 	function openPopup(){
 		var appId=findSelectedBrowserApp();
 		if(!appId)return;
 		currentAppId=appId;
+		var dlg=getDlg();
+		if(!dlg)return;
+		var contentArea=document.querySelector('[data-app-content="'+appId+'"]');
+		if(contentArea)contentArea.appendChild(dlg);
+		var inp=getInp();
 		var wv=window.__libroWebviews[appId];
 		var currentUrl='';
 		if(wv){try{currentUrl=wv.getURL()||'';}catch(e){}}
@@ -1804,18 +1855,28 @@ func urlPopupJS(sid string) string {
 			if(urlInp)currentUrl=urlInp.value||'';
 		}
 		dlg.classList.remove('hidden');
-		inp.value=currentUrl;
-		setTimeout(function(){inp.focus();inp.select();},50);
+		if(inp){
+			inp.value=currentUrl;
+		}
+		selectedIdx=-1;
+		renderHistory('');
+		setTimeout(function(){var i=getInp();if(i){i.focus();i.select();}},50);
 	}
 
 	function closePopup(){
-		dlg.classList.add('hidden');
-		inp.value='';
+		var dlg=getDlg();
+		var inp=getInp();
+		var historyContainer=getHistory();
+		if(dlg)dlg.classList.add('hidden');
+		if(inp)inp.value='';
 		currentAppId='';
+		selectedIdx=-1;
+		if(historyContainer)historyContainer.innerHTML='';
 	}
 
 	function navigate(){
-		var u=inp.value.trim();
+		var inp=getInp();
+		var u=inp?inp.value.trim():'';
 		if(!u||!currentAppId)return;
 		if(!u.startsWith('http://')&&!u.startsWith('https://')){
 			if(/\s/.test(u)||(!u.includes('.')&&!u.includes(':'))){
@@ -1830,16 +1891,43 @@ func urlPopupJS(sid string) string {
 		var urlInp=document.getElementById('urlinput-'+appId);
 		if(urlInp)urlInp.value=u;
 		__ws.callSilent('app.url.set',{sid:'%s',id:appId,url:u});
-		// Delay focus to ensure popup overlay is fully removed from layout
 		setTimeout(function(){
 			var wv=window.__libroWebviews[appId];
 			if(wv)wv.focus();
 		},100);
 	}
 
-	inp.addEventListener('keydown',function(e){
+	document.addEventListener('input',function(e){
+		var inp=getInp();
+		if(e.target!==inp)return;
+		selectedIdx=-1;
+		renderHistory(inp.value);
+	});
+
+	document.addEventListener('keydown',function(e){
+		var inp=getInp();
+		if(e.target!==inp)return;
+		var dlg=getDlg();
+		if(!dlg||dlg.classList.contains('hidden'))return;
 		e.stopImmediatePropagation();
-		if(e.key==='Enter'){
+		if(e.key==='ArrowDown'){
+			e.preventDefault();
+			if(filteredURLs.length>0){
+				selectedIdx=Math.min(selectedIdx+1,filteredURLs.length-1);
+				renderHistory(inp.value);
+				inp.value=filteredURLs[selectedIdx];
+			}
+		}else if(e.key==='ArrowUp'){
+			e.preventDefault();
+			if(filteredURLs.length>0&&selectedIdx>0){
+				selectedIdx--;
+				renderHistory(inp.value);
+				inp.value=filteredURLs[selectedIdx];
+			}else if(selectedIdx===0){
+				selectedIdx=-1;
+				renderHistory(inp.value);
+			}
+		}else if(e.key==='Enter'){
 			e.preventDefault();
 			navigate();
 		}else if(e.key==='Escape'){
@@ -1872,7 +1960,7 @@ func renderResizePopup(sid string) *r.Node {
 		)
 	}
 
-	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[20vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden outline-none").
+	return r.Div("absolute inset-0 z-[60] flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden outline-none").
 		ID(ResizePopupID).
 		Attr("tabindex", "-1").
 		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", ResizePopupID))).
@@ -1901,12 +1989,10 @@ func renderResizePopup(sid string) *r.Node {
 func resizePopupJS(sid string) string {
 	return fmt.Sprintf(`
 (function(){
-	if(window.__libroResizePopupRegistered)return;
-	window.__libroResizePopupRegistered=true;
-
-	var dlg=document.getElementById('%s');
 	var currentAppId='';
 	var focusedIndex=-1;
+
+	function getDlg(){return document.getElementById('%s');}
 
 	function findSelectedApp(){
 		var selToolbar=document.querySelector('.bg-blue-600.border-blue-700');
@@ -1942,7 +2028,7 @@ func resizePopupJS(sid string) string {
 		return'lg';
 	}
 
-	function getBtns(){return dlg.querySelectorAll('.resize-btn');}
+	function getBtns(){var d=getDlg();return d?d.querySelectorAll('.resize-btn'):[];}
 
 	function highlightFocused(idx){
 		var btns=getBtns();
@@ -1966,6 +2052,10 @@ func resizePopupJS(sid string) string {
 		var appId=findSelectedApp();
 		if(!appId)return;
 		currentAppId=appId;
+		var dlg=getDlg();
+		if(!dlg)return;
+		var contentArea=document.querySelector('[data-app-content="'+appId+'"]');
+		if(contentArea)contentArea.appendChild(dlg);
 		var curWidth=getCurrentWidth(appId);
 		var btns=getBtns();
 		var idx=0;
@@ -1978,7 +2068,8 @@ func resizePopupJS(sid string) string {
 	}
 
 	function closePopup(){
-		dlg.classList.add('hidden');
+		var dlg=getDlg();
+		if(dlg)dlg.classList.add('hidden');
 		currentAppId='';
 		focusedIndex=-1;
 	}
@@ -1992,15 +2083,21 @@ func resizePopupJS(sid string) string {
 		closePopup();
 	}
 
-	dlg.querySelectorAll('.resize-btn').forEach(function(btn,i){
-		btn.addEventListener('click',function(e){
-			e.stopPropagation();
-			highlightFocused(i);
-			confirmSelection();
-		});
+	document.addEventListener('click',function(e){
+		var btn=e.target.closest('.resize-btn');
+		var dlg=getDlg();
+		if(!btn||!dlg||!dlg.contains(btn))return;
+		e.stopPropagation();
+		var btns=getBtns();
+		for(var i=0;i<btns.length;i++){
+			if(btns[i]===btn){highlightFocused(i);break;}
+		}
+		confirmSelection();
 	});
 
-	dlg.addEventListener('keydown',function(e){
+	document.addEventListener('keydown',function(e){
+		var dlg=getDlg();
+		if(!dlg||dlg.classList.contains('hidden'))return;
 		var btns=getBtns();
 		if(e.key==='j'||e.key==='ArrowDown'){
 			e.preventDefault();e.stopImmediatePropagation();
@@ -2592,7 +2689,7 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 	}
 
 	requestAnimationFrame(function(){
-		el.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
+		el.scrollIntoView({behavior:'instant',block:'nearest',inline:'nearest'});
 	});
 })();
 `, appID, widthMap, string(width))
@@ -2726,7 +2823,7 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 	return r.Div("flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-200 dark:border-zinc-800 shrink-0").
 		ID(TopBarID).
 		Render(
-			r.Button("shrink-0 cursor-pointer hover:opacity-70 transition-opacity duration-150 flex items-center gap-1.5").
+			r.Button("shrink-0 cursor-pointer hover:opacity-70 transition-opacity duration-75 flex items-center gap-1.5").
 				Attr("title", "Toggle sidebar (⌘B)").
 				OnClick(&r.Action{Name: "sidebar.toggle", Data: sidData(sid)}).
 				Render(
@@ -2796,9 +2893,9 @@ func renderAppPreview(state *AppState, sid string) *r.Node {
 		// Card styling
 		var cardCls string
 		if isSelected {
-			cardCls = "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-100 bg-blue-600 text-white shadow-sm"
+			cardCls = "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-75 bg-blue-600 text-white shadow-sm"
 		} else {
-			cardCls = "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-100 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700 hover:text-gray-800 dark:hover:text-zinc-200"
+			cardCls = "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-75 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700 hover:text-gray-800 dark:hover:text-zinc-200"
 		}
 
 		card := r.Button(cardCls).
@@ -2820,8 +2917,8 @@ func renderAppPreview(state *AppState, sid string) *r.Node {
 // updateAppPreviewJS returns JS that updates the selected state of preview cards
 // without re-rendering the entire top bar. Used for lightweight navigate/select actions.
 func updateAppPreviewJS(state *AppState) string {
-	selectedCls := "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-100 bg-blue-600 text-white shadow-sm"
-	normalCls := "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-100 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700 hover:text-gray-800 dark:hover:text-zinc-200"
+	selectedCls := "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-75 bg-blue-600 text-white shadow-sm"
+	normalCls := "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-75 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700 hover:text-gray-800 dark:hover:text-zinc-200"
 
 	return fmt.Sprintf(`
 		(function(){
@@ -3475,11 +3572,13 @@ func keyboardShortcutsJS(sid string) string {
 				if (e.ctrlKey && !e.metaKey && (e.key === 'r' || e.key === 'R')) {
 					var selToolbar2 = document.querySelector('.bg-blue-600.border-blue-700');
 					var appEl2 = selToolbar2 ? selToolbar2.closest('[data-app-id]') : null;
-					if (appEl2 && appEl2.querySelector('webview')) {
-						e.preventDefault();
-						e.stopImmediatePropagation();
+					if (appEl2) {
 						var appId2 = appEl2.getAttribute('data-app-id');
-						window.__libroWvReload(appId2);
+						if (appId2 && window.__libroWebviews && window.__libroWebviews[appId2]) {
+							e.preventDefault();
+							e.stopImmediatePropagation();
+							window.__libroWvReload(appId2);
+						}
 					}
 				}
 			}
