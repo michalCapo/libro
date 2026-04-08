@@ -261,9 +261,7 @@ app.on('web-contents-created', (event, contents) => {
         e.preventDefault()
         if (mainWindow) {
           mainWindow.webContents.executeJavaScript(`
-            document.dispatchEvent(new KeyboardEvent('keydown', {
-              key: 'r', code: 'KeyR', metaKey: true, bubbles: true, cancelable: true
-            }));
+            if (window.__libroOpenResizePopup) window.__libroOpenResizePopup();
           `)
         }
         return
@@ -275,6 +273,18 @@ app.on('web-contents-created', (event, contents) => {
           mainWindow.webContents.executeJavaScript(`
             document.dispatchEvent(new KeyboardEvent('keydown', {
               key: 'z', code: 'KeyZ', metaKey: true, bubbles: true, cancelable: true
+            }));
+          `)
+        }
+        return
+      }
+      // Super+F: toggle maximize width on selected app
+      if (input.meta && !input.control && code === 'keyf') {
+        e.preventDefault()
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            document.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'f', code: 'KeyF', metaKey: true, bubbles: true, cancelable: true
             }));
           `)
         }

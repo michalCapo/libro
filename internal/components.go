@@ -1853,42 +1853,51 @@ func urlPopupJS(sid string) string {
 `, URLPopupID, sid)
 }
 
-// renderResizePopup renders the resize popup for Win+R (works in both zen and non-zen mode).
+// renderResizePopup renders the resize popup for Win+R / Win+F (works in both zen and non-zen mode).
+// Uses radio-style buttons navigable with j/k and confirmable with Enter.
 func renderResizePopup(sid string) *r.Node {
 	widths := AllWidths()
 	buttons := make([]*r.Node, 0, len(widths))
 	for _, w := range widths {
 		label := strings.ToUpper(string(w))
 		buttons = append(buttons,
-			r.Button("resize-btn px-4 py-2 text-sm font-mono tracking-wider uppercase rounded cursor-pointer transition-colors duration-75 border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-400 hover:bg-blue-600 hover:text-white hover:border-blue-600 dark:hover:bg-blue-600 dark:hover:text-white dark:hover:border-blue-600").
+			r.Div("resize-btn flex items-center gap-3 px-4 py-2 rounded cursor-pointer transition-colors duration-75 text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800").
 				Attr("data-resize-width", string(w)).
-				Text(label),
+				Render(
+					r.Div("w-4 h-4 rounded-full border-2 border-gray-300 dark:border-zinc-600 flex items-center justify-center shrink-0").
+						Attr("data-radio", "").
+						Render(r.Div("w-2 h-2 rounded-full bg-blue-600 hidden").Attr("data-radio-dot", "")),
+					r.Span("text-sm font-mono tracking-wider uppercase").Text(label),
+				),
 		)
 	}
 
-	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[20vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
+	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[20vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden outline-none").
 		ID(ResizePopupID).
+		Attr("tabindex", "-1").
 		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", ResizePopupID))).
 		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden").
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-xs mx-4 overflow-hidden").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
 					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-2").Render(
 						r.I("material-icons-round text-blue-500 text-lg").Text("aspect_ratio"),
 						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200").Text("Resize App"),
 					),
-					r.Div("px-4 py-4 flex flex-wrap gap-2 justify-center").
+					r.Div("px-3 py-2 flex flex-col gap-0").
 						ID("resize-popup-buttons").
 						Render(buttons...),
 					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
-						r.Span("").Text("Click to resize"),
+						r.Span("").Text("j/k navigate"),
+						r.Span("").Text("Enter resize"),
 						r.Span("").Text("Esc close"),
 					),
 				),
 		)
 }
 
-// resizePopupJS returns JS that powers the Win+R resize popup.
+// resizePopupJS returns JS that powers the Win+R / Win+F resize popup.
+// Supports j/k keyboard navigation and Enter to confirm.
 func resizePopupJS(sid string) string {
 	return fmt.Sprintf(`
 (function(){
@@ -1897,6 +1906,7 @@ func resizePopupJS(sid string) string {
 
 	var dlg=document.getElementById('%s');
 	var currentAppId='';
+	var focusedIndex=-1;
 
 	function findSelectedApp(){
 		var selToolbar=document.querySelector('.bg-blue-600.border-blue-700');
@@ -1932,16 +1942,24 @@ func resizePopupJS(sid string) string {
 		return'lg';
 	}
 
-	function highlightCurrent(width){
-		var btns=dlg.querySelectorAll('.resize-btn');
-		btns.forEach(function(b){
-			var w=b.getAttribute('data-resize-width');
-			if(w===width){
-				b.className='resize-btn px-4 py-2 text-sm font-mono tracking-wider uppercase rounded cursor-pointer transition-colors duration-75 border border-blue-600 bg-blue-600 text-white';
+	function getBtns(){return dlg.querySelectorAll('.resize-btn');}
+
+	function highlightFocused(idx){
+		var btns=getBtns();
+		btns.forEach(function(b,i){
+			var radio=b.querySelector('[data-radio]');
+			var dot=b.querySelector('[data-radio-dot]');
+			if(i===idx){
+				b.className='resize-btn flex items-center gap-3 px-4 py-2 rounded cursor-pointer transition-colors duration-75 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300';
+				if(radio)radio.className='w-4 h-4 rounded-full border-2 border-blue-600 flex items-center justify-center shrink-0';
+				if(dot)dot.classList.remove('hidden');
 			}else{
-				b.className='resize-btn px-4 py-2 text-sm font-mono tracking-wider uppercase rounded cursor-pointer transition-colors duration-75 border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-400 hover:bg-blue-600 hover:text-white hover:border-blue-600 dark:hover:bg-blue-600 dark:hover:text-white dark:hover:border-blue-600';
+				b.className='resize-btn flex items-center gap-3 px-4 py-2 rounded cursor-pointer transition-colors duration-75 text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800';
+				if(radio)radio.className='w-4 h-4 rounded-full border-2 border-gray-300 dark:border-zinc-600 flex items-center justify-center shrink-0';
+				if(dot)dot.classList.add('hidden');
 			}
 		});
+		focusedIndex=idx;
 	}
 
 	function openPopup(){
@@ -1949,32 +1967,66 @@ func resizePopupJS(sid string) string {
 		if(!appId)return;
 		currentAppId=appId;
 		var curWidth=getCurrentWidth(appId);
-		highlightCurrent(curWidth);
+		var btns=getBtns();
+		var idx=0;
+		btns.forEach(function(b,i){
+			if(b.getAttribute('data-resize-width')===curWidth)idx=i;
+		});
+		highlightFocused(idx);
 		dlg.classList.remove('hidden');
+		setTimeout(function(){dlg.focus();},50);
 	}
 
 	function closePopup(){
 		dlg.classList.add('hidden');
 		currentAppId='';
+		focusedIndex=-1;
 	}
 
-	dlg.querySelectorAll('.resize-btn').forEach(function(btn){
+	function confirmSelection(){
+		var btns=getBtns();
+		if(focusedIndex<0||focusedIndex>=btns.length||!currentAppId)return;
+		var w=btns[focusedIndex].getAttribute('data-resize-width');
+		if(!w)return;
+		__ws.call('app.resize',{sid:'%s',id:currentAppId,width:w});
+		closePopup();
+	}
+
+	dlg.querySelectorAll('.resize-btn').forEach(function(btn,i){
 		btn.addEventListener('click',function(e){
 			e.stopPropagation();
-			var w=btn.getAttribute('data-resize-width');
-			if(!w||!currentAppId)return;
-			__ws.call('app.resize',{sid:'%s',id:currentAppId,width:w});
-			highlightCurrent(w);
-			closePopup();
+			highlightFocused(i);
+			confirmSelection();
 		});
 	});
 
-	document.addEventListener('keydown',function(e){
-		if(e.key==='Escape'&&!dlg.classList.contains('hidden')){
+	dlg.addEventListener('keydown',function(e){
+		var btns=getBtns();
+		if(e.key==='j'||e.key==='ArrowDown'){
+			e.preventDefault();e.stopImmediatePropagation();
+			var next=focusedIndex+1;
+			if(next>=btns.length)next=0;
+			highlightFocused(next);
+			return;
+		}
+		if(e.key==='k'||e.key==='ArrowUp'){
+			e.preventDefault();e.stopImmediatePropagation();
+			var prev=focusedIndex-1;
+			if(prev<0)prev=btns.length-1;
+			highlightFocused(prev);
+			return;
+		}
+		if(e.key==='Enter'){
+			e.preventDefault();e.stopImmediatePropagation();
+			confirmSelection();
+			return;
+		}
+		if(e.key==='Escape'){
 			e.preventDefault();e.stopImmediatePropagation();
 			closePopup();
+			return;
 		}
-	},true);
+	});
 
 	window.__libroOpenResizePopup=openPopup;
 })();
@@ -1998,6 +2050,7 @@ func renderShortcutsDialog() *r.Node {
 			{"⌘ + Ctrl + N", "New app (left of current)"},
 			{"⌘ + W", "Close current app"},
 			{"⌘ + R", "Resize app popup"},
+			{"⌘ + F", "Toggle full width"},
 			{"⌘ + +", "Zoom in (whole app)"},
 			{"⌘ + -", "Zoom out (whole app)"},
 		}},
@@ -3392,6 +3445,12 @@ func keyboardShortcutsJS(sid string) string {
 					__ws.call('zen.toggle', {"sid": "%s"});
 					return;
 				}
+				if (e.metaKey && (e.key === 'f' || e.key === 'F') && !e.ctrlKey) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					__ws.call('app.maximize.toggle', {"sid": "%s"});
+					return;
+				}
 				if (e.metaKey && (e.key === 'g' || e.key === 'G')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
@@ -3472,5 +3531,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-	`, sid, sid, sid, sid, sid, sid, sid, sid, sid)
+	`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }
