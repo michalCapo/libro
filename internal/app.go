@@ -429,6 +429,17 @@ func Run(assets embed.FS) {
 		return resizeJS(state, width, appID)
 	})
 
+	// Toggle maximize — switch selected app between full width and previous width
+	app.Action("app.maximize.toggle", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		newWidth, appID := sm.ToggleMaxWidth(sid)
+		if appID == "" {
+			return ""
+		}
+		state := sm.Get(sid)
+		return resizeJS(state, newWidth, appID)
+	})
+
 	// Select specific app - JS-only update to preserve iframes
 	app.Action("app.select", func(ctx *r.Context) string {
 		sid := extractSID(ctx)

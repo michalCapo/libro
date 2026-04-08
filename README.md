@@ -103,7 +103,8 @@ A close button is available on each application to remove it from the strip. Whe
 - `⌘ + N` — new app (right of current)
 - `⌘ + Ctrl + N` — new app (left of current)
 - `⌘ + W` — close current app
-- `⌘ + R` — resize app popup
+- `⌘ + R` — resize app popup (j/k to navigate, Enter to resize)
+- `⌘ + F` — toggle full width (selected app)
 - `⌘ + +` — zoom in (whole application)
 - `⌘ + -` — zoom out (whole application)
 
@@ -214,7 +215,10 @@ The current application version is shown in the header toolbar next to the short
 Zen mode (`⌘ + Z`) hides the top bar, project sidebar, and all application toolbars, leaving only the running applications visible. Users navigate entirely via keyboard shortcuts. Toggle zen mode again with `⌘ + Z` to restore the full UI. A zen mode button is also available in the top bar. The zen mode preference is persisted to the database — if the user was in zen mode when they last used Libro, it will start in zen mode on the next launch.
 
 ### Resize Popup
-Press `⌘ + R` to open a resize popup on the currently selected app. The popup shows all available width options (SM, MD, LG, XL, 2XL, FULL) with the current width highlighted. Click a size to resize the app instantly. Works in both normal mode and zen mode.
+Press `⌘ + R` to open a resize popup on the currently selected app. The popup shows all available width options (SM, MD, LG, XL, 2XL, FULL) as radio buttons with the current width selected. Use `j`/`k` (or arrow keys) to navigate between sizes and `Enter` to confirm. Click a size or press `Esc` to close. Works in both normal mode and zen mode.
+
+### Toggle Full Width
+Press `⌘ + F` to toggle the selected app between full width and its previous width. If the app is already at full width, it restores the width it had before maximizing. Works in both normal mode and zen mode.
 
 ## Desktop Mode
 

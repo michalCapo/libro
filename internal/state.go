@@ -18,15 +18,16 @@ const (
 
 // Application represents a single web application displayed in an iframe
 type Application struct {
-	ID       string
-	Type     AppType
-	URL      string // iframe source URL (for terminal apps, this is http://localhost:<port>)
-	Command  string // original command (only for terminal apps)
-	Width    Width
-	Port     int    // ttyd port (only for terminal apps)
-	Writable bool   // ttyd --writable flag (only for terminal apps)
-	Name     string // optional display name
-	IconURL  string // cached icon URL from DB (only for terminal apps)
+	ID            string
+	Type          AppType
+	URL           string // iframe source URL (for terminal apps, this is http://localhost:<port>)
+	Command       string // original command (only for terminal apps)
+	Width         Width
+	PreviousWidth Width  // width before toggling to full (for ⌘+F maximize toggle)
+	Port          int    // ttyd port (only for terminal apps)
+	Writable      bool   // ttyd --writable flag (only for terminal apps)
+	Name          string // optional display name
+	IconURL       string // cached icon URL from DB (only for terminal apps)
 }
 
 // Project represents a named working directory
@@ -472,6 +473,34 @@ func (sm *StateManager) SetAppWidthByID(sessionID, appID string, width Width) in
 		}
 	}
 	return -1
+}
+
+// ToggleMaxWidth toggles the selected app between full width and its previous width.
+// If the app is already full width, it restores the previous width (or LG if none saved).
+// If not full width, it saves the current width and switches to full.
+// Returns the new width and app ID, or empty strings if no app is selected.
+func (sm *StateManager) ToggleMaxWidth(sessionID string) (Width, string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil || len(s.Apps) == 0 || s.SelectedIndex < 0 || s.SelectedIndex >= len(s.Apps) {
+		return "", ""
+	}
+	app := &s.Apps[s.SelectedIndex]
+	if app.Width == WidthFull {
+		// Restore previous width
+		prev := app.PreviousWidth
+		if prev == "" || prev == WidthFull {
+			prev = WidthLG
+		}
+		app.Width = prev
+		app.PreviousWidth = ""
+		return prev, app.ID
+	}
+	// Save current width and go full
+	app.PreviousWidth = app.Width
+	app.Width = WidthFull
+	return WidthFull, app.ID
 }
 
 // SetAppURLByID changes the URL of an app by its ID. Returns the app index or -1.
