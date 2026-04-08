@@ -4,12 +4,29 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
+
+// userShell returns the user's $SHELL if set and available, otherwise "bash".
+func userShell() string {
+	if sh := os.Getenv("SHELL"); sh != "" {
+		if _, err := exec.LookPath(sh); err == nil {
+			return sh
+		}
+	}
+	return "bash"
+}
+
+// userShellBase returns the basename of the user's shell (e.g. "zsh", "fish").
+func userShellBase() string {
+	return filepath.Base(userShell())
+}
 
 // shellQuote escapes a string for safe use as a single shell argument.
 func shellQuote(s string) string {
@@ -83,13 +100,14 @@ func (tm *TtydManager) Start(appID string, port int, command string, writable bo
 	if writable {
 		args = append(args, "--writable")
 	}
-	// Wrap in bash --norc --noprofile to avoid user profile scripts
-	// (e.g. .bashrc launching editors). Also supports complex commands with pipes.
-	shellCmd := command + "; exec bash --norc --noprofile"
+	// Use $SHELL (falling back to bash). Wrap with --norc --noprofile
+	// to avoid user profile scripts (e.g. .bashrc launching editors).
+	shell := userShell()
+	shellCmd := command + "; exec " + shell + " --norc --noprofile"
 	if pwd != "" {
 		shellCmd = fmt.Sprintf("cd %s && %s", shellQuote(pwd), shellCmd)
 	}
-	args = append(args, "bash", "--norc", "--noprofile", "-c", shellCmd)
+	args = append(args, shell, "--norc", "--noprofile", "-c", shellCmd)
 
 	cmd := exec.Command("ttyd", args...)
 	if err := cmd.Start(); err != nil {

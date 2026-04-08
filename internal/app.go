@@ -133,7 +133,7 @@ func Run(assets embed.FS) {
 			command, _ := data["app-command"].(string)
 			command = strings.TrimSpace(command)
 			if command == "" {
-				command = "bash"
+				command = userShellBase()
 			}
 
 			writable := true
@@ -248,7 +248,7 @@ func Run(assets embed.FS) {
 			command, _ := data["command"].(string)
 			command = strings.TrimSpace(command)
 			if command == "" {
-				command = "bash"
+				command = userShellBase()
 			}
 			command = strings.ReplaceAll(command, "__dir__", pwd)
 
@@ -270,6 +270,7 @@ func Run(assets embed.FS) {
 			}
 
 			sm.InsertTerminalApp(sid, appID, command, port, writable, width, name, iconURL, insertIdx)
+
 			state := sm.Get(sid)
 			newApp := &state.Apps[state.SelectedIndex]
 

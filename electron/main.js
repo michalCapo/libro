@@ -353,9 +353,9 @@ app.on('web-contents-created', (event, contents) => {
             if (!selToolbar) return;
             var appEl = selToolbar.closest('[data-app-id]');
             if (!appEl) return;
-            var webview = appEl.querySelector('webview[data-webview-app]');
-            if (webview && webview.reload) {
-              webview.reload();
+            var appId = appEl.getAttribute('data-app-id');
+            if (appId && window.__libroWvReload) {
+              window.__libroWvReload(appId);
             }
           })();` : `
           (function() {
