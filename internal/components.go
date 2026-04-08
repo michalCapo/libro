@@ -383,8 +383,9 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 	}
 	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0").Attr("style", "order:99999"))
 
-	strip := r.Div("flex-1 min-w-0 flex items-stretch h-full overflow-x-auto overflow-y-hidden gap-0.5 p-0.5").
+	strip := r.Div("flex-1 min-w-0 flex items-stretch h-full overflow-x-auto overflow-y-hidden gap-0.5 p-0.5 scrollbar-none").
 		ID(stripID(state.ActiveProject)).
+		Attr("style", "scrollbar-width:none;-ms-overflow-style:none").
 		Render(stripChildren...)
 
 	mainArea := r.Div("flex-1 flex items-stretch overflow-hidden relative p-0.5").ID(projectMainID(state.ActiveProject)).
@@ -1765,6 +1766,7 @@ func urlPopupJS(sid string) string {
 	var currentAppId='';
 	var selectedIdx=-1;
 	var filteredURLs=[];
+	var originalQuery='';
 
 	function getDlg(){return document.getElementById('%s');}
 	function getInp(){return document.getElementById('url-popup-input');}
@@ -1859,6 +1861,7 @@ func urlPopupJS(sid string) string {
 			inp.value=currentUrl;
 		}
 		selectedIdx=-1;
+		originalQuery='';
 		renderHistory('');
 		setTimeout(function(){var i=getInp();if(i){i.focus();i.select();}},50);
 	}
@@ -1871,6 +1874,7 @@ func urlPopupJS(sid string) string {
 		if(inp)inp.value='';
 		currentAppId='';
 		selectedIdx=-1;
+		originalQuery='';
 		if(historyContainer)historyContainer.innerHTML='';
 	}
 
@@ -1901,6 +1905,7 @@ func urlPopupJS(sid string) string {
 		var inp=getInp();
 		if(e.target!==inp)return;
 		selectedIdx=-1;
+		originalQuery=inp.value;
 		renderHistory(inp.value);
 	});
 
@@ -1914,18 +1919,19 @@ func urlPopupJS(sid string) string {
 			e.preventDefault();
 			if(filteredURLs.length>0){
 				selectedIdx=Math.min(selectedIdx+1,filteredURLs.length-1);
-				renderHistory(inp.value);
+				renderHistory(originalQuery);
 				inp.value=filteredURLs[selectedIdx];
 			}
 		}else if(e.key==='ArrowUp'){
 			e.preventDefault();
 			if(filteredURLs.length>0&&selectedIdx>0){
 				selectedIdx--;
-				renderHistory(inp.value);
+				renderHistory(originalQuery);
 				inp.value=filteredURLs[selectedIdx];
 			}else if(selectedIdx===0){
 				selectedIdx=-1;
-				renderHistory(inp.value);
+				renderHistory(originalQuery);
+				inp.value=originalQuery;
 			}
 		}else if(e.key==='Enter'){
 			e.preventDefault();
