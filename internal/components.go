@@ -1988,7 +1988,7 @@ func resizePopupJS(sid string) string {
 		if(focusedIndex<0||focusedIndex>=btns.length||!currentAppId)return;
 		var w=btns[focusedIndex].getAttribute('data-resize-width');
 		if(!w)return;
-		__ws.call('app.resize',{sid:'%s',id:currentAppId,width:w});
+		__ws.callSilent('app.resize',{sid:'%s',id:currentAppId,width:w});
 		closePopup();
 	}
 
