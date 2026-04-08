@@ -126,6 +126,7 @@ func (sm *StateManager) NewSession() string {
 		rendered[projects[0].Name] = true
 	}
 
+	zenMode := DBGetSetting("zen_mode", "0") == "1"
 	sm.states[sid] = &AppState{
 		Projects:         projects,
 		ActiveProject:    projects[0].Name,
@@ -134,6 +135,8 @@ func (sm *StateManager) NewSession() string {
 		EditIndex:        -1,
 		NavSlots:         make(map[int]string),
 		NavProjectSlot:   make(map[string]int),
+		ZenMode:          zenMode,
+		SidebarCollapsed: zenMode,
 	}
 	return sid
 }
@@ -151,6 +154,7 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 	if len(projects) > 0 {
 		rendered[projects[0].Name] = true
 	}
+	zenMode := DBGetSetting("zen_mode", "0") == "1"
 	s := &AppState{
 		Projects:         projects,
 		ActiveProject:    projects[0].Name,
@@ -159,6 +163,8 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 		EditIndex:        -1,
 		NavSlots:         make(map[int]string),
 		NavProjectSlot:   make(map[string]int),
+		ZenMode:          zenMode,
+		SidebarCollapsed: zenMode,
 	}
 	sm.states[sessionID] = s
 	return s
@@ -950,7 +956,7 @@ func (sm *StateManager) ToggleSidebar(sessionID string) {
 	}
 }
 
-// ToggleZenMode flips the zen mode state
+// ToggleZenMode flips the zen mode state and persists it to the database.
 func (sm *StateManager) ToggleZenMode(sessionID string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -961,6 +967,12 @@ func (sm *StateManager) ToggleZenMode(sessionID string) {
 		if s.ZenMode {
 			s.SidebarCollapsed = true
 		}
+		// Persist zen mode preference
+		val := "0"
+		if s.ZenMode {
+			val = "1"
+		}
+		go DBSetSetting("zen_mode", val)
 	}
 }
 
