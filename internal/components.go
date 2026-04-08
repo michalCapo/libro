@@ -35,6 +35,7 @@ const (
 	WorktreeDialogID  = "worktree-dialog"
 	ManageDialogID    = "manage-dialog"
 	URLPopupID        = "url-popup"
+	ResizePopupID     = "resize-popup"
 )
 
 // termIconInfo stores the icon details for a known terminal command.
@@ -1852,6 +1853,134 @@ func urlPopupJS(sid string) string {
 `, URLPopupID, sid)
 }
 
+// renderResizePopup renders the resize popup for Win+R (works in both zen and non-zen mode).
+func renderResizePopup(sid string) *r.Node {
+	widths := AllWidths()
+	buttons := make([]*r.Node, 0, len(widths))
+	for _, w := range widths {
+		label := strings.ToUpper(string(w))
+		buttons = append(buttons,
+			r.Button("resize-btn px-4 py-2 text-sm font-mono tracking-wider uppercase rounded cursor-pointer transition-colors duration-75 border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-400 hover:bg-blue-600 hover:text-white hover:border-blue-600 dark:hover:bg-blue-600 dark:hover:text-white dark:hover:border-blue-600").
+				Attr("data-resize-width", string(w)).
+				Text(label),
+		)
+	}
+
+	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[20vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
+		ID(ResizePopupID).
+		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", ResizePopupID))).
+		Render(
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden").
+				OnClick(r.JS("event.stopPropagation()")).
+				Render(
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-2").Render(
+						r.I("material-icons-round text-blue-500 text-lg").Text("aspect_ratio"),
+						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200").Text("Resize App"),
+					),
+					r.Div("px-4 py-4 flex flex-wrap gap-2 justify-center").
+						ID("resize-popup-buttons").
+						Render(buttons...),
+					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+						r.Span("").Text("Click to resize"),
+						r.Span("").Text("Esc close"),
+					),
+				),
+		)
+}
+
+// resizePopupJS returns JS that powers the Win+R resize popup.
+func resizePopupJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	if(window.__libroResizePopupRegistered)return;
+	window.__libroResizePopupRegistered=true;
+
+	var dlg=document.getElementById('%s');
+	var currentAppId='';
+
+	function findSelectedApp(){
+		var selToolbar=document.querySelector('.bg-blue-600.border-blue-700');
+		var appEl=selToolbar?selToolbar.closest('[data-app-id]'):null;
+		if(!appEl){
+			var strips=document.querySelectorAll('[id^="app-strip-"]');
+			for(var s=0;s<strips.length;s++){
+				var parent=strips[s].closest('[id^="project-main-"]');
+				if(parent&&parent.style.display!=='none'){
+					var sorted=window.__libroSortedApps?window.__libroSortedApps(strips[s]):Array.from(strips[s].querySelectorAll(':scope > [data-app-id]'));
+					for(var i=0;i<sorted.length;i++){
+						if(!sorted[i].querySelector('[data-click-overlay]')){
+							appEl=sorted[i];break;
+						}
+					}
+					break;
+				}
+			}
+		}
+		return appEl?appEl.getAttribute('data-app-id'):'';
+	}
+
+	function getCurrentWidth(appId){
+		var el=document.querySelector('[data-app-id="'+appId+'"]');
+		if(!el)return'lg';
+		var cls=el.className;
+		if(cls.indexOf('w-full')!==-1)return'full';
+		if(cls.indexOf('w-[1920px]')!==-1)return'2xl';
+		if(cls.indexOf('w-[1280px]')!==-1)return'xl';
+		if(cls.indexOf('w-[960px]')!==-1)return'lg';
+		if(cls.indexOf('w-[640px]')!==-1)return'md';
+		if(cls.indexOf('w-[480px]')!==-1)return'sm';
+		return'lg';
+	}
+
+	function highlightCurrent(width){
+		var btns=dlg.querySelectorAll('.resize-btn');
+		btns.forEach(function(b){
+			var w=b.getAttribute('data-resize-width');
+			if(w===width){
+				b.className='resize-btn px-4 py-2 text-sm font-mono tracking-wider uppercase rounded cursor-pointer transition-colors duration-75 border border-blue-600 bg-blue-600 text-white';
+			}else{
+				b.className='resize-btn px-4 py-2 text-sm font-mono tracking-wider uppercase rounded cursor-pointer transition-colors duration-75 border border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-400 hover:bg-blue-600 hover:text-white hover:border-blue-600 dark:hover:bg-blue-600 dark:hover:text-white dark:hover:border-blue-600';
+			}
+		});
+	}
+
+	function openPopup(){
+		var appId=findSelectedApp();
+		if(!appId)return;
+		currentAppId=appId;
+		var curWidth=getCurrentWidth(appId);
+		highlightCurrent(curWidth);
+		dlg.classList.remove('hidden');
+	}
+
+	function closePopup(){
+		dlg.classList.add('hidden');
+		currentAppId='';
+	}
+
+	dlg.querySelectorAll('.resize-btn').forEach(function(btn){
+		btn.addEventListener('click',function(e){
+			e.stopPropagation();
+			var w=btn.getAttribute('data-resize-width');
+			if(!w||!currentAppId)return;
+			__ws.call('app.resize',{sid:'%s',id:currentAppId,width:w});
+			highlightCurrent(w);
+			closePopup();
+		});
+	});
+
+	document.addEventListener('keydown',function(e){
+		if(e.key==='Escape'&&!dlg.classList.contains('hidden')){
+			e.preventDefault();e.stopImmediatePropagation();
+			closePopup();
+		}
+	},true);
+
+	window.__libroOpenResizePopup=openPopup;
+})();
+`, ResizePopupID, sid)
+}
+
 // renderShortcutsDialog renders the keyboard shortcuts popup (hidden by default).
 func renderShortcutsDialog() *r.Node {
 	type shortcut struct {
@@ -1868,6 +1997,7 @@ func renderShortcutsDialog() *r.Node {
 			{"⌘ + N", "New app (right of current)"},
 			{"⌘ + Ctrl + N", "New app (left of current)"},
 			{"⌘ + W", "Close current app"},
+			{"⌘ + R", "Resize app popup"},
 			{"⌘ + +", "Zoom in (whole app)"},
 			{"⌘ + -", "Zoom out (whole app)"},
 		}},
@@ -3285,6 +3415,12 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();
+				}
+				if (e.metaKey && (e.key === 'r' || e.key === 'R') && !e.ctrlKey) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenResizePopup) window.__libroOpenResizePopup();
+					return;
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'r' || e.key === 'R')) {
 					var selToolbar2 = document.querySelector('.bg-blue-600.border-blue-700');

@@ -103,6 +103,7 @@ A close button is available on each application to remove it from the strip. Whe
 - `⌘ + N` — new app (right of current)
 - `⌘ + Ctrl + N` — new app (left of current)
 - `⌘ + W` — close current app
+- `⌘ + R` — resize app popup
 - `⌘ + +` — zoom in (whole application)
 - `⌘ + -` — zoom out (whole application)
 
@@ -214,7 +215,10 @@ The current application version is shown in the header toolbar next to the short
 A fullscreen toggle button is available in the top bar (`⌘ + F`). It uses Electron's native `setFullScreen` via IPC to enter and exit fullscreen mode. The button icon updates dynamically to reflect the current state.
 
 ### Zen Mode
-Zen mode (`⌘ + Z`) hides the top bar, project sidebar, and all application toolbars, leaving only the running applications visible. Users navigate entirely via keyboard shortcuts. Toggle zen mode again with `⌘ + Z` to restore the full UI. A zen mode button is also available in the top bar.
+Zen mode (`⌘ + Z`) hides the top bar, project sidebar, and all application toolbars, leaving only the running applications visible. Users navigate entirely via keyboard shortcuts. Toggle zen mode again with `⌘ + Z` to restore the full UI. A zen mode button is also available in the top bar. The zen mode preference is persisted to the database — if the user was in zen mode when they last used Libro, it will start in zen mode on the next launch.
+
+### Resize Popup
+Press `⌘ + R` to open a resize popup on the currently selected app. The popup shows all available width options (SM, MD, LG, XL, 2XL, FULL) with the current width highlighted. Click a size to resize the app instantly. Works in both normal mode and zen mode.
 
 ## Desktop Mode
 

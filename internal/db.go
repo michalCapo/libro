@@ -76,7 +76,11 @@ func createTables() {
 			command TEXT NOT NULL UNIQUE,
 			run_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
-		CREATE TABLE IF NOT EXISTS saved_apps (
+		CREATE TABLE IF NOT EXISTS settings (
+				key   TEXT PRIMARY KEY,
+				value TEXT NOT NULL DEFAULT ''
+			);
+			CREATE TABLE IF NOT EXISTS saved_apps (
 			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			project_name TEXT NOT NULL DEFAULT 'home',
 			type         TEXT NOT NULL,
@@ -534,4 +538,33 @@ func DBLoadRunCommands() []string {
 		cmds = append(cmds, c)
 	}
 	return cmds
+}
+
+// --- Settings ---
+
+// DBGetSetting returns the value for a setting key, or defaultVal if not found.
+func DBGetSetting(key, defaultVal string) string {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	var val string
+	err := db.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&val)
+	if err != nil {
+		return defaultVal
+	}
+	return val
+}
+
+// DBSetSetting upserts a setting key/value pair.
+func DBSetSetting(key, value string) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	_, err := db.Exec(
+		"INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=?",
+		key, value, value,
+	)
+	if err != nil {
+		log.Printf("db: set setting %s: %v", key, err)
+	}
 }

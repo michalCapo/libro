@@ -272,6 +272,18 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
+      // Super+R: resize popup — must preventDefault to block browser Reload
+      if (input.meta && !input.control && code === 'keyr') {
+        e.preventDefault()
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            document.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'r', code: 'KeyR', metaKey: true, bubbles: true, cancelable: true
+            }));
+          `)
+        }
+        return
+      }
       // Super+Z: zen mode toggle — must preventDefault to block browser Undo
       if (input.meta && !input.control && code === 'keyz') {
         e.preventDefault()
@@ -305,8 +317,8 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, q, w, n, z, b, f, g
-    if (input.meta && (['h', 'l', 'q', 'w', 'n', 'z', 'b', 'f', 'g'].includes(key) || code === 'keyn')) {
+    // Meta (Super/Win) shortcuts: h, l, q, w, n, z, b, f, g, r
+    if (input.meta && (['h', 'l', 'q', 'w', 'n', 'z', 'b', 'f', 'g', 'r'].includes(key) || code === 'keyn')) {
       e.preventDefault()
       if (mainWindow) {
         const safeKey = input.key.replace(/'/g, "\\'")
