@@ -117,7 +117,6 @@ A close button is available on each application to remove it from the strip. Whe
 - `Ctrl + 0` — switch to previous project
 - `⌘ + G` — git worktrees popup
 - `⌘ + Z` — toggle zen mode (hide all UI)
-- `⌘ + F` — toggle fullscreen
 - `⌘ + Q` — quit Libro
 
 **Browser:**
@@ -210,9 +209,6 @@ A developer tools button in the top bar opens the Electron DevTools for the main
 
 ### Version Display
 The current application version is shown in the header toolbar next to the shortcut buttons. In production builds, the version is injected at compile time via `-ldflags`. In development, it is read from the `VERSION` file at startup.
-
-### Fullscreen Mode
-A fullscreen toggle button is available in the top bar (`⌘ + F`). It uses Electron's native `setFullScreen` via IPC to enter and exit fullscreen mode. The button icon updates dynamically to reflect the current state.
 
 ### Zen Mode
 Zen mode (`⌘ + Z`) hides the top bar, project sidebar, and all application toolbars, leaving only the running applications visible. Users navigate entirely via keyboard shortcuts. Toggle zen mode again with `⌘ + Z` to restore the full UI. A zen mode button is also available in the top bar. The zen mode preference is persisted to the database — if the user was in zen mode when they last used Libro, it will start in zen mode on the next launch.

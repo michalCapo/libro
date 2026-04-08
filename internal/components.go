@@ -2011,7 +2011,6 @@ func renderShortcutsDialog() *r.Node {
 			{"Ctrl + 0", "Switch to previous project"},
 			{"⌘ + G", "Git worktrees popup"},
 			{"⌘ + Z", "Toggle zen mode (hide UI)"},
-			{"⌘ + F", "Toggle fullscreen"},
 			{"⌘ + Q", "Quit Libro"},
 		}},
 		{"Search", "⌘ + N or ⌘ + Ctrl + N to open", []shortcut{
@@ -2645,12 +2644,6 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("code"),
 				r.Span(tipCls).Text("Console"),
-			),
-		r.Button(btnCls).
-			Attr("onclick", "if(window.libroElectron&&window.libroElectron.setFullScreen){var fs=document.fullscreenElement||window.__libroIsFullscreen;window.__libroIsFullscreen=!fs;window.libroElectron.setFullScreen(!fs);this.querySelector('.libro-fs-icon').textContent=(!fs?'fullscreen_exit':'fullscreen');}").
-			Render(
-				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl libro-fs-icon").Text("fullscreen"),
-				r.Span(tipCls).Text("Fullscreen"),
 			),
 	)
 
@@ -3399,12 +3392,6 @@ func keyboardShortcutsJS(sid string) string {
 					__ws.call('zen.toggle', {"sid": "%s"});
 					return;
 				}
-				if (e.metaKey && (e.key === 'f' || e.key === 'F') && !e.ctrlKey) {
-					e.preventDefault();
-					e.stopImmediatePropagation();
-					if(window.libroElectron&&window.libroElectron.setFullScreen){var fs=window.__libroIsFullscreen;window.__libroIsFullscreen=!fs;window.libroElectron.setFullScreen(!fs);var ic=document.querySelector('.libro-fs-icon');if(ic)ic.textContent=(!fs?'fullscreen_exit':'fullscreen');}
-					return;
-				}
 				if (e.metaKey && (e.key === 'g' || e.key === 'G')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
@@ -3412,9 +3399,13 @@ func keyboardShortcutsJS(sid string) string {
 					return;
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L')) {
-					e.preventDefault();
-					e.stopImmediatePropagation();
-					if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();
+					var selTb = document.querySelector('.bg-blue-600.border-blue-700');
+					var appE = selTb ? selTb.closest('[data-app-id]') : null;
+					if (appE && appE.querySelector('webview')) {
+						e.preventDefault();
+						e.stopImmediatePropagation();
+						if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();
+					}
 				}
 				if (e.metaKey && (e.key === 'r' || e.key === 'R') && !e.ctrlKey) {
 					e.preventDefault();
@@ -3436,11 +3427,6 @@ func keyboardShortcutsJS(sid string) string {
 
 			document.addEventListener('keydown', libroKeyHandler, true);
 
-			document.addEventListener('fullscreenchange', function() {
-				if (!document.fullscreenElement) {
-					if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock();
-				}
-			});
 
 			function attachIframeListeners() {
 				var iframes = document.querySelectorAll('iframe');
