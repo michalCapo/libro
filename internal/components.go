@@ -392,13 +392,21 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 		Render(
 			strip,
 		)
-	mainArea.JS(centerSelectedJS(state.SelectedIndex, len(state.Apps), state.ActiveProject))
+	mainArea.JS(centerSelectedJS(state))
 
 	return mainArea
 }
 
-func centerSelectedJS(selectedIndex int, totalApps int, projectName string) string {
+func selectedAppID(state *AppState) string {
+	if state.SelectedIndex >= 0 && state.SelectedIndex < len(state.Apps) {
+		return jsString(state.Apps[state.SelectedIndex].ID)
+	}
+	return "''"
+}
+
+func centerSelectedJS(state *AppState) string {
 	return fmt.Sprintf(`
+		window.__libroSelectedApp=%s;
 		(function centerApp() {
 			requestAnimationFrame(function() {
 				requestAnimationFrame(function() {
@@ -413,7 +421,7 @@ func centerSelectedJS(selectedIndex int, totalApps int, projectName string) stri
 				});
 			});
 		})();
-	`, stripID(projectName), totalApps, selectedIndex)
+	`, selectedAppID(state), stripID(state.ActiveProject), len(state.Apps), state.SelectedIndex)
 }
 
 // moveAppJS reorders app frames visually using CSS order (no DOM moves,
@@ -537,6 +545,8 @@ func navigateJS(state *AppState, sid string) string {
 				}
 			}
 
+			window.__libroSelectedApp = %s;
+
 			var selected = sorted[selectedIdx];
 			if (selected) {
 				selected.style.animation='none';
@@ -548,7 +558,7 @@ func navigateJS(state *AppState, sid string) string {
 				}
 			}
 		})();
-	`, orderJS.String(), stripID(state.ActiveProject), state.SelectedIndex, len(state.Apps), state.ZenMode, sid)
+	`, orderJS.String(), stripID(state.ActiveProject), state.SelectedIndex, len(state.Apps), state.ZenMode, sid, selectedAppID(state))
 }
 
 func flashCSS() string {
@@ -1087,11 +1097,17 @@ func switchProjectJS(toProject string, newContent *r.Node) string {
 }
 
 // focusSelectedAppJS returns JS that focuses the selected app's iframe after a short delay
-func focusSelectedAppJS(selectedIndex int) string {
+// and updates the tracked selected app ID for shortcut handlers.
+func focusSelectedAppJS(state *AppState) string {
+	appID := ""
+	if state.SelectedIndex >= 0 && state.SelectedIndex < len(state.Apps) {
+		appID = state.Apps[state.SelectedIndex].ID
+	}
 	return fmt.Sprintf(`
+window.__libroSelectedApp=%s;
 setTimeout(function(){
 	if(window.__libroFocusApp) window.__libroFocusApp(%d);
-}, 30);`, selectedIndex)
+}, 30);`, jsString(appID), state.SelectedIndex)
 }
 
 // removeAppJS returns JS that removes an app frame by its app ID from the strip.
@@ -1102,6 +1118,7 @@ func removeAppJS(appID string) string {
 (function(){
 	var el=document.querySelector('[data-app-id="%s"]');
 	if(!el)return;
+	['resize-popup','url-popup'].forEach(function(pid){var p=document.getElementById(pid);if(p&&el.contains(p)){p.classList.add('hidden');document.body.appendChild(p);}});
 	var wv=el.querySelector('webview[data-webview-app]');
 	var pool=document.getElementById('webview-pool');
 	if(wv&&pool){
@@ -1773,27 +1790,7 @@ func urlPopupJS(sid string) string {
 	function getHistory(){return document.getElementById('url-popup-history');}
 
 	function findSelectedBrowserApp(){
-		var selToolbar=document.querySelector('.bg-blue-600.border-blue-700');
-		var appEl=selToolbar?selToolbar.closest('[data-app-id]'):null;
-		if(!appEl){
-			var strips=document.querySelectorAll('[id^="app-strip-"]');
-			for(var s=0;s<strips.length;s++){
-				var parent=strips[s].closest('[id^="project-main-"]');
-				if(parent&&parent.style.display!=='none'){
-					var sorted=window.__libroSortedApps?window.__libroSortedApps(strips[s]):Array.from(strips[s].querySelectorAll(':scope > [data-app-id]'));
-					for(var i=0;i<sorted.length;i++){
-						if(!sorted[i].querySelector('[data-click-overlay]')){
-							appEl=sorted[i];break;
-						}
-					}
-					break;
-				}
-			}
-		}
-		if(appEl&&appEl.querySelector('webview[data-webview-app]')){
-			return appEl.getAttribute('data-app-id');
-		}
-		return '';
+		return window.__libroSelectedApp||'';
 	}
 
 	function renderHistory(query){
@@ -2001,22 +1998,7 @@ func resizePopupJS(sid string) string {
 	function getDlg(){return document.getElementById('%s');}
 
 	function findSelectedApp(){
-		var visibleProject=document.querySelector('[id^="project-main-"][style*="display: flex"],[id^="project-main-"][style*="display:flex"]');
-		if(!visibleProject)return'';
-		var selToolbar=visibleProject.querySelector('.bg-blue-600.border-blue-700');
-		var appEl=selToolbar?selToolbar.closest('[data-app-id]'):null;
-		if(!appEl){
-			var strip=visibleProject.querySelector('[id^="app-strip-"]');
-			if(strip){
-				var sorted=window.__libroSortedApps?window.__libroSortedApps(strip):Array.from(strip.querySelectorAll(':scope > [data-app-id]'));
-				for(var i=0;i<sorted.length;i++){
-					if(!sorted[i].querySelector('[data-click-overlay]')){
-						appEl=sorted[i];break;
-					}
-				}
-			}
-		}
-		return appEl?appEl.getAttribute('data-app-id'):'';
+		return window.__libroSelectedApp||'';
 	}
 
 	function getCurrentWidth(appId){
@@ -3559,13 +3541,9 @@ func keyboardShortcutsJS(sid string) string {
 					return;
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L')) {
-					var selTb = document.querySelector('.bg-blue-600.border-blue-700');
-					var appE = selTb ? selTb.closest('[data-app-id]') : null;
-					if (appE && appE.querySelector('webview')) {
-						e.preventDefault();
-						e.stopImmediatePropagation();
-						if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();
-					}
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();
 				}
 				if (e.metaKey && (e.key === 'r' || e.key === 'R') && !e.ctrlKey) {
 					e.preventDefault();
@@ -3574,15 +3552,11 @@ func keyboardShortcutsJS(sid string) string {
 					return;
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'r' || e.key === 'R')) {
-					var selToolbar2 = document.querySelector('.bg-blue-600.border-blue-700');
-					var appEl2 = selToolbar2 ? selToolbar2.closest('[data-app-id]') : null;
-					if (appEl2) {
-						var appId2 = appEl2.getAttribute('data-app-id');
-						if (appId2 && window.__libroWebviews && window.__libroWebviews[appId2]) {
-							e.preventDefault();
-							e.stopImmediatePropagation();
-							window.__libroWvReload(appId2);
-						}
+					var appId2 = window.__libroSelectedApp || '';
+					if (appId2 && window.__libroWebviews && window.__libroWebviews[appId2]) {
+						e.preventDefault();
+						e.stopImmediatePropagation();
+						window.__libroWvReload(appId2);
 					}
 				}
 			}

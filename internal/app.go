@@ -689,6 +689,7 @@ func Run(assets embed.FS) {
 			Replace(ProjectDialogID, renderProjectDialog(false, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
+			Add(focusSelectedAppJS(state)).
 			Build()
 	})
 
@@ -752,7 +753,7 @@ func Run(assets embed.FS) {
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
-			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Add(focusSelectedAppJS(state)).
 			Add(savedAppsJS(state.ActiveProject)).
 			Build()
 	})
@@ -780,7 +781,7 @@ func Run(assets embed.FS) {
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
-			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Add(focusSelectedAppJS(state)).
 			Add(savedAppsJS(state.ActiveProject)).
 			Build()
 	})
@@ -808,7 +809,7 @@ func Run(assets embed.FS) {
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
-			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Add(focusSelectedAppJS(state)).
 			Add(savedAppsJS(state.ActiveProject)).
 			Build()
 	})
@@ -851,7 +852,7 @@ func Run(assets embed.FS) {
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
-			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Add(focusSelectedAppJS(state)).
 			Add(savedAppsJS(state.ActiveProject)).
 			Build()
 	})
@@ -881,7 +882,7 @@ func Run(assets embed.FS) {
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
-			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Add(focusSelectedAppJS(state)).
 			Add(savedAppsJS(state.ActiveProject)).
 			Build()
 	})
@@ -1079,7 +1080,7 @@ func Run(assets embed.FS) {
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(vtName)).
-			Add(focusSelectedAppJS(state.SelectedIndex)).
+			Add(focusSelectedAppJS(state)).
 			Build()
 	})
 
