@@ -406,8 +406,8 @@ func centerSelectedJS(selectedIndex int, totalApps int, projectName string) stri
 					var idx = %d;
 					var sorted = window.__libroSortedApps ? window.__libroSortedApps(strip) : Array.from(strip.querySelectorAll(':scope > [data-app-id]'));
 					var app = sorted[idx];
-					if (app) {
-						app.scrollIntoView({behavior:'instant',block:'nearest',inline:'nearest'});
+					if (app && window.__libroScrollToApp) {
+						window.__libroScrollToApp(app);
 					}
 				});
 			});
@@ -541,7 +541,7 @@ func navigateJS(state *AppState, sid string) string {
 				selected.style.animation='none';
 				selected.offsetHeight;
 				selected.style.animation='libro-app-select .08s ease-out';
-				selected.scrollIntoView({behavior:'instant',block:'nearest',inline:'nearest'});
+				if(window.__libroScrollToApp)window.__libroScrollToApp(selected);
 				if (window.__libroFocusApp) {
 					setTimeout(function() { window.__libroFocusApp(selectedIdx); }, 30);
 				}
@@ -551,7 +551,7 @@ func navigateJS(state *AppState, sid string) string {
 }
 
 func flashCSS() string {
-	return `(function(){if(!document.getElementById('libro-flash-css')){var s=document.createElement('style');s.id='libro-flash-css';s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.98)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.98)}} @keyframes libro-toast-slide-up{0%{transform:translateY(100%);opacity:0}100%{transform:translateY(0);opacity:1}} @keyframes libro-toast-slide-down{0%{transform:translateY(0);opacity:1}100%{transform:translateY(100%);opacity:0}} .scroll-smooth{scroll-behavior:smooth} @keyframes libro-app-select{0%{outline:2px solid rgba(59,130,246,.5)}100%{outline:2px solid transparent}} @keyframes libro-project-switch{0%{opacity:0}100%{opacity:1}}';document.head.appendChild(s);}})();`
+	return `(function(){if(!document.getElementById('libro-flash-css')){var s=document.createElement('style');s.id='libro-flash-css';s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.98)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.98)}} @keyframes libro-toast-slide-up{0%{transform:translateY(100%);opacity:0}100%{transform:translateY(0);opacity:1}} @keyframes libro-toast-slide-down{0%{transform:translateY(0);opacity:1}100%{transform:translateY(100%);opacity:0}} @keyframes libro-app-select{0%{outline:2px solid rgba(59,130,246,.5)}100%{outline:2px solid transparent}} @keyframes libro-project-switch{0%{opacity:0}100%{opacity:1}}';document.head.appendChild(s);}window.__libroScrollToApp=function(app){var strip=app.parentElement;if(!strip)return;var sr=strip.getBoundingClientRect();var ar=app.getBoundingClientRect();var appLeft=ar.left-sr.left+strip.scrollLeft;var appRight=appLeft+ar.width;var pad=8;if(appLeft-pad<strip.scrollLeft){strip.scrollLeft=appLeft-pad;}else if(appRight+pad>strip.scrollLeft+sr.width){strip.scrollLeft=appRight+pad-sr.width;}};})();`
 }
 
 // projectToastJS returns JS that shows a brief centered toast with the project and branch.
@@ -2689,7 +2689,7 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 	}
 
 	requestAnimationFrame(function(){
-		el.scrollIntoView({behavior:'instant',block:'nearest',inline:'nearest'});
+		if(window.__libroScrollToApp)window.__libroScrollToApp(el);
 	});
 })();
 `, appID, widthMap, string(width))
