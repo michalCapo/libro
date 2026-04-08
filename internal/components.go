@@ -2001,20 +2001,18 @@ func resizePopupJS(sid string) string {
 	function getDlg(){return document.getElementById('%s');}
 
 	function findSelectedApp(){
-		var selToolbar=document.querySelector('.bg-blue-600.border-blue-700');
+		var visibleProject=document.querySelector('[id^="project-main-"][style*="display: flex"],[id^="project-main-"][style*="display:flex"]');
+		if(!visibleProject)return'';
+		var selToolbar=visibleProject.querySelector('.bg-blue-600.border-blue-700');
 		var appEl=selToolbar?selToolbar.closest('[data-app-id]'):null;
 		if(!appEl){
-			var strips=document.querySelectorAll('[id^="app-strip-"]');
-			for(var s=0;s<strips.length;s++){
-				var parent=strips[s].closest('[id^="project-main-"]');
-				if(parent&&parent.style.display!=='none'){
-					var sorted=window.__libroSortedApps?window.__libroSortedApps(strips[s]):Array.from(strips[s].querySelectorAll(':scope > [data-app-id]'));
-					for(var i=0;i<sorted.length;i++){
-						if(!sorted[i].querySelector('[data-click-overlay]')){
-							appEl=sorted[i];break;
-						}
+			var strip=visibleProject.querySelector('[id^="app-strip-"]');
+			if(strip){
+				var sorted=window.__libroSortedApps?window.__libroSortedApps(strip):Array.from(strip.querySelectorAll(':scope > [data-app-id]'));
+				for(var i=0;i<sorted.length;i++){
+					if(!sorted[i].querySelector('[data-click-overlay]')){
+						appEl=sorted[i];break;
 					}
-					break;
 				}
 			}
 		}
