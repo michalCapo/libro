@@ -349,20 +349,12 @@ app.on('web-contents-created', (event, contents) => {
         // This handles cases where the main document event doesn't reach handlers
         const reloadOrFocusJS = key === 'r' ? `
           (function() {
-            var selToolbar = document.querySelector('.bg-blue-600.border-blue-700');
-            if (!selToolbar) return;
-            var appEl = selToolbar.closest('[data-app-id]');
-            if (!appEl) return;
-            var appId = appEl.getAttribute('data-app-id');
+            var appId = window.__libroSelectedApp || '';
             if (appId && window.__libroWvReload) {
               window.__libroWvReload(appId);
             }
           })();` : `
           (function() {
-            var selToolbar = document.querySelector('.bg-blue-600.border-blue-700');
-            if (!selToolbar) return;
-            var appEl = selToolbar.closest('[data-app-id]');
-            if (!appEl || !appEl.querySelector('webview[data-webview-app]')) return;
             if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();
           })();`
         mainWindow.webContents.executeJavaScript(reloadOrFocusJS)
