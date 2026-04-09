@@ -243,8 +243,14 @@ window.__libroCopyConsole = function(appID) {
 		var src = m.source ? ' (' + m.source.split('/').pop() + (m.line ? ':' + m.line : '') + ')' : '';
 		lines.push(prefix + m.message + src);
 	}
-	if (navigator.clipboard) {
-		navigator.clipboard.writeText(lines.join('\n'));
+	var joined = lines.join('\n');
+	if (window.libroElectron && window.libroElectron.copyToClipboard) {
+		window.libroElectron.copyToClipboard(joined);
+	} else if (navigator.clipboard) {
+		navigator.clipboard.writeText(joined);
+	}
+	if (window.__libroShowToast) {
+		window.__libroShowToast('Copied', lines.length + ' messages', 1500);
 	}
 };
 
