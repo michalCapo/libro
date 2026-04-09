@@ -1016,6 +1016,7 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			Attr("data-sid", sid).
 			Attr("src", webviewSrc).
 			Attr("partition", "persist:libro").
+			Attr("allow", "microphone; camera; display-capture; speaker-selection; autoplay; clipboard-read; clipboard-write; fullscreen").
 			Attr("allowpopups", "").
 			Attr("style", "display:inline-flex;width:100%;height:100%")
 		// Force closing tag by adding empty text content
