@@ -367,7 +367,9 @@ setTimeout(function(){
 		var url=document.getElementById('app-url');if(url)url.value=%s;
 	}
 	var nm=document.getElementById('app-name');if(nm)nm.value=%s;
-	var wr=document.getElementById('width-'+((%s)||'md'));if(wr)wr.checked=true;
+	var wv=((%s)||'md');
+	var wr=document.getElementById('width-'+wv);if(wr)wr.checked=true;
+	var wh=document.getElementById('app-width');if(wh)wh.value=wv;
 	var ps=document.getElementById('app-project-specific');if(ps)ps.checked=%v;
 },100);
 `, jsString(app.Type), jsString(app.Command), app.Writable, jsString(app.URL), jsString(app.Name), jsString(app.Width), app.ProjectSpecific)
@@ -1330,6 +1332,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 		radio := r.IRadio("accent-blue-500 cursor-pointer").
 			Attr("name", "app-width").
 			Attr("value", string(w)).
+			Attr("onchange", fmt.Sprintf("document.getElementById('app-width').value='%s'", string(w))).
 			ID(fmt.Sprintf("width-%s", w))
 		if w == WidthLG {
 			radio.Attr("checked", "checked")
@@ -1358,7 +1361,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 		`, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab)
 	}
 
-	collectIDs := []string{"app-url", "app-command", "app-writable", "app-type", "app-name", "width-md", "app-project-specific"}
+	collectIDs := []string{"app-url", "app-command", "app-writable", "app-type", "app-name", "app-width", "app-project-specific"}
 
 	inputCls := "w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
 
@@ -1372,6 +1375,7 @@ func renderAddDialog(visible bool, sid string) *r.Node {
 					r.H2("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100 mb-4 tracking-tight").Text("Add Application"),
 
 					r.IHidden("").ID("app-type").Attr("value", "terminal"),
+					r.IHidden("").ID("app-width").Attr("value", string(WidthLG)),
 
 					r.Div("flex border-b border-gray-200 dark:border-zinc-700/50 mb-4").Render(
 						r.Button("px-4 py-2 text-sm font-mono border-b-2 border-blue-500 text-blue-600 cursor-pointer transition-colors").
