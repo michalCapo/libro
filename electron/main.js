@@ -4,11 +4,39 @@ const path = require('path')
 const http = require('http')
 const os = require('os')
 
+// Enable PipeWire for WebRTC capture on Linux.
+// This is primarily required for screen sharing on modern Wayland desktops.
+app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer')
+
 const port = process.env.LIBRO_PORT || '8100'
 const serverURL = `http://localhost:${port}`
 
 let goProcess = null
 let mainWindow = null
+
+const allowedPermissions = new Set([
+  'media',
+  'display-capture',
+  'fullscreen',
+  'clipboard-read',
+  'clipboard-sanitized-write',
+  'notifications',
+  'idle-detection',
+  'pointerLock',
+  'openExternal',
+])
+
+function isAllowedPermission(permission) {
+  return allowedPermissions.has(permission)
+}
+
+function getSupportedBrowserUserAgent() {
+  const fallback = app.userAgentFallback || ''
+  return fallback
+    .replace(/\sElectron\/[^\s]+/g, '')
+    .replace(/\sLibro\/[^\s]+/g, '')
+    .trim()
+}
 
 // Track input focus state per webview webContents for browser shortcut key handling.
 // When an input/textarea/select/contentEditable is focused inside a webview,
@@ -80,25 +108,26 @@ function createWindow() {
   // Persistent partition for webview sessions (shared cookies across webviews)
   const libroSession = session.fromPartition('persist:libro')
 
-  // Allow webviews to access media devices (camera, microphone, screen sharing)
-  // so that web apps like Teams, Meet, etc. can make calls.
-  const mediaPermissions = ['media', 'mediaKeySystem', 'display-capture', 'notifications']
-  libroSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    if (mediaPermissions.includes(permission)) {
-      callback(true)
-    } else {
-      callback(false)
-    }
+  // Allow embedded browser apps to use media devices and related browser APIs.
+  // Teams relies on `media` for microphone/camera/speaker access and
+  // `display-capture` for screen sharing.
+  libroSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    callback(isAllowedPermission(permission))
   })
 
-  libroSession.setPermissionCheckHandler((webContents, permission) => {
-    return mediaPermissions.includes(permission)
+  libroSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+    return isAllowedPermission(permission)
   })
 
-  // Allow access to specific USB/HID/serial devices that websites request
   libroSession.setDevicePermissionHandler((details) => {
     return true
   })
+
+  libroSession.setDisplayMediaRequestHandler((request, callback) => {
+    // Let Chromium use the system picker when available. If it falls back to
+    // this handler, grant the requesting tab/window for app-based screen share.
+    callback({ video: request.frame })
+  }, { useSystemPicker: true })
 
   // Handle file downloads from webviews — auto-save to Downloads, show toast
   let nextDownloadId = 1
@@ -211,6 +240,11 @@ function createWindow() {
 app.on('web-contents-created', (event, contents) => {
   // Intercept new window requests from webviews — open as a new browser app
   if (contents.getType() === 'webview') {
+    const supportedUA = getSupportedBrowserUserAgent()
+    if (supportedUA) {
+      contents.setUserAgent(supportedUA)
+    }
+
     // Track input focus state via console messages from the injected browserShortcutsScript.
     // This lets the main process know whether to intercept plain keys (j/k/h/l etc.)
     // or let them through to text input fields.
