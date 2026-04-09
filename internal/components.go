@@ -452,10 +452,11 @@ func navigateJS(state *AppState, sid string) string {
 				if (!child) continue;
 				if (i === selectedIdx) {
 					// Zen mode: show blue border around selected app
+					var cleanCls = child.className.replace(/border-\[\dpx\]/g, '').replace(/border-t-\[\dpx\]/g, '').replace(/border-blue-500/g, '').replace(/border-gray-300 dark:border-zinc-600/g, '').replace(/border-transparent/g, '');
 					if (zenMode) {
-						child.className = child.className.replace(/border-\[3px\] border-blue-500/g, '').replace(/border-\[3px\] border-gray-300 dark:border-zinc-600/g, '').replace(/\bborder\b/g, '') + ' border-[3px] border-blue-500';
+						child.className = cleanCls + ' border-[1px] border-t-[10px] border-blue-500';
 					} else {
-						child.className = child.className.replace(/border-\[3px\] border-blue-500/g, '').replace(/border-\[3px\] border-gray-300 dark:border-zinc-600/g, '').replace(/\bborder\b/g, '') + ' border';
+						child.className = cleanCls + ' border-[1px] border-blue-500';
 					}
 					var toolbar = child.children[0];
 					// Make toolbar blue for selected app
@@ -496,7 +497,8 @@ func navigateJS(state *AppState, sid string) string {
 					if (overlay) overlay.remove();
 				} else {
 					// Zen mode: gray border for unselected app, normal border otherwise
-					child.className = child.className.replace(/border-\[3px\] border-blue-500/g, '').replace(/border-\[3px\] border-gray-300 dark:border-zinc-600/g, '').replace(/\bborder\b/g, '') + (zenMode ? ' border-[3px] border-gray-300 dark:border-zinc-600' : ' border');
+					var cleanCls2 = child.className.replace(/border-\[\dpx\]/g, '').replace(/border-t-\[\dpx\]/g, '').replace(/border-blue-500/g, '').replace(/border-gray-300 dark:border-zinc-600/g, '').replace(/border-transparent/g, '');
+					child.className = cleanCls2 + (zenMode ? ' border-[1px] border-t-[10px] border-gray-300 dark:border-zinc-600' : ' border-[1px] border-transparent');
 					var toolbar2 = child.children[0];
 					// Revert toolbar to default for unselected app
 					if (toolbar2) {
@@ -738,12 +740,18 @@ func showToastJS(title, subtitle string, durationMs int) string {
 // renderAppFrame renders a single application iframe with controls
 func renderAppFrame(app Application, index int, selected bool, sid string, zenMode ...bool) *r.Node {
 	zen := len(zenMode) > 0 && zenMode[0]
-	borderClass := "border border-gray-200 dark:border-zinc-700/50"
+	var borderClass string
 	if zen {
 		if selected {
-			borderClass = "border-[3px] border-blue-500"
+			borderClass = "border-[1px] border-t-[10px] border-blue-500"
 		} else {
-			borderClass = "border-[3px] border-gray-300 dark:border-zinc-600"
+			borderClass = "border-[1px] border-t-[10px] border-gray-300 dark:border-zinc-600"
+		}
+	} else {
+		if selected {
+			borderClass = "border-[1px] border-blue-500"
+		} else {
+			borderClass = "border-[1px] border-transparent"
 		}
 	}
 
@@ -1014,8 +1022,8 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 		wv.Text("")
 		devToolsBtn := r.Button("absolute bottom-3 right-3 z-40 flex items-center gap-2 h-7 px-2.5 rounded-md bg-stone-100 dark:bg-stone-800 backdrop-blur-md shadow-sm border border-stone-300 dark:border-stone-600 hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors cursor-pointer opacity-0 group-hover:opacity-100").
 			ID(fmt.Sprintf("devtools-wrap-%s", app.ID)).
-			Attr("title", "Open DevTools").
-			Attr("onclick", fmt.Sprintf("var wv=window.__libroWebviews['%s'];if(wv){if(wv.isDevToolsOpened()){wv.closeDevTools();}else{wv.openDevTools();}}", app.ID)).
+			Attr("title", "Toggle Console").
+			Attr("onclick", fmt.Sprintf("if(window.__libroToggleConsole)window.__libroToggleConsole('%s')", app.ID)).
 			Render(
 				r.I("material-icons-round text-[14px] text-stone-600 dark:text-stone-300").Text("developer_mode"),
 				r.Span("hidden text-[11px] font-semibold tabular-nums text-red-500").
@@ -1023,7 +1031,64 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 					Text("0"),
 			)
 
-		container := r.Div("w-full h-full absolute inset-0 z-30").Render(wv, devToolsBtn)
+		// Inline console panel (hidden by default)
+		consolePanel := r.Div("hidden flex-col border-t border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-zinc-900").
+			ID(fmt.Sprintf("console-panel-%s", app.ID)).
+			Attr("style", "height:240px;min-height:120px").
+			Render(
+				// Header bar
+				r.Div("flex items-center justify-between px-3 py-1.5 border-b border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-zinc-800 select-none").Render(
+					r.Div("flex items-center gap-2").Render(
+						r.Span("text-[11px] font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide").Text("Console"),
+						r.Span("text-[10px] font-mono tabular-nums text-stone-400 dark:text-stone-500").
+							ID(fmt.Sprintf("console-count-%s", app.ID)).
+							Text(""),
+					),
+					r.Div("flex items-center gap-1").Render(
+						// Filter checkboxes
+						r.Div("flex items-center gap-2 mr-2 border-r border-stone-200 dark:border-stone-700 pr-2").Render(
+							r.Div("flex items-center gap-1 cursor-pointer").
+								Attr("onclick", fmt.Sprintf("if(window.__libroToggleFilter)window.__libroToggleFilter('%s','warn')", app.ID)).
+								Render(
+									r.Div("flex items-center justify-center w-4 h-4 rounded border border-stone-400 dark:border-stone-500 hover:border-stone-500 dark:hover:border-stone-400 cursor-pointer transition-colors").
+										ID(fmt.Sprintf("console-filter-warn-%s", app.ID)),
+									r.Span("text-[11px] font-medium text-stone-500 dark:text-stone-400 select-none").Text("Warnings"),
+								),
+							r.Div("flex items-center gap-1 cursor-pointer").
+								Attr("onclick", fmt.Sprintf("if(window.__libroToggleFilter)window.__libroToggleFilter('%s','error')", app.ID)).
+								Render(
+									r.Div("flex items-center justify-center w-4 h-4 rounded border bg-blue-500 border-blue-500 cursor-pointer transition-colors").
+										ID(fmt.Sprintf("console-filter-error-%s", app.ID)).
+										Render(r.I("material-icons-round text-[12px] text-white").Text("check")),
+									r.Span("text-[11px] font-medium text-stone-500 dark:text-stone-400 select-none").Text("Errors"),
+								),
+						),
+						r.Button("flex items-center justify-center w-6 h-6 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 cursor-pointer text-stone-500 dark:text-stone-400").
+							Attr("title", "Copy to clipboard").
+							Attr("onclick", fmt.Sprintf("if(window.__libroCopyConsole)window.__libroCopyConsole('%s')", app.ID)).
+							Render(r.I("material-icons-round text-[14px]").Text("content_copy")),
+						r.Button("flex items-center justify-center w-6 h-6 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 cursor-pointer text-stone-500 dark:text-stone-400").
+							Attr("title", "Maximize console").
+							Attr("onclick", fmt.Sprintf("if(window.__libroToggleConsoleMaximize)window.__libroToggleConsoleMaximize('%s')", app.ID)).
+							Render(r.I("material-icons-round text-[14px]").ID(fmt.Sprintf("console-maximize-icon-%s", app.ID)).Text("open_in_full")),
+						r.Button("flex items-center justify-center w-6 h-6 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 cursor-pointer text-stone-500 dark:text-stone-400").
+							Attr("title", "Clear console").
+							Attr("onclick", fmt.Sprintf("if(window.__libroClearConsole)window.__libroClearConsole('%s')", app.ID)).
+							Render(r.I("material-icons-round text-[14px]").Text("delete_outline")),
+						r.Button("flex items-center justify-center w-6 h-6 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 cursor-pointer text-stone-500 dark:text-stone-400").
+							Attr("title", "Close console").
+							Attr("onclick", fmt.Sprintf("if(window.__libroToggleConsole)window.__libroToggleConsole('%s')", app.ID)).
+							Render(r.I("material-icons-round text-[14px]").Text("close")),
+					),
+				),
+				// Message list
+				r.Div("flex-1 overflow-y-auto overflow-x-hidden font-mono text-[11px] leading-[18px]").
+					ID(fmt.Sprintf("console-messages-%s", app.ID)),
+			)
+
+		// Flex column: webview on top, console panel below
+		webviewWrapper := r.Div("relative flex-1 min-h-0").Render(wv, devToolsBtn)
+		container := r.Div("w-full h-full absolute inset-0 z-30 flex flex-col").Render(webviewWrapper, consolePanel)
 		if app.URL == "" {
 			container.Render(
 				r.Div("absolute inset-0 flex items-center justify-center text-gray-400 dark:text-zinc-600 font-mono text-xs z-10 pointer-events-none").
@@ -2165,6 +2230,7 @@ func renderShortcutsDialog() *r.Node {
 			{"n / p", "Find next / previous"},
 			{"Esc", "Clear search / blur input"},
 			{"b / f", "Page back / forward"},
+			{"y", "Copy selected text or URL"},
 			{"Enter", "Follow link / click button"},
 		}},
 	}
@@ -2996,13 +3062,28 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 			}
 			badgeNode = r.Span(badgeCls).Text("1")
 		} else if slot := sm.GetNavSlotForProject(sid, proj.Name); slot > 0 {
-			badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 "
+			badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer "
 			if isActive || isParentOfActive {
-				badgeCls += "bg-blue-500 text-blue-100"
+				badgeCls += "bg-blue-500 text-blue-100 hover:bg-red-500"
 			} else {
-				badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500"
+				badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500 hover:bg-red-400 hover:text-white"
 			}
-			badgeNode = r.Span(badgeCls).Text(fmt.Sprintf("%d", slot))
+			badgeNode = r.Span(badgeCls).
+				Attr("title", fmt.Sprintf("Remove shortcut Ctrl+%d", slot)).
+				Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.remove',{sid:'%s',name:'%s'});", sid, proj.Name)).
+				Text(fmt.Sprintf("%d", slot))
+		} else {
+			// No slot — show add button on hover
+			addSlotCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer opacity-0 group-hover/proj:opacity-100 transition-opacity duration-75 "
+			if isActive || isParentOfActive {
+				addSlotCls += "text-blue-200 hover:bg-white/15 hover:text-white"
+			} else {
+				addSlotCls += "bg-gray-200 dark:bg-zinc-800 text-gray-400 dark:text-zinc-600 hover:bg-blue-400 hover:text-white"
+			}
+			badgeNode = r.Span(addSlotCls).
+				Attr("title", "Add shortcut").
+				Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.add',{sid:'%s',name:'%s'});", sid, proj.Name)).
+				Text("+")
 		}
 
 		projBtn := r.Button(projCls).
@@ -3092,10 +3173,38 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 					}
 					wtAppCount := runningAppCount(state, wtProjectName)
 
+					// Shortcut badge for worktree
+					var wtBadge *r.Node
+					wtSlotName := vtName
+					if isMainWt {
+						wtSlotName = proj.Name
+					}
+					if wtSlot := sm.GetNavSlotForProject(sid, wtSlotName); wtSlot > 0 {
+						wtBadgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer "
+						if isWtActive {
+							wtBadgeCls += "bg-blue-500 text-blue-100 hover:bg-red-500"
+						} else {
+							wtBadgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500 hover:bg-red-400 hover:text-white"
+						}
+						wtBadge = r.Span(wtBadgeCls).
+							Attr("title", fmt.Sprintf("Remove shortcut Ctrl+%d", wtSlot)).
+							Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.remove',{sid:'%s',name:'%s'});", sid, wtSlotName)).
+							Text(fmt.Sprintf("%d", wtSlot))
+					} else {
+						addCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer opacity-0 group-hover/proj:opacity-100 transition-opacity duration-75 bg-gray-200 dark:bg-zinc-800 text-gray-400 dark:text-zinc-600 hover:bg-blue-400 hover:text-white"
+						wtBadge = r.Span(addCls).
+							Attr("title", "Add shortcut").
+							Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.add',{sid:'%s',name:'%s'});", sid, wtSlotName)).
+							Text("+")
+					}
+
 					wtBtnChildren := []*r.Node{
 						r.I("material-icons-round text-sm shrink-0").Text("alt_route"),
-						r.Span("truncate flex-1 text-left").Text(wt.Branch),
 					}
+					if wtBadge != nil {
+						wtBtnChildren = append(wtBtnChildren, wtBadge)
+					}
+					wtBtnChildren = append(wtBtnChildren, r.Span("truncate flex-1 text-left").Text(wt.Branch))
 					if badge := renderAppCountBadge(wtAppCount, isWtActive); badge != nil {
 						wtBtnChildren = append(wtBtnChildren, badge)
 					}

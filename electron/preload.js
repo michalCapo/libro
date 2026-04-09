@@ -15,5 +15,8 @@ contextBridge.exposeInMainWorld('libroElectron', {
   },
   cancelDownload: function (id) {
     ipcRenderer.send('libro-cancel-download', id)
+  },
+  copyToClipboard: function (text) {
+    ipcRenderer.send('libro-copy-clipboard', text)
   }
 })
