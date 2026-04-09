@@ -1533,7 +1533,6 @@ func searchDialogJS(sid string) string {
 		res.innerHTML='';
 		if(filtered.length===0){
 			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No matches</div>';
-			return;
 		}
 		filtered.forEach(function(item,i){
 			var row=document.createElement('div');
@@ -1635,6 +1634,30 @@ func searchDialogJS(sid string) string {
 			row.onclick=function(){launch();};
 			res.appendChild(row);
 		});
+		// Always add "Add app" button at the bottom
+		var addRow=document.createElement('div');
+		var addSel=(filtered.length===0&&selIdx===0)||(selIdx===filtered.length);
+		var dk=document.documentElement.classList.contains('dark');
+		addRow.className='flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 border-t border-gray-100 dark:border-zinc-800 '
+			+(addSel?(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500')
+			:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'));
+		addRow.className+=' group';
+		var addTxtCls=dk?'text-zinc-200':'text-gray-800';
+		addRow.innerHTML='<i class="material-icons-round text-emerald-500 text-lg shrink-0">add_circle</i>'
+			+'<div class="flex-1 min-w-0"><div class="text-sm '+addTxtCls+'">Add new application</div></div>';
+		addRow.onmouseenter=function(){
+			if(selIdx===filtered.length)return;
+			var prev=res.children[selIdx];
+			if(prev)prev.className=prev.className.replace(/bg-blue-900\/30|bg-blue-50/g,'').replace(/border-blue-500/g,'border-transparent')+(dk?' hover:bg-zinc-800':' hover:bg-gray-50');
+			selIdx=filtered.length;
+			addRow.className=addRow.className.replace(/hover:bg-zinc-800|hover:bg-gray-50/g,'').replace(/border-transparent/g,'border-blue-500')+(dk?' bg-blue-900/30':' bg-blue-50');
+		};
+		addRow.onclick=function(){
+			dlg.classList.add('hidden');
+			inp.value='';
+			__ws.call('app.dialog.open',{sid:'%s',side:pendingSide});
+		};
+		res.appendChild(addRow);
 		var sel=res.children[selIdx];
 		if(sel)sel.scrollIntoView({block:'nearest'});
 	}
@@ -1749,6 +1772,12 @@ func searchDialogJS(sid string) string {
 	var pendingSide='right';
 
 	function launch(){
+		if(selIdx===filtered.length){
+			dlg.classList.add('hidden');
+			inp.value='';
+			__ws.call('app.dialog.open',{sid:'%s',side:pendingSide});
+			return;
+		}
 		if(filtered.length===0)return;
 		var side=pendingSide;
 		var item=filtered[selIdx];
@@ -1796,7 +1825,7 @@ func searchDialogJS(sid string) string {
 		e.stopImmediatePropagation();
 		if(e.key==='ArrowDown'){
 			e.preventDefault();
-			if(selIdx<filtered.length-1){selIdx++;render();}
+			if(selIdx<filtered.length){selIdx++;render();}
 		}else if(e.key==='ArrowUp'){
 			e.preventDefault();
 			if(selIdx>0){selIdx--;render();}
@@ -1811,7 +1840,7 @@ func searchDialogJS(sid string) string {
 
 	window.__libroOpenSearch=openSearch;
 })();
-`, SearchDialogID, sid, sid, sid, sid, sid, sid, sid)
+`, SearchDialogID, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }
 
 // renderURLPopup renders the URL/search popup for Ctrl+L (works in both zen and non-zen mode).
