@@ -1021,23 +1021,8 @@ func (sm *StateManager) GetProjectPath(sessionID, projectName string) string {
 	return ""
 }
 
-// rootProjectName returns the parent project name for virtual projects,
-// or the project name itself for regular projects.
-func (sm *StateManager) rootProjectName(s *AppState, projectName string) string {
-	for _, p := range s.Projects {
-		if p.Name == projectName {
-			if p.Virtual && p.ParentProject != "" {
-				return p.ParentProject
-			}
-			return p.Name
-		}
-	}
-	return projectName
-}
-
-// AssignNavSlot assigns a keyboard nav slot (2-9) to a project.
-// If the root project already has a slot, it updates the slot target.
-// Otherwise it assigns the next available slot.
+// AssignNavSlot assigns a keyboard nav slot (2-9) to a project or branch.
+// Each branch gets its own independent slot.
 func (sm *StateManager) AssignNavSlot(sessionID, projectName string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -1046,11 +1031,8 @@ func (sm *StateManager) AssignNavSlot(sessionID, projectName string) {
 		return
 	}
 
-	root := sm.rootProjectName(s, projectName)
-
-	// If root project already has a slot, update target
-	if slot, ok := s.NavProjectSlot[root]; ok {
-		s.NavSlots[slot] = projectName
+	// If this project/branch already has a slot, keep it
+	if _, ok := s.NavProjectSlot[projectName]; ok {
 		return
 	}
 
@@ -1058,7 +1040,7 @@ func (sm *StateManager) AssignNavSlot(sessionID, projectName string) {
 	for i := 2; i <= 9; i++ {
 		if _, taken := s.NavSlots[i]; !taken {
 			s.NavSlots[i] = projectName
-			s.NavProjectSlot[root] = i
+			s.NavProjectSlot[projectName] = i
 			return
 		}
 	}
@@ -1076,7 +1058,7 @@ func (sm *StateManager) NavSlotProject(sessionID string, slot int) string {
 	return s.NavSlots[slot]
 }
 
-// GetNavSlotForProject returns the slot number for a project (by root name), or 0 if unassigned.
+// GetNavSlotForProject returns the slot number for a project or branch, or 0 if unassigned.
 func (sm *StateManager) GetNavSlotForProject(sessionID, projectName string) int {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
@@ -1084,15 +1066,24 @@ func (sm *StateManager) GetNavSlotForProject(sessionID, projectName string) int 
 	if s == nil {
 		return 0
 	}
-	root := sm.rootProjectName(s, projectName)
-	return s.NavProjectSlot[root]
+	return s.NavProjectSlot[projectName]
 }
 
-// clearNavSlot removes a project's nav slot assignment.
+// RemoveNavSlot removes a project's nav slot assignment.
+func (sm *StateManager) RemoveNavSlot(sessionID, projectName string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return
+	}
+	sm.clearNavSlot(s, projectName)
+}
+
+// clearNavSlot removes a project's nav slot assignment (must hold lock).
 func (sm *StateManager) clearNavSlot(s *AppState, projectName string) {
-	root := sm.rootProjectName(s, projectName)
-	if slot, ok := s.NavProjectSlot[root]; ok {
+	if slot, ok := s.NavProjectSlot[projectName]; ok {
 		delete(s.NavSlots, slot)
-		delete(s.NavProjectSlot, root)
+		delete(s.NavProjectSlot, projectName)
 	}
 }

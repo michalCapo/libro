@@ -887,6 +887,36 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
+	// Add a nav slot shortcut to a project/branch
+	app.Action("nav.slot.add", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		name, _ := data["name"].(string)
+		if name == "" || name == "home" {
+			return ""
+		}
+		sm.AssignNavSlot(sid, name)
+		state := sm.Get(sid)
+		return r.NewResponse().
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Build()
+	})
+
+	// Remove a nav slot shortcut from a project/branch
+	app.Action("nav.slot.remove", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		name, _ := data["name"].(string)
+		if name == "" || name == "home" {
+			return ""
+		}
+		sm.RemoveNavSlot(sid, name)
+		state := sm.Get(sid)
+		return r.NewResponse().
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Build()
+	})
+
 	// Remove a project
 	app.Action("project.remove", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
@@ -1063,7 +1093,7 @@ func Run(assets embed.FS) {
 			return r.Notify("error", "Failed to switch to worktree")
 		}
 
-		// Assign nav slot for worktree switch (reuses parent project's slot)
+		// Assign nav slot for worktree switch (gets its own slot)
 		sm.AssignNavSlot(sid, vtName)
 
 		state := sm.Get(sid)

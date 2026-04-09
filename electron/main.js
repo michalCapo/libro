@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, session, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, Menu, session, ipcMain, shell, clipboard } = require('electron')
 const { spawn } = require('child_process')
 const path = require('path')
 const http = require('http')
@@ -79,6 +79,26 @@ function waitForServer(retries = 50) {
 function createWindow() {
   // Persistent partition for webview sessions (shared cookies across webviews)
   const libroSession = session.fromPartition('persist:libro')
+
+  // Allow webviews to access media devices (camera, microphone, screen sharing)
+  // so that web apps like Teams, Meet, etc. can make calls.
+  const mediaPermissions = ['media', 'mediaKeySystem', 'display-capture', 'notifications']
+  libroSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (mediaPermissions.includes(permission)) {
+      callback(true)
+    } else {
+      callback(false)
+    }
+  })
+
+  libroSession.setPermissionCheckHandler((webContents, permission) => {
+    return mediaPermissions.includes(permission)
+  })
+
+  // Allow access to specific USB/HID/serial devices that websites request
+  libroSession.setDevicePermissionHandler((details) => {
+    return true
+  })
 
   // Handle file downloads from webviews — auto-save to Downloads, show toast
   let nextDownloadId = 1
@@ -171,6 +191,10 @@ function createWindow() {
     if (mainWindow) mainWindow.webContents.toggleDevTools()
   })
 
+  ipcMain.on('libro-copy-clipboard', (event, text) => {
+    if (text) clipboard.writeText(text)
+  })
+
   ipcMain.on('libro-open-path', (event, filePath) => {
     shell.openPath(filePath)
   })
@@ -202,12 +226,19 @@ app.on('web-contents-created', (event, contents) => {
       webviewInputFocused.delete(contents.id)
     })
 
-    contents.setWindowOpenHandler(({ url }) => {
-      if (url && url !== 'about:blank' && mainWindow) {
-        const safeUrl = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-        mainWindow.webContents.executeJavaScript(`
-          if (window.__libroOpenNewTab) window.__libroOpenNewTab('${safeUrl}');
-        `)
+    contents.setWindowOpenHandler(({ url, disposition }) => {
+      if (url && url !== 'about:blank') {
+        // Download links (e.g. <a download>) — trigger download instead of opening a tab
+        if (disposition === 'save-to-disk') {
+          contents.downloadURL(url)
+          return { action: 'deny' }
+        }
+        if (mainWindow) {
+          const safeUrl = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+          mainWindow.webContents.executeJavaScript(`
+            if (window.__libroOpenNewTab) window.__libroOpenNewTab('${safeUrl}');
+          `)
+        }
       }
       return { action: 'deny' }
     })
