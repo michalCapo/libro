@@ -8,11 +8,15 @@ const os = require('os')
 // This is primarily required for screen sharing on modern Wayland desktops.
 app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer')
 
+// Pin Electron's profile directory so persistent webview partitions survive relaunches.
+app.setPath('userData', path.join(app.getPath('appData'), 'libro'))
+
 const port = process.env.LIBRO_PORT || '8100'
 const serverURL = `http://localhost:${port}`
 
 let goProcess = null
 let mainWindow = null
+let isQuitting = false
 
 const allowedPermissions = new Set([
   'media',
@@ -102,6 +106,31 @@ function waitForServer(retries = 50) {
     }
     check()
   })
+}
+
+async function flushLibroSessionData() {
+  const libroSession = session.fromPartition('persist:libro')
+  try {
+    await libroSession.cookies.flushStore()
+  } catch (err) {
+    console.error('Failed to flush cookie store:', err.message)
+  }
+  try {
+    await libroSession.flushStorageData()
+  } catch (err) {
+    console.error('Failed to flush session storage:', err.message)
+  }
+}
+
+async function quitApp() {
+  if (isQuitting) return
+  isQuitting = true
+  await flushLibroSessionData()
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.destroy()
+    return
+  }
+  app.quit()
 }
 
 function createWindow() {
@@ -204,6 +233,7 @@ function createWindow() {
 
   // Intercept close to show confirmation dialog when apps are running
   mainWindow.on('close', (e) => {
+    if (isQuitting) return
     e.preventDefault()
     // Ask the renderer to check for running apps
     mainWindow.webContents.executeJavaScript(`
@@ -213,7 +243,10 @@ function createWindow() {
 
   // Renderer signals that user confirmed close (or no apps were running)
   ipcMain.on('libro-force-close', () => {
-    if (mainWindow) mainWindow.destroy()
+    quitApp().catch((err) => {
+      console.error('Failed to quit cleanly:', err.message)
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy()
+    })
   })
 
   ipcMain.on('libro-toggle-devtools', () => {
@@ -230,7 +263,9 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null
-    app.quit()
+    if (isQuitting) {
+      app.quit()
+    }
   })
 }
 
@@ -505,8 +540,20 @@ app.on('ready', async () => {
   createWindow()
 })
 
+app.on('before-quit', (e) => {
+  if (isQuitting) return
+  e.preventDefault()
+  quitApp().catch((err) => {
+    console.error('Failed to quit cleanly:', err.message)
+    isQuitting = true
+    app.quit()
+  })
+})
+
 app.on('window-all-closed', () => {
-  app.quit()
+  if (isQuitting) {
+    app.quit()
+  }
 })
 
 app.on('will-quit', () => {
