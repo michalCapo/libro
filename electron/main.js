@@ -361,6 +361,7 @@ app.on('web-contents-created', (event, contents) => {
     const key = (input.key || '').toLowerCase()
     const code = (input.code || '').toLowerCase()
     const isWebview = contents.getType() === 'webview'
+    const isMainWindowContents = !!(mainWindow && !mainWindow.isDestroyed() && contents.id === mainWindow.webContents.id)
     const shortcutSig = [
       code,
       key,
@@ -396,9 +397,9 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // For main window content: directly invoke JS for Super+N and Super+Z shortcuts
-    // (native keydown may be intercepted by the desktop environment on Linux)
-    if (!isWebview) {
+    // For the main window host page: directly invoke JS for a few Super shortcuts
+    // that desktop environments or Chromium can intercept before the page sees them.
+    if (isMainWindowContents) {
       if (input.meta && input.control && code === 'keyn') {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
@@ -481,6 +482,11 @@ app.on('web-contents-created', (event, contents) => {
       }
       return
     }
+
+    // Guest contents (regular webviews and Chromium-managed child contents such as
+    // PDF/document viewers opened from a webview) should forward app shortcuts to
+    // the main host page. These child contents are not always reported as "webview",
+    // so do not special-case them as host content.
 
     // Meta+Ctrl shortcuts: u, i (move app left/right)
     if (input.meta && input.control && ['keyu', 'keyi'].includes(code)) {
