@@ -2243,8 +2243,8 @@ func renderShortcutsDialog() *r.Node {
 		{"Navigation", "", []shortcut{
 			{"⌘ + H", "Navigate left"},
 			{"⌘ + L", "Navigate right"},
-			{"⌘ + Ctrl + H", "Move app left"},
-			{"⌘ + Ctrl + L", "Move app right"},
+			{"⌘ + Ctrl + U", "Move app left"},
+			{"⌘ + Ctrl + I", "Move app right"},
 			{"⌘ + B", "Toggle sidebar"},
 			{"Ctrl + 1–9", "Switch to assigned project"},
 			{"Ctrl + 0", "Switch to previous project"},
@@ -3630,17 +3630,27 @@ func keyboardShortcutsJS(sid string) string {
 				} catch(err) {}
 			};
 
-			function libroKeyHandler(e) {
-				if (e.metaKey && e.ctrlKey && e.code === 'KeyH') {
-					e.preventDefault();
-					e.stopImmediatePropagation();
+			window.__libroMoveSelectedApp = function(direction) {
+				if (direction === 'left') {
 					__ws.call('app.move.left', {"sid": "%s"});
 					return;
 				}
-				if (e.metaKey && e.ctrlKey && e.code === 'KeyL') {
+				if (direction === 'right') {
+					__ws.call('app.move.right', {"sid": "%s"});
+				}
+			};
+
+			function libroKeyHandler(e) {
+				if (e.metaKey && e.ctrlKey && e.code === 'KeyU') {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					__ws.call('app.move.right', {"sid": "%s"});
+					window.__libroMoveSelectedApp('left');
+					return;
+				}
+				if (e.metaKey && e.ctrlKey && e.code === 'KeyI') {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					window.__libroMoveSelectedApp('right');
 					return;
 				}
 				if (e.metaKey && (e.key === 'h' || e.key === 'H')) {

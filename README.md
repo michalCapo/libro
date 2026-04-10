@@ -111,8 +111,8 @@ A close button is available on each application to remove it from the strip. Whe
 **Navigation:**
 - `⌘ + H` — navigate left (previous app)
 - `⌘ + L` — navigate right (next app)
-- `⌘ + Ctrl + H` — move app left (reorder)
-- `⌘ + Ctrl + L` — move app right (reorder)
+- `⌘ + Ctrl + U` — move app left (reorder)
+- `⌘ + Ctrl + I` — move app right (reorder)
 - `⌘ + B` — toggle project sidebar
 - `Ctrl + 1–9` — switch to assigned project by slot
 - `Ctrl + 0` — switch to previous project

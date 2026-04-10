@@ -467,6 +467,10 @@ function whenReady(appID, fn) {
 	queued[appID].push(fn);
 }
 
+function currentAppID(wv) {
+	return wv ? (wv.getAttribute('data-webview-app') || '') : '';
+}
+
 function initWebview(wv) {
 	var appID = wv.getAttribute('data-webview-app');
 	if (!appID || initialized[appID]) return;
@@ -482,9 +486,13 @@ function initWebview(wv) {
 			if (pooled) {
 				// Transfer the pooled webview into the new app frame
 				var oldAppID = pooled.getAttribute('data-webview-app');
+				var currentURL = '';
+				try { currentURL = pooled.getURL() || pooled.getAttribute('src') || ''; } catch(e) { currentURL = pooled.getAttribute('src') || ''; }
 				pooled.removeAttribute('data-pool-origin');
 				pooled.setAttribute('data-webview-app', appID);
 				pooled.setAttribute('id', wv.id || '');
+				pooled.setAttribute('data-sid', wv.getAttribute('data-sid') || '');
+				pooled.setAttribute('src', newSrc);
 				pooled.style.display = '';
 				wv.parentNode.replaceChild(pooled, wv);
 				// Migrate JS state from old app ID to new one
@@ -499,18 +507,22 @@ function initWebview(wv) {
 				}
 				window.__libroWebviews[appID] = pooled;
 				initialized[appID] = true;
-				ready[appID] = true;
-				// Remove loading indicator since the webview is already loaded
-				var lp = pooled.closest('.flex.flex-col') || pooled.parentNode;
-				var loading = lp && lp.querySelector('[data-webview-loading]');
-				if (loading && loading.parentNode) loading.remove();
-				// Update URL bar with current webview URL
+				ready[appID] = currentURL === newSrc;
+				// Update URL bar with the requested URL immediately.
 				var inp = document.getElementById('urlinput-' + appID);
-				if (inp) {
-					try { inp.value = pooled.getURL() || newSrc; } catch(e) { inp.value = newSrc; }
+				if (inp) inp.value = newSrc;
+				// Re-bind events for the current webview element if needed.
+				bindWebviewEvents(pooled);
+				// Reused webviews keep their session, but must navigate to the new
+				// target or a newly opened tab can show stale content from the prior tab.
+				if (currentURL !== newSrc) {
+					try { pooled.loadURL(newSrc).catch(function(){}); } catch(err) {}
+				} else {
+					// Remove loading indicator since the webview is already at the target.
+					var lp = pooled.closest('.flex.flex-col') || pooled.parentNode;
+					var loading = lp && lp.querySelector('[data-webview-loading]');
+					if (loading && loading.parentNode) loading.remove();
 				}
-				// Re-bind events for the new app ID
-				bindWebviewEvents(pooled, appID);
 				return;
 			}
 		}
@@ -518,11 +530,16 @@ function initWebview(wv) {
 
 	initialized[appID] = true;
 	window.__libroWebviews[appID] = wv;
-	bindWebviewEvents(wv, appID);
+	bindWebviewEvents(wv);
 }
 
-function bindWebviewEvents(wv, appID) {
+function bindWebviewEvents(wv) {
+	if (wv.__libroEventsBound) return;
+	wv.__libroEventsBound = true;
+
 	wv.addEventListener('dom-ready', function() {
+		var appID = currentAppID(wv);
+		if (!appID) return;
 		ready[appID] = true;
 		var q = queued[appID];
 		if (q) { queued[appID] = null; q.forEach(function(fn){ fn(); }); }
@@ -531,6 +548,8 @@ function bindWebviewEvents(wv, appID) {
 
 	// Update URL bar on navigation and reset console counts
 	wv.addEventListener('did-navigate', function(e) {
+		var appID = currentAppID(wv);
+		if (!appID) return;
 		var inp = document.getElementById('urlinput-' + appID);
 		if (inp && e.url) inp.value = e.url;
 		consoleCounts[appID] = {errors: 0};
@@ -541,18 +560,24 @@ function bindWebviewEvents(wv, appID) {
 	});
 	wv.addEventListener('did-navigate-in-page', function(e) {
 		if (!e.isMainFrame) return;
+		var appID = currentAppID(wv);
+		if (!appID) return;
 		var inp = document.getElementById('urlinput-' + appID);
 		if (inp && e.url) inp.value = e.url;
 	});
 
 	// Re-inject browser shortcuts after full page navigation
 	wv.addEventListener('did-finish-load', function() {
+		var appID = currentAppID(wv);
+		if (!appID) return;
 		injectBrowserShortcuts(wv, appID);
 	});
 
 	// Listen for browser shortcut messages and track errors/warnings
-	if (!consoleCounts[appID]) consoleCounts[appID] = {errors: 0};
 	wv.addEventListener('console-message', function(e) {
+		var appID = currentAppID(wv);
+		if (!appID) return;
+		if (!consoleCounts[appID]) consoleCounts[appID] = {errors: 0};
 		var msg = e.message;
 		if (msg === '__libro:search') showSearchBar(appID);
 		else if (msg === '__libro:findnext') findInPageNext(appID);
@@ -590,6 +615,8 @@ function bindWebviewEvents(wv, appID) {
 
 	// Show error page on load failure — for DNS errors, redirect to Google search
 	wv.addEventListener('did-fail-load', function(e) {
+		var appID = currentAppID(wv);
+		if (!appID) return;
 		// Ignore aborted loads (e.g. navigation interrupted by another navigation)
 		if (e.errorCode === -3) return;
 		var failedUrl = e.validatedURL || '';
