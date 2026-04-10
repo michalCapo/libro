@@ -3141,8 +3141,29 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 				proj.Name, sid, proj.Name,
 			)))
 
-		btnChildren := []*r.Node{
+		projLeadingCls := "relative flex items-center justify-center w-5 h-5 shrink-0"
+		projLeadingChildren := []*r.Node{
 			r.I("material-icons-round text-base shrink-0").Text(iconName),
+		}
+		if proj.Name != "home" {
+			removeCls := "absolute inset-0 flex items-center justify-center rounded cursor-pointer opacity-0 group-hover/projitem:opacity-100 transition-opacity duration-75 "
+			iconCls := "material-icons-round text-[14px]"
+			if isActive || isParentOfActive {
+				removeCls += "text-blue-200 hover:text-white hover:bg-white/15"
+			} else {
+				removeCls += "text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10"
+			}
+			projLeadingChildren[0] = r.I("material-icons-round text-base shrink-0 group-hover/projitem:opacity-0 transition-opacity duration-75").Text(iconName)
+			projLeadingChildren = append(projLeadingChildren,
+				r.Button(removeCls).
+					Attr("title", "Remove project").
+					Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('project.remove',{sid:'%s',name:'%s'});", sid, proj.Name)).
+					Render(r.I(iconCls).Text("close")),
+			)
+		}
+
+		btnChildren := []*r.Node{
+			r.Span(projLeadingCls).Render(projLeadingChildren...),
 			r.Span("truncate flex-1 text-left").Text(proj.Name),
 		}
 
@@ -3154,20 +3175,6 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 		}
 		projBtn.Render(btnChildren...)
 		projControls := []*r.Node{}
-		if proj.Name != "home" {
-			deleteCls := "flex items-center justify-center w-5 h-5 rounded cursor-pointer opacity-0 group-hover/projitem:opacity-100 transition-opacity duration-75 shrink-0 "
-			if isActive || isParentOfActive {
-				deleteCls += "text-blue-200 hover:text-white hover:bg-white/15"
-			} else {
-				deleteCls += "text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10"
-			}
-			projControls = append(projControls,
-				r.Button(deleteCls).
-					Attr("title", "Remove project").
-					Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('project.remove',{sid:'%s',name:'%s'});", sid, proj.Name)).
-					Render(r.I("material-icons-round text-[14px]").Text("close")),
-			)
-		}
 		if badgeNode != nil {
 			projControls = append(projControls, badgeNode)
 		}
@@ -3247,7 +3254,18 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 							Text("+")
 					}
 
+					wtRemoveSlotChildren := []*r.Node{
+						r.Span("w-4 h-4 shrink-0"),
+					}
+					if !isMainWt {
+						wtRemoveSlotChildren[0] = r.Button("flex items-center justify-center w-4 h-4 rounded cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover/wtitem:opacity-100 transition-opacity duration-75 shrink-0").
+							Attr("title", "Remove worktree").
+							Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('worktree.remove',{sid:'%s',project:'%s',path:'%s'});", sid, proj.Name, wt.Path)).
+							Render(r.I("material-icons-round text-[12px]").Text("close"))
+					}
+
 					wtBtnChildren := []*r.Node{
+						wtRemoveSlotChildren[0],
 						r.I("material-icons-round text-sm shrink-0").Text("alt_route"),
 					}
 					wtBtnChildren = append(wtBtnChildren, r.Span("truncate flex-1 text-left").Text(wt.Branch))
@@ -3260,16 +3278,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 						OnClick(r.JS(wtOnClick)).
 						Render(wtBtnChildren...)
 
-					controls := []*r.Node{}
-					if !isMainWt {
-						controls = append(controls,
-							r.Button("flex items-center justify-center w-4 h-4 rounded cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover/wtitem:opacity-100 transition-opacity duration-75 shrink-0").
-								Attr("title", "Remove worktree").
-								Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('worktree.remove',{sid:'%s',project:'%s',path:'%s'});", sid, proj.Name, wt.Path)).
-								Render(r.I("material-icons-round text-[12px]").Text("close")),
-						)
-					}
-					controls = append(controls, wtBadge)
+					controls := []*r.Node{wtBadge}
 
 					wtItems = append(wtItems,
 						r.Div("group/wtitem").Render(
