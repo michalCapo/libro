@@ -471,6 +471,19 @@ function currentAppID(wv) {
 	return wv ? (wv.getAttribute('data-webview-app') || '') : '';
 }
 
+function focusIfSelected(appID, wv) {
+	if (!appID || !wv) return;
+	function attempt() {
+		if ((window.__libroSelectedApp || '') !== appID) return;
+		try { window.focus(); } catch(err) {}
+		try { wv.focus(); } catch(err) {}
+	}
+	attempt();
+	setTimeout(attempt, 40);
+	setTimeout(attempt, 120);
+	setTimeout(attempt, 260);
+}
+
 function initWebview(wv) {
 	var appID = wv.getAttribute('data-webview-app');
 	if (!appID || initialized[appID]) return;
@@ -513,6 +526,7 @@ function initWebview(wv) {
 				if (inp) inp.value = newSrc;
 				// Re-bind events for the current webview element if needed.
 				bindWebviewEvents(pooled);
+				focusIfSelected(appID, pooled);
 				// Reused webviews keep their session, but must navigate to the new
 				// target or a newly opened tab can show stale content from the prior tab.
 				if (currentURL !== newSrc) {
@@ -531,6 +545,7 @@ function initWebview(wv) {
 	initialized[appID] = true;
 	window.__libroWebviews[appID] = wv;
 	bindWebviewEvents(wv);
+	focusIfSelected(appID, wv);
 }
 
 function bindWebviewEvents(wv) {
@@ -544,6 +559,7 @@ function bindWebviewEvents(wv) {
 		var q = queued[appID];
 		if (q) { queued[appID] = null; q.forEach(function(fn){ fn(); }); }
 		injectBrowserShortcuts(wv, appID);
+		focusIfSelected(appID, wv);
 	});
 
 	// Update URL bar on navigation and reset console counts

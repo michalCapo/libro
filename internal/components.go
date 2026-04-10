@@ -497,6 +497,8 @@ func navigateJS(state *AppState, sid string) string {
 					}
 					var overlay = child.querySelector('[data-click-overlay]');
 					if (overlay) overlay.remove();
+					var zenClose = child.querySelector('[data-zen-close]');
+					if (zenClose) zenClose.style.display = zenMode ? 'flex' : 'none';
 				} else {
 					// Zen mode: gray border for unselected app, normal border otherwise
 					var cleanCls2 = child.className.replace(/border-\[\dpx\]/g, '').replace(/border-t-\[\dpx\]/g, '').replace(/border-blue-500/g, '').replace(/border-gray-300 dark:border-zinc-600/g, '').replace(/border-transparent/g, '');
@@ -546,6 +548,8 @@ func navigateJS(state *AppState, sid string) string {
 						var iframeWrap = child.children[1];
 						if (iframeWrap) { iframeWrap.appendChild(ov); } else { child.appendChild(ov); }
 					}
+					var zenClose2 = child.querySelector('[data-zen-close]');
+					if (zenClose2) zenClose2.style.display = 'none';
 				}
 			}
 
@@ -989,6 +993,18 @@ func renderAppFrame(app Application, index int, selected bool, sid string, zenMo
 		toolbar = toolbar.Attr("style", "display:none")
 	}
 
+	zenCloseBtn := r.Button("hidden absolute top-2 right-2 z-50 w-7 h-7 items-center justify-center rounded-full cursor-pointer bg-black/45 text-white/80 backdrop-blur-sm transition-colors duration-75 hover:bg-red-500/85 hover:text-white").
+		Attr("data-zen-close", "").
+		Attr("title", "Close app").
+		OnClick(&r.Action{
+			Name: "app.close",
+			Data: sidData(sid, "id", app.ID),
+		}).
+		Render(r.I("material-icons-round text-[16px] leading-none block").Text("close"))
+	if zen && selected {
+		zenCloseBtn = zenCloseBtn.Attr("style", "display:flex")
+	}
+
 	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-all duration-50").
 		ID(fmt.Sprintf("frame-%s", app.ID)).
 		Attr("data-app-id", app.ID).
@@ -1001,6 +1017,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string, zenMo
 					renderIframe(app, frameID, iframeSrc, sid),
 					clickOverlay,
 				),
+			zenCloseBtn,
 		)
 }
 
@@ -3599,35 +3616,45 @@ func keyboardShortcutsJS(sid string) string {
 				var container = sorted[idx];
 				if (!container) return;
 
-				// Blur all other iframes and webviews first
-				var allIframes = document.querySelectorAll('iframe');
-				for (var i = 0; i < allIframes.length; i++) {
-					try { allIframes[i].contentWindow.blur(); } catch(err) {}
-					allIframes[i].blur();
-				}
-				var allWebviews = document.querySelectorAll('webview');
-				for (var i = 0; i < allWebviews.length; i++) {
-					allWebviews[i].blur();
-				}
+				function focusAttempt() {
+					if ((window.__libroSelectedApp || '') !== (container.getAttribute('data-app-id') || '')) return;
+					try { window.focus(); } catch(err) {}
 
-				// Try to focus a webview first, then fall back to iframe
-				var webview = container.querySelector('webview');
-				if (webview) {
-					webview.focus();
-					return;
-				}
-
-				var iframe = container.querySelector('iframe');
-				if (!iframe) return;
-				iframe.focus();
-				try {
-					iframe.contentWindow.focus();
-					var doc = iframe.contentDocument || iframe.contentWindow.document;
-					var termEl = doc.querySelector('.xterm-helper-textarea') || doc.querySelector('textarea') || doc.body;
-					if (termEl) {
-						termEl.focus();
+					// Blur all other iframes and webviews first
+					var allIframes = document.querySelectorAll('iframe');
+					for (var i = 0; i < allIframes.length; i++) {
+						try { allIframes[i].contentWindow.blur(); } catch(err) {}
+						allIframes[i].blur();
 					}
-				} catch(err) {}
+					var allWebviews = document.querySelectorAll('webview');
+					for (var j = 0; j < allWebviews.length; j++) {
+						allWebviews[j].blur();
+					}
+
+					// Try to focus a webview first, then fall back to iframe
+					var webview = container.querySelector('webview');
+					if (webview) {
+						try { webview.focus(); } catch(err) {}
+						return;
+					}
+
+					var iframe = container.querySelector('iframe');
+					if (!iframe) return;
+					iframe.focus();
+					try {
+						iframe.contentWindow.focus();
+						var doc = iframe.contentDocument || iframe.contentWindow.document;
+						var termEl = doc.querySelector('.xterm-helper-textarea') || doc.querySelector('textarea') || doc.body;
+						if (termEl) {
+							termEl.focus();
+						}
+					} catch(err) {}
+				}
+
+				focusAttempt();
+				setTimeout(focusAttempt, 40);
+				setTimeout(focusAttempt, 120);
+				setTimeout(focusAttempt, 260);
 			};
 
 			window.__libroMoveSelectedApp = function(direction) {
