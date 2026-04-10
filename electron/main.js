@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, session, ipcMain, shell, clipboard } = require('electron')
+const { app, BrowserWindow, Menu, session, ipcMain, shell, clipboard, globalShortcut } = require('electron')
 const { spawn } = require('child_process')
 const path = require('path')
 const http = require('http')
@@ -46,10 +46,48 @@ function getSupportedBrowserUserAgent() {
     .trim()
 }
 
+function dispatchToMainWindow(js) {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.executeJavaScript(js).catch((err) => {
+    console.error('Failed to dispatch shortcut JS:', err.message)
+  })
+}
+
+function moveSelectedApp(direction) {
+  const focusedWindow = BrowserWindow.getFocusedWindow()
+  if (!focusedWindow || focusedWindow !== mainWindow) {
+    console.log(`[libro-shortcut] ignored move ${direction}: main window not focused`)
+    return
+  }
+  console.log(`[libro-shortcut] firing move ${direction}`)
+  dispatchToMainWindow(`
+    if (window.__libroMoveSelectedApp) {
+      window.__libroMoveSelectedApp('${direction}');
+    }
+  `)
+}
+
+function registerWindowShortcuts() {
+  const shortcuts = [
+    ['Super+Control+U', () => moveSelectedApp('left')],
+    ['Super+Control+I', () => moveSelectedApp('right')],
+  ]
+
+  for (const [accelerator, handler] of shortcuts) {
+    try {
+      const ok = globalShortcut.register(accelerator, handler)
+      console.log(`[libro-shortcut] register ${accelerator}: ${ok ? 'ok' : 'failed'}`)
+    } catch (err) {
+      console.error(`Failed to register shortcut ${accelerator}:`, err.message)
+    }
+  }
+}
+
 // Track input focus state per webview webContents for browser shortcut key handling.
 // When an input/textarea/select/contentEditable is focused inside a webview,
 // we must NOT intercept plain keys (j/k/h/l etc.) so the user can type.
 const webviewInputFocused = new Map()
+const shortcutEventDedup = new Map()
 
 // Find the Go binary — look next to the electron dir, or in PATH
 function findGoBinary() {
@@ -318,14 +356,33 @@ app.on('web-contents-created', (event, contents) => {
   }
 
   contents.on('before-input-event', (e, input) => {
-    if (input.type !== 'keyDown') return
+    if (input.type !== 'keyDown' && input.type !== 'rawKeyDown') return
 
     const key = (input.key || '').toLowerCase()
     const code = (input.code || '').toLowerCase()
     const isWebview = contents.getType() === 'webview'
+    const shortcutSig = [
+      code,
+      key,
+      input.meta ? 'meta' : '',
+      input.control ? 'ctrl' : '',
+      input.alt ? 'alt' : '',
+      input.shift ? 'shift' : '',
+    ].join('|')
+
+    const shouldSkipDuplicateShortcut = () => {
+      const now = Date.now()
+      const last = shortcutEventDedup.get(contents.id)
+      if (last && last.sig === shortcutSig && now-last.at < 80) {
+        return true
+      }
+      shortcutEventDedup.set(contents.id, { sig: shortcutSig, at: now })
+      return false
+    }
 
     // Win/Super + Plus/Minus: zoom whole application
     if (input.meta && (key === '+' || key === '=' || key === '-')) {
+      if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
         const wc = mainWindow.webContents
@@ -343,6 +400,7 @@ app.on('web-contents-created', (event, contents) => {
     // (native keydown may be intercepted by the desktop environment on Linux)
     if (!isWebview) {
       if (input.meta && input.control && code === 'keyn') {
+        if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
           mainWindow.webContents.executeJavaScript(`
@@ -351,25 +409,31 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
-      // Super+Ctrl+H/L: move app left/right — must preventDefault to avoid
+      // Super+Ctrl+U/I: move app left/right — must preventDefault to avoid
       // Chromium accelerators consuming the event before page JS sees it
-      if (input.meta && input.control && (code === 'keyh' || code === 'keyl')) {
+      if (input.meta && input.control && (code === 'keyu' || code === 'keyi')) {
+        if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
-          const safeCode = (input.code || '').replace(/'/g, "\\'")
+          const direction = code === 'keyu' ? 'left' : 'right'
           mainWindow.webContents.executeJavaScript(`
-            document.dispatchEvent(new KeyboardEvent('keydown', {
-              code: '${safeCode}',
-              metaKey: true,
-              ctrlKey: true,
-              bubbles: true,
-              cancelable: true
-            }));
+            if (window.__libroMoveSelectedApp) {
+              window.__libroMoveSelectedApp('${direction}');
+            } else {
+              document.dispatchEvent(new KeyboardEvent('keydown', {
+                code: '${input.code || ''}',
+                metaKey: true,
+                ctrlKey: true,
+                bubbles: true,
+                cancelable: true
+              }));
+            }
           `)
         }
         return
       }
       if (input.meta && !input.control && code === 'keyn') {
+        if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
           mainWindow.webContents.executeJavaScript(`
@@ -380,6 +444,7 @@ app.on('web-contents-created', (event, contents) => {
       }
       // Super+R: resize popup — must preventDefault to block browser Reload
       if (input.meta && !input.control && code === 'keyr') {
+        if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
           mainWindow.webContents.executeJavaScript(`
@@ -390,6 +455,7 @@ app.on('web-contents-created', (event, contents) => {
       }
       // Super+Z: zen mode toggle — must preventDefault to block browser Undo
       if (input.meta && !input.control && code === 'keyz') {
+        if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
           mainWindow.webContents.executeJavaScript(`
@@ -402,6 +468,7 @@ app.on('web-contents-created', (event, contents) => {
       }
       // Super+F: toggle maximize width on selected app
       if (input.meta && !input.control && code === 'keyf') {
+        if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
           mainWindow.webContents.executeJavaScript(`
@@ -415,19 +482,24 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta+Ctrl shortcuts: h, l (move app left/right), n (new app left)
-    if (input.meta && input.control && ['keyh', 'keyl', 'keyn'].includes(code)) {
+    // Meta+Ctrl shortcuts: u, i (move app left/right)
+    if (input.meta && input.control && ['keyu', 'keyi'].includes(code)) {
+      if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
-        const safeCode = (input.code || '').replace(/'/g, "\\'")
+        const direction = code === 'keyu' ? 'left' : 'right'
         mainWindow.webContents.executeJavaScript(`
-          document.dispatchEvent(new KeyboardEvent('keydown', {
-            code: '${safeCode}',
-            metaKey: true,
-            ctrlKey: true,
-            bubbles: true,
-            cancelable: true
-          }));
+          if (window.__libroMoveSelectedApp) {
+            window.__libroMoveSelectedApp('${direction}');
+          } else {
+            document.dispatchEvent(new KeyboardEvent('keydown', {
+              code: '${input.code || ''}',
+              metaKey: true,
+              ctrlKey: true,
+              bubbles: true,
+              cancelable: true
+            }));
+          }
         `)
       }
       return
@@ -435,6 +507,7 @@ app.on('web-contents-created', (event, contents) => {
 
     // Meta (Super/Win) shortcuts: h, l, q, w, n, z, b, f, g, r
     if (input.meta && (['h', 'l', 'q', 'w', 'n', 'z', 'b', 'f', 'g', 'r'].includes(key) || code === 'keyn')) {
+      if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
         const safeKey = input.key.replace(/'/g, "\\'")
@@ -453,6 +526,7 @@ app.on('web-contents-created', (event, contents) => {
 
     // Ctrl+L (select URL bar) and Ctrl+R (reload) for browser apps
     if (input.control && !input.meta && ['l', 'r'].includes(key)) {
+      if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
         const safeKey = input.key.replace(/'/g, "\\'")
@@ -486,6 +560,7 @@ app.on('web-contents-created', (event, contents) => {
 
     // Ctrl+0–9 shortcuts (project switching)
     if (input.control && key >= '0' && key <= '9') {
+      if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
         mainWindow.webContents.executeJavaScript(`
@@ -506,6 +581,7 @@ app.on('web-contents-created', (event, contents) => {
     if (isWebview && !input.meta && !input.control && !input.alt && !webviewInputFocused.get(contents.id)) {
       // Shift+G = scroll to bottom
       if (input.shift && key === 'g') {
+        if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         contents.executeJavaScript("window.scrollTo({top:document.documentElement.scrollHeight,behavior:'smooth'})").catch(() => {})
         return
@@ -520,6 +596,7 @@ app.on('web-contents-created', (event, contents) => {
         'f': "history.forward()",
       }
       if (!input.shift && browserKeyActions[key]) {
+        if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         contents.executeJavaScript(browserKeyActions[key]).catch(() => {})
         return
@@ -541,6 +618,7 @@ app.on('ready', async () => {
       return
     }
   }
+  registerWindowShortcuts()
   createWindow()
 })
 
@@ -561,6 +639,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
   if (goProcess) {
     goProcess.kill()
     goProcess = null
