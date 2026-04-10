@@ -1889,7 +1889,11 @@ func urlPopupJS(sid string) string {
 	function getHistory(){return document.getElementById('url-popup-history');}
 
 	function findSelectedBrowserApp(){
-		return window.__libroSelectedApp||'';
+		var appId=window.__libroSelectedApp||'';
+		if(!appId)return '';
+		var el=document.querySelector('[data-app-id="'+appId+'"]');
+		if(!el)return '';
+		return el.querySelector('webview[data-webview-app]')?appId:'';
 	}
 
 	function renderHistory(query){
@@ -2253,7 +2257,7 @@ func renderShortcutsDialog() *r.Node {
 			{"! command", "Run terminal command"},
 		}},
 		{"Browser", "", []shortcut{
-			{"Ctrl + L", "URL / search popup"},
+			{"Ctrl + L", "URL / search popup for browser apps"},
 			{"Ctrl + R", "Reload browser page"},
 		}},
 		{"Browser", "Vim keys — disabled in input fields", []shortcut{
@@ -3700,6 +3704,10 @@ func keyboardShortcutsJS(sid string) string {
 					return;
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L')) {
+					var selectedApp = window.__libroSelectedApp || '';
+					var selectedEl = selectedApp ? document.querySelector('[data-app-id="' + selectedApp + '"]') : null;
+					var selectedIsBrowser = !!(selectedEl && selectedEl.querySelector('webview[data-webview-app]'));
+					if (!selectedIsBrowser) return;
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();

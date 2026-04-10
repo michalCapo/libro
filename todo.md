@@ -1,2 +1,2 @@
---url
-i can use and press ctrl+l on ttyd apps and it will bring ups url search popup which should be only GitAvailable for browser app
+--remove
+move the remove icon in project sidebar to the start of the row. make it appier over project icon when user hover over project row. for branch display thsi remove icon on the left side of the branch icon so these remoe icons will apear to be alligned
