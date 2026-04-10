@@ -4,6 +4,10 @@ const path = require('path')
 const http = require('http')
 const os = require('os')
 
+// Libro intentionally hosts arbitrary external pages in Electron webviews.
+// Electron's CSP warning is not actionable for those guest pages in development.
+process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true'
+
 // Enable PipeWire for WebRTC capture on Linux.
 // This is primarily required for screen sharing on modern Wayland desktops.
 app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer')

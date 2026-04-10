@@ -722,19 +722,32 @@ func Run(assets embed.FS) {
 		return resp.Build()
 	})
 
-	// Switch active project
-	app.Action("project.switch", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		name, _ := data["name"].(string)
-
-		if !sm.SwitchProject(sid, name) {
-			return r.Notify("error", "Project not found")
+	switchToProjectName := func(sid, name string) string {
+		if name == "" {
+			return "/* noop */"
 		}
 
-		// Assign nav slot when switching via sidebar click (not for home)
-		if name != "home" {
-			sm.AssignNavSlot(sid, name)
+		// Branch shortcuts can exist before their virtual project has been created
+		// in the current session. Resolve the matching worktree lazily.
+		if strings.Contains(name, "/") {
+			parts := strings.SplitN(name, "/", 2)
+			parentProject, branch := parts[0], parts[1]
+			projectPath := sm.GetProjectPath(sid, parentProject)
+			if projectPath != "" && branch != "" {
+				if worktrees, err := GitListWorktrees(projectPath); err == nil {
+					for _, wt := range worktrees {
+						if wt.IsBare || wt.Branch != branch {
+							continue
+						}
+						sm.AddVirtualProject(sid, name, wt.Path, parentProject)
+						break
+					}
+				}
+			}
+		}
+
+		if !sm.SwitchProject(sid, name) {
+			return "/* noop */"
 		}
 
 		state := sm.Get(sid)
@@ -753,9 +766,22 @@ func Run(assets embed.FS) {
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
+			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state)).
 			Add(savedAppsJS(state.ActiveProject)).
 			Build()
+	}
+
+	// Switch active project
+	app.Action("project.switch", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		name, _ := data["name"].(string)
+		resp := switchToProjectName(sid, name)
+		if resp == "/* noop */" {
+			return r.Notify("error", "Project not found")
+		}
+		return resp
 	})
 
 	// Navigate to next project
@@ -831,30 +857,7 @@ func Run(assets embed.FS) {
 			// Ctrl+2-9: look up from nav slots
 			name = sm.NavSlotProject(sid, slot)
 		}
-		if name == "" {
-			return "/* noop */"
-		}
-		if !sm.SwitchProject(sid, name) {
-			return "/* noop */"
-		}
-		state := sm.Get(sid)
-
-		var jsSwitch string
-		if sm.IsProjectRendered(sid, name) {
-			jsSwitch = switchProjectJS(name, nil)
-		} else {
-			jsSwitch = switchProjectJS(name, renderMainArea(state, sid))
-		}
-
-		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(jsSwitch).
-			Add(updateHashJS(name)).
-			Add(projectToastJS(state.ActiveProject)).
-			Add(focusSelectedAppJS(state)).
-			Add(savedAppsJS(state.ActiveProject)).
-			Build()
+		return switchToProjectName(sid, name)
 	})
 
 	// Select previous project (Ctrl+0)
@@ -1092,9 +1095,6 @@ func Run(assets embed.FS) {
 		if !sm.SwitchProject(sid, vtName) {
 			return r.Notify("error", "Failed to switch to worktree")
 		}
-
-		// Assign nav slot for worktree switch (gets its own slot)
-		sm.AssignNavSlot(sid, vtName)
 
 		state := sm.Get(sid)
 

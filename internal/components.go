@@ -3072,8 +3072,8 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 			}
 		}
 
-		// Project button
-		projCls := "w-full flex items-center gap-2 px-3 py-2 text-sm font-mono rounded-md cursor-pointer transition-colors duration-75 group/proj "
+		// Project row
+		projCls := "w-full flex items-center gap-2 px-3 py-2 text-sm font-mono rounded-md cursor-pointer transition-colors duration-75 "
 		if isActive || isParentOfActive {
 			projCls += "bg-blue-600 text-white"
 		} else {
@@ -3085,7 +3085,15 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 			iconName = "source"
 		}
 
-		// Shortcut badge: home always shows "1", others show assigned nav slot
+		worktrees, worktreeErr := []Worktree(nil), error(nil)
+		hasBranchRows := false
+		if proj.IsGitRepo && GitAvailable() {
+			worktrees, worktreeErr = GitListWorktrees(proj.Path)
+			hasBranchRows = worktreeErr == nil && len(worktrees) > 1
+		}
+
+		// Shortcut badge: home always shows "1". Git parents with visible branch rows
+		// don't render project shortcuts; those are shown on the branch rows only.
 		var badgeNode *r.Node
 		if proj.Name == "home" {
 			badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 "
@@ -3095,32 +3103,34 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 				badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500"
 			}
 			badgeNode = r.Span(badgeCls).Text("1")
-		} else if slot := sm.GetNavSlotForProject(sid, proj.Name); slot > 0 {
-			badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer "
-			if isActive || isParentOfActive {
-				badgeCls += "bg-blue-500 text-blue-100 hover:bg-red-500"
+		} else if !hasBranchRows {
+			if slot := sm.GetNavSlotForProject(sid, proj.Name); slot > 0 {
+				badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer "
+				if isActive || isParentOfActive {
+					badgeCls += "bg-blue-500 text-blue-100 hover:bg-red-500"
+				} else {
+					badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500 hover:bg-red-400 hover:text-white"
+				}
+				badgeNode = r.Span(badgeCls).
+					Attr("title", fmt.Sprintf("Remove shortcut Ctrl+%d", slot)).
+					Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.remove',{sid:'%s',name:'%s'});", sid, proj.Name)).
+					Text(fmt.Sprintf("%d", slot))
 			} else {
-				badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500 hover:bg-red-400 hover:text-white"
+				// No slot — show add button on row hover while keeping space reserved.
+				addSlotCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer opacity-0 group-hover/projitem:opacity-100 transition-opacity duration-75 "
+				if isActive || isParentOfActive {
+					addSlotCls += "text-blue-200 hover:bg-white/15 hover:text-white"
+				} else {
+					addSlotCls += "bg-gray-200 dark:bg-zinc-800 text-gray-400 dark:text-zinc-600 hover:bg-blue-400 hover:text-white"
+				}
+				badgeNode = r.Span(addSlotCls).
+					Attr("title", "Add shortcut").
+					Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.add',{sid:'%s',name:'%s'});", sid, proj.Name)).
+					Text("+")
 			}
-			badgeNode = r.Span(badgeCls).
-				Attr("title", fmt.Sprintf("Remove shortcut Ctrl+%d", slot)).
-				Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.remove',{sid:'%s',name:'%s'});", sid, proj.Name)).
-				Text(fmt.Sprintf("%d", slot))
-		} else {
-			// No slot — show add button on hover
-			addSlotCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer opacity-0 group-hover/proj:opacity-100 transition-opacity duration-75 "
-			if isActive || isParentOfActive {
-				addSlotCls += "text-blue-200 hover:bg-white/15 hover:text-white"
-			} else {
-				addSlotCls += "bg-gray-200 dark:bg-zinc-800 text-gray-400 dark:text-zinc-600 hover:bg-blue-400 hover:text-white"
-			}
-			badgeNode = r.Span(addSlotCls).
-				Attr("title", "Add shortcut").
-				Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.add',{sid:'%s',name:'%s'});", sid, proj.Name)).
-				Text("+")
 		}
 
-		projBtn := r.Button(projCls).
+		projBtn := r.Button("flex-1 min-w-0 flex items-center gap-2 text-left").
 			Attr("title", proj.Path).
 			OnClick(r.JS(fmt.Sprintf(
 				"history.replaceState(null,'','#%s');__ws.call('project.switch',{sid:'%s',name:'%s'});",
@@ -3129,11 +3139,8 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 
 		btnChildren := []*r.Node{
 			r.I("material-icons-round text-base shrink-0").Text(iconName),
+			r.Span("truncate flex-1 text-left").Text(proj.Name),
 		}
-		if badgeNode != nil {
-			btnChildren = append(btnChildren, badgeNode)
-		}
-		btnChildren = append(btnChildren, r.Span("truncate flex-1 text-left").Text(proj.Name))
 
 		// Running app count badge for non-git projects (git repos show counts on worktree sub-items)
 		if !proj.IsGitRepo {
@@ -3141,31 +3148,35 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 				btnChildren = append(btnChildren, badge)
 			}
 		}
-
-		// Delete button (hidden until hover, not for home)
+		projBtn.Render(btnChildren...)
+		projControls := []*r.Node{}
 		if proj.Name != "home" {
-			deleteCls := "flex items-center justify-center w-5 h-5 rounded cursor-pointer opacity-0 group-hover/proj:opacity-100 transition-opacity duration-75 shrink-0 "
+			deleteCls := "flex items-center justify-center w-5 h-5 rounded cursor-pointer opacity-0 group-hover/projitem:opacity-100 transition-opacity duration-75 shrink-0 "
 			if isActive || isParentOfActive {
 				deleteCls += "text-blue-200 hover:text-white hover:bg-white/15"
 			} else {
 				deleteCls += "text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10"
 			}
-			btnChildren = append(btnChildren,
+			projControls = append(projControls,
 				r.Button(deleteCls).
 					Attr("title", "Remove project").
 					Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('project.remove',{sid:'%s',name:'%s'});", sid, proj.Name)).
 					Render(r.I("material-icons-round text-[14px]").Text("close")),
 			)
 		}
-
-		projBtn.Render(btnChildren...)
-
-		projItem := r.Div("").Render(projBtn)
+		if badgeNode != nil {
+			projControls = append(projControls, badgeNode)
+		}
+		projItem := r.Div("group/projitem").Render(
+			r.Div(projCls).Render(
+				projBtn,
+				r.Div("ml-2 flex items-center gap-1 shrink-0").Render(projControls...),
+			),
+		)
 
 		// Worktree sub-items for git repos
 		if proj.IsGitRepo && GitAvailable() {
-			worktrees, err := GitListWorktrees(proj.Path)
-			if err == nil && len(worktrees) > 1 {
+			if worktreeErr == nil && len(worktrees) > 1 {
 				wtItems := make([]*r.Node, 0, len(worktrees))
 				for _, wt := range worktrees {
 					if wt.IsBare {
@@ -3225,7 +3236,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 							Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.remove',{sid:'%s',name:'%s'});", sid, wtSlotName)).
 							Text(fmt.Sprintf("%d", wtSlot))
 					} else {
-						addCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer opacity-0 group-hover/proj:opacity-100 transition-opacity duration-75 bg-gray-200 dark:bg-zinc-800 text-gray-400 dark:text-zinc-600 hover:bg-blue-400 hover:text-white"
+						addCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer opacity-0 group-hover/wtitem:opacity-100 transition-opacity duration-75 bg-gray-200 dark:bg-zinc-800 text-gray-400 dark:text-zinc-600 hover:bg-blue-400 hover:text-white"
 						wtBadge = r.Span(addCls).
 							Attr("title", "Add shortcut").
 							Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.add',{sid:'%s',name:'%s'});", sid, wtSlotName)).
@@ -3235,30 +3246,35 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 					wtBtnChildren := []*r.Node{
 						r.I("material-icons-round text-sm shrink-0").Text("alt_route"),
 					}
-					if wtBadge != nil {
-						wtBtnChildren = append(wtBtnChildren, wtBadge)
-					}
 					wtBtnChildren = append(wtBtnChildren, r.Span("truncate flex-1 text-left").Text(wt.Branch))
 					if badge := renderAppCountBadge(wtAppCount, isWtActive); badge != nil {
 						wtBtnChildren = append(wtBtnChildren, badge)
 					}
 
-					wtBtn := r.Button(wtCls).
+					wtBtn := r.Button("flex-1 min-w-0 flex items-center gap-2 text-left").
 						Attr("title", wt.Path).
 						OnClick(r.JS(wtOnClick)).
 						Render(wtBtnChildren...)
 
-					// Delete worktree button (not for main worktree)
+					controls := []*r.Node{}
 					if !isMainWt {
-						wtBtn.Render(
-							r.Button("flex items-center justify-center w-4 h-4 rounded cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover/proj:opacity-100 transition-opacity duration-75 shrink-0").
+						controls = append(controls,
+							r.Button("flex items-center justify-center w-4 h-4 rounded cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover/wtitem:opacity-100 transition-opacity duration-75 shrink-0").
 								Attr("title", "Remove worktree").
 								Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('worktree.remove',{sid:'%s',project:'%s',path:'%s'});", sid, proj.Name, wt.Path)).
 								Render(r.I("material-icons-round text-[12px]").Text("close")),
 						)
 					}
+					controls = append(controls, wtBadge)
 
-					wtItems = append(wtItems, wtBtn)
+					wtItems = append(wtItems,
+						r.Div("group/wtitem").Render(
+							r.Div(wtCls).Render(
+								wtBtn,
+								r.Div("ml-2 flex items-center gap-1 shrink-0").Render(controls...),
+							),
+						),
+					)
 				}
 
 				// Add worktree button
@@ -3272,7 +3288,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 				)
 
 				projItem.Render(r.Div("mt-0.5").Render(wtItems...))
-			} else if err == nil && (isActive || isParentOfActive) {
+			} else if worktreeErr == nil && (isActive || isParentOfActive) {
 				// Single worktree (or none) — still show add button
 				projItem.Render(
 					r.Div("mt-0.5").Render(

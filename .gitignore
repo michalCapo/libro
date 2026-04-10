@@ -4,3 +4,4 @@ libro
 node_modules/
 libro.db*
 .codex
+.gocache
