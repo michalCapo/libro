@@ -30,25 +30,35 @@ function withWebContents(id) {
 }
 
 function panelShortcut(panel) {
-  if (panel === 'elements') return '1'
-  if (panel === 'console') return '2'
-  return ''
+  if (panel === 'elements') return { keyCode: 'C', code: 'KeyC', shift: true }
+  if (panel === 'console') return { keyCode: 'J', code: 'KeyJ', shift: true }
+  return null
 }
 
 function selectDevToolsPanel(devtoolsContents, panel) {
-  const key = panelShortcut(panel)
-  if (!devtoolsContents || !key) return
+  const shortcut = panelShortcut(panel)
+  if (!devtoolsContents || !shortcut) return
   const control = process.platform !== 'darwin'
   const meta = process.platform === 'darwin'
-  const code = `Digit${key}`
-  setTimeout(() => {
-    try {
-      devtoolsContents.sendInputEvent({ type: 'keyDown', keyCode: key, code, control, meta })
-      devtoolsContents.sendInputEvent({ type: 'keyUp', keyCode: key, code, control, meta })
-    } catch (err) {
-      console.error('Failed to switch DevTools panel:', err.message)
-    }
-  }, 150)
+  const event = {
+    type: 'keyDown',
+    keyCode: shortcut.keyCode,
+    code: shortcut.code,
+    shift: !!shortcut.shift,
+    control,
+    meta,
+  }
+  const release = { ...event, type: 'keyUp' }
+  for (const delay of [150, 325]) {
+    setTimeout(() => {
+      try {
+        devtoolsContents.sendInputEvent(event)
+        devtoolsContents.sendInputEvent(release)
+      } catch (err) {
+        console.error('Failed to switch DevTools panel:', err.message)
+      }
+    }, delay)
+  }
 }
 
 function activateDevToolsPicker(devtoolsContents) {
@@ -451,21 +461,6 @@ function createWindow() {
       hideDevtoolsOverlay(targetId)
     } catch (err) {
       console.error('Failed to close webview DevTools:', err.message)
-    }
-  })
-
-  ipcMain.on('libro-open-webview-inspector', (event, targetId, bounds) => {
-    const pair = ensureDevtoolsOverlay(targetId, bounds)
-    if (!pair) return
-    try {
-      if (!pair.target.isDevToolsOpened()) {
-        pair.target.openDevTools({ mode: 'detach', activate: false })
-        pair.entry.opened = true
-      }
-      selectDevToolsPanel(pair.devtools, 'elements')
-      activateDevToolsPicker(pair.devtools)
-    } catch (err) {
-      console.error('Failed to open webview inspector:', err.message)
     }
   })
 

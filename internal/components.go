@@ -2296,7 +2296,6 @@ func renderShortcutsDialog() *r.Node {
 			{"Esc", "Clear search / blur input"},
 			{"b / f", "Page back / forward"},
 			{"y", "Copy selected text or URL"},
-			{"i", "Open Elements and enable picker"},
 			{"c", "Open DevTools Console tab"},
 			{"Enter", "Follow link / click button"},
 		}},
