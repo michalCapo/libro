@@ -51,6 +51,35 @@ function selectDevToolsPanel(devtoolsContents, panel) {
   }, 150)
 }
 
+function activateDevToolsPicker(devtoolsContents) {
+  if (!devtoolsContents) return
+  const isMac = process.platform === 'darwin'
+  setTimeout(() => {
+    try {
+      devtoolsContents.sendInputEvent({
+        type: 'keyDown',
+        keyCode: 'C',
+        code: 'KeyC',
+        control: !isMac,
+        shift: !isMac,
+        meta: isMac,
+        alt: isMac,
+      })
+      devtoolsContents.sendInputEvent({
+        type: 'keyUp',
+        keyCode: 'C',
+        code: 'KeyC',
+        control: !isMac,
+        shift: !isMac,
+        meta: isMac,
+        alt: isMac,
+      })
+    } catch (err) {
+      console.error('Failed to activate DevTools picker:', err.message)
+    }
+  }, 260)
+}
+
 function normalizeBounds(bounds) {
   if (!bounds) return null
   const x = Math.max(0, Math.round(Number(bounds.x) || 0))
@@ -410,6 +439,36 @@ function createWindow() {
     }
   })
 
+  ipcMain.on('libro-close-webview-devtools', (event, targetId) => {
+    const target = withWebContents(targetId)
+    if (!target) return
+    try {
+      if (target.isDevToolsOpened()) {
+        target.closeDevTools()
+      }
+      const entry = devtoolsOverlays.get(target.id)
+      if (entry) entry.opened = false
+      hideDevtoolsOverlay(targetId)
+    } catch (err) {
+      console.error('Failed to close webview DevTools:', err.message)
+    }
+  })
+
+  ipcMain.on('libro-open-webview-inspector', (event, targetId, bounds) => {
+    const pair = ensureDevtoolsOverlay(targetId, bounds)
+    if (!pair) return
+    try {
+      if (!pair.target.isDevToolsOpened()) {
+        pair.target.openDevTools({ mode: 'detach', activate: false })
+        pair.entry.opened = true
+      }
+      selectDevToolsPanel(pair.devtools, 'elements')
+      activateDevToolsPicker(pair.devtools)
+    } catch (err) {
+      console.error('Failed to open webview inspector:', err.message)
+    }
+  })
+
   ipcMain.on('libro-inspect-webview-element', (event, targetId, bounds, x, y) => {
     const pair = ensureDevtoolsOverlay(targetId, bounds)
     if (!pair) return
@@ -420,6 +479,7 @@ function createWindow() {
       }
       pair.target.inspectElement(Number(x) || 0, Number(y) || 0)
       selectDevToolsPanel(pair.devtools, 'elements')
+      activateDevToolsPicker(pair.devtools)
     } catch (err) {
       console.error('Failed to inspect webview element:', err.message)
     }

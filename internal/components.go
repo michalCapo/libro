@@ -1096,20 +1096,23 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			Attr("style", "display:inline-flex;width:100%;height:100%")
 		// Force closing tag by adding empty text content
 		wv.Text("")
-		devToolsBtn := r.Button("box-border absolute bottom-3 right-3 z-40 flex items-center gap-2 h-7 px-2.5 leading-none rounded-md bg-stone-100 dark:bg-stone-800 backdrop-blur-md shadow-sm border border-stone-300 dark:border-stone-600 hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors cursor-pointer text-stone-600 dark:text-stone-300 opacity-0 group-hover:opacity-100").
-			ID(fmt.Sprintf("devtools-wrap-%s", app.ID)).
-			Attr("title", "Toggle DevTools").
-			Attr("onclick", fmt.Sprintf("if(window.__libroToggleConsole)window.__libroToggleConsole('%s')", app.ID)).
+		devtoolsCloseBtn := r.Button("hidden absolute bottom-3 right-3 z-50 w-8 h-8 cursor-pointer flex items-center justify-center text-stone-500 dark:text-stone-300 hover:text-stone-700 dark:hover:text-white").
+			ID(fmt.Sprintf("devtools-close-%s", app.ID)).
+			Attr("title", "Close DevTools").
+			Attr("onclick", fmt.Sprintf("if(window.__libroCloseConsole)window.__libroCloseConsole('%s')", app.ID)).
 			Render(
-				r.I("material-icons-round text-[14px]").Text("developer_mode"),
-				r.Span("hidden text-[11px] font-semibold tabular-nums text-red-500").
-					ID(fmt.Sprintf("devtools-errors-%s", app.ID)).
-					Text("0"),
+				r.I("material-icons-round text-[16px]").Text("close"),
 			)
-		webviewWrapper := r.Div("relative flex-1 min-h-0").Render(wv, devToolsBtn)
+		webviewWrapper := r.Div("relative flex-1 min-h-0").Render(
+			wv,
+			r.Span("hidden text-[11px] font-semibold tabular-nums text-red-500 absolute bottom-3 right-3 z-40 pointer-events-none").
+				ID(fmt.Sprintf("devtools-errors-%s", app.ID)).
+				Text("0"),
+			devtoolsCloseBtn,
+		)
 		devtoolsPanel := r.Div("hidden border-t border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-zinc-900").
 			ID(fmt.Sprintf("devtools-panel-%s", app.ID)).
-			Attr("style", "height:320px;min-height:160px").
+			Attr("style", "height:320px;min-height:160px;position:relative").
 			Render(
 				r.Div("w-full h-full").
 					ID(fmt.Sprintf("devtools-host-%s", app.ID)),
@@ -2293,7 +2296,7 @@ func renderShortcutsDialog() *r.Node {
 			{"Esc", "Clear search / blur input"},
 			{"b / f", "Page back / forward"},
 			{"y", "Copy selected text or URL"},
-			{"i", "Open DevTools on hovered element"},
+			{"i", "Open Elements and enable picker"},
 			{"c", "Open DevTools Console tab"},
 			{"Enter", "Follow link / click button"},
 		}},
