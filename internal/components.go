@@ -1096,75 +1096,25 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			Attr("style", "display:inline-flex;width:100%;height:100%")
 		// Force closing tag by adding empty text content
 		wv.Text("")
-		devToolsBtn := r.Button("absolute bottom-3 right-3 z-40 flex items-center gap-2 h-7 px-2.5 rounded-md bg-stone-100 dark:bg-stone-800 backdrop-blur-md shadow-sm border border-stone-300 dark:border-stone-600 hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors cursor-pointer opacity-0 group-hover:opacity-100").
+		devToolsBtn := r.Button("box-border absolute bottom-3 right-3 z-40 flex items-center gap-2 h-7 px-2.5 leading-none rounded-md bg-stone-100 dark:bg-stone-800 backdrop-blur-md shadow-sm border border-stone-300 dark:border-stone-600 hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors cursor-pointer text-stone-600 dark:text-stone-300 opacity-0 group-hover:opacity-100").
 			ID(fmt.Sprintf("devtools-wrap-%s", app.ID)).
-			Attr("title", "Toggle Console").
+			Attr("title", "Toggle DevTools").
 			Attr("onclick", fmt.Sprintf("if(window.__libroToggleConsole)window.__libroToggleConsole('%s')", app.ID)).
 			Render(
-				r.I("material-icons-round text-[14px] text-stone-600 dark:text-stone-300").Text("developer_mode"),
+				r.I("material-icons-round text-[14px]").Text("developer_mode"),
 				r.Span("hidden text-[11px] font-semibold tabular-nums text-red-500").
 					ID(fmt.Sprintf("devtools-errors-%s", app.ID)).
 					Text("0"),
 			)
-
-		// Inline console panel (hidden by default)
-		consolePanel := r.Div("hidden flex-col border-t border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-zinc-900").
-			ID(fmt.Sprintf("console-panel-%s", app.ID)).
-			Attr("style", "height:240px;min-height:120px").
-			Render(
-				// Header bar
-				r.Div("flex items-center justify-between px-3 py-1.5 border-b border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-zinc-800 select-none").Render(
-					r.Div("flex items-center gap-2").Render(
-						r.Span("text-[11px] font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wide").Text("Console"),
-						r.Span("text-[10px] font-mono tabular-nums text-stone-400 dark:text-stone-500").
-							ID(fmt.Sprintf("console-count-%s", app.ID)).
-							Text(""),
-					),
-					r.Div("flex items-center gap-1").Render(
-						// Filter checkboxes
-						r.Div("flex items-center gap-2 mr-2 border-r border-stone-200 dark:border-stone-700 pr-2").Render(
-							r.Div("flex items-center gap-1 cursor-pointer").
-								Attr("onclick", fmt.Sprintf("if(window.__libroToggleFilter)window.__libroToggleFilter('%s','warn')", app.ID)).
-								Render(
-									r.Div("flex items-center justify-center w-4 h-4 rounded border border-stone-400 dark:border-stone-500 hover:border-stone-500 dark:hover:border-stone-400 cursor-pointer transition-colors").
-										ID(fmt.Sprintf("console-filter-warn-%s", app.ID)),
-									r.Span("text-[11px] font-medium text-stone-500 dark:text-stone-400 select-none").Text("Warnings"),
-								),
-							r.Div("flex items-center gap-1 cursor-pointer").
-								Attr("onclick", fmt.Sprintf("if(window.__libroToggleFilter)window.__libroToggleFilter('%s','error')", app.ID)).
-								Render(
-									r.Div("flex items-center justify-center w-4 h-4 rounded border bg-blue-500 border-blue-500 cursor-pointer transition-colors").
-										ID(fmt.Sprintf("console-filter-error-%s", app.ID)).
-										Render(r.I("material-icons-round text-[12px] text-white").Text("check")),
-									r.Span("text-[11px] font-medium text-stone-500 dark:text-stone-400 select-none").Text("Errors"),
-								),
-						),
-						r.Button("flex items-center justify-center w-6 h-6 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 cursor-pointer text-stone-500 dark:text-stone-400").
-							Attr("title", "Copy to clipboard").
-							Attr("onclick", fmt.Sprintf("if(window.__libroCopyConsole)window.__libroCopyConsole('%s')", app.ID)).
-							Render(r.I("material-icons-round text-[14px]").Text("content_copy")),
-						r.Button("flex items-center justify-center w-6 h-6 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 cursor-pointer text-stone-500 dark:text-stone-400").
-							Attr("title", "Maximize console").
-							Attr("onclick", fmt.Sprintf("if(window.__libroToggleConsoleMaximize)window.__libroToggleConsoleMaximize('%s')", app.ID)).
-							Render(r.I("material-icons-round text-[14px]").ID(fmt.Sprintf("console-maximize-icon-%s", app.ID)).Text("open_in_full")),
-						r.Button("flex items-center justify-center w-6 h-6 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 cursor-pointer text-stone-500 dark:text-stone-400").
-							Attr("title", "Clear console").
-							Attr("onclick", fmt.Sprintf("if(window.__libroClearConsole)window.__libroClearConsole('%s')", app.ID)).
-							Render(r.I("material-icons-round text-[14px]").Text("delete_outline")),
-						r.Button("flex items-center justify-center w-6 h-6 rounded hover:bg-stone-200 dark:hover:bg-zinc-700 cursor-pointer text-stone-500 dark:text-stone-400").
-							Attr("title", "Close console").
-							Attr("onclick", fmt.Sprintf("if(window.__libroToggleConsole)window.__libroToggleConsole('%s')", app.ID)).
-							Render(r.I("material-icons-round text-[14px]").Text("close")),
-					),
-				),
-				// Message list
-				r.Div("flex-1 overflow-y-auto overflow-x-hidden font-mono text-[11px] leading-[18px]").
-					ID(fmt.Sprintf("console-messages-%s", app.ID)),
-			)
-
-		// Flex column: webview on top, console panel below
 		webviewWrapper := r.Div("relative flex-1 min-h-0").Render(wv, devToolsBtn)
-		container := r.Div("w-full h-full absolute inset-0 z-30 flex flex-col").Render(webviewWrapper, consolePanel)
+		devtoolsPanel := r.Div("hidden border-t border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-zinc-900").
+			ID(fmt.Sprintf("devtools-panel-%s", app.ID)).
+			Attr("style", "height:320px;min-height:160px").
+			Render(
+				r.Div("w-full h-full").
+					ID(fmt.Sprintf("devtools-host-%s", app.ID)),
+			)
+		container := r.Div("w-full h-full absolute inset-0 z-30 flex flex-col").Render(webviewWrapper, devtoolsPanel)
 		if app.URL == "" {
 			container.Render(
 				r.Div("absolute inset-0 flex items-center justify-center text-gray-400 dark:text-zinc-600 font-mono text-xs z-10 pointer-events-none").
@@ -2343,6 +2293,8 @@ func renderShortcutsDialog() *r.Node {
 			{"Esc", "Clear search / blur input"},
 			{"b / f", "Page back / forward"},
 			{"y", "Copy selected text or URL"},
+			{"i", "Open DevTools on hovered element"},
+			{"c", "Open DevTools Console tab"},
 			{"Enter", "Follow link / click button"},
 		}},
 	}

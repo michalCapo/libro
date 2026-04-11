@@ -10,6 +10,18 @@ contextBridge.exposeInMainWorld('libroElectron', {
   toggleDevTools: function () {
     ipcRenderer.send('libro-toggle-devtools')
   },
+  toggleWebviewDevTools: function (webContentsId, bounds, panel) {
+    ipcRenderer.send('libro-toggle-webview-devtools', webContentsId, bounds, panel)
+  },
+  openWebviewDevTools: function (webContentsId, bounds, panel) {
+    ipcRenderer.send('libro-open-webview-devtools', webContentsId, bounds, panel)
+  },
+  inspectWebviewElement: function (webContentsId, bounds, x, y) {
+    ipcRenderer.send('libro-inspect-webview-element', webContentsId, bounds, x, y)
+  },
+  updateWebviewDevToolsBounds: function (webContentsId, bounds) {
+    ipcRenderer.send('libro-update-webview-devtools-bounds', webContentsId, bounds)
+  },
   openPath: function (filePath) {
     ipcRenderer.send('libro-open-path', filePath)
   },
