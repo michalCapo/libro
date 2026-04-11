@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, session, ipcMain, shell, clipboard, globalShortcut } = require('electron')
+const { app, BrowserWindow, Menu, session, ipcMain, shell, clipboard, globalShortcut, webContents, WebContentsView } = require('electron')
 const { spawn } = require('child_process')
 const path = require('path')
 const http = require('http')
@@ -21,6 +21,89 @@ const serverURL = `http://localhost:${port}`
 let goProcess = null
 let mainWindow = null
 let isQuitting = false
+const devtoolsOverlays = new Map()
+
+function withWebContents(id) {
+  const contents = webContents.fromId(Number(id))
+  if (!contents || contents.isDestroyed()) return null
+  return contents
+}
+
+function panelShortcut(panel) {
+  if (panel === 'elements') return '1'
+  if (panel === 'console') return '2'
+  return ''
+}
+
+function selectDevToolsPanel(devtoolsContents, panel) {
+  const key = panelShortcut(panel)
+  if (!devtoolsContents || !key) return
+  const control = process.platform !== 'darwin'
+  const meta = process.platform === 'darwin'
+  const code = `Digit${key}`
+  setTimeout(() => {
+    try {
+      devtoolsContents.sendInputEvent({ type: 'keyDown', keyCode: key, code, control, meta })
+      devtoolsContents.sendInputEvent({ type: 'keyUp', keyCode: key, code, control, meta })
+    } catch (err) {
+      console.error('Failed to switch DevTools panel:', err.message)
+    }
+  }, 150)
+}
+
+function normalizeBounds(bounds) {
+  if (!bounds) return null
+  const x = Math.max(0, Math.round(Number(bounds.x) || 0))
+  const y = Math.max(0, Math.round(Number(bounds.y) || 0))
+  const width = Math.max(1, Math.round(Number(bounds.width) || 0))
+  const height = Math.max(1, Math.round(Number(bounds.height) || 0))
+  return { x, y, width, height }
+}
+
+function ensureDevtoolsOverlay(targetId, bounds) {
+  const target = withWebContents(targetId)
+  const normalizedBounds = normalizeBounds(bounds)
+  if (!target || !normalizedBounds || !mainWindow || mainWindow.isDestroyed()) return null
+
+  let entry = devtoolsOverlays.get(target.id)
+  if (!entry) {
+    const view = new WebContentsView()
+    entry = { view, opened: false }
+    devtoolsOverlays.set(target.id, entry)
+    try {
+      target.setDevToolsWebContents(view.webContents)
+    } catch (err) {
+      console.error('Failed to bind DevTools view:', err.message)
+      view.webContents.close()
+      devtoolsOverlays.delete(target.id)
+      return null
+    }
+  }
+
+  try {
+    if (!entry.attached) {
+      mainWindow.contentView.addChildView(entry.view)
+      entry.attached = true
+    }
+    entry.view.setBounds(normalizedBounds)
+  } catch (err) {
+    console.error('Failed to place DevTools view:', err.message)
+    return null
+  }
+
+  return { target, devtools: entry.view.webContents, entry }
+}
+
+function hideDevtoolsOverlay(targetId) {
+  const target = withWebContents(targetId)
+  const entry = target ? devtoolsOverlays.get(target.id) : null
+  if (!entry || !mainWindow || mainWindow.isDestroyed()) return
+  try {
+    entry.view.setBounds({ x: 0, y: 0, width: 1, height: 1 })
+  } catch (err) {
+    console.error('Failed to hide DevTools view:', err.message)
+  }
+}
 
 const allowedPermissions = new Set([
   'media',
@@ -295,6 +378,58 @@ function createWindow() {
     if (mainWindow) mainWindow.webContents.toggleDevTools()
   })
 
+  ipcMain.on('libro-toggle-webview-devtools', (event, targetId, bounds, panel) => {
+    const pair = ensureDevtoolsOverlay(targetId, bounds)
+    if (!pair) return
+    try {
+      if (pair.entry.opened && pair.target.isDevToolsOpened()) {
+        pair.target.closeDevTools()
+        pair.entry.opened = false
+        hideDevtoolsOverlay(targetId)
+      } else {
+        pair.target.openDevTools({ mode: 'detach', activate: false })
+        pair.entry.opened = true
+        selectDevToolsPanel(pair.devtools, panel)
+      }
+    } catch (err) {
+      console.error('Failed to toggle webview DevTools:', err.message)
+    }
+  })
+
+  ipcMain.on('libro-open-webview-devtools', (event, targetId, bounds, panel) => {
+    const pair = ensureDevtoolsOverlay(targetId, bounds)
+    if (!pair) return
+    try {
+      if (!pair.target.isDevToolsOpened()) {
+        pair.target.openDevTools({ mode: 'detach', activate: false })
+        pair.entry.opened = true
+      }
+      selectDevToolsPanel(pair.devtools, panel)
+    } catch (err) {
+      console.error('Failed to open webview DevTools:', err.message)
+    }
+  })
+
+  ipcMain.on('libro-inspect-webview-element', (event, targetId, bounds, x, y) => {
+    const pair = ensureDevtoolsOverlay(targetId, bounds)
+    if (!pair) return
+    try {
+      if (!pair.target.isDevToolsOpened()) {
+        pair.target.openDevTools({ mode: 'detach', activate: false })
+        pair.entry.opened = true
+      }
+      pair.target.inspectElement(Number(x) || 0, Number(y) || 0)
+      selectDevToolsPanel(pair.devtools, 'elements')
+    } catch (err) {
+      console.error('Failed to inspect webview element:', err.message)
+    }
+  })
+
+  ipcMain.on('libro-update-webview-devtools-bounds', (event, targetId, bounds) => {
+    const pair = ensureDevtoolsOverlay(targetId, bounds)
+    if (!pair) return
+  })
+
   ipcMain.on('libro-copy-clipboard', (event, text) => {
     if (text) clipboard.writeText(text)
   })
@@ -325,7 +460,8 @@ app.on('web-contents-created', (event, contents) => {
     // Track input focus state via console messages from the injected browserShortcutsScript.
     // This lets the main process know whether to intercept plain keys (j/k/h/l etc.)
     // or let them through to text input fields.
-    contents.on('console-message', (e, level, message) => {
+    contents.on('console-message', (e) => {
+      const message = e.message || ''
       if (message === '__libro:inputfocus') webviewInputFocused.set(contents.id, true)
       else if (message === '__libro:inputblur') webviewInputFocused.set(contents.id, false)
     })
@@ -335,6 +471,11 @@ app.on('web-contents-created', (event, contents) => {
     })
     contents.on('destroyed', () => {
       webviewInputFocused.delete(contents.id)
+      const entry = devtoolsOverlays.get(contents.id)
+      if (entry) {
+        try { entry.view.webContents.close() } catch (err) {}
+        devtoolsOverlays.delete(contents.id)
+      }
     })
 
     contents.setWindowOpenHandler(({ url, disposition }) => {

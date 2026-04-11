@@ -21,8 +21,10 @@ var browserShortcutsScript = '(' + function(){
 	if(window.__libroBrowserShortcuts) return;
 	window.__libroBrowserShortcuts = true;
 	window.__libroHoveredLink = '';
+	window.__libroHoveredElement = null;
 	document.addEventListener('mouseover', function(e) {
 		var el = e.target;
+		window.__libroHoveredElement = el || null;
 		while (el && el.tagName !== 'A') el = el.parentElement;
 		window.__libroHoveredLink = (el && el.href) ? el.href : '';
 	}, true);
@@ -68,6 +70,57 @@ var browserShortcutsScript = '(' + function(){
 					console.log('__libro:copytext:' + window.__libroHoveredLink);
 				}
 				break;
+			case 'i':
+				var target = window.__libroHoveredElement;
+				if (target && target.tagName) {
+					var rect = target.getBoundingClientRect();
+					var parts = [];
+					var node = target;
+					var depth = 0;
+					while (node && node.nodeType === 1 && depth < 5) {
+						var part = node.tagName.toLowerCase();
+						if (node.id) {
+							part += '#' + String(node.id).replace(/([^a-zA-Z0-9_-])/g, '\\$1');
+							parts.unshift(part);
+							break;
+						}
+						if (node.classList && node.classList.length) {
+							var cls = Array.prototype.slice.call(node.classList, 0, 2).join('.');
+							if (cls) part += '.' + cls.replace(/([^a-zA-Z0-9_-])/g, '\\$1');
+						}
+						var idx = 1;
+						var sib = node;
+						while ((sib = sib.previousElementSibling)) {
+							if (sib.tagName === node.tagName) idx++;
+						}
+						part += ':nth-of-type(' + idx + ')';
+						parts.unshift(part);
+						node = node.parentElement;
+						depth++;
+					}
+					var xpathSegments = [];
+					node = target;
+					while (node && node.nodeType === 1) {
+						var index = 1;
+						var sibling = node.previousElementSibling;
+						while (sibling) {
+							if (sibling.tagName === node.tagName) index++;
+							sibling = sibling.previousElementSibling;
+						}
+						xpathSegments.unshift(node.tagName.toLowerCase() + '[' + index + ']');
+						node = node.parentElement;
+					}
+					console.log('__libro:inspectpick:' + JSON.stringify({
+						x: Math.max(0, Math.round(rect.left + rect.width / 2)),
+						y: Math.max(0, Math.round(rect.top + rect.height / 2)),
+						css: parts.join(' > '),
+						xpath: '/' + xpathSegments.join('/')
+					}));
+				}
+				break;
+			case 'c':
+				console.log('__libro:console');
+				break;
 			case '/': console.log('__libro:search'); break;
 			case 'n': console.log('__libro:findnext'); break;
 			case 'N': console.log('__libro:findprev'); break;
@@ -91,9 +144,6 @@ var browserShortcutsScript = '(' + function(){
 // --- Console error/warning counts per webview ---
 var consoleCounts = {}; // appID -> {errors}
 var consoleMessages = {}; // appID -> [{level, message, source, line}]
-var consoleFilter = {}; // appID -> {warn: bool, error: bool}
-var consoleMaximized = {}; // appID -> bool
-
 function updateConsoleBadges(appID) {
 	var c = consoleCounts[appID] || {errors: 0};
 	var errEl = document.getElementById('devtools-errors-' + appID);
@@ -111,12 +161,6 @@ function updateConsoleBadges(appID) {
 	if (wrapEl && c.errors === 0) {
 		wrapEl.style.opacity = '';
 	}
-	// Update console panel count
-	var countEl = document.getElementById('console-count-' + appID);
-	if (countEl) {
-		var msgs = consoleMessages[appID] || [];
-		countEl.textContent = msgs.length > 0 ? msgs.length + ' messages' : '';
-	}
 }
 
 function addConsoleMessage(appID, level, message, source, line) {
@@ -124,152 +168,39 @@ function addConsoleMessage(appID, level, message, source, line) {
 	consoleMessages[appID].push({level: level, message: message, source: source, line: line});
 	// Cap at 500 messages
 	if (consoleMessages[appID].length > 500) consoleMessages[appID].shift();
-	renderConsoleMessage(appID, level, message, source, line);
-}
-
-function shouldShowConsoleMessage(appID, level) {
-	var f = getConsoleFilter(appID);
-	// If both unchecked, show all (log + warn + error)
-	if (!f.warn && !f.error) return true;
-	// If warn checked, show warn (1) and error (2)
-	if (f.warn && level >= 1) return true;
-	// If error checked, show error (2)
-	if (f.error && level >= 2) return true;
-	// Show logs only if no filter is active
-	return false;
-}
-
-function renderConsoleMessage(appID, level, message, source, line) {
-	var container = document.getElementById('console-messages-' + appID);
-	if (!container) return;
-	if (!shouldShowConsoleMessage(appID, level)) return;
-	var row = document.createElement('div');
-	row.className = 'flex items-start gap-2 px-3 py-0.5 border-b border-stone-100 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-zinc-800/50';
-	// Color by level: 0=log, 1=warning, 2=error
-	var textColor = 'text-stone-600 dark:text-stone-300';
-	var bgColor = '';
-	var icon = '';
-	if (level === 2) {
-		textColor = 'text-red-600 dark:text-red-400';
-		bgColor = ' bg-red-50/50 dark:bg-red-950/20';
-		icon = 'error_outline';
-	} else if (level === 1) {
-		textColor = 'text-yellow-600 dark:text-yellow-400';
-		bgColor = ' bg-yellow-50/50 dark:bg-yellow-950/20';
-		icon = 'warning_amber';
-	}
-	if (bgColor) row.className += bgColor;
-	var html = '';
-	if (icon) {
-		html += '<span class="material-icons-round text-[12px] mt-[3px] shrink-0 ' + textColor + '">' + icon + '</span>';
-	} else {
-		html += '<span class="w-3 shrink-0"></span>';
-	}
-	var safeMsg = message.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-	html += '<span class="flex-1 break-all whitespace-pre-wrap ' + textColor + '">' + safeMsg + '</span>';
-	if (source) {
-		var shortSource = source.split('/').pop();
-		if (line) shortSource += ':' + line;
-		html += '<span class="shrink-0 text-stone-400 dark:text-stone-500 text-[10px] mt-[2px]">' + shortSource.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>';
-	}
-	row.innerHTML = html;
-	container.appendChild(row);
-	// Auto-scroll to bottom
-	container.scrollTop = container.scrollHeight;
-}
-
-function renderAllConsoleMessages(appID) {
-	var container = document.getElementById('console-messages-' + appID);
-	if (!container) return;
-	container.innerHTML = '';
-	var msgs = consoleMessages[appID] || [];
-	for (var i = 0; i < msgs.length; i++) {
-		var m = msgs[i];
-		if (!shouldShowConsoleMessage(appID, m.level)) continue;
-		renderConsoleMessage(appID, m.level, m.message, m.source, m.line);
-	}
 }
 
 window.__libroToggleConsole = function(appID) {
-	var panel = document.getElementById('console-panel-' + appID);
-	if (!panel) return;
-	if (panel.classList.contains('hidden')) {
-		panel.classList.remove('hidden');
-		panel.classList.add('flex');
-		renderAllConsoleMessages(appID);
-	} else {
-		panel.classList.add('hidden');
-		panel.classList.remove('flex');
-	}
+	var wv = window.__libroWebviews[appID];
+	if (!wv || !window.libroElectron || typeof window.libroElectron.toggleWebviewDevTools !== 'function') return;
+	whenReady(appID, function() {
+		try {
+			var targetId = webviewContentsID(wv);
+			if (!targetId) return;
+			var panel = document.getElementById('devtools-panel-' + appID);
+			var opening = !!(panel && panel.classList.contains('hidden'));
+			setDevtoolsPanelVisible(appID, opening);
+			var bounds = devtoolsPanelBounds(appID);
+			if (!bounds) return;
+			window.libroElectron.toggleWebviewDevTools(targetId, bounds, 'console');
+			if (!opening) setDevtoolsPanelVisible(appID, false);
+		} catch (err) {}
+	});
 };
 
-window.__libroClearConsole = function(appID) {
-	consoleMessages[appID] = [];
-	consoleCounts[appID] = {errors: 0};
-	updateConsoleBadges(appID);
-	var container = document.getElementById('console-messages-' + appID);
-	if (container) container.innerHTML = '';
-};
-
-function getConsoleFilter(appID) {
-	if (!consoleFilter[appID]) consoleFilter[appID] = {warn: false, error: true};
-	return consoleFilter[appID];
-}
-
-function updateFilterCheckbox(appID, type) {
-	var cb = document.getElementById('console-filter-' + type + '-' + appID);
-	if (!cb) return;
-	var f = getConsoleFilter(appID);
-	var checked = f[type];
-	cb.className = 'flex items-center justify-center w-4 h-4 rounded border cursor-pointer transition-colors ' +
-		(checked ? 'bg-blue-500 border-blue-500' : 'border-stone-400 dark:border-stone-500 hover:border-stone-500 dark:hover:border-stone-400');
-	cb.innerHTML = checked ? '<span class="material-icons-round text-[12px] text-white">check</span>' : '';
-}
-
-window.__libroToggleFilter = function(appID, type) {
-	var f = getConsoleFilter(appID);
-	f[type] = !f[type];
-	updateFilterCheckbox(appID, type);
-	renderAllConsoleMessages(appID);
-};
-
-window.__libroCopyConsole = function(appID) {
-	var msgs = consoleMessages[appID] || [];
-	var lines = [];
-	for (var i = 0; i < msgs.length; i++) {
-		var m = msgs[i];
-		if (!shouldShowConsoleMessage(appID, m.level)) continue;
-		var prefix = m.level === 2 ? '[ERROR] ' : (m.level === 1 ? '[WARN] ' : '');
-		var src = m.source ? ' (' + m.source.split('/').pop() + (m.line ? ':' + m.line : '') + ')' : '';
-		lines.push(prefix + m.message + src);
-	}
-	var joined = lines.join('\n');
-	if (window.libroElectron && window.libroElectron.copyToClipboard) {
-		window.libroElectron.copyToClipboard(joined);
-	} else if (navigator.clipboard) {
-		navigator.clipboard.writeText(joined);
-	}
-	if (window.__libroShowToast) {
-		window.__libroShowToast('Copied', lines.length + ' messages', 1500);
-	}
-};
-
-window.__libroToggleConsoleMaximize = function(appID) {
-	var panel = document.getElementById('console-panel-' + appID);
-	if (!panel) return;
-	var maximized = consoleMaximized[appID] || false;
-	if (maximized) {
-		panel.style.height = '240px';
-		panel.style.flex = '';
-		consoleMaximized[appID] = false;
-	} else {
-		panel.style.height = '';
-		panel.style.flex = '1';
-		consoleMaximized[appID] = true;
-	}
-	// Update icon
-	var icon = document.getElementById('console-maximize-icon-' + appID);
-	if (icon) icon.textContent = consoleMaximized[appID] ? 'close_fullscreen' : 'open_in_full';
+window.__libroOpenConsole = function(appID) {
+	var wv = window.__libroWebviews[appID];
+	if (!wv || !window.libroElectron || typeof window.libroElectron.openWebviewDevTools !== 'function') return;
+	whenReady(appID, function() {
+		try {
+			var targetId = webviewContentsID(wv);
+			if (!targetId) return;
+			setDevtoolsPanelVisible(appID, true);
+			var bounds = devtoolsPanelBounds(appID);
+			if (!bounds) return;
+			window.libroElectron.openWebviewDevTools(targetId, bounds, 'console');
+		} catch (err) {}
+	});
 };
 
 // --- Find-in-page state per webview ---
@@ -471,6 +402,40 @@ function currentAppID(wv) {
 	return wv ? (wv.getAttribute('data-webview-app') || '') : '';
 }
 
+function webviewContentsID(wv) {
+	if (!wv) return 0;
+	try { return Number(wv.getWebContentsId ? wv.getWebContentsId() : 0) || 0; } catch (err) {}
+	return 0;
+}
+
+function setDevtoolsPanelVisible(appID, visible) {
+	var panel = document.getElementById('devtools-panel-' + appID);
+	if (!panel) return;
+	if (visible) panel.classList.remove('hidden');
+	else panel.classList.add('hidden');
+}
+
+function devtoolsPanelBounds(appID) {
+	var panel = document.getElementById('devtools-panel-' + appID);
+	if (!panel) return null;
+	var rect = panel.getBoundingClientRect();
+	if (!rect.width || !rect.height) return null;
+	return {
+		x: Math.round(rect.left),
+		y: Math.round(rect.top),
+		width: Math.round(rect.width),
+		height: Math.round(rect.height),
+	};
+}
+
+function updateDevtoolsBounds(appID) {
+	var wv = window.__libroWebviews[appID];
+	var targetId = webviewContentsID(wv);
+	var bounds = devtoolsPanelBounds(appID);
+	if (!targetId || !bounds || !window.libroElectron || typeof window.libroElectron.updateWebviewDevToolsBounds !== 'function') return;
+	window.libroElectron.updateWebviewDevToolsBounds(targetId, bounds);
+}
+
 function focusIfSelected(appID, wv) {
 	if (!appID || !wv) return;
 	function attempt() {
@@ -525,8 +490,8 @@ function initWebview(wv) {
 				var inp = document.getElementById('urlinput-' + appID);
 				if (inp) inp.value = newSrc;
 				// Re-bind events for the current webview element if needed.
-				bindWebviewEvents(pooled);
-				focusIfSelected(appID, pooled);
+					bindWebviewEvents(pooled);
+					focusIfSelected(appID, pooled);
 				// Reused webviews keep their session, but must navigate to the new
 				// target or a newly opened tab can show stale content from the prior tab.
 				if (currentURL !== newSrc) {
@@ -571,8 +536,6 @@ function bindWebviewEvents(wv) {
 		consoleCounts[appID] = {errors: 0};
 		consoleMessages[appID] = [];
 		updateConsoleBadges(appID);
-		var container = document.getElementById('console-messages-' + appID);
-		if (container) container.innerHTML = '';
 	});
 	wv.addEventListener('did-navigate-in-page', function(e) {
 		if (!e.isMainFrame) return;
@@ -600,6 +563,26 @@ function bindWebviewEvents(wv) {
 		else if (msg === '__libro:findprev') findInPagePrev(appID);
 		else if (msg === '__libro:searchclear') clearSearch(appID);
 		else if (msg === '__libro:enter') handleEnter(appID);
+		else if (msg === '__libro:console') window.__libroOpenConsole(appID);
+		else if (msg && msg.startsWith('__libro:inspectpick:')) {
+			var raw = msg.substring('__libro:inspectpick:'.length);
+			var payload = null;
+			try { payload = JSON.parse(raw); } catch (err) {}
+			if (payload) {
+						whenReady(appID, function() {
+							try {
+								var targetId = webviewContentsID(wv);
+								var bounds = devtoolsPanelBounds(appID);
+								if (!targetId || !bounds || !window.libroElectron || typeof window.libroElectron.inspectWebviewElement !== 'function') return;
+								setDevtoolsPanelVisible(appID, true);
+								window.libroElectron.inspectWebviewElement(targetId, bounds, payload.x || 0, payload.y || 0);
+							} catch (err) {}
+						});
+				if (window.__libroShowToast && payload.css) {
+					window.__libroShowToast('Inspect', payload.css, 1800);
+				}
+			}
+		}
 		else if (msg === '__libro:copyurl') {
 			var inp = document.getElementById('urlinput-' + appID);
 			if (inp && navigator.clipboard) navigator.clipboard.writeText(inp.value);
@@ -689,40 +672,45 @@ initAll();
 
 var bodyObserver = new MutationObserver(function() { initAll(); });
 bodyObserver.observe(document.body, { childList: true, subtree: true });
+window.addEventListener('resize', function() {
+	Object.keys(window.__libroWebviews).forEach(function(appID) {
+		updateDevtoolsBounds(appID);
+	});
+});
 
 // Cleanup when webview removed from DOM (skip pooled webviews)
 var cleanupObserver = new MutationObserver(function(mutations) {
 	var pool = document.getElementById('webview-pool');
 	mutations.forEach(function(m) {
 		m.removedNodes.forEach(function(node) {
-			if (node.nodeType !== 1) return;
-			var wvs = node.querySelectorAll ? node.querySelectorAll('webview[data-webview-app]') : [];
-			wvs.forEach(function(wv) {
-				// Skip cleanup if webview was moved to pool
-				if (pool && pool.contains(wv)) return;
-				var id = wv.getAttribute('data-webview-app');
-				if (id) {
+				if (node.nodeType !== 1) return;
+				var wvs = node.querySelectorAll ? node.querySelectorAll('webview[data-webview-app]') : [];
+				wvs.forEach(function(wv) {
+					// Skip cleanup if webview was moved to pool
+					if (pool && pool.contains(wv)) return;
+					var id = wv.getAttribute('data-webview-app');
+					if (id) {
+						delete window.__libroWebviews[id];
+						delete initialized[id];
+						delete ready[id];
+						delete queued[id];
+						delete searchState[id];
+						delete consoleMessages[id];
+						delete consoleCounts[id];
+					}
+				});
+				if (node.tagName === 'WEBVIEW' && node.getAttribute('data-webview-app')) {
+					if (pool && pool.contains(node)) return;
+					var id = node.getAttribute('data-webview-app');
 					delete window.__libroWebviews[id];
 					delete initialized[id];
 					delete ready[id];
 					delete queued[id];
 					delete searchState[id];
-					delete consoleMessages[id];
-					delete consoleCounts[id];
 				}
 			});
-			if (node.tagName === 'WEBVIEW' && node.getAttribute('data-webview-app')) {
-				if (pool && pool.contains(node)) return;
-				var id = node.getAttribute('data-webview-app');
-				delete window.__libroWebviews[id];
-				delete initialized[id];
-				delete ready[id];
-				delete queued[id];
-				delete searchState[id];
-			}
 		});
 	});
-});
 cleanupObserver.observe(document.body, { childList: true, subtree: true });
 
 // Global helpers — safe to call before dom-ready (calls are queued)
