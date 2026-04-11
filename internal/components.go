@@ -262,9 +262,46 @@ func renderMainArea(state *AppState, sid string) *r.Node {
 	return renderAppStrip(state, sid)
 }
 
+func savedAppsProjectName(state *AppState, projectName string) string {
+	for _, project := range state.Projects {
+		if project.Name == projectName {
+			if project.Virtual && project.ParentProject != "" {
+				return project.ParentProject
+			}
+			break
+		}
+	}
+	return projectName
+}
+
+func renderMainAreaForProject(state *AppState, sid, projectName string) *r.Node {
+	projectState := *state
+	projectState.ActiveProject = projectName
+	if projectName != state.ActiveProject {
+		if snap, ok := state.snapshots[projectName]; ok {
+			projectState.Apps = snap.Apps
+			projectState.SelectedIndex = snap.SelectedIndex
+		} else {
+			projectState.Apps = nil
+			projectState.SelectedIndex = 0
+		}
+	}
+	return renderMainArea(&projectState, sid)
+}
+
+func projectHasRunningApps(state *AppState, projectName string) bool {
+	if projectName == state.ActiveProject {
+		return len(state.Apps) > 0
+	}
+	if snap, ok := state.snapshots[projectName]; ok {
+		return len(snap.Apps) > 0
+	}
+	return false
+}
+
 // renderEmptyState renders the saved apps list with "+ Add App" button
 func renderEmptyState(state *AppState, sid string) *r.Node {
-	savedApps := DBLoadVisibleSavedApps(state.ActiveProject)
+	savedApps := DBLoadVisibleSavedApps(savedAppsProjectName(state, state.ActiveProject))
 	appButtons := make([]*r.Node, 0, len(savedApps))
 	for _, app := range savedApps {
 		appButtons = append(appButtons, renderSavedAppButton(app, sid))
@@ -336,14 +373,21 @@ func renderSavedAppButton(app SavedApp, sid string) *r.Node {
 
 	writable := app.Writable
 
-	// Launch button (simplified - edit/delete moved to Manage Apps dialog)
-	btn := r.Button("w-full flex items-center gap-3 px-4 py-3 bg-white dark:bg-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-zinc-700/40 hover:border-gray-300 dark:hover:border-zinc-600 rounded-lg cursor-pointer text-left transition-colors duration-75 shadow-sm dark:shadow-none").
-		Render(
-			iconNode,
-			r.Span("flex-1 truncate text-sm text-gray-800 dark:text-zinc-200").Text(label),
-			r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Type),
-			r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Width),
-		).
+	launchBtn := r.Button("flex-1 flex items-center gap-3 px-4 py-3 text-left cursor-pointer transition-colors duration-75").
+		Render(func() []*r.Node {
+			nodes := []*r.Node{
+				iconNode,
+				r.Span("flex-1 truncate text-sm text-gray-800 dark:text-zinc-200").Text(label),
+			}
+			if app.ProjectSpecific {
+				nodes = append(nodes, r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400").Text("project"))
+			}
+			nodes = append(nodes,
+				r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Type),
+				r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Width),
+			)
+			return nodes
+		}()...).
 		OnClick(&r.Action{Name: "app.start", Data: map[string]any{
 			"sid": sid, "type": app.Type, "url": app.URL,
 			"command": app.Command, "width": app.Width,
@@ -351,7 +395,19 @@ func renderSavedAppButton(app SavedApp, sid string) *r.Node {
 			"iconUrl": app.IconURL,
 		}})
 
-	return btn
+	editBtn := r.Button("shrink-0 flex items-center justify-center w-9 h-9 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-700/60 transition-colors").
+		Attr("title", "Edit app").
+		Attr("onclick", fmt.Sprintf(`__ws.callSilent('app.saved.edit',{sid:'%s',dbid:%d});__ws.call('app.dialog.open',{sid:'%s'});`, sid, app.DBID, sid)+
+			savedAppEditFillJS(app)).
+		Render(r.I("material-icons-round text-lg").Text("edit"))
+
+	deleteBtn := r.Button("shrink-0 flex items-center justify-center w-9 h-9 mr-2 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors").
+		Attr("title", "Delete app").
+		Render(r.I("material-icons-round text-lg").Text("delete")).
+		OnClick(&r.Action{Name: "app.saved.delete", Data: sidData(sid, "dbid", float64(app.DBID))})
+
+	return r.Div("w-full flex items-center gap-2 bg-white dark:bg-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-zinc-700/40 hover:border-gray-300 dark:hover:border-zinc-600 rounded-lg transition-colors duration-75 shadow-sm dark:shadow-none").
+		Render(launchBtn, editBtn, deleteBtn)
 }
 
 // savedAppEditFillJS returns JS that fills the add dialog with saved app data for editing.
@@ -1253,7 +1309,8 @@ func removeManageOverlayJS() string {
 // renderSideLauncher renders a vertical icon dock: saved app icons + "+" button.
 // Now server-rendered from DB instead of client-side localStorage.
 func renderSideLauncher(sid, side, activeProject string) *r.Node {
-	savedApps := DBLoadVisibleSavedApps(activeProject)
+	state := sm.Get(sid)
+	savedApps := DBLoadVisibleSavedApps(savedAppsProjectName(state, activeProject))
 
 	tipPos := "left-full ml-2"
 	if side == "right" {
@@ -2638,21 +2695,62 @@ func worktreesJS(state *AppState) string {
 
 // renderManageAppsPage renders the manage apps page as a fixed overlay so running apps stay alive.
 func renderManageAppsPage(state *AppState, sid string) *r.Node {
-	savedApps := DBLoadVisibleSavedApps(state.ActiveProject)
+	savedApps := DBLoadAllSavedApps()
 
-	rows := make([]*r.Node, 0, len(savedApps))
+	globalApps := make([]SavedApp, 0, len(savedApps))
+	projectApps := make(map[string][]SavedApp)
 	for _, app := range savedApps {
-		rows = append(rows, renderManageAppRow(app, sid))
+		if app.ProjectSpecific {
+			projectApps[app.ProjectName] = append(projectApps[app.ProjectName], app)
+			continue
+		}
+		globalApps = append(globalApps, app)
+	}
+	sort.Slice(globalApps, func(i, j int) bool {
+		return strings.ToLower(savedAppDisplayLabel(globalApps[i])) < strings.ToLower(savedAppDisplayLabel(globalApps[j]))
+	})
+
+	projectOrder := make([]string, 0, len(projectApps))
+	seenProjects := make(map[string]bool, len(projectApps))
+	for _, project := range state.Projects {
+		if len(projectApps[project.Name]) == 0 {
+			continue
+		}
+		projectOrder = append(projectOrder, project.Name)
+		seenProjects[project.Name] = true
+	}
+	extraProjects := make([]string, 0)
+	for projectName := range projectApps {
+		if seenProjects[projectName] {
+			continue
+		}
+		extraProjects = append(extraProjects, projectName)
+	}
+	sort.Slice(extraProjects, func(i, j int) bool {
+		return strings.ToLower(extraProjects[i]) < strings.ToLower(extraProjects[j])
+	})
+	projectOrder = append(projectOrder, extraProjects...)
+
+	sections := make([]*r.Node, 0, len(projectOrder)+1)
+	if len(globalApps) > 0 {
+		sections = append(sections, renderManageAppSection("Global Apps", "Available across all projects", globalApps, sid))
+	}
+	for _, projectName := range projectOrder {
+		apps := projectApps[projectName]
+		sort.Slice(apps, func(i, j int) bool {
+			return strings.ToLower(savedAppDisplayLabel(apps[i])) < strings.ToLower(savedAppDisplayLabel(apps[j]))
+		})
+		sections = append(sections, renderManageAppSection(projectName, "Project-specific apps", apps, sid))
 	}
 
 	var listNode *r.Node
-	if len(rows) == 0 {
+	if len(sections) == 0 {
 		listNode = r.Div("flex-1 flex items-center justify-center").Render(
 			r.P("text-sm font-mono text-gray-400 dark:text-zinc-500").Text("No saved apps yet"),
 		)
 	} else {
 		listNode = r.Div("flex-1 overflow-y-auto").Render(
-			r.Div("max-w-2xl mx-auto w-full px-4").Render(rows...),
+			r.Div("max-w-3xl mx-auto w-full px-4 py-6 space-y-6").Render(sections...),
 		)
 	}
 
@@ -2679,15 +2777,31 @@ func renderManageAppsPage(state *AppState, sid string) *r.Node {
 		)
 }
 
+func renderManageAppSection(title, subtitle string, apps []SavedApp, sid string) *r.Node {
+	rows := make([]*r.Node, 0, len(apps))
+	for _, app := range apps {
+		rows = append(rows, renderManageAppRow(app, sid))
+	}
+
+	children := []*r.Node{
+		r.Div("px-1").Render(
+			r.Div("text-sm font-mono font-bold uppercase tracking-[0.18em] text-gray-900 dark:text-zinc-100").Text(title),
+		),
+	}
+	if subtitle != "" {
+		children = append(children, r.Div("px-1 text-[11px] font-mono uppercase tracking-[0.14em] text-gray-400 dark:text-zinc-500").Text(subtitle))
+	}
+	children = append(children, r.Div("overflow-hidden rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60").Render(rows...))
+
+	return r.Div("space-y-2").Render(children...)
+}
+
 // renderManageAppRow renders a single row in the manage apps page.
 func renderManageAppRow(app SavedApp, sid string) *r.Node {
 	var iconNode *r.Node
-	label := app.Name
+	label := savedAppDisplayLabel(app)
 
 	if app.Type == "terminal" {
-		if label == "" {
-			label = app.Command
-		}
 		if info := lookupTermIcon(app.Command); info != nil {
 			if info.URL != "" {
 				iconNode = r.Img("w-6 h-6 shrink-0 rounded-sm").Attr("src", info.URL)
@@ -2700,9 +2814,6 @@ func renderManageAppRow(app SavedApp, sid string) *r.Node {
 			iconNode = r.I("material-icons-round text-xl shrink-0 text-gray-400 dark:text-zinc-500").Text("terminal")
 		}
 	} else {
-		if label == "" {
-			label = app.URL
-		}
 		iconNode = r.I("material-icons-round text-xl shrink-0 text-gray-400 dark:text-zinc-500").Text("language")
 		if app.URL != "" {
 			if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
@@ -2716,15 +2827,14 @@ func renderManageAppRow(app SavedApp, sid string) *r.Node {
 		}
 	}
 
-	badges := []*r.Node{
+	badges := make([]*r.Node, 0, 3)
+	if app.ProjectSpecific {
+		badges = append(badges, r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400").Text("project"))
+	}
+	badges = append(badges,
 		r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Type),
 		r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Width),
-	}
-	if app.ProjectSpecific {
-		badges = append(badges,
-			r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400").Text("project"),
-		)
-	}
+	)
 
 	editBtn := r.Button("flex items-center justify-center w-8 h-8 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors").
 		Render(r.I("material-icons-round text-lg").Text("edit")).
@@ -2742,6 +2852,20 @@ func renderManageAppRow(app SavedApp, sid string) *r.Node {
 
 	return r.Div("flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors").
 		Render(children...)
+}
+
+func savedAppDisplayLabel(app SavedApp) string {
+	label := app.Name
+	if app.Type == "terminal" {
+		if label == "" {
+			label = app.Command
+		}
+		return label
+	}
+	if label == "" {
+		label = app.URL
+	}
+	return label
 }
 
 // resizeJS returns JS that updates an app frame's width without replacing the DOM
@@ -2805,7 +2929,7 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 // renderProjectBar renders the horizontal project switcher bar
 // renderTopBar renders the top bar with saved app icons, browse/add buttons, and action buttons.
 func renderTopBar(state *AppState, sid string) *r.Node {
-	savedApps := DBLoadVisibleSavedApps(state.ActiveProject)
+	savedApps := DBLoadVisibleSavedApps(savedAppsProjectName(state, state.ActiveProject))
 
 	btnCls := "w-9 h-9 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-gray-200 dark:hover:bg-zinc-700 relative group/ico"
 	tipCls := "absolute top-full mt-1 px-2 py-1 text-xs rounded bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg"
@@ -3490,8 +3614,8 @@ func updateHashJS(name string) string {
 
 // savedAppsJS returns JS that sets the global __libroSavedApps and __libroBrowsedURLs variables from DB data.
 // Only apps visible in the given project are included (global + project-specific for this project).
-func savedAppsJS(activeProject string) string {
-	apps := DBLoadVisibleSavedApps(activeProject)
+func savedAppsJS(state *AppState) string {
+	apps := DBLoadVisibleSavedApps(savedAppsProjectName(state, state.ActiveProject))
 	type jsApp struct {
 		Type     string `json:"type"`
 		URL      string `json:"url,omitempty"`

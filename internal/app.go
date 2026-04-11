@@ -141,7 +141,7 @@ func Run(assets embed.FS) {
 				writable = val
 			}
 
-			dbSaveApp(state.ActiveProject, editDBID, "terminal", command, string(width), name, writable, projectSpecific)
+			dbSaveApp(savedAppsProjectName(state, state.ActiveProject), editDBID, "terminal", command, string(width), name, writable, projectSpecific)
 		} else {
 			url, _ := data["app-url"].(string)
 			url = strings.TrimSpace(url)
@@ -150,7 +150,7 @@ func Run(assets embed.FS) {
 			}
 			url = ensureScheme(url)
 
-			dbSaveApp(state.ActiveProject, editDBID, "url", url, string(width), name, false, projectSpecific)
+			dbSaveApp(savedAppsProjectName(state, state.ActiveProject), editDBID, "url", url, string(width), name, false, projectSpecific)
 		}
 
 		sm.CloseDialog(sid)
@@ -169,13 +169,20 @@ func Run(assets embed.FS) {
 			Replace(DialogID, renderAddDialog(false, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Add(savedAppsJS(state.ActiveProject)).
+			Add(savedAppsJS(state)).
 			Add(manageOverlayJS)
 
-		// Only replace main area when no apps are running (empty state),
-		// to avoid destroying live iframes/webviews.
-		if len(state.Apps) == 0 {
-			resp.Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid))
+		// Refresh rendered empty-state project panes without touching live running app panes.
+		for projectName := range state.renderedProjects {
+			if projectHasRunningApps(state, projectName) {
+				continue
+			}
+			resp.Replace(projectMainID(projectName), renderMainAreaForProject(state, sid, projectName))
+			if projectName == state.ActiveProject {
+				resp.Add(fmt.Sprintf(`(function(){var el=document.getElementById('%s');if(el)el.style.display='flex';})();`, projectMainID(projectName)))
+			} else {
+				resp.Add(fmt.Sprintf(`(function(){var el=document.getElementById('%s');if(el)el.style.display='none';})();`, projectMainID(projectName)))
+			}
 		}
 
 		return resp.Build()
@@ -768,7 +775,7 @@ func Run(assets embed.FS) {
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state)).
-			Add(savedAppsJS(state.ActiveProject)).
+			Add(savedAppsJS(state)).
 			Build()
 	}
 
@@ -808,7 +815,7 @@ func Run(assets embed.FS) {
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state)).
-			Add(savedAppsJS(state.ActiveProject)).
+			Add(savedAppsJS(state)).
 			Build()
 	})
 
@@ -836,7 +843,7 @@ func Run(assets embed.FS) {
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state)).
-			Add(savedAppsJS(state.ActiveProject)).
+			Add(savedAppsJS(state)).
 			Build()
 	})
 
@@ -886,7 +893,7 @@ func Run(assets embed.FS) {
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state)).
-			Add(savedAppsJS(state.ActiveProject)).
+			Add(savedAppsJS(state)).
 			Build()
 	})
 
@@ -1001,13 +1008,24 @@ func Run(assets embed.FS) {
 		}
 		DBRemoveSavedAppByID(dbid)
 		state := sm.Get(sid)
-		// Re-render the manage overlay and top bar to reflect the deletion
-		return r.NewResponse().
+		// Re-render the visible surfaces that consume saved app data.
+		resp := r.NewResponse().
 			Replace(ManageDialogID, renderManageAppsPage(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Add(savedAppsJS(state.ActiveProject)).
-			Build()
+			Add(savedAppsJS(state))
+		for projectName := range state.renderedProjects {
+			if projectHasRunningApps(state, projectName) {
+				continue
+			}
+			resp.Replace(projectMainID(projectName), renderMainAreaForProject(state, sid, projectName))
+			if projectName == state.ActiveProject {
+				resp.Add(fmt.Sprintf(`(function(){var el=document.getElementById('%s');if(el)el.style.display='flex';})();`, projectMainID(projectName)))
+			} else {
+				resp.Add(fmt.Sprintf(`(function(){var el=document.getElementById('%s');if(el)el.style.display='none';})();`, projectMainID(projectName)))
+			}
+		}
+		return resp.Build()
 	})
 
 	// Set edit DB ID for editing a saved app

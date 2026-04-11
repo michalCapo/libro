@@ -13,6 +13,7 @@ import (
 // SavedApp represents a persisted application definition (no runtime state like Port/ID).
 type SavedApp struct {
 	DBID            int64  // database row ID (used for edit/delete operations)
+	ProjectName     string // owning project for this saved app
 	Type            string // "url" or "terminal"
 	URL             string
 	Command         string
@@ -190,7 +191,7 @@ func DBLoadSavedApps(projectName string) []SavedApp {
 	defer dbMu.Unlock()
 
 	rows, err := db.Query(
-		"SELECT id, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps WHERE project_name = ? ORDER BY position, id",
+		"SELECT id, project_name, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps WHERE project_name = ? ORDER BY position, id",
 		projectName,
 	)
 	if err != nil {
@@ -203,7 +204,7 @@ func DBLoadSavedApps(projectName string) []SavedApp {
 	for rows.Next() {
 		var a SavedApp
 		var writable, projectSpecific int
-		if err := rows.Scan(&a.DBID, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL, &projectSpecific); err != nil {
+		if err := rows.Scan(&a.DBID, &a.ProjectName, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL, &projectSpecific); err != nil {
 			continue
 		}
 		a.Writable = writable != 0
@@ -218,7 +219,7 @@ func DBLoadAllSavedApps() []SavedApp {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
-	rows, err := db.Query("SELECT id, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps ORDER BY position, id")
+	rows, err := db.Query("SELECT id, project_name, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps ORDER BY LOWER(project_name), LOWER(COALESCE(NULLIF(name,''), command, url)), id")
 	if err != nil {
 		log.Printf("db: load all saved apps: %v", err)
 		return nil
@@ -229,7 +230,7 @@ func DBLoadAllSavedApps() []SavedApp {
 	for rows.Next() {
 		var a SavedApp
 		var writable, projectSpecific int
-		if err := rows.Scan(&a.DBID, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL, &projectSpecific); err != nil {
+		if err := rows.Scan(&a.DBID, &a.ProjectName, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL, &projectSpecific); err != nil {
 			continue
 		}
 		a.Writable = writable != 0
@@ -246,7 +247,7 @@ func DBLoadVisibleSavedApps(projectName string) []SavedApp {
 	defer dbMu.Unlock()
 
 	rows, err := db.Query(
-		"SELECT id, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps WHERE project_specific = 0 OR project_name = ? ORDER BY LOWER(COALESCE(NULLIF(name,''), command, url)), id",
+		"SELECT id, project_name, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps WHERE project_specific = 0 OR project_name = ? ORDER BY LOWER(COALESCE(NULLIF(name,''), command, url)), id",
 		projectName,
 	)
 	if err != nil {
@@ -259,7 +260,7 @@ func DBLoadVisibleSavedApps(projectName string) []SavedApp {
 	for rows.Next() {
 		var a SavedApp
 		var writable, projectSpecific int
-		if err := rows.Scan(&a.DBID, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL, &projectSpecific); err != nil {
+		if err := rows.Scan(&a.DBID, &a.ProjectName, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL, &projectSpecific); err != nil {
 			continue
 		}
 		a.Writable = writable != 0
