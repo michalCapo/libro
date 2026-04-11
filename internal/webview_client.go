@@ -71,52 +71,7 @@ var browserShortcutsScript = '(' + function(){
 				}
 				break;
 			case 'i':
-				var target = window.__libroHoveredElement;
-				if (target && target.tagName) {
-					var rect = target.getBoundingClientRect();
-					var parts = [];
-					var node = target;
-					var depth = 0;
-					while (node && node.nodeType === 1 && depth < 5) {
-						var part = node.tagName.toLowerCase();
-						if (node.id) {
-							part += '#' + String(node.id).replace(/([^a-zA-Z0-9_-])/g, '\\$1');
-							parts.unshift(part);
-							break;
-						}
-						if (node.classList && node.classList.length) {
-							var cls = Array.prototype.slice.call(node.classList, 0, 2).join('.');
-							if (cls) part += '.' + cls.replace(/([^a-zA-Z0-9_-])/g, '\\$1');
-						}
-						var idx = 1;
-						var sib = node;
-						while ((sib = sib.previousElementSibling)) {
-							if (sib.tagName === node.tagName) idx++;
-						}
-						part += ':nth-of-type(' + idx + ')';
-						parts.unshift(part);
-						node = node.parentElement;
-						depth++;
-					}
-					var xpathSegments = [];
-					node = target;
-					while (node && node.nodeType === 1) {
-						var index = 1;
-						var sibling = node.previousElementSibling;
-						while (sibling) {
-							if (sibling.tagName === node.tagName) index++;
-							sibling = sibling.previousElementSibling;
-						}
-						xpathSegments.unshift(node.tagName.toLowerCase() + '[' + index + ']');
-						node = node.parentElement;
-					}
-					console.log('__libro:inspectpick:' + JSON.stringify({
-						x: Math.max(0, Math.round(rect.left + rect.width / 2)),
-						y: Math.max(0, Math.round(rect.top + rect.height / 2)),
-						css: parts.join(' > '),
-						xpath: '/' + xpathSegments.join('/')
-					}));
-				}
+				console.log('__libro:inspect');
 				break;
 			case 'c':
 				console.log('__libro:console');
@@ -199,6 +154,34 @@ window.__libroOpenConsole = function(appID) {
 			var bounds = devtoolsPanelBounds(appID);
 			if (!bounds) return;
 			window.libroElectron.openWebviewDevTools(targetId, bounds, 'console');
+		} catch (err) {}
+	});
+};
+
+window.__libroOpenInspector = function(appID) {
+	var wv = window.__libroWebviews[appID];
+	if (!wv || !window.libroElectron || typeof window.libroElectron.openWebviewInspector !== 'function') return;
+	whenReady(appID, function() {
+		try {
+			var targetId = webviewContentsID(wv);
+			if (!targetId) return;
+			setDevtoolsPanelVisible(appID, true);
+			var bounds = devtoolsPanelBounds(appID);
+			if (!bounds) return;
+			window.libroElectron.openWebviewInspector(targetId, bounds);
+		} catch (err) {}
+	});
+};
+
+window.__libroCloseConsole = function(appID) {
+	var wv = window.__libroWebviews[appID];
+	if (!wv || !window.libroElectron || typeof window.libroElectron.closeWebviewDevTools !== 'function') return;
+	whenReady(appID, function() {
+		try {
+			var targetId = webviewContentsID(wv);
+			if (!targetId) return;
+			window.libroElectron.closeWebviewDevTools(targetId);
+			setDevtoolsPanelVisible(appID, false);
 		} catch (err) {}
 	});
 };
@@ -413,6 +396,11 @@ function setDevtoolsPanelVisible(appID, visible) {
 	if (!panel) return;
 	if (visible) panel.classList.remove('hidden');
 	else panel.classList.add('hidden');
+	var closeBtn = document.getElementById('devtools-close-' + appID);
+	if (closeBtn) {
+		if (visible) closeBtn.classList.remove('hidden');
+		else closeBtn.classList.add('hidden');
+	}
 }
 
 function devtoolsPanelBounds(appID) {
@@ -423,8 +411,8 @@ function devtoolsPanelBounds(appID) {
 	return {
 		x: Math.round(rect.left),
 		y: Math.round(rect.top),
-		width: Math.round(rect.width),
-		height: Math.round(rect.height),
+		width: Math.max(1, Math.round(rect.width)),
+		height: Math.max(1, Math.round(rect.height)),
 	};
 }
 
@@ -564,25 +552,7 @@ function bindWebviewEvents(wv) {
 		else if (msg === '__libro:searchclear') clearSearch(appID);
 		else if (msg === '__libro:enter') handleEnter(appID);
 		else if (msg === '__libro:console') window.__libroOpenConsole(appID);
-		else if (msg && msg.startsWith('__libro:inspectpick:')) {
-			var raw = msg.substring('__libro:inspectpick:'.length);
-			var payload = null;
-			try { payload = JSON.parse(raw); } catch (err) {}
-			if (payload) {
-						whenReady(appID, function() {
-							try {
-								var targetId = webviewContentsID(wv);
-								var bounds = devtoolsPanelBounds(appID);
-								if (!targetId || !bounds || !window.libroElectron || typeof window.libroElectron.inspectWebviewElement !== 'function') return;
-								setDevtoolsPanelVisible(appID, true);
-								window.libroElectron.inspectWebviewElement(targetId, bounds, payload.x || 0, payload.y || 0);
-							} catch (err) {}
-						});
-				if (window.__libroShowToast && payload.css) {
-					window.__libroShowToast('Inspect', payload.css, 1800);
-				}
-			}
-		}
+		else if (msg === '__libro:inspect') window.__libroOpenInspector(appID);
 		else if (msg === '__libro:copyurl') {
 			var inp = document.getElementById('urlinput-' + appID);
 			if (inp && navigator.clipboard) navigator.clipboard.writeText(inp.value);

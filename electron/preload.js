@@ -16,6 +16,12 @@ contextBridge.exposeInMainWorld('libroElectron', {
   openWebviewDevTools: function (webContentsId, bounds, panel) {
     ipcRenderer.send('libro-open-webview-devtools', webContentsId, bounds, panel)
   },
+  closeWebviewDevTools: function (webContentsId) {
+    ipcRenderer.send('libro-close-webview-devtools', webContentsId)
+  },
+  openWebviewInspector: function (webContentsId, bounds) {
+    ipcRenderer.send('libro-open-webview-inspector', webContentsId, bounds)
+  },
   inspectWebviewElement: function (webContentsId, bounds, x, y) {
     ipcRenderer.send('libro-inspect-webview-element', webContentsId, bounds, x, y)
   },
