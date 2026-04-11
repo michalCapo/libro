@@ -70,9 +70,6 @@ var browserShortcutsScript = '(' + function(){
 					console.log('__libro:copytext:' + window.__libroHoveredLink);
 				}
 				break;
-			case 'i':
-				console.log('__libro:inspect');
-				break;
 			case 'c':
 				console.log('__libro:console');
 				break;
@@ -154,21 +151,6 @@ window.__libroOpenConsole = function(appID) {
 			var bounds = devtoolsPanelBounds(appID);
 			if (!bounds) return;
 			window.libroElectron.openWebviewDevTools(targetId, bounds, 'console');
-		} catch (err) {}
-	});
-};
-
-window.__libroOpenInspector = function(appID) {
-	var wv = window.__libroWebviews[appID];
-	if (!wv || !window.libroElectron || typeof window.libroElectron.openWebviewInspector !== 'function') return;
-	whenReady(appID, function() {
-		try {
-			var targetId = webviewContentsID(wv);
-			if (!targetId) return;
-			setDevtoolsPanelVisible(appID, true);
-			var bounds = devtoolsPanelBounds(appID);
-			if (!bounds) return;
-			window.libroElectron.openWebviewInspector(targetId, bounds);
 		} catch (err) {}
 	});
 };
@@ -552,7 +534,6 @@ function bindWebviewEvents(wv) {
 		else if (msg === '__libro:searchclear') clearSearch(appID);
 		else if (msg === '__libro:enter') handleEnter(appID);
 		else if (msg === '__libro:console') window.__libroOpenConsole(appID);
-		else if (msg === '__libro:inspect') window.__libroOpenInspector(appID);
 		else if (msg === '__libro:copyurl') {
 			var inp = document.getElementById('urlinput-' + appID);
 			if (inp && navigator.clipboard) navigator.clipboard.writeText(inp.value);
