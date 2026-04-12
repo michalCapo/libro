@@ -99,6 +99,16 @@ function normalizeBounds(bounds) {
   return { x, y, width, height }
 }
 
+function resetDevtoolsZoom(contents) {
+  if (!contents || contents.isDestroyed()) return
+  try {
+    contents.setZoomLevel(0)
+  } catch (err) {}
+  try {
+    contents.setVisualZoomLevelLimits(1, 1)
+  } catch (err) {}
+}
+
 function ensureDevtoolsOverlay(targetId, bounds) {
   const target = withWebContents(targetId)
   const normalizedBounds = normalizeBounds(bounds)
@@ -109,6 +119,10 @@ function ensureDevtoolsOverlay(targetId, bounds) {
     const view = new WebContentsView()
     entry = { view, opened: false }
     devtoolsOverlays.set(target.id, entry)
+    resetDevtoolsZoom(view.webContents)
+    view.webContents.on('did-finish-load', () => {
+      resetDevtoolsZoom(view.webContents)
+    })
     try {
       target.setDevToolsWebContents(view.webContents)
     } catch (err) {
@@ -414,7 +428,16 @@ function createWindow() {
   })
 
   ipcMain.on('libro-toggle-devtools', () => {
-    if (mainWindow) mainWindow.webContents.toggleDevTools()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    const contents = mainWindow.webContents
+    if (contents.isDevToolsOpened()) {
+      contents.closeDevTools()
+      return
+    }
+    // Docked DevTools do not lay out reliably after renderer zoom changes.
+    // Opening them detached keeps the inspected window zoomed while DevTools
+    // stays at its own native scale.
+    contents.openDevTools({ mode: 'detach', activate: false })
   })
 
   ipcMain.on('libro-toggle-webview-devtools', (event, targetId, bounds, panel) => {
@@ -427,6 +450,7 @@ function createWindow() {
         hideDevtoolsOverlay(targetId)
       } else {
         pair.target.openDevTools({ mode: 'detach', activate: false })
+        resetDevtoolsZoom(pair.devtools)
         pair.entry.opened = true
         selectDevToolsPanel(pair.devtools, panel)
       }
@@ -443,6 +467,7 @@ function createWindow() {
         pair.target.openDevTools({ mode: 'detach', activate: false })
         pair.entry.opened = true
       }
+      resetDevtoolsZoom(pair.devtools)
       selectDevToolsPanel(pair.devtools, panel)
     } catch (err) {
       console.error('Failed to open webview DevTools:', err.message)
@@ -472,6 +497,7 @@ function createWindow() {
         pair.target.openDevTools({ mode: 'detach', activate: false })
         pair.entry.opened = true
       }
+      resetDevtoolsZoom(pair.devtools)
       pair.target.inspectElement(Number(x) || 0, Number(y) || 0)
       selectDevToolsPanel(pair.devtools, 'elements')
       activateDevToolsPicker(pair.devtools)

@@ -170,6 +170,7 @@ window.__libroCloseConsole = function(appID) {
 
 // --- Find-in-page state per webview ---
 var searchState = {}; // appID -> {query, barEl, inputEl, countEl}
+var devtoolsPanelObservers = {};
 
 function injectBrowserShortcuts(wv, appID) {
 	try { wv.executeJavaScript(browserShortcutsScript); } catch(err) {}
@@ -390,11 +391,18 @@ function devtoolsPanelBounds(appID) {
 	if (!panel) return null;
 	var rect = panel.getBoundingClientRect();
 	if (!rect.width || !rect.height) return null;
+	var zoomFactor = 1;
+	try {
+		if (window.libroElectron && typeof window.libroElectron.getZoomFactor === 'function') {
+			zoomFactor = Number(window.libroElectron.getZoomFactor()) || 1;
+		}
+	} catch (err) {}
+	if (!zoomFactor || zoomFactor < 0.01) zoomFactor = 1;
 	return {
-		x: Math.round(rect.left),
-		y: Math.round(rect.top),
-		width: Math.max(1, Math.round(rect.width)),
-		height: Math.max(1, Math.round(rect.height)),
+		x: Math.round(rect.left * zoomFactor),
+		y: Math.round(rect.top * zoomFactor),
+		width: Math.max(1, Math.round(rect.width * zoomFactor)),
+		height: Math.max(1, Math.round(rect.height * zoomFactor)),
 	};
 }
 
@@ -404,6 +412,17 @@ function updateDevtoolsBounds(appID) {
 	var bounds = devtoolsPanelBounds(appID);
 	if (!targetId || !bounds || !window.libroElectron || typeof window.libroElectron.updateWebviewDevToolsBounds !== 'function') return;
 	window.libroElectron.updateWebviewDevToolsBounds(targetId, bounds);
+}
+
+function observeDevtoolsPanel(appID) {
+	if (!window.ResizeObserver || devtoolsPanelObservers[appID]) return;
+	var panel = document.getElementById('devtools-panel-' + appID);
+	if (!panel) return;
+	var observer = new ResizeObserver(function() {
+		updateDevtoolsBounds(appID);
+	});
+	observer.observe(panel);
+	devtoolsPanelObservers[appID] = observer;
 }
 
 function focusIfSelected(appID, wv) {
@@ -422,6 +441,7 @@ function focusIfSelected(appID, wv) {
 function initWebview(wv) {
 	var appID = wv.getAttribute('data-webview-app');
 	if (!appID || initialized[appID]) return;
+	observeDevtoolsPanel(appID);
 
 	// Check pool for a webview with the same origin — reuse it to preserve session state
 	var pool = document.getElementById('webview-pool');
@@ -445,6 +465,10 @@ function initWebview(wv) {
 				wv.parentNode.replaceChild(pooled, wv);
 				// Migrate JS state from old app ID to new one
 				if (oldAppID && oldAppID !== appID) {
+					if (devtoolsPanelObservers[oldAppID]) {
+						try { devtoolsPanelObservers[oldAppID].disconnect(); } catch (err) {}
+						delete devtoolsPanelObservers[oldAppID];
+					}
 					delete window.__libroWebviews[oldAppID];
 					delete initialized[oldAppID];
 					delete ready[oldAppID];
@@ -641,6 +665,10 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 					if (pool && pool.contains(wv)) return;
 					var id = wv.getAttribute('data-webview-app');
 					if (id) {
+						if (devtoolsPanelObservers[id]) {
+							try { devtoolsPanelObservers[id].disconnect(); } catch (err) {}
+							delete devtoolsPanelObservers[id];
+						}
 						delete window.__libroWebviews[id];
 						delete initialized[id];
 						delete ready[id];
@@ -653,6 +681,10 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 				if (node.tagName === 'WEBVIEW' && node.getAttribute('data-webview-app')) {
 					if (pool && pool.contains(node)) return;
 					var id = node.getAttribute('data-webview-app');
+					if (devtoolsPanelObservers[id]) {
+						try { devtoolsPanelObservers[id].disconnect(); } catch (err) {}
+						delete devtoolsPanelObservers[id];
+					}
 					delete window.__libroWebviews[id];
 					delete initialized[id];
 					delete ready[id];
