@@ -396,6 +396,8 @@ function createWindow() {
     width: 1920,
     height: 1080,
     show: false,
+    frame: false,
+    autoHideMenuBar: true,
     webPreferences: {
       webviewTag: true,
       nodeIntegration: false,
