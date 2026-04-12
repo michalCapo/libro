@@ -1,6 +1,6 @@
 // Preload script — runs in the renderer process with limited Node.js access.
 // Webview tags are enabled via webPreferences.webviewTag in main.js.
-const { ipcRenderer, contextBridge } = require('electron')
+const { ipcRenderer, contextBridge, webFrame } = require('electron')
 
 // Expose IPC methods to the renderer page for close confirmation flow
 contextBridge.exposeInMainWorld('libroElectron', {
@@ -24,6 +24,13 @@ contextBridge.exposeInMainWorld('libroElectron', {
   },
   updateWebviewDevToolsBounds: function (webContentsId, bounds) {
     ipcRenderer.send('libro-update-webview-devtools-bounds', webContentsId, bounds)
+  },
+  getZoomFactor: function () {
+    try {
+      return webFrame.getZoomFactor()
+    } catch (err) {
+      return 1
+    }
   },
   openPath: function (filePath) {
     ipcRenderer.send('libro-open-path', filePath)
