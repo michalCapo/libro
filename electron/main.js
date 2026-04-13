@@ -22,11 +22,93 @@ let goProcess = null
 let mainWindow = null
 let isQuitting = false
 const devtoolsOverlays = new Map()
+const webviewConsoleState = new Map()
 
 function withWebContents(id) {
   const contents = webContents.fromId(Number(id))
   if (!contents || contents.isDestroyed()) return null
   return contents
+}
+
+function dispatchConsoleErrorCount(targetId, count) {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const safeTargetId = Number(targetId) || 0
+  const safeCount = Math.max(0, Number(count) || 0)
+  mainWindow.webContents.executeJavaScript(`
+    if (window.__libroSetConsoleErrorCount) {
+      window.__libroSetConsoleErrorCount(${safeTargetId}, ${safeCount})
+    }
+  `).catch(() => {})
+}
+
+function resetConsoleErrorCount(contents) {
+  if (!contents || contents.isDestroyed()) return
+  let state = webviewConsoleState.get(contents.id)
+  if (!state) {
+    state = { errorCount: 0, debuggerAttached: false, onMessage: null, onDetach: null }
+    webviewConsoleState.set(contents.id, state)
+  }
+  state.errorCount = 0
+  dispatchConsoleErrorCount(contents.id, 0)
+}
+
+function shouldCountConsoleError(entry) {
+  if (!entry || entry.level !== 'error') return false
+  const text = String(entry.text || '')
+  return !text.startsWith('__libro:')
+}
+
+function attachConsoleTracker(contents) {
+  if (!contents || contents.isDestroyed() || contents.getType() !== 'webview') return
+
+  let state = webviewConsoleState.get(contents.id)
+  if (!state) {
+    state = { errorCount: 0, debuggerAttached: false, onMessage: null, onDetach: null }
+    webviewConsoleState.set(contents.id, state)
+  }
+  if (state.debuggerAttached) return
+
+  try {
+    contents.debugger.attach('1.3')
+    state.debuggerAttached = true
+  } catch (err) {
+    console.error('Failed to attach webview console tracker:', err.message)
+    return
+  }
+
+  state.onMessage = (event, method, params) => {
+    if (method !== 'Log.entryAdded') return
+    if (!shouldCountConsoleError(params && params.entry)) return
+    state.errorCount += 1
+    dispatchConsoleErrorCount(contents.id, state.errorCount)
+  }
+
+  state.onDetach = () => {
+    state.debuggerAttached = false
+  }
+
+  contents.debugger.on('message', state.onMessage)
+  contents.debugger.on('detach', state.onDetach)
+  contents.debugger.sendCommand('Log.enable').catch((err) => {
+    console.error('Failed to enable webview console tracker:', err.message)
+  })
+  dispatchConsoleErrorCount(contents.id, state.errorCount)
+}
+
+function cleanupConsoleTracker(contents) {
+  if (!contents) return
+  const state = webviewConsoleState.get(contents.id)
+  if (!state) return
+  if (state.onMessage) {
+    try { contents.debugger.removeListener('message', state.onMessage) } catch (err) {}
+  }
+  if (state.onDetach) {
+    try { contents.debugger.removeListener('detach', state.onDetach) } catch (err) {}
+  }
+  if (state.debuggerAttached) {
+    try { contents.debugger.detach() } catch (err) {}
+  }
+  webviewConsoleState.delete(contents.id)
 }
 
 function panelShortcut(panel) {
@@ -539,6 +621,8 @@ app.on('web-contents-created', (event, contents) => {
     if (supportedUA) {
       contents.setUserAgent(supportedUA)
     }
+    attachConsoleTracker(contents)
+    resetConsoleErrorCount(contents)
 
     // Track input focus state via console messages from the injected browserShortcutsScript.
     // This lets the main process know whether to intercept plain keys (j/k/h/l etc.)
@@ -551,9 +635,11 @@ app.on('web-contents-created', (event, contents) => {
     // Reset focus tracking on navigation (old page is unloaded)
     contents.on('did-start-navigation', () => {
       webviewInputFocused.set(contents.id, false)
+      resetConsoleErrorCount(contents)
     })
     contents.on('destroyed', () => {
       webviewInputFocused.delete(contents.id)
+      cleanupConsoleTracker(contents)
       const entry = devtoolsOverlays.get(contents.id)
       if (entry) {
         try { entry.view.webContents.close() } catch (err) {}

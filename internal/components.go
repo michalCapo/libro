@@ -1096,19 +1096,28 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			Attr("style", "display:inline-flex;width:100%;height:100%")
 		// Force closing tag by adding empty text content
 		wv.Text("")
-		devtoolsCloseBtn := r.Button("hidden absolute bottom-3 right-3 z-50 w-8 h-8 cursor-pointer flex items-center justify-center text-stone-500 dark:text-stone-300 hover:text-stone-700 dark:hover:text-white").
+		devtoolsCloseBtn := r.Button("hidden w-5 h-5 cursor-pointer pointer-events-auto items-center justify-center rounded-full bg-red-500 text-white shadow-sm ring-1 ring-red-600/50 hover:bg-red-600").
 			ID(fmt.Sprintf("devtools-close-%s", app.ID)).
 			Attr("title", "Close DevTools").
 			Attr("onclick", fmt.Sprintf("if(window.__libroCloseConsole)window.__libroCloseConsole('%s')", app.ID)).
 			Render(
-				r.I("material-icons-round text-[16px]").Text("close"),
+				r.Span("block w-full text-center text-[9px] leading-5 font-semibold").Text("x"),
+			)
+		devtoolsControls := r.Div("absolute bottom-3 right-3 z-50 flex items-center gap-2 pointer-events-none").
+			ID(fmt.Sprintf("devtools-wrap-%s", app.ID)).
+			Render(
+				r.Span("hidden inline-flex w-5 h-5 items-center justify-center rounded-full bg-red-500 text-white shadow-sm ring-1 ring-red-600/50 pointer-events-none").
+					ID(fmt.Sprintf("devtools-errors-%s", app.ID)).
+					Render(
+						r.Span("block w-full text-center text-[10px] leading-5 font-semibold tabular-nums").
+							ID(fmt.Sprintf("devtools-errors-value-%s", app.ID)).
+							Text("0"),
+					),
+				devtoolsCloseBtn,
 			)
 		webviewWrapper := r.Div("relative flex-1 min-h-0").Render(
 			wv,
-			r.Span("hidden text-[11px] font-semibold tabular-nums text-red-500 absolute bottom-3 right-3 z-40 pointer-events-none").
-				ID(fmt.Sprintf("devtools-errors-%s", app.ID)).
-				Text("0"),
-			devtoolsCloseBtn,
+			devtoolsControls,
 		)
 		devtoolsPanel := r.Div("hidden border-t border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-zinc-900").
 			ID(fmt.Sprintf("devtools-panel-%s", app.ID)).
@@ -1188,6 +1197,18 @@ func switchProjectJS(toProject string, newContent *r.Node) string {
 
 	// Target already exists in DOM — hide all, show target
 	return hideJS + showProjectJS(toProject)
+}
+
+// closeDevtoolsForAppJS returns JS that closes the Electron devtools overlay
+// for a specific app before its project is hidden.
+func closeDevtoolsForAppJS(appID string) string {
+	if appID == "" {
+		return ""
+	}
+	return fmt.Sprintf(`
+(function(){
+	if(window.__libroCloseConsole) window.__libroCloseConsole(%s);
+})();`, jsString(appID))
 }
 
 // focusSelectedAppJS returns JS that focuses the selected app's iframe after a short delay
