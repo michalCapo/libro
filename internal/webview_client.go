@@ -117,37 +117,6 @@ var browserShortcutsScript = '(' + function(){
 	syncInputFocus();
 } + ')()';
 
-// --- Console error/warning counts per webview ---
-var consoleCounts = {}; // appID -> {errors}
-var consoleMessages = {}; // appID -> [{level, message, source, line}]
-function updateConsoleBadges(appID) {
-	var c = consoleCounts[appID] || {errors: 0};
-	var errEl = document.getElementById('devtools-errors-' + appID);
-	var errValueEl = document.getElementById('devtools-errors-value-' + appID);
-	var wrapEl = document.getElementById('devtools-wrap-' + appID);
-	if (errEl) {
-		if (c.errors > 0) {
-			errEl.style.display = 'inline';
-			if (errValueEl) errValueEl.textContent = c.errors;
-			else errEl.textContent = c.errors;
-			if (wrapEl) wrapEl.style.opacity = '1';
-		} else {
-			errEl.style.display = 'none';
-		}
-	}
-	// Restore hover-only if no errors
-	if (wrapEl && c.errors === 0) {
-		wrapEl.style.opacity = '';
-	}
-}
-
-function addConsoleMessage(appID, level, message, source, line) {
-	if (!consoleMessages[appID]) consoleMessages[appID] = [];
-	consoleMessages[appID].push({level: level, message: message, source: source, line: line});
-	// Cap at 500 messages
-	if (consoleMessages[appID].length > 500) consoleMessages[appID].shift();
-}
-
 window.__libroToggleConsole = function(appID) {
 	var wv = window.__libroWebviews[appID];
 	if (!wv || !window.libroElectron || typeof window.libroElectron.toggleWebviewDevTools !== 'function') return;
@@ -505,8 +474,6 @@ function initWebview(wv) {
 					delete ready[oldAppID];
 					delete queued[oldAppID];
 					delete searchState[oldAppID];
-					delete consoleMessages[oldAppID];
-					delete consoleCounts[oldAppID];
 				}
 				window.__libroWebviews[appID] = pooled;
 				initialized[appID] = true;
@@ -552,15 +519,12 @@ function bindWebviewEvents(wv) {
 		focusIfSelected(appID, wv);
 	});
 
-	// Update URL bar on navigation and reset console counts
+	// Update URL bar on navigation
 	wv.addEventListener('did-navigate', function(e) {
 		var appID = currentAppID(wv);
 		if (!appID) return;
 		var inp = document.getElementById('urlinput-' + appID);
 		if (inp && e.url) inp.value = e.url;
-		consoleCounts[appID] = {errors: 0};
-		consoleMessages[appID] = [];
-		updateConsoleBadges(appID);
 	});
 	wv.addEventListener('did-navigate-in-page', function(e) {
 		if (!e.isMainFrame) return;
@@ -577,11 +541,10 @@ function bindWebviewEvents(wv) {
 		injectBrowserShortcuts(wv, appID);
 	});
 
-	// Listen for browser shortcut messages and track errors/warnings
+	// Listen for browser shortcut messages
 	wv.addEventListener('console-message', function(e) {
 		var appID = currentAppID(wv);
 		if (!appID) return;
-		if (!consoleCounts[appID]) consoleCounts[appID] = {errors: 0};
 		var msg = e.message;
 		if (msg === '__libro:search') showSearchBar(appID);
 		else if (msg === '__libro:findnext') findInPageNext(appID);
@@ -606,16 +569,6 @@ function bindWebviewEvents(wv) {
 					window.__libroShowToast('Copied', preview, 1500);
 				}
 			}
-		}
-		else if (msg && !msg.startsWith('__libro:')) {
-			// Store and display all console messages
-			addConsoleMessage(appID, e.level, msg, e.sourceId || '', e.line || 0);
-			// Electron webview console-message levels are:
-			// 0=verbose, 1=info, 2=warning, 3=error.
-			if (e.level === 3) {
-				consoleCounts[appID].errors++;
-			}
-			updateConsoleBadges(appID);
 		}
 	});
 
@@ -706,8 +659,6 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 						delete ready[id];
 						delete queued[id];
 						delete searchState[id];
-						delete consoleMessages[id];
-						delete consoleCounts[id];
 					}
 				});
 				if (node.tagName === 'WEBVIEW' && node.getAttribute('data-webview-app')) {

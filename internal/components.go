@@ -1106,13 +1106,6 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 		devtoolsControls := r.Div("absolute bottom-3 right-3 z-50 flex items-center gap-2 pointer-events-none").
 			ID(fmt.Sprintf("devtools-wrap-%s", app.ID)).
 			Render(
-				r.Span("hidden inline-flex w-5 h-5 items-center justify-center rounded-full bg-red-500 text-white shadow-sm ring-1 ring-red-600/50 pointer-events-none").
-					ID(fmt.Sprintf("devtools-errors-%s", app.ID)).
-					Render(
-						r.Span("block w-full text-center text-[10px] leading-5 font-semibold tabular-nums").
-							ID(fmt.Sprintf("devtools-errors-value-%s", app.ID)).
-							Text("0"),
-					),
 				devtoolsCloseBtn,
 			)
 		webviewWrapper := r.Div("relative flex-1 min-h-0").Render(
