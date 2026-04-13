@@ -22,6 +22,32 @@ var browserShortcutsScript = '(' + function(){
 	window.__libroBrowserShortcuts = true;
 	window.__libroHoveredLink = '';
 	window.__libroHoveredElement = null;
+	function isEditableElement(el) {
+		if (!el) return false;
+		if (el.isContentEditable) return true;
+		var tag = el.tagName ? el.tagName.toUpperCase() : '';
+		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+		if (el.getAttribute) {
+			var role = (el.getAttribute('role') || '').toLowerCase();
+			if (role === 'textbox' || role === 'searchbox' || role === 'combobox' || role === 'spinbutton') return true;
+		}
+		return false;
+	}
+	function activeEditableElement() {
+		var el = document.activeElement;
+		while (el && el.shadowRoot && el.shadowRoot.activeElement) {
+			el = el.shadowRoot.activeElement;
+		}
+		if (isEditableElement(el)) return el;
+		if (el && typeof el.closest === 'function') {
+			var editableParent = el.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="textbox"], [role="searchbox"], [role="combobox"], [role="spinbutton"]');
+			if (editableParent) return editableParent;
+		}
+		return null;
+	}
+	function syncInputFocus() {
+		console.log(activeEditableElement() ? '__libro:inputfocus' : '__libro:inputblur');
+	}
 	document.addEventListener('mouseover', function(e) {
 		var el = e.target;
 		window.__libroHoveredElement = el || null;
@@ -31,24 +57,21 @@ var browserShortcutsScript = '(' + function(){
 	// Track input focus state — the Electron main process listens for these
 	// console messages to decide whether to intercept plain keys (j/k/h/l etc.)
 	// or let them through to text input fields.
-	document.addEventListener('focusin', function(e) {
-		var t = e.target.tagName ? e.target.tagName.toUpperCase() : '';
-		if(t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||(e.target&&e.target.isContentEditable)) {
-			console.log('__libro:inputfocus');
-		}
+	document.addEventListener('focusin', syncInputFocus, true);
+	document.addEventListener('focusout', function() {
+		setTimeout(syncInputFocus, 0);
 	}, true);
-	document.addEventListener('focusout', function(e) {
-		var t = e.target.tagName ? e.target.tagName.toUpperCase() : '';
-		if(t==='INPUT'||t==='TEXTAREA'||t==='SELECT'||(e.target&&e.target.isContentEditable)) {
-			console.log('__libro:inputblur');
-		}
+	document.addEventListener('mousedown', function() {
+		setTimeout(syncInputFocus, 0);
 	}, true);
+	document.addEventListener('selectionchange', syncInputFocus, true);
+	window.addEventListener('pageshow', syncInputFocus, true);
+	window.addEventListener('load', syncInputFocus, true);
 	document.addEventListener('keydown', function(e) {
 		if(e.metaKey || e.ctrlKey || e.altKey) return;
-		var ae = document.activeElement;
-		var tag = ae ? ae.tagName.toUpperCase() : '';
-		if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(ae&&ae.isContentEditable)) {
-			if(e.key==='Escape' && ae) { ae.blur(); e.preventDefault(); e.stopPropagation(); }
+		var ae = activeEditableElement();
+		if(ae) {
+			if(e.key==='Escape' && ae && typeof ae.blur === 'function') { ae.blur(); e.preventDefault(); e.stopPropagation(); }
 			return;
 		}
 		var handled = true;
@@ -91,6 +114,7 @@ var browserShortcutsScript = '(' + function(){
 		}
 		if(handled) { e.preventDefault(); e.stopPropagation(); }
 	}, true);
+	syncInputFocus();
 } + ')()';
 
 // --- Console error/warning counts per webview ---
@@ -99,11 +123,13 @@ var consoleMessages = {}; // appID -> [{level, message, source, line}]
 function updateConsoleBadges(appID) {
 	var c = consoleCounts[appID] || {errors: 0};
 	var errEl = document.getElementById('devtools-errors-' + appID);
+	var errValueEl = document.getElementById('devtools-errors-value-' + appID);
 	var wrapEl = document.getElementById('devtools-wrap-' + appID);
 	if (errEl) {
 		if (c.errors > 0) {
 			errEl.style.display = 'inline';
-			errEl.textContent = c.errors;
+			if (errValueEl) errValueEl.textContent = c.errors;
+			else errEl.textContent = c.errors;
 			if (wrapEl) wrapEl.style.opacity = '1';
 		} else {
 			errEl.style.display = 'none';
@@ -381,8 +407,13 @@ function setDevtoolsPanelVisible(appID, visible) {
 	else panel.classList.add('hidden');
 	var closeBtn = document.getElementById('devtools-close-' + appID);
 	if (closeBtn) {
-		if (visible) closeBtn.classList.remove('hidden');
-		else closeBtn.classList.add('hidden');
+		if (visible) {
+			closeBtn.classList.remove('hidden');
+			closeBtn.classList.add('inline-flex');
+		} else {
+			closeBtn.classList.add('hidden');
+			closeBtn.classList.remove('inline-flex');
+		}
 	}
 }
 
@@ -579,8 +610,9 @@ function bindWebviewEvents(wv) {
 		else if (msg && !msg.startsWith('__libro:')) {
 			// Store and display all console messages
 			addConsoleMessage(appID, e.level, msg, e.sourceId || '', e.line || 0);
-			// level: 0=log, 1=warning, 2=error
-			if (e.level === 2) {
+			// Electron webview console-message levels are:
+			// 0=verbose, 1=info, 2=warning, 3=error.
+			if (e.level === 3) {
 				consoleCounts[appID].errors++;
 			}
 			updateConsoleBadges(appID);

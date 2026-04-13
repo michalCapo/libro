@@ -734,6 +734,12 @@ func Run(assets embed.FS) {
 			return "/* noop */"
 		}
 
+		prevState := sm.Get(sid)
+		prevAppID := ""
+		if prevState.SelectedIndex >= 0 && prevState.SelectedIndex < len(prevState.Apps) {
+			prevAppID = prevState.Apps[prevState.SelectedIndex].ID
+		}
+
 		// Branch shortcuts can exist before their virtual project has been created
 		// in the current session. Resolve the matching worktree lazily.
 		if strings.Contains(name, "/") {
@@ -771,6 +777,7 @@ func Run(assets embed.FS) {
 		return r.NewResponse().
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
+			Add(closeDevtoolsForAppJS(prevAppID)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
