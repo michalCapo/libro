@@ -1249,6 +1249,7 @@ func poolWebviewJS(appID string) string {
 (function(){
 	var el=document.querySelector('[data-app-id="%s"]');
 	if(!el)return;
+	['resize-popup','url-popup'].forEach(function(pid){var p=document.getElementById(pid);if(p&&el.contains(p)){p.classList.add('hidden');document.body.appendChild(p);}});
 	var wv=el.querySelector('webview[data-webview-app]');
 	var pool=document.getElementById('webview-pool');
 	if(wv&&pool){
