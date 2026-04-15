@@ -203,10 +203,34 @@ function moveSelectedApp(direction) {
   `)
 }
 
+function adjustMainWindowZoom(action) {
+  const focusedWindow = BrowserWindow.getFocusedWindow()
+  if (!focusedWindow || focusedWindow !== mainWindow || !mainWindow || mainWindow.isDestroyed()) {
+    console.log(`[libro-shortcut] ignored zoom ${action}: main window not focused`)
+    return
+  }
+
+  const wc = mainWindow.webContents
+  const current = wc.getZoomLevel()
+  if (action === 'reset') {
+    wc.setZoomLevel(0)
+  } else if (action === 'out') {
+    wc.setZoomLevel(current - 0.5)
+  } else {
+    wc.setZoomLevel(current + 0.5)
+  }
+  console.log(`[libro-shortcut] zoom ${action}: ${wc.getZoomLevel()}`)
+}
+
 function registerWindowShortcuts() {
   const shortcuts = [
     ['Super+Control+U', () => moveSelectedApp('left')],
     ['Super+Control+I', () => moveSelectedApp('right')],
+    ['Super+=', () => adjustMainWindowZoom('in')],
+    ['Super+Plus', () => adjustMainWindowZoom('in')],
+    ['Super+-', () => adjustMainWindowZoom('out')],
+    ['Super+_', () => adjustMainWindowZoom('out')],
+    ['Super+0', () => adjustMainWindowZoom('reset')],
   ]
 
   for (const [accelerator, handler] of shortcuts) {
@@ -605,14 +629,20 @@ app.on('web-contents-created', (event, contents) => {
       return false
     }
 
-    // Win/Super + Plus/Minus: zoom whole application
-    if (input.meta && (key === '+' || key === '=' || key === '-')) {
+    const isZoomInKey = key === '+' || key === '=' || code === 'equal' || code === 'numpadadd'
+    const isZoomOutKey = key === '-' || code === 'minus' || code === 'numpadsubtract'
+    const isZoomResetKey = key === '0' || code === 'digit0' || code === 'numpad0'
+
+    // Cmd/Super + Plus/Minus/0: zoom whole application
+    if (input.meta && !input.control && !input.alt && (isZoomInKey || isZoomOutKey || isZoomResetKey)) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
         const wc = mainWindow.webContents
         const current = wc.getZoomLevel()
-        if (key === '-') {
+        if (isZoomResetKey) {
+          wc.setZoomLevel(0)
+        } else if (isZoomOutKey) {
           wc.setZoomLevel(current - 0.5)
         } else {
           wc.setZoomLevel(current + 0.5)
