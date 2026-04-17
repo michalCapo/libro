@@ -805,25 +805,7 @@ func Run(assets embed.FS) {
 		if name == "" {
 			return "/* noop */"
 		}
-		sm.SwitchProject(sid, name)
-		state := sm.Get(sid)
-
-		var jsSwitch string
-		if sm.IsProjectRendered(sid, name) {
-			jsSwitch = switchProjectJS(name, nil)
-		} else {
-			jsSwitch = switchProjectJS(name, renderMainArea(state, sid))
-		}
-
-		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(jsSwitch).
-			Add(updateHashJS(name)).
-			Add(projectToastJS(state.ActiveProject)).
-			Add(focusSelectedAppJS(state)).
-			Add(savedAppsJS(state)).
-			Build()
+		return switchToProjectName(sid, name)
 	})
 
 	// Navigate to previous project
@@ -833,25 +815,7 @@ func Run(assets embed.FS) {
 		if name == "" {
 			return "/* noop */"
 		}
-		sm.SwitchProject(sid, name)
-		state := sm.Get(sid)
-
-		var jsSwitch string
-		if sm.IsProjectRendered(sid, name) {
-			jsSwitch = switchProjectJS(name, nil)
-		} else {
-			jsSwitch = switchProjectJS(name, renderMainArea(state, sid))
-		}
-
-		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(jsSwitch).
-			Add(updateHashJS(name)).
-			Add(projectToastJS(state.ActiveProject)).
-			Add(focusSelectedAppJS(state)).
-			Add(savedAppsJS(state)).
-			Build()
+		return switchToProjectName(sid, name)
 	})
 
 	// Select project by nav slot (Ctrl+1 = home, Ctrl+2-9 = assigned slots)
@@ -881,27 +845,7 @@ func Run(assets embed.FS) {
 		if name == "" {
 			return "/* noop */"
 		}
-		if !sm.SwitchProject(sid, name) {
-			return "/* noop */"
-		}
-		state := sm.Get(sid)
-
-		var jsSwitch string
-		if sm.IsProjectRendered(sid, name) {
-			jsSwitch = switchProjectJS(name, nil)
-		} else {
-			jsSwitch = switchProjectJS(name, renderMainArea(state, sid))
-		}
-
-		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(jsSwitch).
-			Add(updateHashJS(name)).
-			Add(projectToastJS(state.ActiveProject)).
-			Add(focusSelectedAppJS(state)).
-			Add(savedAppsJS(state)).
-			Build()
+		return switchToProjectName(sid, name)
 	})
 
 	// Add a nav slot shortcut to a project/branch
@@ -912,7 +856,9 @@ func Run(assets embed.FS) {
 		if name == "" || name == "home" {
 			return ""
 		}
-		sm.AssignNavSlot(sid, name)
+		if slot := sm.AssignNavSlot(sid, name); slot >= 2 && slot <= 9 {
+			DBSetProjectNavSlot(name, slot)
+		}
 		state := sm.Get(sid)
 		return r.NewResponse().
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
@@ -928,9 +874,46 @@ func Run(assets embed.FS) {
 			return ""
 		}
 		sm.RemoveNavSlot(sid, name)
+		DBSetProjectNavSlot(name, 0)
 		state := sm.Get(sid)
 		return r.NewResponse().
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Build()
+	})
+
+	// Toggle a nav slot for the currently active project/worktree (Win+X).
+	app.Action("nav.slot.toggle.active", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		stateBefore := sm.Get(sid)
+		name := stateBefore.ActiveProject
+		if name == "" {
+			return "/* noop */"
+		}
+		if name == "home" {
+			return showToastJS("Ctrl+1 is fixed", "Home is always assigned to Ctrl+1", 1400)
+		}
+
+		title := ""
+		subtitle := ""
+		if slot := sm.GetNavSlotForProject(sid, name); slot >= 2 && slot <= 9 {
+			sm.RemoveNavSlot(sid, name)
+			DBSetProjectNavSlot(name, 0)
+			title = fmt.Sprintf("Ctrl+%d removed", slot)
+			subtitle = name
+		} else {
+			slot := sm.AssignNavSlot(sid, name)
+			if slot < 2 || slot > 9 {
+				return showToastJS("No free shortcut", "Ctrl+2 through Ctrl+9 are already assigned", 1500)
+			}
+			DBSetProjectNavSlot(name, slot)
+			title = fmt.Sprintf("Ctrl+%d assigned", slot)
+			subtitle = name
+		}
+
+		state := sm.Get(sid)
+		return r.NewResponse().
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(showToastJS(title, subtitle, 1300)).
 			Build()
 	})
 

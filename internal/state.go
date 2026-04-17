@@ -34,6 +34,7 @@ type Application struct {
 type Project struct {
 	Name          string
 	Path          string
+	NavSlot       int
 	IsGitRepo     bool   // detected at load time, not persisted
 	Virtual       bool   // true for worktree-derived projects
 	ParentProject string // name of parent project (for virtual projects)
@@ -104,6 +105,22 @@ func NewStateManager() *StateManager {
 	}
 }
 
+func navSlotsFromProjects(projects []Project) (map[int]string, map[string]int) {
+	slots := make(map[int]string)
+	projectSlots := make(map[string]int)
+	for _, p := range projects {
+		if p.NavSlot < 2 || p.NavSlot > 9 {
+			continue
+		}
+		if _, taken := slots[p.NavSlot]; taken {
+			continue
+		}
+		slots[p.NavSlot] = p.Name
+		projectSlots[p.Name] = p.NavSlot
+	}
+	return slots, projectSlots
+}
+
 func defaultHomeDir() string {
 	home, _ := os.UserHomeDir()
 	if home == "" {
@@ -126,6 +143,7 @@ func (sm *StateManager) NewSession() string {
 	if len(projects) > 0 {
 		rendered[projects[0].Name] = true
 	}
+	navSlots, navProjectSlots := navSlotsFromProjects(projects)
 
 	zenMode := DBGetSetting("zen_mode", "0") == "1"
 	sm.states[sid] = &AppState{
@@ -134,8 +152,8 @@ func (sm *StateManager) NewSession() string {
 		snapshots:        make(map[string]*projectSnapshot),
 		renderedProjects: rendered,
 		EditIndex:        -1,
-		NavSlots:         make(map[int]string),
-		NavProjectSlot:   make(map[string]int),
+		NavSlots:         navSlots,
+		NavProjectSlot:   navProjectSlots,
 		ZenMode:          zenMode,
 		SidebarCollapsed: zenMode,
 	}
@@ -155,6 +173,7 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 	if len(projects) > 0 {
 		rendered[projects[0].Name] = true
 	}
+	navSlots, navProjectSlots := navSlotsFromProjects(projects)
 	zenMode := DBGetSetting("zen_mode", "0") == "1"
 	s := &AppState{
 		Projects:         projects,
@@ -162,8 +181,8 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 		snapshots:        make(map[string]*projectSnapshot),
 		renderedProjects: rendered,
 		EditIndex:        -1,
-		NavSlots:         make(map[int]string),
-		NavProjectSlot:   make(map[string]int),
+		NavSlots:         navSlots,
+		NavProjectSlot:   navProjectSlots,
 		ZenMode:          zenMode,
 		SidebarCollapsed: zenMode,
 	}
@@ -1022,18 +1041,18 @@ func (sm *StateManager) GetProjectPath(sessionID, projectName string) string {
 }
 
 // AssignNavSlot assigns a keyboard nav slot (2-9) to a project or branch.
-// Each branch gets its own independent slot.
-func (sm *StateManager) AssignNavSlot(sessionID, projectName string) {
+// Each branch gets its own independent slot. Returns the assigned slot, or 0.
+func (sm *StateManager) AssignNavSlot(sessionID, projectName string) int {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
 	if s == nil {
-		return
+		return 0
 	}
 
 	// If this project/branch already has a slot, keep it
-	if _, ok := s.NavProjectSlot[projectName]; ok {
-		return
+	if slot, ok := s.NavProjectSlot[projectName]; ok {
+		return slot
 	}
 
 	// Find next available slot (2-9)
@@ -1041,10 +1060,17 @@ func (sm *StateManager) AssignNavSlot(sessionID, projectName string) {
 		if _, taken := s.NavSlots[i]; !taken {
 			s.NavSlots[i] = projectName
 			s.NavProjectSlot[projectName] = i
-			return
+			for idx := range s.Projects {
+				if s.Projects[idx].Name == projectName {
+					s.Projects[idx].NavSlot = i
+					break
+				}
+			}
+			return i
 		}
 	}
 	// All slots taken — no assignment
+	return 0
 }
 
 // NavSlotProject returns the project name for a given slot (2-9), or "".
@@ -1069,21 +1095,30 @@ func (sm *StateManager) GetNavSlotForProject(sessionID, projectName string) int 
 	return s.NavProjectSlot[projectName]
 }
 
-// RemoveNavSlot removes a project's nav slot assignment.
-func (sm *StateManager) RemoveNavSlot(sessionID, projectName string) {
+// RemoveNavSlot removes a project's nav slot assignment and returns the removed slot, or 0.
+func (sm *StateManager) RemoveNavSlot(sessionID, projectName string) int {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
 	if s == nil {
-		return
+		return 0
 	}
-	sm.clearNavSlot(s, projectName)
+	return sm.clearNavSlot(s, projectName)
 }
 
 // clearNavSlot removes a project's nav slot assignment (must hold lock).
-func (sm *StateManager) clearNavSlot(s *AppState, projectName string) {
-	if slot, ok := s.NavProjectSlot[projectName]; ok {
-		delete(s.NavSlots, slot)
+func (sm *StateManager) clearNavSlot(s *AppState, projectName string) int {
+	slot := 0
+	if assigned, ok := s.NavProjectSlot[projectName]; ok {
+		slot = assigned
+		delete(s.NavSlots, assigned)
 		delete(s.NavProjectSlot, projectName)
 	}
+	for idx := range s.Projects {
+		if s.Projects[idx].Name == projectName {
+			s.Projects[idx].NavSlot = 0
+			break
+		}
+	}
+	return slot
 }

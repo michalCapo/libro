@@ -114,7 +114,9 @@ A close button is available on each application to remove it from the strip. Whe
 - `⌘ + Ctrl + U` — move app left (reorder)
 - `⌘ + Ctrl + I` — move app right (reorder)
 - `⌘ + B` — toggle project sidebar
-- `Ctrl + 1–9` — switch to assigned project by slot
+- `⌘ + X` — assign or remove an automatic project shortcut for the current project/worktree
+- `Ctrl + 1` — switch to home project
+- `Ctrl + 2–9` — switch to assigned project or worktree by slot
 - `Ctrl + 0` — switch to previous project
 - `⌘ + G` — git worktrees popup
 - `⌘ + Z` — toggle zen mode (hide all UI)
@@ -176,7 +178,7 @@ Projects can be removed by clicking the close button next to the project name in
 When switching between projects, applications from the previous project are kept alive but hidden. The app remembers position and size of applications per project. When returning to a project, its applications become visible again or are created if this is the first time opening the project in the session.
 
 ### Project Sidebar
-The project sidebar lists all projects and can be collapsed/expanded with `⌘ + B`. Projects that are git repositories are automatically detected and marked. Each project can be assigned a keyboard navigation slot (Ctrl+2–9) for quick switching.
+The project sidebar lists all projects and can be collapsed/expanded with `⌘ + B`. Projects that are git repositories are automatically detected and marked. Press `⌘ + X` to toggle an automatic `Ctrl+2–9` slot for the current project or worktree, or use the sidebar `+` / number badge directly. Libro shows a centered toast when a slot is assigned or removed.
 
 ### Directory Picker for Projects
 When adding a new project, a directory picker is used to select the folder. The project name is determined from the folder path but can be changed by the user after selection.
