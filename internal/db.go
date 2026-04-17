@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	_ "modernc.org/sqlite"
@@ -64,7 +65,8 @@ func createTables() {
 		CREATE TABLE IF NOT EXISTS projects (
 			name     TEXT PRIMARY KEY,
 			path     TEXT NOT NULL,
-			position INTEGER NOT NULL DEFAULT 0
+			position INTEGER NOT NULL DEFAULT 0,
+			nav_slot INTEGER NOT NULL DEFAULT 0
 		);
 		CREATE TABLE IF NOT EXISTS browsed_urls (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,6 +104,8 @@ func createTables() {
 
 // migrateTables adds columns that may be missing in older databases.
 func migrateTables() {
+	// Add nav_slot column if it doesn't exist (project Ctrl+2-9 shortcuts)
+	_, _ = db.Exec("ALTER TABLE projects ADD COLUMN nav_slot INTEGER NOT NULL DEFAULT 0")
 	// Add icon_url column if it doesn't exist (added for icon discovery feature)
 	_, _ = db.Exec("ALTER TABLE saved_apps ADD COLUMN icon_url TEXT NOT NULL DEFAULT ''")
 	// Add project_specific column (app visible only in its project when true)
@@ -113,7 +117,7 @@ func ensureHomeProject() {
 	if home == "" {
 		home = "/"
 	}
-	_, err := db.Exec(`INSERT OR IGNORE INTO projects (name, path, position) VALUES ('home', ?, 0)`, home)
+	_, err := db.Exec(`INSERT OR IGNORE INTO projects (name, path, position, nav_slot) VALUES ('home', ?, 0, 0)`, home)
 	if err != nil {
 		log.Printf("db: failed to ensure home project: %v", err)
 	}
@@ -133,7 +137,7 @@ func DBLoadProjects() []Project {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
-	rows, err := db.Query("SELECT name, path FROM projects ORDER BY position, rowid")
+	rows, err := db.Query("SELECT name, path, nav_slot FROM projects ORDER BY position, rowid")
 	if err != nil {
 		log.Printf("db: load projects: %v", err)
 		return []Project{{Name: "home", Path: defaultHomeDir()}}
@@ -143,7 +147,7 @@ func DBLoadProjects() []Project {
 	var projects []Project
 	for rows.Next() {
 		var p Project
-		if err := rows.Scan(&p.Name, &p.Path); err != nil {
+		if err := rows.Scan(&p.Name, &p.Path, &p.NavSlot); err != nil {
 			continue
 		}
 		projects = append(projects, p)
@@ -154,22 +158,67 @@ func DBLoadProjects() []Project {
 	return projects
 }
 
-// DBSaveProject inserts or updates a project.
+// DBSaveProject inserts or updates a project, preserving its slot when replacing.
 func DBSaveProject(name, path string) {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
-	// Get max position
-	var maxPos int
-	_ = db.QueryRow("SELECT COALESCE(MAX(position),0) FROM projects").Scan(&maxPos)
+	var existingPosition, existingNavSlot int
+	err := db.QueryRow("SELECT position, nav_slot FROM projects WHERE name = ?", name).Scan(&existingPosition, &existingNavSlot)
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("db: lookup project %s: %v", name, err)
+		return
+	}
 
-	_, err := db.Exec(
-		"INSERT OR REPLACE INTO projects (name, path, position) VALUES (?, ?, ?)",
-		name, path, maxPos+1,
+	position := existingPosition
+	if err == sql.ErrNoRows {
+		_ = db.QueryRow("SELECT COALESCE(MAX(position),0) FROM projects").Scan(&position)
+		position++
+	}
+
+	_, err = db.Exec(
+		"INSERT OR REPLACE INTO projects (name, path, position, nav_slot) VALUES (?, ?, ?, ?)",
+		name, path, position, existingNavSlot,
 	)
 	if err != nil {
 		log.Printf("db: save project %s: %v", name, err)
 	}
+}
+
+// DBSetProjectNavSlot updates one project's persisted Ctrl+2-9 shortcut slot.
+func DBSetProjectNavSlot(name string, slot int) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	_, err := db.Exec("UPDATE projects SET nav_slot = ? WHERE name = ?", slot, name)
+	if err != nil {
+		log.Printf("db: set nav slot %s=%d: %v", name, slot, err)
+	}
+}
+
+// DBFindProjectByPath returns the most specific non-home project whose path
+// matches the given working directory exactly or as an ancestor.
+func DBFindProjectByPath(path string) (Project, bool) {
+	projects := DBLoadProjects()
+	cleanPath := filepath.Clean(path)
+
+	var best Project
+	bestLen := -1
+	for _, p := range projects {
+		if p.Name == "home" {
+			continue
+		}
+		projectPath := filepath.Clean(p.Path)
+		if cleanPath != projectPath && !strings.HasPrefix(cleanPath, projectPath+string(os.PathSeparator)) {
+			continue
+		}
+		if len(projectPath) > bestLen {
+			best = p
+			bestLen = len(projectPath)
+		}
+	}
+
+	return best, bestLen >= 0
 }
 
 // DBRemoveProject deletes a project and its apps (via CASCADE).

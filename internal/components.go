@@ -2282,13 +2282,15 @@ func renderShortcutsDialog() *r.Node {
 			{"⌘ + +", "Zoom in (whole app)"},
 			{"⌘ + -", "Zoom out (whole app)"},
 		}},
-		{"Navigation", "", []shortcut{
+		{"Navigation", "Win + X toggles an automatic Ctrl + 2-9 assignment for the current project; sidebar badges still allow click add/remove", []shortcut{
 			{"⌘ + H", "Navigate left"},
 			{"⌘ + L", "Navigate right"},
 			{"⌘ + Ctrl + U", "Move app left"},
 			{"⌘ + Ctrl + I", "Move app right"},
 			{"⌘ + B", "Toggle sidebar"},
-			{"Ctrl + 1–9", "Switch to assigned project"},
+			{"⌘ + X", "Assign or remove current project shortcut"},
+			{"Ctrl + 1", "Switch to home project"},
+			{"Ctrl + 2–9", "Switch to assigned project or worktree"},
 			{"Ctrl + 0", "Switch to previous project"},
 			{"⌘ + G", "Git worktrees popup"},
 			{"⌘ + Z", "Toggle zen mode (hide UI)"},
@@ -3345,14 +3347,25 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 					}
 					wtAppCount := runningAppCount(state, wtProjectName)
 
-					// Shortcut badge for worktree
+					// Shortcut badge for worktree. Prefer the canonical session project
+					// name for this path so virtual worktrees render their assigned slot
+					// even if the sidebar row label was reconstructed separately.
 					var wtBadge *r.Node
 					wtSlotName := vtName
 					if isMainWt {
 						wtSlotName = proj.Name
+					} else if isWtActive && state.ActiveProject != "" {
+						wtSlotName = state.ActiveProject
+					} else {
+						for _, sessionProj := range state.Projects {
+							if sessionProj.Virtual && sessionProj.ParentProject == proj.Name && sessionProj.Path == wt.Path {
+								wtSlotName = sessionProj.Name
+								break
+							}
+						}
 					}
 					if wtSlot := sm.GetNavSlotForProject(sid, wtSlotName); wtSlot > 0 {
-						wtBadgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer "
+						wtBadgeCls := "inline-flex items-center justify-center w-4 min-w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer "
 						if isWtActive {
 							wtBadgeCls += "bg-blue-500 text-blue-100 hover:bg-red-500"
 						} else {
@@ -3363,7 +3376,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 							Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.remove',{sid:'%s',name:'%s'});", sid, wtSlotName)).
 							Text(fmt.Sprintf("%d", wtSlot))
 					} else {
-						addCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer opacity-0 group-hover/wtitem:opacity-100 transition-opacity duration-75 bg-gray-200 dark:bg-zinc-800 text-gray-400 dark:text-zinc-600 hover:bg-blue-400 hover:text-white"
+						addCls := "inline-flex items-center justify-center w-4 min-w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer opacity-0 group-hover/wtitem:opacity-100 transition-opacity duration-75 bg-gray-200 dark:bg-zinc-800 text-gray-400 dark:text-zinc-600 hover:bg-blue-400 hover:text-white"
 						wtBadge = r.Span(addCls).
 							Attr("title", "Add shortcut").
 							Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.add',{sid:'%s',name:'%s'});", sid, wtSlotName)).
@@ -3818,6 +3831,12 @@ func keyboardShortcutsJS(sid string) string {
 					__ws.call('sidebar.toggle', {"sid": "%s"});
 					return;
 				}
+				if (e.metaKey && (e.key === 'x' || e.key === 'X' || e.code === 'KeyX') && !e.ctrlKey) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					__ws.call('nav.slot.toggle.active', {"sid": "%s"});
+					return;
+				}
 				if (e.metaKey && (e.key === 'q' || e.key === 'Q') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
@@ -3920,5 +3939,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-	`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
-}
+		`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
+	}

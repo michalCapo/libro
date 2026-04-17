@@ -708,6 +708,19 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
+      // Super+X: toggle active project shortcut assignment
+      if (input.meta && !input.control && code === 'keyx') {
+        if (shouldSkipDuplicateShortcut()) return
+        e.preventDefault()
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            document.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'x', code: 'KeyX', metaKey: true, bubbles: true, cancelable: true
+            }));
+          `)
+        }
+        return
+      }
       // Super+Z: zen mode toggle — must preventDefault to block browser Undo
       if (input.meta && !input.control && code === 'keyz') {
         if (shouldSkipDuplicateShortcut()) return
@@ -765,8 +778,8 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, q, w, n, z, b, f, g, r
-    if (input.meta && (['h', 'l', 'q', 'w', 'n', 'z', 'b', 'f', 'g', 'r'].includes(key) || code === 'keyn')) {
+    // Meta (Super/Win) shortcuts: h, l, q, w, n, z, b, f, g, r, x
+    if (input.meta && (['h', 'l', 'q', 'w', 'n', 'z', 'b', 'f', 'g', 'r', 'x'].includes(key) || code === 'keyn')) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
