@@ -6,6 +6,14 @@ A Go + Electron application using [g-sui](https://github.com/michalCapo/g-sui) t
 
 ![Demo](demo/demo.gif)
 
+## Install
+
+For macOS and Linux, download the latest release binary to `~/.local/bin`:
+
+```bash
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"; ARCH="$(uname -m)"; case "$ARCH" in x86_64) ARCH="amd64" ;; aarch64|arm64) ARCH="arm64" ;; esac; mkdir -p "$HOME/.local/bin" && curl -fsSL "https://github.com/michalCapo/libro/releases/latest/download/libro-${OS}-${ARCH}" -o "$HOME/.local/bin/libro" && chmod +x "$HOME/.local/bin/libro"
+```
+
 ## Architecture
 
 - **Backend**: Go with g-sui (server-rendered UI via WebSocket)
@@ -244,27 +252,6 @@ Development builds (`go build -tags dev`) use port `1439` instead of `8100`, so 
 - **Node.js / npm** (required for Electron installation)
 - **g-sui** for server-rendered UI over WebSocket
 - **modernc.org/sqlite** for persistence (pure Go, no CGO)
-
-## Install
-
-```bash
-./install
-```
-
-Builds the Go binary for your OS/architecture and installs it to `~/.local/share/libro/` along with the Electron files (`package.json`, `electron/main.js`, `electron/preload.js`). Runs `npm install` to fetch Electron, then creates a symlink at `~/.local/bin/libro`. Works on Linux, macOS, and Windows (via MSYS/Cygwin).
-
-**Supported architectures:** x86_64 (amd64), aarch64/arm64.
-
-On **Linux**, it also installs a `.desktop` entry, sets a custom icon on the binary, and installs the app icon to `~/.local/share/icons/`. On **Windows**, it embeds the icon into the `.exe` via `go-winres` (if installed).
-
-## Release
-
-```bash
-./release           # bump version, build, tag, push, create GitHub release
-./release --dry-run # preview without changes
-```
-
-Reads the current version from `VERSION`, increments the patch number (e.g. `0.0.1` → `0.0.2`), builds cross-platform binaries (linux/darwin/windows, amd64/arm64), commits the version bump, tags it `vX.X.X`, pushes to git, and creates a GitHub Release with all binaries attached.
 
 ## Key Technical Decisions
 
