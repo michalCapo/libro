@@ -47,194 +47,74 @@ Each app uses its configured fixed pixel width. FULL takes 100% of the viewport.
 
 ## Features
 
-### Layout & Page Structure
-Full-height flex container as a single page app. One route (`/`) renders the application strip. The entire viewport is the application strip with a neutral background to distinguish from app content.
+Libro is a desktop strip for keeping browser panels and terminal sessions open side by side.
 
-### Empty State
-When no applications exist, "Add App" and "Quick Launch" buttons are displayed centered. If the project has no saved applications yet, a short gray guide text explains how to get started — add web apps by URL or terminal commands, use Quick Launch for quick web lookups and terminal commands, and check shortcuts for a productivity boost.
+### Core
 
-### Add Application Dialog
-Modal/dialog overlay triggered by "+" button click. Contains a URL input field (required) and width selection via radio buttons (SM, MD, LG, XL, 2XL, FULL). On submit, validates the URL is not empty, adds the application to state, closes the dialog, and re-renders the strip.
+- Browser apps render in Electron `<webview>`s with a persistent session.
+- Terminal apps run through [ttyd](https://github.com/tsl0922/ttyd).
+- Apps live in a horizontal strip with fixed widths (`SM` through `FULL`).
+- The selected app can be resized, moved left/right, reloaded, or closed.
+- Browser panels support navigation, editable URL input, copy URL, reload, and per-panel DevTools.
+- Downloads from webviews are saved to the system Downloads folder with in-app progress toasts.
 
-### Application Rendering
+### Search & Launch
 
-**URL apps** render natively using Electron's `<webview>` tag with a shared persistent session (`partition="persist:libro"`). This provides full browser-quality rendering without the X-Frame-Options and CSP restrictions that block iframe embedding. Each webview gets real mouse, keyboard, and scroll input — no screencasting or input forwarding needed.
+- Quick Launch opens a fuzzy search popup for saved apps, URL history, and command history.
+- Plain text searches saved entries; `:query` opens a web search; `!command` runs a terminal command.
+- Typing a URL or hostname offers a direct `Browse` action.
+- A `Browser` entry opens an empty browser panel with the URL bar focused.
 
-Links opened with `target="_blank"` (new tab/window) are intercepted and opened as a new browser app in the strip, keeping everything inside Libro.
+### Projects
 
-**Terminal apps** render via ttyd iframes, unchanged from the terminal support described below.
+- Projects are tied to directories, with `home` as the default project.
+- Each project keeps its own running strip state while inactive projects stay hidden.
+- Saved apps can be global or project-specific.
+- Git repositories get worktree actions, and projects/worktrees can be assigned to `Ctrl + 2-9` slots.
 
-### Browser-Like Toolbar
-Each application frame has a non-overlapping toolbar above the content, similar to a real browser. The toolbar is always visible and contains:
+### Interface
 
-- **Left side (URL apps)**: Back/forward buttons, globe icon, editable URL input field, copy URL button, reload button
-- **Left side (Terminal apps)**: Real application icon (for known commands) or gradient initials badge, command/name label
-- **Right side (all apps)**: Width size badges (SM, MD, LG, XL, 2XL, FULL) and close button
-
-Users can see the current URL, copy it to clipboard, edit it and press Enter to navigate to a new URL, or reload the page. Back and forward buttons navigate the browser history. The URL bar automatically updates when the user navigates within the webview, reflecting the current page URL in real time (via `did-navigate` and `did-navigate-in-page` events). The URL is automatically prefixed with `https://` if no scheme is provided.
-
-Each webview has a **per-app DevTools button** that appears on hover (bottom-right corner). It opens Electron DevTools for that specific webview and shows a red error count badge when console errors occur.
-
-### Horizontal Strip Layout
-Applications are arranged in a horizontal flexbox row. The currently selected application is centered in the viewport. Applications that don't fit extend beyond the viewport (off-screen left/right). The strip takes the full height of the viewport.
-
-### "+" Add Buttons on Sides
-When there is space on the left or right of the application strip, "+" buttons appear as vertical strips on the viewport edges. New applications are always added to the right side of the strip.
-
-### Viewport Panning / Navigation
-When applications overflow the viewport, left (`<`) and right (`>`) arrows appear at viewport edges allowing the user to shift/pan the layout. Smooth CSS transitions animate the shift. Partially visible apps appear on edges during panning.
-
-### Application Selection / Focus
-One application is always selected and centered. Clicking on a partially visible app selects and centers it. The selected app is marked with a small teal dot on the top-left corner (absolute positioned with a subtle glow), rather than a border change.
-
-### App Preview Strip
-The top bar includes a horizontal strip of clickable mini-cards representing all running apps in the current project. Each card shows the app's favicon (for URLs) or terminal icon and a truncated label. The currently selected app is highlighted. Clicking a card selects and scrolls to that app — useful when the window is too small to see all apps at once.
-
-### Multi-App Layout on Large Screens
-If the selected app doesn't fill the viewport, adjacent apps are shown partially or fully next to it. "+" buttons fill remaining space if no more apps to show.
-
-### Application Reordering
-Applications can be reordered within the strip using keyboard shortcuts (`⌘+Ctrl+H` to move left, `⌘+Ctrl+L` to move right). The selected app swaps position with its neighbor.
-
-### Application Sorting
-Apps are sorted alphabetically by name (case-insensitive) when added. Manual reordering via move shortcuts overrides the sort order.
-
-### Manage Saved Apps
-A manage/edit overlay allows viewing all saved app definitions, editing existing saved apps (name, URL, command, width, etc.), and deleting saved app definitions from the database. Project-specific apps can be flagged to only appear in their associated project.
-
-### Browser Downloads
-File downloads initiated from webviews are automatically saved to the system Downloads folder. A toast notification shows real-time download progress with a cancel button. When complete, the toast displays the filename as a clickable link that opens the file using the system default application. Failed or cancelled downloads show appropriate notifications.
-
-### Terminal Application Support (ttyd)
-Support for terminal-based applications via [ttyd](https://github.com/tsl0922/ttyd). When a user defines a terminal application, it starts on a new port using the `-p` parameter. Terminal applications are editable via the `--writable` parameter. Ports are allocated starting from 7681, automatically skipping any ports already in use.
-
-### Close Application
-A close button is available on each application to remove it from the strip. When closing the entire app with running applications, a confirmation dialog is shown to prevent accidental exit.
+- App previews appear in the top bar for fast switching.
+- Zen mode hides most chrome and leaves the running apps visible.
+- The sidebar can be collapsed, and the current app can be toggled to full width.
+- The current app version is shown in the header.
 
 ### Keyboard Shortcuts
 
-**Apps:**
-- `⌘ + N` — new app (right of current)
-- `⌘ + Ctrl + N` — new app (left of current)
-- `⌘ + W` — close current app
-- `⌘ + R` — resize app popup (j/k to navigate, Enter to resize)
-- `⌘ + F` — toggle full width (selected app)
-- `⌘ + +` — zoom in (whole application)
-- `⌘ + -` — zoom out (whole application)
+**Apps**
 
-**Navigation:**
-- `⌘ + H` — navigate left (previous app)
-- `⌘ + L` — navigate right (next app)
-- `⌘ + Ctrl + U` — move app left (reorder)
-- `⌘ + Ctrl + I` — move app right (reorder)
-- `⌘ + B` — toggle project sidebar
-- `⌘ + X` — assign or remove an automatic project shortcut for the current project/worktree
-- `Ctrl + 1` — switch to home project
-- `Ctrl + 2–9` — switch to assigned project or worktree by slot
+- `⌘ + N` — open launcher on the right
+- `⌘ + Ctrl + N` — open launcher on the left
+- `⌘ + W` — close current app
+- `⌘ + R` — open resize popup
+- `⌘ + F` — toggle full width
+- `⌘ + +` — zoom in
+- `⌘ + -` — zoom out
+
+**Navigation**
+
+- `⌘ + H` — select app to the left
+- `⌘ + L` — select app to the right
+- `⌘ + Ctrl + U` — move app left
+- `⌘ + Ctrl + I` — move app right
+- `⌘ + B` — toggle sidebar
+- `⌘ + X` — assign or remove current project shortcut
+- `Ctrl + 1` — switch to `home`
+- `Ctrl + 2–9` — switch to assigned project or worktree
 - `Ctrl + 0` — switch to previous project
-- `⌘ + G` — git worktrees popup
-- `⌘ + Z` — toggle zen mode (hide all UI)
+- `⌘ + G` — open worktree popup
+- `⌘ + Z` — toggle zen mode
 - `⌘ + Q` — quit Libro
 
-**Browser:**
-- `Ctrl + L` — URL / search popup (works in zen mode)
-- `Ctrl + R` — reload the selected app
+**Browser**
 
-**Browser Vim Keys** (disabled in input fields):
-- `g / G` — go to top / bottom of page
-- `j / k` — scroll down / up
-- `h / l` — scroll left / right
+- `Ctrl + L` — open URL/search popup for the selected browser app
+- `Ctrl + R` — reload selected browser app
 - `/` — find in page
-- `n / p` — find next / previous
-- `Esc` — clear search (in input fields: blur/unfocus the field)
-- `b / f` — page back / forward
-- `Enter` — follow link / click button
-
-Keyboard shortcuts from webview guest pages are intercepted at the Electron main process level (via `web-contents-created` + `before-input-event`) and forwarded to the host page as synthetic KeyboardEvents.
-
-When switching apps, the selected application scrolls into view only if it is off-screen (minimal scroll, no centering). Terminal (ttyd) iframes automatically receive focus when selected, including across project switches.
-
-### Fuzzy Search Launcher
-Press `⌘ + /` to open a fuzzy search popup that lists all saved applications from the database. The user can type to filter the list — matching is fuzzy across app name, command, URL, and type, with scoring that prioritizes word boundaries and consecutive matches. Use arrow keys (Up/Down) to navigate the list, `Enter` to launch the selected app on the right side, `Ctrl+Enter` to launch on the left side, and `Escape` to close. The search is accessible from any context (with or without apps open, from any project).
-
-A **Browser** entry is always available at the bottom of the list. Selecting it opens a new empty browser panel with the URL bar focused.
-
-When typing a URL directly into the search box, a **Browse** entry appears at the top for quick navigation. URL detection covers:
-- Full URLs: `https://example.com`, `http://localhost:3000`
-- Domain-like strings: `google.com`, `app.example.org/path`
-- Local addresses: `localhost`, `127.0.0.1`, `0.0.0.0`, `[::1]`, `[::]`
-
-Local addresses (`localhost`, `127.0.0.1`, `0.0.0.0`, IPv6 loopback) automatically use `http://`. All other addresses default to `https://`.
-
-The search box supports prefix modes for quick actions:
-- **`:query`** — Internet search. A **Search** entry appears at the top that opens a Google search for the query in a browser panel.
-- **`!command`** — Run terminal command. A **Run** entry appears at the top that executes the command in a terminal panel. After the command finishes, the terminal drops into an interactive shell so output remains visible.
-- **Plain text** — Fuzzy-matches saved apps, browsing history, and run history only (no auto-run entry).
-
-When typing a URL directly into the search box, a **Browse** entry still appears at the top for quick navigation.
-
-The "Quick Launch" button in the top bar, side launcher, and empty state all open this same search popup, providing a single entry point for browsing URLs, searching the web, and running commands.
-
-### Browsing History
-Browsed URLs are persisted to the database with timestamps and titles. History entries can be individually deleted or cleared entirely via WebSocket actions.
-
-### Command History
-Terminal commands executed via the search launcher are persisted to the database. Run history entries appear in the search popup alongside browsed URL history and saved apps, and can be individually deleted or cleared.
-
-### Smart Terminal Icons
-Terminal applications display real brand icons for known commands instead of generic initials. Icons are resolved by matching the base command name (handling prefixes like `sudo`, `env`, and full paths). Known commands include neovim, vim, claude, node, python, docker, git, go, rust, ruby, kubernetes, terraform, tmux, and many more — sourced from Simple Icons CDN. Generic categories (shells, monitoring tools, build tools) use Material Design icons. Unknown commands fall back to the original colored gradient letter icon.
-
-### Project Support
-Projects are tied to folders. The default project is "home" which starts in the home directory. Users can create new projects by defining a folder. When a user clicks on a project, the working directory changes to that folder. All ttyd applications start with `cd <pwd>` to ensure they begin in the project's directory.
-
-Projects can be removed by clicking the close button next to the project name in the project bar. The "home" project cannot be removed. Removing a project cleans up all its running applications (terminals and browser tabs) and removes it from the database.
-
-When switching between projects, applications from the previous project are kept alive but hidden. The app remembers position and size of applications per project. When returning to a project, its applications become visible again or are created if this is the first time opening the project in the session.
-
-### Project Sidebar
-The project sidebar lists all projects and can be collapsed/expanded with `⌘ + B`. Projects that are git repositories are automatically detected and marked. Press `⌘ + X` to toggle an automatic `Ctrl+2–9` slot for the current project or worktree, or use the sidebar `+` / number badge directly. Libro shows a centered toast when a slot is assigned or removed.
-
-### Directory Picker for Projects
-When adding a new project, a directory picker is used to select the folder. The project name is determined from the folder path but can be changed by the user after selection.
-
-### Git Worktree Support
-For projects that are git repositories, a worktree dialog (`⌘ + G`) allows managing git worktrees:
-- **List** existing worktrees with their branch names
-- **Switch** to a worktree — creates a virtual project linked to the parent project
-- **Add** a new worktree for a branch (creates the branch if it doesn't exist)
-- **Remove** a worktree and its associated virtual project
-
-Virtual projects (created from worktrees) are not persisted to the database and share the keyboard nav slot of their parent project.
-
-### Application State Preservation
-When opening new applications, existing applications (especially ttyd) are not reset and maintain their current state. Closing one application does not affect the state of other running applications.
-
-### Application Position Centering
-When a single application is open in a project, it is centered horizontally. When two or more applications are open, they start from the left side.
-
-### Browse (Empty Browser)
-The "Browser" entry in the search launcher opens a new empty browser panel. The panel starts with a blank page and the URL bar focused, so the user can immediately type a URL or search query and press Enter to navigate. This behaves like opening a new browser tab.
-
-### Application Zoom
-The entire UI can be zoomed in (`⌘ + +`) or out (`⌘ + -`), handled at the Electron level with `webContents.setZoomLevel()`.
-
-### Dark Mode
-Full dark mode support using Tailwind `dark:` prefix classes throughout all components. System theme is detected and applied automatically.
-
-### Developer Console
-A developer tools button in the top bar opens the Electron DevTools for the main Libro window, useful for debugging the host application.
-
-### Version Display
-The current application version is shown in the header toolbar next to the shortcut buttons. In production builds, the version is injected at compile time via `-ldflags`. In development, it is read from the `VERSION` file at startup.
-
-### Zen Mode
-Zen mode (`⌘ + Z`) hides the top bar, project sidebar, and all application toolbars, leaving only the running applications visible. Users navigate entirely via keyboard shortcuts. Toggle zen mode again with `⌘ + Z` to restore the full UI. A zen mode button is also available in the top bar. The zen mode preference is persisted to the database — if the user was in zen mode when they last used Libro, it will start in zen mode on the next launch.
-
-### Resize Popup
-Press `⌘ + R` to open a resize popup on the currently selected app. The popup shows all available width options (SM, MD, LG, XL, 2XL, FULL) as radio buttons with the current width selected. Use `j`/`k` (or arrow keys) to navigate between sizes and `Enter` to confirm. Click a size or press `Esc` to close. Works in both normal mode and zen mode.
-
-### Toggle Full Width
-Press `⌘ + F` to toggle the selected app between full width and its previous width. If the app is already at full width, it restores the width it had before maximizing. Works in both normal mode and zen mode.
+- `n / p` — next / previous find result
+- `g / G`, `j / k`, `h / l`, `b / f` — vim-style page navigation
+- `y` — copy selected text or current URL
+- `c` — open DevTools Console for the selected webview
 
 ## Desktop Mode
 
