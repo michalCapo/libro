@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# release — Version-bump, build cross-platform binaries, tag, push,
-#            and create a GitHub Release with attached binaries
+# release — Version-bump, build self-contained cross-platform release binaries,
+#           tag, push, and create a GitHub Release with attached assets
 #
 # Usage:
 #   ./release              # bump patch, build, tag, push, create release
@@ -13,6 +13,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERSION_FILE="$SCRIPT_DIR/VERSION"
 MODULE="libro"
+BUILD_DIR="$SCRIPT_DIR/dist"
+BUNDLE_DIR="$SCRIPT_DIR/internal/desktopbundledata"
+BUNDLE_APP_DIR="$BUNDLE_DIR/electron-app"
+BUNDLE_RUNTIME_DIR="$BUNDLE_DIR/electron-runtime"
 
 DRY_RUN=false
 
@@ -39,6 +43,65 @@ ok()    { echo -e "\033[1;32m==>\033[0m $*"; }
 warn()  { echo -e "\033[1;33m==>\033[0m $*"; }
 err()   { echo -e "\033[1;31m==>\033[0m $*" >&2; }
 
+electron_version() {
+    sed -nE 's/.*"electron"[[:space:]]*:[[:space:]]*"[^0-9]*([0-9][^"]*)".*/\1/p' "$SCRIPT_DIR/package.json" | head -n 1
+}
+
+electron_platform_id() {
+    local os="$1"
+    local arch="$2"
+    case "${os}/${arch}" in
+        linux/amd64) echo "linux-x64" ;;
+        linux/arm64) echo "linux-arm64" ;;
+        darwin/amd64) echo "darwin-x64" ;;
+        darwin/arm64) echo "darwin-arm64" ;;
+        windows/amd64) echo "win32-x64" ;;
+        *)
+            err "Unsupported Electron platform: ${os}/${arch}"
+            exit 1
+            ;;
+    esac
+}
+
+reset_embedded_bundle_dirs() {
+    rm -rf "$BUNDLE_APP_DIR" "$BUNDLE_RUNTIME_DIR"
+    mkdir -p "$BUNDLE_APP_DIR/electron" "$BUNDLE_RUNTIME_DIR"
+    printf '%s\n' "Generated release-time desktop app files live here." > "$BUNDLE_APP_DIR/README.md"
+    printf '%s\n' "Generated release-time Electron runtime zips live here." > "$BUNDLE_RUNTIME_DIR/README.md"
+}
+
+stage_embedded_app_files() {
+    mkdir -p "$BUNDLE_APP_DIR/electron"
+    rm -f "$BUNDLE_APP_DIR/README.md"
+    cp "$SCRIPT_DIR/package.json" "$BUNDLE_APP_DIR/package.json"
+    cp "$SCRIPT_DIR/electron/main.js" "$BUNDLE_APP_DIR/electron/main.js"
+    cp "$SCRIPT_DIR/electron/preload.js" "$BUNDLE_APP_DIR/electron/preload.js"
+}
+
+prepare_embedded_runtime() {
+    local os="$1"
+    local arch="$2"
+    local platform_id
+    local zip_name
+    local url
+
+    platform_id="$(electron_platform_id "$os" "$arch")"
+    zip_name="electron-v${ELECTRON_VERSION}-${platform_id}.zip"
+    url="https://github.com/electron/electron/releases/download/v${ELECTRON_VERSION}/${zip_name}"
+
+    reset_embedded_bundle_dirs
+    stage_embedded_app_files
+
+    info "Downloading Electron ${ELECTRON_VERSION} for ${os}/${arch}..."
+    curl -L "$url" -o "$BUNDLE_RUNTIME_DIR/$zip_name"
+    ok "Embedded desktop payload staged for ${os}/${arch}"
+}
+
+cleanup_generated_bundle() {
+    reset_embedded_bundle_dirs
+    rm -f "$SCRIPT_DIR/"*.syso
+}
+
 # ---------------------------------------------------------------------------
 # Pre-flight checks
 # ---------------------------------------------------------------------------
@@ -53,12 +116,31 @@ if ! command -v gh &>/dev/null; then
     exit 1
 fi
 
+if ! command -v curl &>/dev/null; then
+    err "curl is required to download Electron runtimes"
+    exit 1
+fi
+
+if [[ ! -f "$SCRIPT_DIR/package.json" ]]; then
+    err "package.json not found at $SCRIPT_DIR/package.json"
+    exit 1
+fi
+
+ELECTRON_VERSION="$(electron_version)"
+if [[ -z "$ELECTRON_VERSION" ]]; then
+    err "Unable to determine Electron version from package.json"
+    exit 1
+fi
+
+trap cleanup_generated_bundle EXIT
+
 # ---------------------------------------------------------------------------
 # Read current version and auto-bump patch
 # ---------------------------------------------------------------------------
 
 CURRENT_VERSION=$(cat "$VERSION_FILE" | tr -d '[:space:]')
 info "Current version: $CURRENT_VERSION"
+info "Electron version: $ELECTRON_VERSION"
 
 IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
 PATCH=$((PATCH + 1))
@@ -80,7 +162,6 @@ PLATFORMS=(
 )
 
 LDFLAGS="-X ${MODULE}/internal/version.Version=${NEW_VERSION}"
-BUILD_DIR="$SCRIPT_DIR/dist"
 
 # ---------------------------------------------------------------------------
 # Dry-run mode
@@ -89,20 +170,22 @@ BUILD_DIR="$SCRIPT_DIR/dist"
 if [[ "$DRY_RUN" == true ]]; then
     warn "DRY RUN — no changes will be made"
     echo ""
-    echo "  Version bump:  $CURRENT_VERSION → $NEW_VERSION"
-    echo "  VERSION file:  $VERSION_FILE"
+    echo "  Version bump:   $CURRENT_VERSION → $NEW_VERSION"
+    echo "  Electron:       $ELECTRON_VERSION"
+    echo "  VERSION file:   $VERSION_FILE"
     echo ""
     echo "  Builds:"
     for platform in "${PLATFORMS[@]}"; do
         OS="${platform%/*}"
         ARCH="${platform#*/}"
-        EXT=""; [[ "$OS" == "windows" ]] && EXT=".exe"
-        echo "    ${MODULE}-${OS}-${ARCH}${EXT}"
+        EXT=""
+        [[ "$OS" == "windows" ]] && EXT=".exe"
+        echo "    ${MODULE}-${OS}-${ARCH}${EXT} (self-contained desktop runtime)"
     done
     echo ""
-    echo "  Git commit:    git add VERSION && git commit -m \"$TAG\""
-    echo "  Git tag:       git tag $TAG"
-    echo "  Git push:      git push && git push --tags"
+    echo "  Git commit:     git add VERSION && git commit -m \"$TAG\""
+    echo "  Git tag:        git tag $TAG"
+    echo "  Git push:       git push && git push --tags"
     echo ""
     echo "  GitHub release: gh release create $TAG --generate-notes <binaries...>"
     echo ""
@@ -126,7 +209,7 @@ go mod tidy
 ok "Clean"
 
 # ---------------------------------------------------------------------------
-# Build all platforms
+# Build all release targets. Each binary embeds its own Electron runtime zip.
 # ---------------------------------------------------------------------------
 
 rm -rf "$BUILD_DIR"
@@ -141,6 +224,8 @@ for platform in "${PLATFORMS[@]}"; do
     OUTPUT="${BUILD_DIR}/${MODULE}-${OS}-${ARCH}${EXT}"
     info "Building ${OS}/${ARCH}..."
 
+    prepare_embedded_runtime "$OS" "$ARCH"
+
     # Embed Windows resources if building for Windows and go-winres is available
     if [[ "$OS" == "windows" ]] && command -v go-winres &>/dev/null; then
         (cd "$SCRIPT_DIR" && go-winres make --product-version="${NEW_VERSION}" --file-version="${NEW_VERSION}")
@@ -153,7 +238,8 @@ for platform in "${PLATFORMS[@]}"; do
     [[ "$OS" == "windows" ]] && rm -f "$SCRIPT_DIR/"*.syso
 done
 
-ok "All binaries built in $BUILD_DIR"
+reset_embedded_bundle_dirs
+ok "All self-contained binaries built in $BUILD_DIR"
 
 # ---------------------------------------------------------------------------
 # Git commit, tag, and push

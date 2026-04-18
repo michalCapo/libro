@@ -8,6 +8,8 @@ A Go + Electron application using [g-sui](https://github.com/michalCapo/g-sui) t
 
 ## Install
 
+Release downloads are self-contained single binaries. On first launch, Libro extracts its bundled Electron runtime into the user cache directory and starts the desktop app.
+
 For macOS and Linux, download the latest release binary to `~/.local/bin`:
 
 ```bash
@@ -19,6 +21,14 @@ OS="$(uname -s | tr '[:upper:]' '[:lower:]')"; ARCH="$(uname -m)"; case "$ARCH" 
 [![Download macOS amd64](https://img.shields.io/badge/macOS-amd64-111827?style=for-the-badge)](https://github.com/michalCapo/libro/releases/latest/download/libro-darwin-amd64)
 [![Download macOS arm64](https://img.shields.io/badge/macOS-arm64-111827?style=for-the-badge)](https://github.com/michalCapo/libro/releases/latest/download/libro-darwin-arm64)
 [![Download Windows amd64](https://img.shields.io/badge/Windows-amd64-0ea5e9?style=for-the-badge)](https://github.com/michalCapo/libro/releases/latest/download/libro-windows-amd64.exe)
+
+### Run From Source
+
+```bash
+go run .
+```
+
+If Electron is not installed locally, Libro will try to install it with `npm install` from the repo root.
 
 ## Architecture
 
@@ -126,16 +136,14 @@ libro --no-desktop # starts server only (no window)
 libro --version    # show version and exit (also -v)
 ```
 
-The Go binary launches Electron as a child process, passing the server port via `LIBRO_PORT`. If Electron is not installed locally, the Go binary runs `npm install` automatically. When the Electron window is closed, the Go process exits.
+The Go binary launches Electron as a child process, passing the server port via `LIBRO_PORT`. When running from the repo, if Electron is not installed locally, Libro runs `npm install` automatically. Release builds embed the Electron app files and a platform-specific Electron runtime, extract them on first launch, and start the desktop UI without any extra files next to the binary. If no desktop runtime is available, Libro falls back to opening the UI in the system browser instead of failing at startup. When the Electron window is closed, the Go process exits.
 
 Electron is configured with `webviewTag: true` for native web rendering. Keyboard shortcuts that would be consumed by webview guest pages are intercepted at the Electron main process level and forwarded to the host page.
 
-Development builds (`go build -tags dev`) use port `1439` instead of `8100`, so both can run side-by-side.
-
 ### Dependencies
 
-- **Electron** (installed via npm alongside the Go binary)
-- **Node.js / npm** (required for Electron installation)
+- **Electron** for the desktop shell
+- **Node.js / npm** only when running from source or building from the repo
 - **g-sui** for server-rendered UI over WebSocket
 - **modernc.org/sqlite** for persistence (pure Go, no CGO)
 

@@ -1,11 +1,14 @@
 package libro
 
 import (
+	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
 // OpenDesktop opens the libro UI in an Electron window.
@@ -13,24 +16,37 @@ import (
 // so the process can shut down.
 func OpenDesktop(url string) <-chan struct{} {
 	done := make(chan struct{})
-
-	electron := findElectron()
-	if electron == "" {
-		projectRoot := findProjectRoot()
-		if installElectron(projectRoot) {
+	projectRoot := findProjectRoot()
+	electron := ""
+	if hasElectronProject(projectRoot) {
+		electron = findElectron()
+		if electron == "" && installElectron(projectRoot) {
 			electron = findElectron()
 		}
-		if electron == "" {
-			log.Println("[desktop] Electron not found. Run 'npm install' in the libro directory.")
-			return done
+	}
+
+	if electron == "" {
+		bundledProjectRoot, bundledElectron, err := prepareBundledDesktop()
+		if err == nil {
+			projectRoot = bundledProjectRoot
+			electron = bundledElectron
+			log.Println("[desktop] Using bundled Electron runtime.")
+		} else {
+			log.Printf("[desktop] Bundled Electron unavailable: %v", err)
 		}
+	}
+
+	if electron == "" || projectRoot == "" {
+		if err := openBrowserWhenReady(url); err != nil {
+			log.Printf("[desktop] Electron unavailable and browser fallback failed: %v", err)
+		} else {
+			log.Println("[desktop] Electron unavailable; opened Libro in the default browser.")
+		}
+		return done
 	}
 
 	// Unbind GNOME's Super+D (show-desktop) so it reaches the app
 	unbindGnomeSuperD()
-
-	// Find project root (where package.json / electron/main.js live)
-	projectRoot := findProjectRoot()
 
 	cmd := exec.Command(electron, projectRoot, "--gtk-version=3")
 	cmd.Dir = projectRoot
@@ -48,6 +64,19 @@ func OpenDesktop(url string) <-chan struct{} {
 	}()
 
 	return done
+}
+
+func hasElectronProject(projectRoot string) bool {
+	if projectRoot == "" {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(projectRoot, "package.json")); err != nil {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(projectRoot, "electron", "main.js")); err != nil {
+		return false
+	}
+	return true
 }
 
 // installElectron runs npm install in the project root to install Electron.
@@ -75,6 +104,39 @@ func installElectron(projectRoot string) bool {
 	}
 	log.Println("[desktop] Electron installed")
 	return true
+}
+
+func openBrowserWhenReady(url string) error {
+	if err := waitForHTTPServer("127.0.0.1:"+Port(), 5*time.Second); err != nil {
+		return err
+	}
+	return openBrowser(url)
+}
+
+func waitForHTTPServer(address string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", address, 250*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("server on %s did not become ready within %s", address, timeout)
+}
+
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	return cmd.Start()
 }
 
 // findElectron returns the path to a locally installed Electron binary.
@@ -114,15 +176,17 @@ func findProjectRoot() string {
 	exePath, err := os.Executable()
 	if err == nil {
 		exeDir := filepath.Dir(exePath)
-		if _, err := os.Stat(filepath.Join(exeDir, "package.json")); err == nil {
+		if hasElectronProject(exeDir) {
 			return exeDir
 		}
 	}
 	// Fallback to working directory
 	if wd, err := os.Getwd(); err == nil {
-		return wd
+		if hasElectronProject(wd) {
+			return wd
+		}
 	}
-	return "."
+	return ""
 }
 
 // unbindGnomeSuperD disables the GNOME show-desktop shortcut (Super+D)
