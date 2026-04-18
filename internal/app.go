@@ -67,14 +67,23 @@ func Run(assets embed.FS) {
 	app.Assets(assets, "assets", "/assets/")
 	app.Favicon = "/assets/logo.svg"
 
-	restoreClosedApps := func(sid string, snap *projectSnapshot) error {
+	restoreClosedApps := func(sid string, snap *projectSnapshot) (int, []string) {
 		if snap == nil || len(snap.Apps) == 0 {
 			sm.RestoreActiveProjectApps(sid, nil, 0)
-			return nil
+			return 0, nil
 		}
 		pwd := sm.GetActiveProjectPath(sid)
 		restored := make([]Application, 0, len(snap.Apps))
-		for _, prev := range snap.Apps {
+		skipped := make([]string, 0)
+		restoredSelectedIndex := snap.SelectedIndex
+		originalSelectedIndex := snap.SelectedIndex
+		if originalSelectedIndex < 0 {
+			originalSelectedIndex = 0
+		}
+		if originalSelectedIndex >= len(snap.Apps) {
+			originalSelectedIndex = len(snap.Apps) - 1
+		}
+		for originalIndex, prev := range snap.Apps {
 			switch prev.Type {
 			case AppTypeTerminal:
 				appID := sm.NextAppID()
@@ -84,12 +93,18 @@ func Run(assets embed.FS) {
 					command = userShellBase()
 				}
 				if err := tm.Start(appID, port, command, prev.Writable, pwd); err != nil {
-					for _, started := range restored {
-						if started.Type == AppTypeTerminal {
-							tm.Stop(started.ID)
-						}
+					name := strings.TrimSpace(prev.Name)
+					if name == "" {
+						name = strings.TrimSpace(prev.Command)
 					}
-					return err
+					if name == "" {
+						name = "terminal"
+					}
+					skipped = append(skipped, name)
+					if originalIndex < originalSelectedIndex && restoredSelectedIndex > 0 {
+						restoredSelectedIndex--
+					}
+					continue
 				}
 				restored = append(restored, Application{
 					ID:            appID,
@@ -116,8 +131,11 @@ func Run(assets embed.FS) {
 				})
 			}
 		}
-		sm.RestoreActiveProjectApps(sid, restored, snap.SelectedIndex)
-		return nil
+		if restoredSelectedIndex < 0 {
+			restoredSelectedIndex = 0
+		}
+		sm.RestoreActiveProjectApps(sid, restored, restoredSelectedIndex)
+		return len(restored), skipped
 	}
 
 	// Main page - generates a unique session ID per page load
@@ -440,6 +458,37 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
+	// Save all running apps in the active project for reopen without closing them.
+	app.Action("project.apps.save", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		projectName, count := sm.SaveActiveProjectApps(sid)
+		if count == 0 {
+			return r.Notify("error", "No open apps in "+projectName)
+		}
+		state := sm.Get(sid)
+		return r.NewResponse().
+			Replace(TopBarID, renderTopBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(showToastJS("Saved apps", projectName, 1300)).
+			Build()
+	})
+
+	// Clear the saved reopen snapshot for the active project.
+	app.Action("project.apps.clean", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		projectName, hadSaved := sm.ClearClosedProjectApps(sid)
+		if !hadSaved {
+			return r.Notify("error", "Nothing saved for "+projectName)
+		}
+		state := sm.Get(sid)
+		return r.NewResponse().
+			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
+			Replace(TopBarID, renderTopBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(showToastJS("Cleared saved apps", projectName, 1300)).
+			Build()
+	})
+
 	// Reopen the last set of apps closed via the command palette for the active project.
 	app.Action("project.apps.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
@@ -447,18 +496,28 @@ func Run(assets embed.FS) {
 		if snap == nil || len(snap.Apps) == 0 {
 			return r.Notify("error", "Nothing to open for "+projectName)
 		}
-		if err := restoreClosedApps(sid, snap); err != nil {
-			sm.RememberClosedProjectApps(sid, projectName, snap)
-			return r.Notify("error", "Failed to reopen apps: "+err.Error())
+		restoredCount, skipped := restoreClosedApps(sid, snap)
+		if restoredCount == 0 {
+			msg := "Failed to reopen apps"
+			if len(skipped) > 0 {
+				msg = "Failed to reopen: " + strings.Join(skipped, ", ")
+			}
+			return r.Notify("error", msg)
 		}
 		state := sm.Get(sid)
 		time.Sleep(500 * time.Millisecond)
+		toastTitle := "Reopened apps"
+		toastBody := projectName
+		if len(skipped) > 0 {
+			toastTitle = "Reopened with skips"
+			toastBody = strings.Join(skipped, ", ")
+		}
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Add(focusSelectedAppJS(state)).
-			Add(showToastJS("Reopened apps", projectName, 1300)).
+			Add(showToastJS(toastTitle, toastBody, 1800)).
 			Build()
 	})
 

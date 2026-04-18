@@ -2,9 +2,11 @@ package libro
 
 import (
 	"database/sql"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -23,6 +25,21 @@ type SavedApp struct {
 	Name            string
 	IconURL         string // cached icon URL discovered via web search
 	ProjectSpecific bool   // if true, only visible in the project it was saved to
+}
+
+// ClosedProjectApp represents an app snapshot persisted for project reopen.
+type ClosedProjectApp struct {
+	ProjectName   string
+	Type          string
+	URL           string
+	Command       string
+	Width         string
+	PreviousWidth string
+	Writable      bool
+	Name          string
+	IconURL       string
+	Position      int
+	SelectedIndex int
 }
 
 var (
@@ -53,11 +70,96 @@ func InitDB() {
 }
 
 func dbFilePath() string {
-	exe, err := os.Executable()
+	dir, err := libroDataDir()
 	if err != nil {
+		log.Printf("db: failed to resolve data dir: %v", err)
 		return "libro.db"
 	}
-	return filepath.Join(filepath.Dir(exe), "libro.db")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		log.Printf("db: failed to create data dir %s: %v", dir, err)
+		return filepath.Join(dir, "libro.db")
+	}
+	dbPath := filepath.Join(dir, "libro.db")
+	migrateLegacyDB(dbPath)
+	return dbPath
+}
+
+func libroDataDir() (string, error) {
+	if dataHome := strings.TrimSpace(os.Getenv("XDG_DATA_HOME")); dataHome != "" {
+		return filepath.Join(dataHome, "libro"), nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	switch runtime.GOOS {
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support", "libro"), nil
+	case "windows":
+		if appData := strings.TrimSpace(os.Getenv("APPDATA")); appData != "" {
+			return filepath.Join(appData, "libro"), nil
+		}
+		return filepath.Join(home, "AppData", "Roaming", "libro"), nil
+	default:
+		return filepath.Join(home, ".local", "share", "libro"), nil
+	}
+}
+
+func migrateLegacyDB(dbPath string) {
+	if fileExists(dbPath) {
+		return
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	legacyPath := filepath.Join(filepath.Dir(exe), "libro.db")
+	if legacyPath == dbPath || !fileExists(legacyPath) {
+		return
+	}
+
+	if err := copyFile(legacyPath, dbPath); err != nil {
+		log.Printf("db: failed to migrate legacy db from %s to %s: %v", legacyPath, dbPath, err)
+		return
+	}
+
+	for _, suffix := range []string{"-wal", "-shm"} {
+		src := legacyPath + suffix
+		dst := dbPath + suffix
+		if !fileExists(src) {
+			continue
+		}
+		if err := copyFile(src, dst); err != nil {
+			log.Printf("db: failed to migrate legacy db sidecar %s: %v", src, err)
+		}
+	}
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Sync()
 }
 
 func createTables() {
@@ -94,6 +196,21 @@ func createTables() {
 			name         TEXT NOT NULL DEFAULT '',
 			icon_url     TEXT NOT NULL DEFAULT '',
 			position     INTEGER NOT NULL DEFAULT 0,
+			FOREIGN KEY (project_name) REFERENCES projects(name) ON DELETE CASCADE
+		);
+		CREATE TABLE IF NOT EXISTS closed_project_apps (
+			id             INTEGER PRIMARY KEY AUTOINCREMENT,
+			project_name   TEXT NOT NULL,
+			type           TEXT NOT NULL,
+			url            TEXT NOT NULL DEFAULT '',
+			command        TEXT NOT NULL DEFAULT '',
+			width          TEXT NOT NULL DEFAULT 'lg',
+			previous_width TEXT NOT NULL DEFAULT '',
+			writable       INTEGER NOT NULL DEFAULT 1,
+			name           TEXT NOT NULL DEFAULT '',
+			icon_url       TEXT NOT NULL DEFAULT '',
+			position       INTEGER NOT NULL DEFAULT 0,
+			selected_index INTEGER NOT NULL DEFAULT 0,
 			FOREIGN KEY (project_name) REFERENCES projects(name) ON DELETE CASCADE
 		);
 	`)
@@ -229,6 +346,87 @@ func DBRemoveProject(name string) {
 	_, err := db.Exec("DELETE FROM projects WHERE name = ?", name)
 	if err != nil {
 		log.Printf("db: remove project %s: %v", name, err)
+	}
+}
+
+// --- Closed Project Apps ---
+
+// DBLoadClosedProjectApps returns the persisted reopen snapshot for a project.
+func DBLoadClosedProjectApps(projectName string) []ClosedProjectApp {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	rows, err := db.Query(
+		"SELECT project_name, type, url, command, width, previous_width, writable, name, icon_url, position, selected_index FROM closed_project_apps WHERE project_name = ? ORDER BY position, id",
+		projectName,
+	)
+	if err != nil {
+		log.Printf("db: load closed project apps for %s: %v", projectName, err)
+		return nil
+	}
+	defer rows.Close()
+
+	var apps []ClosedProjectApp
+	for rows.Next() {
+		var a ClosedProjectApp
+		var writable int
+		if err := rows.Scan(&a.ProjectName, &a.Type, &a.URL, &a.Command, &a.Width, &a.PreviousWidth, &writable, &a.Name, &a.IconURL, &a.Position, &a.SelectedIndex); err != nil {
+			continue
+		}
+		a.Writable = writable != 0
+		apps = append(apps, a)
+	}
+	return apps
+}
+
+// DBSaveClosedProjectApps replaces the persisted reopen snapshot for a project.
+func DBSaveClosedProjectApps(projectName string, apps []ClosedProjectApp) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("db: begin save closed project apps for %s: %v", projectName, err)
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM closed_project_apps WHERE project_name = ?", projectName); err != nil {
+		log.Printf("db: clear closed project apps for %s: %v", projectName, err)
+		return
+	}
+
+	for i, app := range apps {
+		writable := 0
+		if app.Writable {
+			writable = 1
+		}
+		position := app.Position
+		if position == 0 && i > 0 {
+			position = i
+		}
+		if _, err := tx.Exec(
+			"INSERT INTO closed_project_apps (project_name, type, url, command, width, previous_width, writable, name, icon_url, position, selected_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			projectName, app.Type, app.URL, app.Command, app.Width, app.PreviousWidth, writable, app.Name, app.IconURL, position, app.SelectedIndex,
+		); err != nil {
+			log.Printf("db: insert closed project app for %s: %v", projectName, err)
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("db: commit closed project apps for %s: %v", projectName, err)
+	}
+}
+
+// DBClearClosedProjectApps removes the persisted reopen snapshot for a project.
+func DBClearClosedProjectApps(projectName string) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	_, err := db.Exec("DELETE FROM closed_project_apps WHERE project_name = ?", projectName)
+	if err != nil {
+		log.Printf("db: clear closed project apps for %s: %v", projectName, err)
 	}
 }
 

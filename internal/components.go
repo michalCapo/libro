@@ -2229,6 +2229,14 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				__ws.call('project.apps.close',{sid:'%s'});
 			}},
+			{id:'save',label:'Save open apps',scope:'project',icon:'save',keywords:'save persist project apps reopen restore positions order snapshot',run:function(){
+				closePalette();
+				__ws.call('project.apps.save',{sid:'%s'});
+			}},
+			{id:'clean',label:'Clean saved apps',scope:'project',icon:'delete_sweep',keywords:'clean clear remove saved persisted reopen closed project apps snapshot database',run:function(){
+				closePalette();
+				__ws.call('project.apps.clean',{sid:'%s'});
+			}},
 			{id:'console',label:'App console',scope:'app',icon:'code',keywords:'devtools app console inspector developer tools',run:function(){
 				closePalette();
 				if(window.libroElectron&&window.libroElectron.toggleDevTools)window.libroElectron.toggleDevTools();
@@ -2365,7 +2373,7 @@ func commandPopupJS(sid string) string {
 
 	window.__libroOpenCommandPalette=openPalette;
 })();
-`, CommandPopupID, sid, sid, sid, sid, sid)
+`, CommandPopupID, sid, sid, sid, sid, sid, sid, sid)
 }
 
 // resizePopupJS returns JS that powers the Win+R / Win+F resize popup.
@@ -3256,6 +3264,12 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 
 	// Action buttons in icon style (same as app icons)
 	appIcons = append(appIcons,
+		r.Button(btnCls).
+			Attr("onclick", "if(window.__libroOpenCommandPalette)window.__libroOpenCommandPalette();").
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("menu_open"),
+				r.Span(tipCls).Text("Commands"),
+			),
 		r.Button(btnCls).
 			Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.toggle('hidden');", ShortcutsDialogID)).
 			Render(
