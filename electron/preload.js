@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('libroElectron', {
   toggleDevTools: function () {
     ipcRenderer.send('libro-toggle-devtools')
   },
+  toggleMaximize: function () {
+    ipcRenderer.send('libro-toggle-maximize')
+  },
   toggleWebviewDevTools: function (webContentsId, bounds, panel) {
     ipcRenderer.send('libro-toggle-webview-devtools', webContentsId, bounds, panel)
   },
