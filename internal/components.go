@@ -2058,46 +2058,45 @@ func urlPopupJS(sid string) string {
 		},100);
 	}
 
-	document.addEventListener('input',function(e){
-		var inp=getInp();
-		if(e.target!==inp)return;
-		selectedIdx=-1;
-		originalQuery=inp.value;
-		renderHistory(inp.value);
-	});
+	var inp=getInp();
+	if(inp){
+		inp.addEventListener('input',function(){
+			selectedIdx=-1;
+			originalQuery=inp.value;
+			renderHistory(inp.value);
+		});
 
-	document.addEventListener('keydown',function(e){
-		var inp=getInp();
-		if(e.target!==inp)return;
-		var dlg=getDlg();
-		if(!dlg||dlg.classList.contains('hidden'))return;
-		e.stopImmediatePropagation();
-		if(e.key==='ArrowDown'){
-			e.preventDefault();
-			if(filteredURLs.length>0){
-				selectedIdx=Math.min(selectedIdx+1,filteredURLs.length-1);
-				renderHistory(originalQuery);
-				inp.value=filteredURLs[selectedIdx];
+		inp.addEventListener('keydown',function(e){
+			var dlg=getDlg();
+			if(!dlg||dlg.classList.contains('hidden'))return;
+			e.stopImmediatePropagation();
+			if(e.key==='ArrowDown'){
+				e.preventDefault();
+				if(filteredURLs.length>0){
+					selectedIdx=Math.min(selectedIdx+1,filteredURLs.length-1);
+					renderHistory(originalQuery);
+					inp.value=filteredURLs[selectedIdx];
+				}
+			}else if(e.key==='ArrowUp'){
+				e.preventDefault();
+				if(filteredURLs.length>0&&selectedIdx>0){
+					selectedIdx--;
+					renderHistory(originalQuery);
+					inp.value=filteredURLs[selectedIdx];
+				}else if(selectedIdx===0){
+					selectedIdx=-1;
+					renderHistory(originalQuery);
+					inp.value=originalQuery;
+				}
+			}else if(e.key==='Enter'){
+				e.preventDefault();
+				navigate();
+			}else if(e.key==='Escape'){
+				e.preventDefault();
+				closePopup();
 			}
-		}else if(e.key==='ArrowUp'){
-			e.preventDefault();
-			if(filteredURLs.length>0&&selectedIdx>0){
-				selectedIdx--;
-				renderHistory(originalQuery);
-				inp.value=filteredURLs[selectedIdx];
-			}else if(selectedIdx===0){
-				selectedIdx=-1;
-				renderHistory(originalQuery);
-				inp.value=originalQuery;
-			}
-		}else if(e.key==='Enter'){
-			e.preventDefault();
-			navigate();
-		}else if(e.key==='Escape'){
-			e.preventDefault();
-			closePopup();
-		}
-	});
+		});
+	}
 
 	window.__libroOpenURLPopup=openPopup;
 })();
@@ -2750,19 +2749,21 @@ func worktreeCreatePopupJS(sid string) string {
 		setTimeout(function(){inp.focus();},50);
 	}
 
-	document.addEventListener('keydown',function(e){
-		var dlg=getDlg();
-		var inp=getInp();
-		if(!dlg||dlg.classList.contains('hidden')||e.target!==inp)return;
-		e.stopImmediatePropagation();
-		if(e.key==='Enter'){
-			e.preventDefault();
-			createWorktree();
-		}else if(e.key==='Escape'){
-			e.preventDefault();
-			closePopup();
-		}
-	});
+	var inp=getInp();
+	if(inp){
+		inp.addEventListener('keydown',function(e){
+			var dlg=getDlg();
+			if(!dlg||dlg.classList.contains('hidden'))return;
+			e.stopImmediatePropagation();
+			if(e.key==='Enter'){
+				e.preventDefault();
+				createWorktree();
+			}else if(e.key==='Escape'){
+				e.preventDefault();
+				closePopup();
+			}
+		});
+	}
 
 	window.__libroOpenWorktreeCreatePopup=openPopup;
 })();
@@ -2911,30 +2912,28 @@ func worktreePickerPopupJS(sid string) string {
 		setTimeout(function(){inp.focus();},50);
 	}
 
-	document.addEventListener('input',function(e){
-		if(e.target!==getInp())return;
-		filter();
-	});
-
-	document.addEventListener('keydown',function(e){
-		var dlg=getDlg();
-		var inp=getInp();
-		if(!dlg||dlg.classList.contains('hidden')||e.target!==inp)return;
-		e.stopImmediatePropagation();
-		if(e.key==='ArrowDown'){
-			e.preventDefault();
-			if(selectedIdx<filtered.length-1){selectedIdx++;render();}
-		}else if(e.key==='ArrowUp'){
-			e.preventDefault();
-			if(selectedIdx>0){selectedIdx--;render();}
-		}else if(e.key==='Enter'){
-			e.preventDefault();
-			launch();
-		}else if(e.key==='Escape'){
-			e.preventDefault();
-			closePopup();
-		}
-	});
+	var inp=getInp();
+	if(inp){
+		inp.addEventListener('input',filter);
+		inp.addEventListener('keydown',function(e){
+			var dlg=getDlg();
+			if(!dlg||dlg.classList.contains('hidden'))return;
+			e.stopImmediatePropagation();
+			if(e.key==='ArrowDown'){
+				e.preventDefault();
+				if(selectedIdx<filtered.length-1){selectedIdx++;render();}
+			}else if(e.key==='ArrowUp'){
+				e.preventDefault();
+				if(selectedIdx>0){selectedIdx--;render();}
+			}else if(e.key==='Enter'){
+				e.preventDefault();
+				launch();
+			}else if(e.key==='Escape'){
+				e.preventDefault();
+				closePopup();
+			}
+		});
+	}
 
 	window.__libroOpenWorktreePicker=openPopup;
 })();
