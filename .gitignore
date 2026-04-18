@@ -7,4 +7,5 @@ libro.db*
 .gocache
 internal/desktopbundledata/electron-app/package.json
 internal/desktopbundledata/electron-app/electron/
+internal/desktopbundledata/electron-app/winres/
 internal/desktopbundledata/electron-runtime/*.zip

@@ -65,17 +65,18 @@ electron_platform_id() {
 
 reset_embedded_bundle_dirs() {
     rm -rf "$BUNDLE_APP_DIR" "$BUNDLE_RUNTIME_DIR"
-    mkdir -p "$BUNDLE_APP_DIR/electron" "$BUNDLE_RUNTIME_DIR"
+    mkdir -p "$BUNDLE_APP_DIR/electron" "$BUNDLE_APP_DIR/winres" "$BUNDLE_RUNTIME_DIR"
     printf '%s\n' "Generated release-time desktop app files live here." > "$BUNDLE_APP_DIR/README.md"
     printf '%s\n' "Generated release-time Electron runtime zips live here." > "$BUNDLE_RUNTIME_DIR/README.md"
 }
 
 stage_embedded_app_files() {
-    mkdir -p "$BUNDLE_APP_DIR/electron"
+    mkdir -p "$BUNDLE_APP_DIR/electron" "$BUNDLE_APP_DIR/winres"
     rm -f "$BUNDLE_APP_DIR/README.md"
     cp "$SCRIPT_DIR/package.json" "$BUNDLE_APP_DIR/package.json"
     cp "$SCRIPT_DIR/electron/main.js" "$BUNDLE_APP_DIR/electron/main.js"
     cp "$SCRIPT_DIR/electron/preload.js" "$BUNDLE_APP_DIR/electron/preload.js"
+    cp "$SCRIPT_DIR/winres/icon.png" "$BUNDLE_APP_DIR/winres/icon.png"
 }
 
 prepare_embedded_runtime() {
