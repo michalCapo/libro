@@ -5,7 +5,9 @@ node_modules/
 libro.db*
 .codex
 .gocache
+.cache/
 internal/desktopbundledata/electron-app/package.json
+internal/desktopbundledata/electron-app/package-lock.json
 internal/desktopbundledata/electron-app/electron/
 internal/desktopbundledata/electron-app/winres/
 internal/desktopbundledata/electron-runtime/*.zip
