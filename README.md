@@ -8,7 +8,9 @@ A Go + Electron application using [g-sui](https://github.com/michalCapo/g-sui) t
 
 ## Recent Changes
 
-- Command Palette now exposes app and project actions, including saving the current strip, clearing saved reopen state, and reopening saved project apps.
+- The project sidebar now expands git projects into an inline worktree tree; clicking a project header toggles the tree and creating a worktree opens its parent automatically.
+- `⌘ + G` opens a dedicated worktree picker popup that fuzzy-searches worktrees across all git projects.
+- Command Palette exposes app and project actions, including saving the current strip, clearing saved reopen state, and reopening saved project apps.
 - Projects can save a strip explicitly, so you can restore a project's browser and terminal layout later with the save and reopen commands.
 - The selected app can be moved left or right to reorder the strip without reopening panels.
 - Manage Apps is available directly from the top bar as a popup for editing or deleting saved entries.
@@ -76,7 +78,8 @@ Libro is a desktop strip for keeping browser panels and terminal sessions open s
 - Each project keeps its own running strip state while inactive projects stay hidden.
 - Closed app strips can be saved and reopened per project from the command palette.
 - Saved apps can be global or project-specific.
-- Git repositories get worktree actions, and projects/worktrees can be assigned to `Ctrl + 2-9` slots.
+- Git repositories expand in the sidebar into an inline worktree tree, and a fuzzy picker (`⌘ + G`) searches worktrees across all projects.
+- Projects and worktrees can be assigned to `Ctrl + 2-9` slots.
 
 ### Interface
 
