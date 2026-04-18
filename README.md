@@ -107,6 +107,7 @@ Libro is a desktop strip for keeping browser panels and terminal sessions open s
 - `⌘ + Ctrl + I` — move app right
 - `⌘ + B` — toggle sidebar
 - `⌘ + X` — assign or remove current project shortcut
+- `⌘ + G` — search all worktrees
 - `Ctrl + 1` — switch to `home`
 - `Ctrl + 2–9` — switch to assigned project or worktree
 - `Ctrl + 0` — switch to previous project

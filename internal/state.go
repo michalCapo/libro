@@ -145,6 +145,9 @@ type AppState struct {
 	// SidebarCollapsed tracks whether the project sidebar is collapsed
 	SidebarCollapsed bool
 
+	// ProjectTreeOpen tracks which git projects have their worktree list expanded
+	ProjectTreeOpen map[string]bool
+
 	// ZenMode hides everything except running applications (top bar, sidebar, toolbars)
 	ZenMode bool
 
@@ -223,6 +226,7 @@ func (sm *StateManager) NewSession() string {
 		NavProjectSlot:   navProjectSlots,
 		ZenMode:          zenMode,
 		SidebarCollapsed: zenMode,
+		ProjectTreeOpen:  make(map[string]bool),
 	}
 	return sid
 }
@@ -254,6 +258,7 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 		NavProjectSlot:   navProjectSlots,
 		ZenMode:          zenMode,
 		SidebarCollapsed: zenMode,
+		ProjectTreeOpen:  make(map[string]bool),
 	}
 	sm.states[sessionID] = s
 	return s
@@ -667,6 +672,27 @@ func (sm *StateManager) RestoreActiveProjectApps(sessionID string, apps []Applic
 	s.SelectedIndex = selectedIndex
 }
 
+func applyAppWidth(app *Application, width Width) {
+	if app == nil {
+		return
+	}
+	if width == "" {
+		width = WidthLG
+	}
+	if width == WidthFull {
+		if app.Width != WidthFull {
+			app.PreviousWidth = app.Width
+			if app.PreviousWidth == "" {
+				app.PreviousWidth = WidthLG
+			}
+		}
+		app.Width = WidthFull
+		return
+	}
+	app.Width = width
+	app.PreviousWidth = ""
+}
+
 // SetAppWidthByID sets the width of an app by its ID and returns the app's current index
 func (sm *StateManager) SetAppWidthByID(sessionID, appID string, width Width) int {
 	sm.mu.Lock()
@@ -677,7 +703,7 @@ func (sm *StateManager) SetAppWidthByID(sessionID, appID string, width Width) in
 	}
 	for i, app := range s.Apps {
 		if app.ID == appID {
-			s.Apps[i].Width = width
+			applyAppWidth(&s.Apps[i], width)
 			return i
 		}
 	}
@@ -707,8 +733,7 @@ func (sm *StateManager) ToggleMaxWidth(sessionID string) (Width, string) {
 		return prev, app.ID
 	}
 	// Save current width and go full
-	app.PreviousWidth = app.Width
-	app.Width = WidthFull
+	applyAppWidth(app, WidthFull)
 	return WidthFull, app.ID
 }
 
@@ -806,7 +831,7 @@ func (sm *StateManager) SetAppWidth(sessionID string, index int, width Width) {
 	if s == nil || index < 0 || index >= len(s.Apps) {
 		return
 	}
-	s.Apps[index].Width = width
+	applyAppWidth(&s.Apps[index], width)
 }
 
 // OpenDialog sets the dialog open flag and records which side it was opened from
@@ -848,6 +873,10 @@ func (sm *StateManager) AddProject(sessionID, name, path string) bool {
 		p.IsGitRepo = GitIsRepo(path)
 	}
 	s.Projects = append(s.Projects, p)
+	if s.ProjectTreeOpen == nil {
+		s.ProjectTreeOpen = make(map[string]bool)
+	}
+	s.ProjectTreeOpen[name] = false
 	return true
 }
 
@@ -881,6 +910,7 @@ func (sm *StateManager) RemoveProject(sessionID, projectName string) ([]Applicat
 	}
 	delete(s.closedSnapshots, projectName)
 	delete(s.renderedProjects, projectName)
+	delete(s.ProjectTreeOpen, projectName)
 	sm.clearNavSlot(s, projectName)
 
 	if s.ActiveProject == projectName {
@@ -1125,6 +1155,10 @@ func (sm *StateManager) AddVirtualProject(sessionID, name, path, parentProject s
 		Virtual:       true,
 		ParentProject: parentProject,
 	})
+	if s.ProjectTreeOpen == nil {
+		s.ProjectTreeOpen = make(map[string]bool)
+	}
+	s.ProjectTreeOpen[parentProject] = true
 	return true
 }
 
@@ -1164,6 +1198,34 @@ func (sm *StateManager) RemoveVirtualProject(sessionID, name string) ([]Applicat
 	}
 
 	return apps, true
+}
+
+// ToggleProjectTree flips the expanded state for a project's worktree list.
+func (sm *StateManager) ToggleProjectTree(sessionID, projectName string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return
+	}
+	if s.ProjectTreeOpen == nil {
+		s.ProjectTreeOpen = make(map[string]bool)
+	}
+	s.ProjectTreeOpen[projectName] = !s.ProjectTreeOpen[projectName]
+}
+
+// OpenProjectTree ensures a project's worktree list is expanded.
+func (sm *StateManager) OpenProjectTree(sessionID, projectName string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return
+	}
+	if s.ProjectTreeOpen == nil {
+		s.ProjectTreeOpen = make(map[string]bool)
+	}
+	s.ProjectTreeOpen[projectName] = true
 }
 
 // OpenWorktreeDialog sets the worktree dialog open flag

@@ -33,6 +33,7 @@ const (
 	ShortcutsDialogID = "shortcuts-dialog"
 	CloseDialogID     = "close-dialog"
 	WorktreeCreateID  = "worktree-create-popup"
+	WorktreePickerID  = "worktree-picker-popup"
 	ManageDialogID    = "manage-dialog"
 	URLPopupID        = "url-popup"
 	ResizePopupID     = "resize-popup"
@@ -2534,6 +2535,7 @@ func renderShortcutsDialog() *r.Node {
 			{"⌘ + Ctrl + I", "Move app right"},
 			{"⌘ + B", "Toggle sidebar"},
 			{"⌘ + X", "Assign or remove current project shortcut"},
+			{"⌘ + G", "Search all worktrees"},
 			{"Ctrl + 1", "Switch to home project"},
 			{"Ctrl + 2–9", "Switch to assigned project or worktree"},
 			{"Ctrl + 0", "Switch to previous project"},
@@ -2765,6 +2767,214 @@ func worktreeCreatePopupJS(sid string) string {
 	window.__libroOpenWorktreeCreatePopup=openPopup;
 })();
 `, WorktreeCreateID, sid)
+}
+
+func renderWorktreePickerPopup(sid string) *r.Node {
+	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
+		ID(WorktreePickerID).
+		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", WorktreePickerID))).
+		Render(
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
+				OnClick(r.JS("event.stopPropagation()")).
+				Render(
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
+						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("alt_route"),
+						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").Text("Worktrees"),
+					),
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
+						r.Input("w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
+							ID("worktree-picker-input").
+							Attr("type", "text").
+							Attr("placeholder", "Type project or branch...").
+							Attr("autocomplete", "off").
+							Attr("spellcheck", "false"),
+					),
+					r.Div("max-h-80 overflow-y-auto").ID("worktree-picker-results"),
+					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+						r.Span("").Text("↑↓ navigate"),
+						r.Span("").Text("Enter select"),
+						r.Span("").Text("Esc close"),
+					),
+				),
+		)
+}
+
+func worktreePickerPopupJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	var selectedIdx=0;
+	var filtered=[];
+
+	function getDlg(){return document.getElementById('%s');}
+	function getInp(){return document.getElementById('worktree-picker-input');}
+	function getResults(){return document.getElementById('worktree-picker-results');}
+
+	function fuzzyMatch(text,query){
+		text=(text||'').toLowerCase();
+		query=(query||'').toLowerCase();
+		var ti=0,qi=0,score=0,lastMatch=-1;
+		while(ti<text.length&&qi<query.length){
+			if(text[ti]===query[qi]){
+				score+=1;
+				if(lastMatch===ti-1)score+=2;
+				if(ti===0||text[ti-1]===' '||text[ti-1]==='/'||text[ti-1]==='.')score+=3;
+				lastMatch=ti;
+				qi++;
+			}
+			ti++;
+		}
+		return qi===query.length?score:0;
+	}
+
+	function render(){
+		var res=getResults();
+		if(!res)return;
+		var dk=document.documentElement.classList.contains('dark');
+		if(filtered.length===0){
+			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No worktrees found</div>';
+			return;
+		}
+		var html='';
+		filtered.forEach(function(item,i){
+			var sel=i===selectedIdx;
+			html+='<div class="worktree-picker-item flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
+				+(sel?(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500')
+				:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'))
+				+'" data-worktree-idx="'+i+'">';
+			html+='<i class="material-icons-round '+(dk?'text-zinc-400':'text-gray-400')+' text-lg">alt_route</i>';
+			html+='<div class="flex-1 min-w-0">';
+			html+='<div class="text-sm truncate '+(dk?'text-zinc-200':'text-gray-800')+'">'+item.branch+'</div>';
+			html+='<div class="text-[11px] truncate '+(dk?'text-zinc-500':'text-gray-400')+'">'+item.project+'</div>';
+			html+='</div></div>';
+		});
+		res.innerHTML=html;
+		res.querySelectorAll('[data-worktree-idx]').forEach(function(el){
+			el.addEventListener('mouseenter',function(){
+				var idx=parseInt(el.getAttribute('data-worktree-idx'),10);
+				if(!Number.isNaN(idx)&&idx!==selectedIdx){
+					selectedIdx=idx;
+					render();
+				}
+			});
+			el.addEventListener('mousedown',function(e){
+				e.preventDefault();
+				var idx=parseInt(el.getAttribute('data-worktree-idx'),10);
+				if(Number.isNaN(idx))return;
+				selectedIdx=idx;
+				launch();
+			});
+		});
+		var selected=res.querySelector('[data-worktree-idx="'+selectedIdx+'"]');
+		if(selected)selected.scrollIntoView({block:'nearest'});
+	}
+
+	function filter(){
+		var query=(getInp()&&getInp().value||'').trim();
+		var all=(window.__libroWorktrees||[]).slice();
+		if(!query){
+			filtered=all;
+		}else{
+			filtered=[];
+			all.forEach(function(item){
+				var score=fuzzyMatch(item.project+' '+item.branch+' '+item.path,query);
+				if(score>0){
+					filtered.push(Object.assign({score:score},item));
+				}
+			});
+			filtered.sort(function(a,b){return b.score-a.score;});
+		}
+		selectedIdx=0;
+		render();
+	}
+
+	function closePopup(){
+		var dlg=getDlg();
+		var inp=getInp();
+		if(dlg)dlg.classList.add('hidden');
+		if(inp)inp.value='';
+	}
+
+	function launch(){
+		if(filtered.length===0)return;
+		var item=filtered[selectedIdx];
+		closePopup();
+		__ws.call('worktree.switch',{sid:'%s',project:item.project,path:item.path,branch:item.branch});
+	}
+
+	function openPopup(){
+		var dlg=getDlg();
+		var inp=getInp();
+		if(!dlg||!inp)return;
+		dlg.classList.remove('hidden');
+		inp.value='';
+		filter();
+		setTimeout(function(){inp.focus();},50);
+	}
+
+	document.addEventListener('input',function(e){
+		if(e.target!==getInp())return;
+		filter();
+	});
+
+	document.addEventListener('keydown',function(e){
+		var dlg=getDlg();
+		var inp=getInp();
+		if(!dlg||dlg.classList.contains('hidden')||e.target!==inp)return;
+		e.stopImmediatePropagation();
+		if(e.key==='ArrowDown'){
+			e.preventDefault();
+			if(selectedIdx<filtered.length-1){selectedIdx++;render();}
+		}else if(e.key==='ArrowUp'){
+			e.preventDefault();
+			if(selectedIdx>0){selectedIdx--;render();}
+		}else if(e.key==='Enter'){
+			e.preventDefault();
+			launch();
+		}else if(e.key==='Escape'){
+			e.preventDefault();
+			closePopup();
+		}
+	});
+
+	window.__libroOpenWorktreePicker=openPopup;
+})();
+`, WorktreePickerID, sid)
+}
+
+func worktreesJS(state *AppState) string {
+	if !GitAvailable() {
+		return "window.__libroWorktrees=[];"
+	}
+	type jsWorktree struct {
+		Project string `json:"project"`
+		Branch  string `json:"branch"`
+		Path    string `json:"path"`
+	}
+	var all []jsWorktree
+	for _, p := range state.Projects {
+		if !p.IsGitRepo || p.Virtual {
+			continue
+		}
+		wts, err := GitListWorktrees(p.Path)
+		if err != nil {
+			continue
+		}
+		for _, wt := range wts {
+			if wt.IsBare {
+				continue
+			}
+			all = append(all, jsWorktree{
+				Project: p.Name,
+				Branch:  wt.Branch,
+				Path:    wt.Path,
+			})
+		}
+	}
+	b, _ := json.Marshal(all)
+	if b == nil {
+		b = []byte("[]")
+	}
+	return fmt.Sprintf("window.__libroWorktrees=%s;", string(b))
 }
 
 // renderManageAppsPage renders the manage apps popup.
@@ -3380,56 +3590,15 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 		}
 
 		worktrees, worktreeErr := []Worktree(nil), error(nil)
-		hasBranchRows := false
-		if proj.IsGitRepo && GitAvailable() {
+		hasBranchRows := proj.IsGitRepo && GitAvailable()
+		treeOpen := state.ProjectTreeOpen != nil && state.ProjectTreeOpen[proj.Name]
+		if treeOpen && hasBranchRows {
 			worktrees, worktreeErr = GitListWorktrees(proj.Path)
-			hasBranchRows = worktreeErr == nil && len(worktrees) > 0
-		}
-
-		// Shortcut badge: home always shows "1". Git parents with visible branch rows
-		// don't render project shortcuts; those are shown on the branch rows only.
-		var badgeNode *r.Node
-		if proj.Name == "home" {
-			badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 "
-			if isActive || isParentOfActive {
-				badgeCls += "bg-blue-500 text-blue-100"
-			} else {
-				badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500"
-			}
-			badgeNode = r.Span(badgeCls).Text("1")
-		} else if !hasBranchRows {
-			if slot := sm.GetNavSlotForProject(sid, proj.Name); slot > 0 {
-				badgeCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer "
-				if isActive || isParentOfActive {
-					badgeCls += "bg-blue-500 text-blue-100 hover:bg-red-500"
-				} else {
-					badgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500 hover:bg-red-400 hover:text-white"
-				}
-				badgeNode = r.Span(badgeCls).
-					Attr("title", fmt.Sprintf("Remove shortcut Ctrl+%d", slot)).
-					Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.remove',{sid:'%s',name:'%s'});", sid, proj.Name)).
-					Text(fmt.Sprintf("%d", slot))
-			} else {
-				// No slot — show add button on row hover while keeping space reserved.
-				addSlotCls := "inline-flex items-center justify-center w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer opacity-0 group-hover/projitem:opacity-100 transition-opacity duration-75 "
-				if isActive || isParentOfActive {
-					addSlotCls += "text-blue-200 hover:bg-white/15 hover:text-white"
-				} else {
-					addSlotCls += "bg-gray-200 dark:bg-zinc-800 text-gray-400 dark:text-zinc-600 hover:bg-blue-400 hover:text-white"
-				}
-				badgeNode = r.Span(addSlotCls).
-					Attr("title", "Add shortcut").
-					Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.add',{sid:'%s',name:'%s'});", sid, proj.Name)).
-					Text("+")
-			}
 		}
 
 		projBtn := r.Button("flex-1 min-w-0 flex items-center gap-2 text-left").
 			Attr("title", proj.Path).
-			OnClick(r.JS(fmt.Sprintf(
-				"history.replaceState(null,'','#%s');__ws.call('project.switch',{sid:'%s',name:'%s'});",
-				proj.Name, sid, proj.Name,
-			)))
+			Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('project.header.click',{sid:'%s',project:'%s'});", sid, proj.Name))
 
 		projLeadingCls := "relative flex items-center justify-center w-5 h-5 shrink-0"
 		projLeadingChildren := []*r.Node{
@@ -3465,8 +3634,23 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 		}
 		projBtn.Render(btnChildren...)
 		projControls := []*r.Node{}
-		if badgeNode != nil {
-			projControls = append(projControls, badgeNode)
+		if hasBranchRows {
+			toggleCls := "inline-flex items-center justify-center w-4 h-4 rounded shrink-0 cursor-pointer transition-colors duration-75 "
+			if isActive || isParentOfActive {
+				toggleCls += "text-blue-200 hover:bg-white/15 hover:text-white"
+			} else {
+				toggleCls += "text-gray-400 dark:text-zinc-600 hover:bg-gray-200 dark:hover:bg-zinc-800 hover:text-gray-700 dark:hover:text-zinc-300"
+			}
+			toggleIcon := "chevron_right"
+			if treeOpen {
+				toggleIcon = "expand_more"
+			}
+			projControls = append(projControls,
+				r.Button(toggleCls).
+					Attr("title", "Toggle worktrees").
+					Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('project.worktrees.toggle',{sid:'%s',project:'%s'});", sid, proj.Name)).
+					Render(r.I("material-icons-round text-[14px]").Text(toggleIcon)),
+			)
 		}
 		projItem := r.Div("group/projitem").Render(
 			r.Div(projCls).Render(
@@ -3477,7 +3661,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 
 		// Worktree sub-items for git repos
 		if proj.IsGitRepo && GitAvailable() {
-			if worktreeErr == nil && len(worktrees) > 0 {
+			if treeOpen && worktreeErr == nil && len(worktrees) > 0 {
 				wtItems := make([]*r.Node, 0, len(worktrees))
 				for _, wt := range worktrees {
 					if wt.IsBare {
@@ -4013,6 +4197,12 @@ func keyboardShortcutsJS(sid string) string {
 					__ws.call('nav.slot.toggle.active', {"sid": "%s"});
 					return;
 				}
+				if (e.metaKey && (e.key === 'g' || e.key === 'G' || e.code === 'KeyG') && !e.ctrlKey) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenWorktreePicker) window.__libroOpenWorktreePicker();
+					return;
+				}
 				if (e.metaKey && (e.key === 'q' || e.key === 'Q') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
@@ -4032,6 +4222,9 @@ func keyboardShortcutsJS(sid string) string {
 					return;
 				}
 				if (e.metaKey && (e.key === 'f' || e.key === 'F') && !e.ctrlKey) {
+					var appId = window.__libroSelectedApp || '';
+					var appEl = appId ? document.querySelector('[data-app-id="' + appId + '"]') : null;
+					if (!appEl) return;
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					__ws.call('app.maximize.toggle', {"sid": "%s"});

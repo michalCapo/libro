@@ -846,6 +846,67 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		return r.NewResponse().
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(worktreesJS(state)).
+			Build()
+	})
+
+	app.Action("project.worktrees.toggle", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		project, _ := data["project"].(string)
+		if strings.TrimSpace(project) == "" {
+			return ""
+		}
+		sm.ToggleProjectTree(sid, project)
+		state := sm.Get(sid)
+		return r.NewResponse().
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(worktreesJS(state)).
+			Build()
+	})
+
+	app.Action("project.header.click", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		project, _ := data["project"].(string)
+		project = strings.TrimSpace(project)
+		if project == "" {
+			return ""
+		}
+
+		state := sm.Get(sid)
+		isActive := state.ActiveProject == project
+		isParentOfActive := false
+		for _, p := range state.Projects {
+			if p.Virtual && p.ParentProject == project && p.Name == state.ActiveProject {
+				isParentOfActive = true
+				break
+			}
+		}
+
+		projectPath := sm.GetProjectPath(sid, project)
+		if projectPath != "" && GitAvailable() && GitIsRepo(projectPath) {
+			sm.ToggleProjectTree(sid, project)
+		}
+		if !isActive || isParentOfActive {
+			sm.SwitchProject(sid, project)
+		}
+
+		state = sm.Get(sid)
+		var jsSwitch string
+		if sm.IsProjectRendered(sid, project) {
+			jsSwitch = switchProjectJS(project, nil)
+		} else {
+			jsSwitch = switchProjectJS(project, renderMainArea(state, sid))
+		}
+
+		return r.NewResponse().
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Replace(TopBarID, renderTopBar(state, sid)).
+			Add(jsSwitch).
+			Add(updateHashJS(project)).
+			Add(focusSelectedAppJS(state)).
+			Add(worktreesJS(state)).
 			Build()
 	})
 
@@ -1236,6 +1297,7 @@ func Run(assets embed.FS) {
 		if parentProject == "" || wtPath == "" || branch == "" {
 			return ""
 		}
+		sm.OpenProjectTree(sid, parentProject)
 
 		vtName := parentProject + "/" + branch
 
@@ -1334,7 +1396,8 @@ func Run(assets embed.FS) {
 
 		state = sm.Get(sid)
 		resp := r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid))
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(worktreesJS(state))
 
 		return resp.Build()
 	})
