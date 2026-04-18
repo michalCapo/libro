@@ -67,6 +67,59 @@ func Run(assets embed.FS) {
 	app.Assets(assets, "assets", "/assets/")
 	app.Favicon = "/assets/logo.svg"
 
+	restoreClosedApps := func(sid string, snap *projectSnapshot) error {
+		if snap == nil || len(snap.Apps) == 0 {
+			sm.RestoreActiveProjectApps(sid, nil, 0)
+			return nil
+		}
+		pwd := sm.GetActiveProjectPath(sid)
+		restored := make([]Application, 0, len(snap.Apps))
+		for _, prev := range snap.Apps {
+			switch prev.Type {
+			case AppTypeTerminal:
+				appID := sm.NextAppID()
+				port := sm.NextPort()
+				command := strings.ReplaceAll(prev.Command, "__dir__", pwd)
+				if command == "" {
+					command = userShellBase()
+				}
+				if err := tm.Start(appID, port, command, prev.Writable, pwd); err != nil {
+					for _, started := range restored {
+						if started.Type == AppTypeTerminal {
+							tm.Stop(started.ID)
+						}
+					}
+					return err
+				}
+				restored = append(restored, Application{
+					ID:            appID,
+					Type:          AppTypeTerminal,
+					URL:           fmt.Sprintf("/ttyd/%d/", port),
+					Command:       command,
+					Width:         prev.Width,
+					PreviousWidth: prev.PreviousWidth,
+					Port:          port,
+					Writable:      prev.Writable,
+					Name:          prev.Name,
+					IconURL:       prev.IconURL,
+				})
+			default:
+				appID := sm.NextAppID()
+				restored = append(restored, Application{
+					ID:            appID,
+					Type:          AppTypeURL,
+					URL:           prev.URL,
+					Width:         prev.Width,
+					PreviousWidth: prev.PreviousWidth,
+					Name:          prev.Name,
+					IconURL:       prev.IconURL,
+				})
+			}
+		}
+		sm.RestoreActiveProjectApps(sid, restored, snap.SelectedIndex)
+		return nil
+	}
+
 	// Main page - generates a unique session ID per page load
 	app.Page("/", func(ctx *r.Context) *r.Node {
 		sid := sm.NewSession()
@@ -380,6 +433,49 @@ func Run(assets embed.FS) {
 			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + sidebarJS
 		}
 		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + sidebarJS
+	})
+
+	// Close all running apps in the active project and remember them for reopen.
+	app.Action("project.apps.close", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		projectName, apps := sm.CloseActiveProjectApps(sid)
+		if len(apps) == 0 {
+			return r.Notify("error", "No open apps in "+projectName)
+		}
+		for _, a := range apps {
+			if a.Type == AppTypeTerminal {
+				tm.Stop(a.ID)
+			}
+		}
+		state := sm.Get(sid)
+		return r.NewResponse().
+			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
+			Replace(TopBarID, renderTopBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(showToastJS("Closed apps", projectName, 1300)).
+			Build()
+	})
+
+	// Reopen the last set of apps closed via the command palette for the active project.
+	app.Action("project.apps.open", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		projectName, snap := sm.TakeClosedProjectApps(sid)
+		if snap == nil || len(snap.Apps) == 0 {
+			return r.Notify("error", "Nothing to open for "+projectName)
+		}
+		if err := restoreClosedApps(sid, snap); err != nil {
+			sm.RememberClosedProjectApps(sid, projectName, snap)
+			return r.Notify("error", "Failed to reopen apps: "+err.Error())
+		}
+		state := sm.Get(sid)
+		time.Sleep(500 * time.Millisecond)
+		return r.NewResponse().
+			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
+			Replace(TopBarID, renderTopBar(state, sid)).
+			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(focusSelectedAppJS(state)).
+			Add(showToastJS("Reopened apps", projectName, 1300)).
+			Build()
 	})
 
 	// Navigate left - JS-only update to preserve iframes
