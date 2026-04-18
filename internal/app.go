@@ -1290,7 +1290,6 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		return r.NewResponse().
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Add(worktreesJS(state)).
 			Build()
 	})
 
@@ -1335,21 +1334,9 @@ func Run(assets embed.FS) {
 
 		state = sm.Get(sid)
 		resp := r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Add(worktreesJS(state))
+			Replace(SidebarID, renderProjectSidebar(state, sid))
 
 		return resp.Build()
-	})
-
-	// Open worktree add dialog
-	app.Action("worktree.dialog.open", func(ctx *r.Context) string {
-		data := ctx.WsData()
-		project, _ := data["project"].(string)
-		if project == "" {
-			return ""
-		}
-		// Return JS to open the worktree dialog with project context
-		return fmt.Sprintf(`(function(){if(window.__libroOpenWorktreeDialog)window.__libroOpenWorktreeDialog(%s);})();`, jsString(project))
 	})
 
 	registerTtydProxy(app)
