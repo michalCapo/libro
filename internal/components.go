@@ -3340,6 +3340,15 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 				),
 			r.Div("flex items-center gap-0.5 ml-2").Render(appIcons...),
 			r.Div("ml-auto flex items-center gap-1").Render(appPreview),
+			r.Button(btnCls).
+				Attr("data-libro-no-drag", "true").
+				Attr("style", noDragStyle).
+				Attr("title", "Close Libro").
+				Attr("onclick", "if(window.__libroShowCloseDialog)window.__libroShowCloseDialog();").
+				Render(
+					r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-red-600 dark:hover:text-red-400 text-xl").Text("close"),
+					r.Span(tipCls).Text("Close Libro"),
+				),
 			r.Div("").
 				Attr("data-libro-no-drag", "true").
 				Attr("style", noDragStyle).
