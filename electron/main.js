@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Menu, session, ipcMain, shell, clipboard, globalShortcut, webContents, WebContentsView } = require('electron')
+const { app, BrowserWindow, Menu, session, ipcMain, shell, clipboard, globalShortcut, webContents, WebContentsView, nativeImage } = require('electron')
 const { spawn } = require('child_process')
+const fs = require('fs')
 const path = require('path')
 const http = require('http')
 const os = require('os')
@@ -14,6 +15,10 @@ app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer')
 
 // Pin Electron's profile directory so persistent webview partitions survive relaunches.
 app.setPath('userData', path.join(app.getPath('appData'), 'libro'))
+app.setName('Libro')
+if (process.platform === 'windows') {
+  app.setAppUserModelId('com.michalcapo.libro')
+}
 
 const port = process.env.LIBRO_PORT || '8100'
 const serverURL = `http://localhost:${port}`
@@ -22,6 +27,24 @@ let goProcess = null
 let mainWindow = null
 let isQuitting = false
 const devtoolsOverlays = new Map()
+
+function resolveAppIconPath() {
+  const candidates = [
+    path.join(__dirname, '..', 'winres', 'icon.png'),
+    path.join(process.resourcesPath || '', 'app', 'winres', 'icon.png'),
+  ]
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) return candidate
+  }
+  return null
+}
+
+const appIconPath = resolveAppIconPath()
+const appIcon = appIconPath ? nativeImage.createFromPath(appIconPath) : null
+
+if (process.platform === 'darwin' && appIcon && !appIcon.isEmpty() && app.dock) {
+  app.dock.setIcon(appIcon)
+}
 
 function withWebContents(id) {
   const contents = webContents.fromId(Number(id))
@@ -422,6 +445,7 @@ function createWindow() {
     show: false,
     frame: false,
     autoHideMenuBar: true,
+    ...(appIconPath ? { icon: appIconPath } : {}),
     webPreferences: {
       webviewTag: true,
       nodeIntegration: false,
