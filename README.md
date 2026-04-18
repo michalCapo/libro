@@ -6,6 +6,14 @@ A Go + Electron application using [g-sui](https://github.com/michalCapo/g-sui) t
 
 ![Demo](demo/demo.gif)
 
+## Recent Changes
+
+- Command Palette now exposes app and project actions, including saving the current strip, clearing saved reopen state, and reopening the last closed project apps.
+- Projects remember the last closed strip, so you can restore a project's browser and terminal layout after closing everything.
+- The selected app can be moved left or right to reorder the strip without reopening panels.
+- Manage Apps is available directly from the top bar as a popup for editing or deleting saved entries.
+- The desktop top bar now behaves more like a native title bar: it is draggable, supports double-click maximize/restore, and includes a dedicated close button.
+
 ## Install
 
 Release downloads are self-contained single binaries. On first launch, Libro extracts its bundled Electron runtime into the user cache directory and starts the desktop app.
@@ -66,12 +74,14 @@ Libro is a desktop strip for keeping browser panels and terminal sessions open s
 
 - Projects are tied to directories, with `home` as the default project.
 - Each project keeps its own running strip state while inactive projects stay hidden.
+- Closed app strips can be saved and reopened per project from the command palette.
 - Saved apps can be global or project-specific.
 - Git repositories get worktree actions, and projects/worktrees can be assigned to `Ctrl + 2-9` slots.
 
 ### Interface
 
 - App previews appear in the top bar for fast switching.
+- The top bar also provides Quick Launch, Manage Apps, command access, and desktop window controls.
 - Zen mode hides most chrome and leaves the running apps visible.
 - The sidebar can be collapsed, and the current app can be toggled to full width.
 - The current app version is shown in the header.
@@ -126,7 +136,7 @@ libro --version    # show version and exit (also -v)
 
 The Go binary launches Electron as a child process, passing the server port via `LIBRO_PORT`. When running from the repo, if Electron is not installed locally, Libro runs `npm install` automatically. Release builds embed the Electron app files and a platform-specific Electron runtime, extract them on first launch, and start the desktop UI without any extra files next to the binary. If no desktop runtime is available, Libro falls back to opening the UI in the system browser instead of failing at startup. When the Electron window is closed, the Go process exits.
 
-Electron is configured with `webviewTag: true` for native web rendering. Keyboard shortcuts that would be consumed by webview guest pages are intercepted at the Electron main process level and forwarded to the host page.
+Electron is configured with `webviewTag: true` for native web rendering. Keyboard shortcuts that would be consumed by webview guest pages are intercepted at the Electron main process level and forwarded to the host page. The top bar is integrated with Electron window controls, so dragging the bar moves the window and double-clicking it toggles maximize.
 
 ### Dependencies
 
