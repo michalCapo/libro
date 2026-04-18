@@ -437,7 +437,7 @@ func Run(assets embed.FS) {
 		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + sidebarJS
 	})
 
-	// Close all running apps in the active project and remember them for reopen.
+	// Close all running apps in the active project.
 	app.Action("project.apps.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		projectName, apps := sm.CloseActiveProjectApps(sid)
@@ -489,7 +489,7 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
-	// Reopen the last set of apps closed via the command palette for the active project.
+	// Reopen the saved apps for the active project.
 	app.Action("project.apps.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		projectName, snap := sm.TakeClosedProjectApps(sid)

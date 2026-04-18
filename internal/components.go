@@ -2225,7 +2225,7 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				__ws.call('app.manage.open',{sid:'%s'});
 			}},
-			{id:'close',label:'Close all apps in project',scope:'project',icon:'close',keywords:'close project apps clear strip remember opened apps',run:function(){
+			{id:'close',label:'Close all apps in project',scope:'project',icon:'close',keywords:'close project apps clear strip remove opened apps',run:function(){
 				closePalette();
 				__ws.call('project.apps.close',{sid:'%s'});
 			}},
@@ -2245,7 +2245,7 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroOpenShortcuts)window.__libroOpenShortcuts();
 			}},
-			{id:'open',label:'Reopen closed apps',scope:'project',icon:'history',keywords:'restore reopen closed project apps last closed strip',run:function(){
+			{id:'open',label:'Reopen saved apps',scope:'project',icon:'history',keywords:'restore reopen saved project apps snapshot strip',run:function(){
 				closePalette();
 				__ws.call('project.apps.open',{sid:'%s'});
 			}},

@@ -552,7 +552,7 @@ func (sm *StateManager) RemoveAppByID(sessionID, appID string) *Application {
 	return nil
 }
 
-// CloseActiveProjectApps remembers and clears the active project's running apps.
+// CloseActiveProjectApps clears the active project's running apps.
 // It returns the project name and the removed apps for external cleanup.
 func (sm *StateManager) CloseActiveProjectApps(sessionID string) (string, []Application) {
 	sm.mu.Lock()
@@ -566,12 +566,6 @@ func (sm *StateManager) CloseActiveProjectApps(sessionID string) (string, []Appl
 		return projectName, nil
 	}
 	appsCopy := cloneApplications(s.Apps)
-	snap := &projectSnapshot{
-		Apps:          appsCopy,
-		SelectedIndex: s.SelectedIndex,
-	}
-	s.closedSnapshots[projectName] = snap
-	persistClosedProjectSnapshot(projectName, snap)
 	s.Apps = nil
 	s.SelectedIndex = 0
 	return projectName, appsCopy
