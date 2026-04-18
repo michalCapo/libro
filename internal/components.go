@@ -32,7 +32,7 @@ const (
 	SearchDialogID    = "search-dialog"
 	ShortcutsDialogID = "shortcuts-dialog"
 	CloseDialogID     = "close-dialog"
-	WorktreeDialogID  = "worktree-dialog"
+	WorktreeCreateID  = "worktree-create-popup"
 	ManageDialogID    = "manage-dialog"
 	URLPopupID        = "url-popup"
 	ResizePopupID     = "resize-popup"
@@ -2537,7 +2537,6 @@ func renderShortcutsDialog() *r.Node {
 			{"Ctrl + 1", "Switch to home project"},
 			{"Ctrl + 2–9", "Switch to assigned project or worktree"},
 			{"Ctrl + 0", "Switch to previous project"},
-			{"⌘ + G", "Git worktrees popup"},
 			{"⌘ + Z", "Toggle zen mode (hide UI)"},
 			{"⌘ + Q", "Quit Libro"},
 		}},
@@ -2683,230 +2682,89 @@ func closeDialogJS(sid string) string {
 `, sid, CloseDialogID)
 }
 
-// renderWorktreeDialog renders the worktree add/switch popup dialog (hidden by default).
-func renderWorktreeDialog(sid string) *r.Node {
+func renderWorktreeCreatePopup(sid string) *r.Node {
 	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
-		ID(WorktreeDialogID).
-		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", WorktreeDialogID))).
+		ID(WorktreeCreateID).
+		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", WorktreeCreateID))).
 		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
 					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
-						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("alt_route"),
-						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").ID("worktree-dialog-title").Text("Worktrees"),
+						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("add"),
+						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").ID("worktree-create-title").Text("New Worktree"),
 					),
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
+					r.Div("px-4 py-3").Render(
 						r.Input("w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
-							ID("worktree-input").
+							ID("worktree-create-input").
 							Attr("type", "text").
-							Attr("placeholder", "Search worktrees or type new branch name...").
+							Attr("placeholder", "Branch name...").
 							Attr("autocomplete", "off").
 							Attr("spellcheck", "false"),
 					),
-					r.Div("max-h-80 overflow-y-auto").ID("worktree-results"),
 					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
-						r.Span("").Text("↑↓ navigate"),
-						r.Span("").Text("Enter switch/create"),
+						r.Span("").Text("Enter create"),
 						r.Span("").Text("Esc close"),
 					),
 				),
 		)
 }
 
-// worktreeDialogJS returns JS that powers the worktree popup behavior.
-func worktreeDialogJS(sid string) string {
+func worktreeCreatePopupJS(sid string) string {
 	return fmt.Sprintf(`
 (function(){
-	if(window.__libroWtRegistered)return;
-	window.__libroWtRegistered=true;
-
-	var dlg=document.getElementById('%s');
-	var inp=document.getElementById('worktree-input');
-	var res=document.getElementById('worktree-results');
-	var title=document.getElementById('worktree-dialog-title');
-	var selIdx=0;
-	var filtered=[];
 	var currentProject='';
 
-	function fuzzyMatch(text,query){
-		text=text.toLowerCase();query=query.toLowerCase();
-		var ti=0,qi=0,score=0,lastMatch=-1;
-		while(ti<text.length&&qi<query.length){
-			if(text[ti]===query[qi]){
-				score+=1;
-				if(lastMatch===ti-1)score+=2;
-				if(ti===0||text[ti-1]===' '||text[ti-1]==='/'||text[ti-1]==='.')score+=3;
-				lastMatch=ti;qi++;
-			}
-			ti++;
-		}
-		return qi===query.length?score:0;
+	function getDlg(){return document.getElementById('%s');}
+	function getInp(){return document.getElementById('worktree-create-input');}
+	function getTitle(){return document.getElementById('worktree-create-title');}
+
+	function closePopup(){
+		var dlg=getDlg();
+		var inp=getInp();
+		if(dlg)dlg.classList.add('hidden');
+		if(inp)inp.value='';
+		currentProject='';
 	}
 
-	function getWorktrees(){
-		return (window.__libroWorktrees||[]).filter(function(wt){
-			return !currentProject||wt.project===currentProject;
-		});
-	}
-
-	function render(){
-		var dk=document.documentElement.classList.contains('dark');
-		res.innerHTML='';
-		if(filtered.length===0){
-			var q=inp.value.trim();
-			if(q&&currentProject){
-				// Show "create new worktree" option
-				var row=document.createElement('div');
-				row.className='flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
-					+(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500');
-				row.innerHTML='<i class="material-icons-round text-blue-500 text-lg">add</i>'
-					+'<div class="flex-1 min-w-0"><div class="text-sm '+(dk?'text-zinc-200':'text-gray-800')+'">Create worktree: <b>'+q+'</b></div></div>';
-				row.onclick=function(){createWorktree(q);};
-				res.appendChild(row);
-			} else {
-				res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No worktrees found</div>';
-			}
-			return;
-		}
-		filtered.forEach(function(item,i){
-			var row=document.createElement('div');
-			var sel=i===selIdx;
-			row.className='flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
-				+(sel?(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500')
-				:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'));
-			var txtCls=dk?'text-zinc-200':'text-gray-800';
-			var subCls=dk?'text-zinc-500':'text-gray-400';
-			row.innerHTML='<i class="material-icons-round '+(dk?'text-zinc-400':'text-gray-400')+' text-lg">alt_route</i>'
-				+'<div class="flex-1 min-w-0"><div class="text-sm truncate '+txtCls+'">'+item.branch+'</div>'
-				+'<div class="text-[11px] truncate '+subCls+'">'+item.project+' — '+item.path+'</div></div>';
-			row.onmouseenter=function(){
-				if(selIdx===i)return;
-				var prev=res.children[selIdx];
-				if(prev)prev.className=prev.className.replace(/bg-blue-900\/30|bg-blue-50/g,'').replace(/border-blue-500/g,'border-transparent')+(dk?' hover:bg-zinc-800':' hover:bg-gray-50');
-				selIdx=i;
-				row.className=row.className.replace(/hover:bg-zinc-800|hover:bg-gray-50/g,'').replace(/border-transparent/g,'border-blue-500')+(dk?' bg-blue-900/30':' bg-blue-50');
-			};
-			row.onclick=function(){launch();};
-			res.appendChild(row);
-		});
-		var sel=res.children[selIdx];
-		if(sel)sel.scrollIntoView({block:'nearest'});
-	}
-
-	function filter(){
-		var q=inp.value.trim();
-		var wts=getWorktrees();
-		if(!q){
-			filtered=wts.map(function(w){return{branch:w.branch,project:w.project,path:w.path,score:1};});
-		}else{
-			filtered=[];
-			wts.forEach(function(w){
-				var text=w.branch+' '+w.project+' '+w.path;
-				var score=fuzzyMatch(text,q);
-				if(score>0)filtered.push({branch:w.branch,project:w.project,path:w.path,score:score});
-			});
-			filtered.sort(function(a,b){return b.score-a.score;});
-		}
-		selIdx=0;
-		render();
-	}
-
-	function launch(){
-		if(filtered.length===0){
-			var q=inp.value.trim();
-			if(q&&currentProject){createWorktree(q);}
-			return;
-		}
-		var item=filtered[selIdx];
-		dlg.classList.add('hidden');
-		inp.value='';
-		__ws.call('worktree.switch',{sid:'%s',project:item.project,path:item.path,branch:item.branch});
-	}
-
-	function createWorktree(branch){
-		if(!currentProject)return;
-		dlg.classList.add('hidden');
-		inp.value='';
+	function createWorktree(){
+		var inp=getInp();
+		var branch=inp?inp.value.trim():'';
+		if(!currentProject||!branch)return;
+		closePopup();
 		__ws.call('worktree.add',{sid:'%s',project:currentProject,branch:branch});
 	}
 
-	function openDialog(project){
-		currentProject=project||'';
-		if(project){
-			title.textContent='Worktrees — '+project;
-		}else{
-			title.textContent='Worktrees';
-		}
-		dlg.classList.remove('hidden');
+	function openPopup(project){
+		if(!project)return;
+		currentProject=project;
+		var dlg=getDlg();
+		var inp=getInp();
+		var title=getTitle();
+		if(!dlg||!inp||!title)return;
+		title.textContent='New Worktree — '+project;
 		inp.value='';
-		filter();
+		dlg.classList.remove('hidden');
 		setTimeout(function(){inp.focus();},50);
 	}
 
-	function closeDialog(){
-		dlg.classList.add('hidden');
-		inp.value='';
-	}
-
-	inp.addEventListener('input',filter);
-	inp.addEventListener('keydown',function(e){
+	document.addEventListener('keydown',function(e){
+		var dlg=getDlg();
+		var inp=getInp();
+		if(!dlg||dlg.classList.contains('hidden')||e.target!==inp)return;
 		e.stopImmediatePropagation();
-		if(e.key==='ArrowDown'){
+		if(e.key==='Enter'){
 			e.preventDefault();
-			if(selIdx<filtered.length-1){selIdx++;render();}
-		}else if(e.key==='ArrowUp'){
-			e.preventDefault();
-			if(selIdx>0){selIdx--;render();}
-		}else if(e.key==='Enter'){
-			e.preventDefault();
-			launch();
+			createWorktree();
 		}else if(e.key==='Escape'){
 			e.preventDefault();
-			closeDialog();
+			closePopup();
 		}
 	});
 
-	window.__libroOpenWorktreeDialog=openDialog;
+	window.__libroOpenWorktreeCreatePopup=openPopup;
 })();
-`, WorktreeDialogID, sid, sid)
-}
-
-// worktreesJS returns JS that sets the global __libroWorktrees variable from all git projects.
-func worktreesJS(state *AppState) string {
-	if !GitAvailable() {
-		return "window.__libroWorktrees=[];"
-	}
-	type jsWorktree struct {
-		Project string `json:"project"`
-		Branch  string `json:"branch"`
-		Path    string `json:"path"`
-	}
-	var all []jsWorktree
-	for _, p := range state.Projects {
-		if !p.IsGitRepo || p.Virtual {
-			continue
-		}
-		wts, err := GitListWorktrees(p.Path)
-		if err != nil {
-			continue
-		}
-		for _, wt := range wts {
-			if wt.IsBare {
-				continue
-			}
-			all = append(all, jsWorktree{
-				Project: p.Name,
-				Branch:  wt.Branch,
-				Path:    wt.Path,
-			})
-		}
-	}
-	b, _ := json.Marshal(all)
-	if b == nil {
-		b = []byte("[]")
-	}
-	return fmt.Sprintf("window.__libroWorktrees=%s;", string(b))
+`, WorktreeCreateID, sid)
 }
 
 // renderManageAppsPage renders the manage apps popup.
@@ -3525,7 +3383,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 		hasBranchRows := false
 		if proj.IsGitRepo && GitAvailable() {
 			worktrees, worktreeErr = GitListWorktrees(proj.Path)
-			hasBranchRows = worktreeErr == nil && len(worktrees) > 1
+			hasBranchRows = worktreeErr == nil && len(worktrees) > 0
 		}
 
 		// Shortcut badge: home always shows "1". Git parents with visible branch rows
@@ -3619,7 +3477,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 
 		// Worktree sub-items for git repos
 		if proj.IsGitRepo && GitAvailable() {
-			if worktreeErr == nil && len(worktrees) > 1 {
+			if worktreeErr == nil && len(worktrees) > 0 {
 				wtItems := make([]*r.Node, 0, len(worktrees))
 				for _, wt := range worktrees {
 					if wt.IsBare {
@@ -3634,7 +3492,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 						isWtActive = true
 					}
 
-					wtCls := "w-full flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer transition-colors duration-75 "
+					wtCls := "w-full flex items-center gap-2 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer transition-colors duration-75 "
 					if isWtActive {
 						wtCls += "bg-blue-500/20 text-blue-700 dark:text-blue-300"
 					} else {
@@ -3697,21 +3555,42 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 							Text("+")
 					}
 
-					wtRemoveSlotChildren := []*r.Node{
-						r.Span("w-4 h-4 shrink-0"),
+					wtAddCls := "flex items-center justify-center w-4 h-4 rounded cursor-pointer opacity-0 group-hover/wtitem:opacity-100 transition-opacity duration-75 shrink-0 "
+					if isWtActive {
+						wtAddCls += "text-blue-300 hover:text-white hover:bg-white/15"
+					} else {
+						wtAddCls += "text-gray-400 dark:text-zinc-600 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+					}
+					wtAdd := r.Button(wtAddCls).
+						Attr("title", "Add worktree").
+						Attr("onclick", fmt.Sprintf("event.stopPropagation();if(window.__libroOpenWorktreeCreatePopup)window.__libroOpenWorktreeCreatePopup(%s);", jsString(proj.Name))).
+						Render(r.I("material-icons-round text-[12px]").Text("add"))
+
+					wtLeadingCls := "relative flex items-center justify-center w-4 h-4 shrink-0"
+					wtLeadingChildren := []*r.Node{
+						r.I("material-icons-round text-sm shrink-0").Text("alt_route"),
 					}
 					if !isMainWt {
-						wtRemoveSlotChildren[0] = r.Button("flex items-center justify-center w-4 h-4 rounded cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover/wtitem:opacity-100 transition-opacity duration-75 shrink-0").
-							Attr("title", "Remove worktree").
-							Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('worktree.remove',{sid:'%s',project:'%s',path:'%s'});", sid, proj.Name, wt.Path)).
-							Render(r.I("material-icons-round text-[12px]").Text("close"))
+						iconCls := "material-icons-round text-[12px]"
+						removeCls := "absolute inset-0 flex items-center justify-center rounded cursor-pointer opacity-0 group-hover/wtitem:opacity-100 transition-opacity duration-75 "
+						if isWtActive {
+							removeCls += "text-blue-300 hover:text-white hover:bg-white/15"
+						} else {
+							removeCls += "text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10"
+						}
+						wtLeadingChildren[0] = r.I("material-icons-round text-sm shrink-0 group-hover/wtitem:opacity-0 transition-opacity duration-75").Text("alt_route")
+						wtLeadingChildren = append(wtLeadingChildren,
+							r.Button(removeCls).
+								Attr("title", "Remove worktree").
+								Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('worktree.remove',{sid:'%s',project:'%s',path:'%s'});", sid, proj.Name, wt.Path)).
+								Render(r.I(iconCls).Text("close")),
+						)
 					}
 
 					wtBtnChildren := []*r.Node{
-						wtRemoveSlotChildren[0],
-						r.I("material-icons-round text-sm shrink-0").Text("alt_route"),
+						r.Span(wtLeadingCls).Render(wtLeadingChildren...),
+						r.Span("truncate flex-1 text-left").Text(wt.Branch),
 					}
-					wtBtnChildren = append(wtBtnChildren, r.Span("truncate flex-1 text-left").Text(wt.Branch))
 					if badge := renderAppCountBadge(wtAppCount, isWtActive); badge != nil {
 						wtBtnChildren = append(wtBtnChildren, badge)
 					}
@@ -3721,41 +3600,18 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 						OnClick(r.JS(wtOnClick)).
 						Render(wtBtnChildren...)
 
-					controls := []*r.Node{wtBadge}
-
 					wtItems = append(wtItems,
 						r.Div("group/wtitem").Render(
 							r.Div(wtCls).Render(
+								wtBadge,
 								wtBtn,
-								r.Div("ml-2 flex items-center gap-1 shrink-0").Render(controls...),
+								r.Div("ml-2 flex items-center gap-1 shrink-0").Render(wtAdd),
 							),
 						),
 					)
 				}
 
-				// Add worktree button
-				wtItems = append(wtItems,
-					r.Button("w-full flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors duration-75").
-						Attr("onclick", fmt.Sprintf("__ws.call('worktree.dialog.open',{sid:'%s',project:'%s'});", sid, proj.Name)).
-						Render(
-							r.I("material-icons-round text-sm shrink-0").Text("add"),
-							r.Span("").Text("Add worktree"),
-						),
-				)
-
 				projItem.Render(r.Div("mt-0.5").Render(wtItems...))
-			} else if worktreeErr == nil && (isActive || isParentOfActive) {
-				// Single worktree (or none) — still show add button
-				projItem.Render(
-					r.Div("mt-0.5").Render(
-						r.Button("w-full flex items-center gap-2 pl-8 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer text-gray-400 dark:text-zinc-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors duration-75").
-							Attr("onclick", fmt.Sprintf("__ws.call('worktree.dialog.open',{sid:'%s',project:'%s'});", sid, proj.Name)).
-							Render(
-								r.I("material-icons-round text-sm shrink-0").Text("add"),
-								r.Span("").Text("Add worktree"),
-							),
-					),
-				)
 			}
 		}
 
@@ -4179,12 +4035,6 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					__ws.call('app.maximize.toggle', {"sid": "%s"});
-					return;
-				}
-				if (e.metaKey && (e.key === 'g' || e.key === 'G')) {
-					e.preventDefault();
-					e.stopImmediatePropagation();
-					if (window.__libroOpenWorktreeDialog) window.__libroOpenWorktreeDialog();
 					return;
 				}
 				if (e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L')) {

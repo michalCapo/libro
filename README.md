@@ -110,7 +110,6 @@ Libro is a desktop strip for keeping browser panels and terminal sessions open s
 - `Ctrl + 1` — switch to `home`
 - `Ctrl + 2–9` — switch to assigned project or worktree
 - `Ctrl + 0` — switch to previous project
-- `⌘ + G` — open worktree popup
 - `⌘ + Z` — toggle zen mode
 - `⌘ + Q` — quit Libro
 
