@@ -10,6 +10,7 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderTopBar(state, sid),
 		renderMainAreaWrapper(state, sid),
 		renderAddDialog(state.DialogOpen, sid),
+		renderManageAppsPage(state, sid),
 		renderProjectDialog(state.ProjectDialogOpen, sid),
 		renderSearchDialog(sid),
 		renderShortcutsDialog(),
@@ -19,6 +20,6 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderResizePopup(sid),
 		renderCommandPopup(),
 	)
-	page.JS(flashCSS() + termIconSetupJS() + projectToastSetupJS() + keyboardShortcutsJS(sid) + savedAppsJS(state) + initHashJS(sid) + searchDialogJS(sid) + shortcutsDialogJS() + closeDialogJS(sid) + webviewClientJS() + worktreeDialogJS(sid) + worktreesJS(state) + urlPopupJS(sid) + resizePopupJS(sid) + commandPopupJS(sid))
+	page.JS(flashCSS() + termIconSetupJS() + projectToastSetupJS() + keyboardShortcutsJS(sid) + savedAppsJS(state) + initHashJS(sid) + searchDialogJS(sid) + shortcutsDialogJS() + closeDialogJS(sid) + webviewClientJS() + worktreeDialogJS(sid) + worktreesJS(state) + urlPopupJS(sid) + resizePopupJS(sid) + commandPopupJS(sid) + manageAppsJS())
 	return page
 }

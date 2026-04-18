@@ -1265,16 +1265,6 @@ func poolWebviewJS(appID string) string {
 })();`, appID)
 }
 
-// showManageOverlayJS returns JS that removes any existing overlay, then appends the new one to body.
-func showManageOverlayJS(node *r.Node) string {
-	return removeManageOverlayJS() + node.ToJS()
-}
-
-// removeManageOverlayJS returns JS that removes the manage overlay.
-func removeManageOverlayJS() string {
-	return fmt.Sprintf(`(function(){var el=document.getElementById('%s');if(el)el.remove();})();`, ManageDialogID)
-}
-
 // renderSideLauncher renders a vertical icon dock: saved app icons + "+" button.
 // Now server-rendered from DB instead of client-side localStorage.
 func renderSideLauncher(sid, side, activeProject string) *r.Node {
@@ -2888,8 +2878,13 @@ func worktreesJS(state *AppState) string {
 	return fmt.Sprintf("window.__libroWorktrees=%s;", string(b))
 }
 
-// renderManageAppsPage renders the manage apps page as a fixed overlay so running apps stay alive.
+// renderManageAppsPage renders the manage apps popup.
 func renderManageAppsPage(state *AppState, sid string) *r.Node {
+	hiddenClass := " hidden"
+	if state.ManageOpen {
+		hiddenClass = ""
+	}
+
 	savedApps := DBLoadAllSavedApps()
 
 	globalApps := make([]SavedApp, 0, len(savedApps))
@@ -2949,27 +2944,50 @@ func renderManageAppsPage(state *AppState, sid string) *r.Node {
 		)
 	}
 
-	return r.Div("fixed inset-0 z-[55] flex flex-col bg-gray-100 dark:bg-zinc-900").
+	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[10vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
 		ID(ManageDialogID).
+		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", ManageDialogID))).
 		Render(
-			// Header bar
-			r.Div("shrink-0 border-b border-gray-200 dark:border-zinc-800 py-4 bg-white dark:bg-zinc-900").Render(
-				r.Div("max-w-2xl mx-auto w-full flex items-center gap-3 px-4").Render(
-					r.Span("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100").Text("Manage Apps"),
-					r.Div("ml-auto flex items-center gap-2").Render(
-						r.Button("flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors").
-							Render(r.I("material-icons-round text-[16px]").Text("add"), r.Span("").Text("Add App")).
-							OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
-						r.Button("flex items-center justify-center w-9 h-9 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors").
-							Attr("title", "Close").
-							OnClick(&r.Action{Name: "app.manage.close", Data: sidData(sid)}).
-							Render(r.I("material-icons-round text-xl").Text("close")),
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-4xl mx-4 overflow-hidden").
+				OnClick(r.JS("event.stopPropagation()")).
+				Render(
+					r.Div("shrink-0 border-b border-gray-200 dark:border-zinc-800 py-4 bg-white dark:bg-zinc-900").Render(
+						r.Div("w-full flex items-center gap-3 px-4").Render(
+							r.Span("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100").Text("Manage Apps"),
+							r.Div("ml-auto flex items-center gap-2").Render(
+								r.Button("flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors").
+									Render(r.I("material-icons-round text-[16px]").Text("add"), r.Span("").Text("Add App")).
+									OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
+								r.Button("flex items-center justify-center w-9 h-9 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors").
+									Attr("title", "Close").
+									OnClick(&r.Action{Name: "app.manage.close", Data: sidData(sid)}).
+									Render(r.I("material-icons-round text-xl").Text("close")),
+							),
+						),
+					),
+					r.Div("max-h-[70vh] overflow-y-auto bg-gray-100 dark:bg-zinc-900").Render(
+						r.Div("px-4 py-4").Render(listNode),
+					),
+					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+						r.Span("").Text("Esc close"),
 					),
 				),
-			),
-			// App list
-			listNode,
 		)
+}
+
+func manageAppsJS() string {
+	return fmt.Sprintf(`
+(function(){
+	var dlg=document.getElementById('%s');
+	if(!dlg)return;
+	document.addEventListener('keydown',function(e){
+		if(e.key==='Escape'&&!dlg.classList.contains('hidden')){
+			e.preventDefault();e.stopImmediatePropagation();
+			dlg.classList.add('hidden');
+		}
+	},true);
+})();
+`, ManageDialogID)
 }
 
 func renderManageAppSection(title, subtitle string, apps []SavedApp, sid string) *r.Node {

@@ -136,24 +136,14 @@ func Run(assets embed.FS) {
 			side = s
 		}
 		sm.OpenDialog(sid, side)
-		state := sm.Get(sid)
-		js := r.Show(DialogID)
-		if state.ManageOpen {
-			js = removeManageOverlayJS() + js
-		}
-		return js
+		return r.Show(DialogID)
 	})
 
 	// Close add dialog
 	app.Action("app.dialog.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		sm.CloseDialog(sid)
-		state := sm.Get(sid)
-		js := r.Hide(DialogID)
-		if state.ManageOpen {
-			js += showManageOverlayJS(renderManageAppsPage(state, sid))
-		}
-		return js
+		return r.Hide(DialogID)
 	})
 
 	// Add application (URL or Terminal)
@@ -212,18 +202,12 @@ func Run(assets embed.FS) {
 		// Re-fetch state to ensure we have latest state for rendering
 		state = sm.Get(sid)
 
-		// Ensure Manage Apps dialog is updated with the new app
-		var manageOverlayJS string
-		if state.ManageOpen {
-			manageOverlayJS = showManageOverlayJS(renderManageAppsPage(state, sid))
-		}
-
 		resp := r.NewResponse().
 			Replace(DialogID, renderAddDialog(false, sid)).
+			Replace(ManageDialogID, renderManageAppsPage(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Add(savedAppsJS(state)).
-			Add(manageOverlayJS)
+			Add(savedAppsJS(state))
 
 		// Refresh rendered empty-state project panes without touching live running app panes.
 		for projectName := range state.renderedProjects {
@@ -1067,18 +1051,21 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		if state.ManageOpen {
 			state.ManageOpen = false
-			return removeManageOverlayJS()
+			return r.Hide(ManageDialogID)
 		}
 		state.ManageOpen = true
-		return showManageOverlayJS(renderManageAppsPage(state, sid))
+		return r.NewResponse().
+			Replace(ManageDialogID, renderManageAppsPage(state, sid)).
+			Add(r.Show(ManageDialogID)).
+			Build()
 	})
 
-	// Close manage apps overlay
+	// Close manage apps popup
 	app.Action("app.manage.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		state := sm.Get(sid)
 		state.ManageOpen = false
-		return removeManageOverlayJS()
+		return r.Hide(ManageDialogID)
 	})
 
 	// Delete a saved app from DB
