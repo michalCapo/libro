@@ -22,16 +22,52 @@ var browserShortcutsScript = '(' + function(){
 	window.__libroBrowserShortcuts = true;
 	window.__libroHoveredLink = '';
 	window.__libroHoveredElement = null;
+	function elementRole(el) {
+		if (!el || !el.getAttribute) return '';
+		return (el.getAttribute('role') || '').toLowerCase();
+	}
 	function isEditableElement(el) {
 		if (!el) return false;
 		if (el.isContentEditable) return true;
 		var tag = el.tagName ? el.tagName.toUpperCase() : '';
-		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+		if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+		if (tag === 'INPUT') {
+			var inputType = ((el.getAttribute && el.getAttribute('type')) || el.type || '').toLowerCase();
+			if (!inputType || ['text', 'search', 'email', 'url', 'tel', 'password', 'number'].indexOf(inputType) >= 0) return true;
+		}
 		if (el.getAttribute) {
-			var role = (el.getAttribute('role') || '').toLowerCase();
+			var role = elementRole(el);
 			if (role === 'textbox' || role === 'searchbox' || role === 'combobox' || role === 'spinbutton') return true;
 		}
 		return false;
+	}
+	function nearestActivatableElement(el) {
+		var node = el && el.nodeType === 3 ? el.parentElement : el;
+		while (node) {
+			if (node.nodeType === 1) {
+				var tag = node.tagName ? node.tagName.toUpperCase() : '';
+				var role = elementRole(node);
+				if (
+					tag === 'A' ||
+					tag === 'BUTTON' ||
+					tag === 'SUMMARY' ||
+					tag === 'OPTION' ||
+					role === 'link' ||
+					role === 'button' ||
+					role === 'menuitem' ||
+					role === 'menuitemcheckbox' ||
+					role === 'menuitemradio' ||
+					role === 'option' ||
+					role === 'tab'
+				) return node;
+				if (tag === 'INPUT') {
+					var inputType = ((node.getAttribute && node.getAttribute('type')) || node.type || '').toLowerCase();
+					if (['button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'image'].indexOf(inputType) >= 0) return node;
+				}
+			}
+			node = node.parentElement || node.parentNode;
+		}
+		return null;
 	}
 	function activeEditableElement() {
 		var el = document.activeElement;
@@ -102,9 +138,7 @@ var browserShortcutsScript = '(' + function(){
 			case 'p': console.log('__libro:findprev'); break;
 			case 'Escape': console.log('__libro:searchclear'); break;
 			case 'Enter':
-				var ae2=document.activeElement;
-				var tn2=ae2?ae2.tagName.toUpperCase():'';
-				if(tn2==='A'||tn2==='BUTTON'||(ae2&&ae2.getAttribute&&(ae2.getAttribute('role')==='link'||ae2.getAttribute('role')==='button'))){
+				if(nearestActivatableElement(document.activeElement)){
 					handled=false;
 				}else{
 					console.log('__libro:enter');
@@ -320,34 +354,122 @@ function handleEnter(appID) {
 	var wv = window.__libroWebviews[appID];
 	if (!wv) return;
 	var state = searchState[appID];
+	var activationScript =
+		'(function(targetX,targetY,query){' +
+		'function roleOf(el){return el&&el.getAttribute?String(el.getAttribute("role")||"").toLowerCase():"";}' +
+		'function normalizeText(value){return String(value||"").replace(/\\s+/g," ").trim().toLowerCase();}' +
+		'function nearest(node){' +
+		'var cur=node&&node.nodeType===3?node.parentElement:node;' +
+		'while(cur){' +
+		'if(cur.nodeType===1){' +
+		'var tag=cur.tagName?cur.tagName.toUpperCase():"";' +
+		'var role=roleOf(cur);' +
+		'if(tag==="A"||tag==="BUTTON"||tag==="SUMMARY"||tag==="OPTION"||role==="link"||role==="button"||role==="menuitem"||role==="menuitemcheckbox"||role==="menuitemradio"||role==="option"||role==="tab") return cur;' +
+		'if(tag==="INPUT"){' +
+		'var inputType=String((cur.getAttribute&&cur.getAttribute("type"))||cur.type||"").toLowerCase();' +
+		'if(["button","submit","reset","checkbox","radio","file","image"].indexOf(inputType)>=0) return cur;' +
+		'}' +
+		'}' +
+		'cur=cur.parentElement||cur.parentNode;' +
+		'}' +
+		'return null;' +
+		'}' +
+		'function dispatchEnter(el){' +
+		'var opts={key:"Enter",code:"Enter",which:13,keyCode:13,bubbles:true,cancelable:true};' +
+		'var down=new KeyboardEvent("keydown",opts);' +
+		'el.dispatchEvent(down);' +
+		'if(down.defaultPrevented) return true;' +
+		'var press=new KeyboardEvent("keypress",opts);' +
+		'el.dispatchEvent(press);' +
+		'if(press.defaultPrevented) return true;' +
+		'var up=new KeyboardEvent("keyup",opts);' +
+		'el.dispatchEvent(up);' +
+		'return up.defaultPrevented;' +
+		'}' +
+		'function submitNearestForm(el){' +
+		'var form=el&&el.closest?el.closest("form"):null;' +
+		'if(!form) return false;' +
+		'if(typeof form.requestSubmit==="function"){form.requestSubmit();return true;}' +
+		'if(typeof form.submit==="function"){form.submit();return true;}' +
+		'return false;' +
+		'}' +
+		'function candidateFromPoint(x,y){' +
+		'if(typeof x!=="number"||typeof y!=="number") return null;' +
+		'var points=[[x,y],[x-window.scrollX,y-window.scrollY],[x+window.scrollX,y+window.scrollY]];' +
+		'for(var p=0;p<points.length;p++){' +
+		'var px=points[p][0], py=points[p][1];' +
+		'if(!isFinite(px)||!isFinite(py)) continue;' +
+		'var hit=null;' +
+		'if(typeof document.elementsFromPoint==="function"){' +
+		'var stack=document.elementsFromPoint(px,py)||[];' +
+		'for(var i=0;i<stack.length;i++){ hit=nearest(stack[i]); if(hit) return hit; }' +
+		'}' +
+		'if(typeof document.caretPositionFromPoint==="function"){' +
+		'var pos=document.caretPositionFromPoint(px,py);' +
+		'if(pos){ hit=nearest(pos.offsetNode); if(hit) return hit; }' +
+		'}' +
+		'if(typeof document.caretRangeFromPoint==="function"){' +
+		'var range=document.caretRangeFromPoint(px,py);' +
+		'if(range){ hit=nearest(range.startContainer); if(hit) return hit; }' +
+		'}' +
+		'var single=document.elementFromPoint(px,py);' +
+		'hit=nearest(single);' +
+		'if(hit) return hit;' +
+		'}' +
+		'return null;' +
+		'}' +
+		'function queryFallback(text){' +
+		'var q=normalizeText(text);' +
+		'if(!q) return null;' +
+		'var nodes=document.querySelectorAll("a[href],button,[role=link],[role=button],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],[role=option],[role=tab],summary,input[type=button],input[type=submit],input[type=reset],input[type=image]");' +
+		'for(var i=0;i<nodes.length;i++){' +
+		'var el=nodes[i];' +
+		'var rect=el.getBoundingClientRect?el.getBoundingClientRect():null;' +
+		'if(rect&&rect.width===0&&rect.height===0) continue;' +
+		'var txt=normalizeText(el.innerText||el.textContent||el.value||el.getAttribute("aria-label"));' +
+		'if(txt&&txt.indexOf(q)!==-1) return el;' +
+		'}' +
+		'return null;' +
+		'}' +
+		'function activate(el){' +
+		'if(!el) return false;' +
+		'try{if(typeof el.focus==="function") el.focus({preventScroll:true});}catch(err){try{if(typeof el.focus==="function") el.focus();}catch(err2){}}' +
+		'var tag=el.tagName?el.tagName.toUpperCase():"";' +
+		'var role=roleOf(el);' +
+		'if(tag==="A"&&el.href){el.click();return true;}' +
+		'if(tag==="BUTTON"||tag==="SUMMARY"){el.click();return true;}' +
+		'if(tag==="INPUT"){' +
+		'var inputType=String((el.getAttribute&&el.getAttribute("type"))||el.type||"").toLowerCase();' +
+		'if(["button","submit","reset","checkbox","radio","file","image"].indexOf(inputType)>=0){el.click();return true;}' +
+		'if(submitNearestForm(el)) return true;' +
+		'}' +
+		'if(role==="link"||role==="button"||role==="menuitem"||role==="menuitemcheckbox"||role==="menuitemradio"||role==="option"||role==="tab"){' +
+		'if(dispatchEnter(el)) return true;' +
+		'if(typeof el.click==="function"){el.click();return true;}' +
+		'}' +
+		'if(dispatchEnter(el)) return true;' +
+		'if(submitNearestForm(el)) return true;' +
+		'if(typeof el.click==="function"){el.click();return true;}' +
+		'return false;' +
+		'}' +
+		'var target=nearest(document.activeElement);' +
+		'if(!target) target=candidateFromPoint(targetX,targetY);' +
+		'if(!target&&window.getSelection){' +
+		'var sel=window.getSelection();' +
+		'if(sel&&sel.rangeCount) target=nearest(sel.anchorNode)||nearest(sel.focusNode);' +
+		'}' +
+		'if(!target) target=queryFallback(query);' +
+		'if(!target&&typeof targetX==="number"&&typeof targetY==="number") target=document.elementFromPoint(targetX,targetY);' +
+		'if(target) activate(target);' +
+		'})';
 	if (state && state.findActive && state.matchRect) {
 		// Use elementFromPoint with the match rectangle from find-in-page
 		var r = state.matchRect;
 		var cx = r.x + Math.round(r.width / 2);
 		var cy = r.y + Math.round(r.height / 2);
-		wv.executeJavaScript(
-			'(function(){' +
-			'var el=document.elementFromPoint(' + cx + ',' + cy + ');' +
-			'var node=el;' +
-			'while(node){' +
-			'if(node.nodeType===1){' +
-			'var tn=node.tagName.toUpperCase();' +
-			'if(tn==="A"){node.click();return;}' +
-			'if(tn==="BUTTON"){node.click();return;}' +
-			'if(node.getAttribute&&(node.getAttribute("role")==="link"||node.getAttribute("role")==="button")){node.click();return;}' +
-			'}' +
-			'node=node.parentNode;' +
-			'}' +
-			'if(el)el.click();' +
-			'})()'
-		).catch(function(){});
+		wv.executeJavaScript(activationScript + '(' + cx + ',' + cy + ',' + JSON.stringify(state.query || '') + ')').catch(function(){});
 	} else {
-		wv.executeJavaScript(
-			'(function(){' +
-			'var ae=document.activeElement;' +
-			'if(ae&&ae!==document.body&&ae!==document.documentElement)ae.click();' +
-			'})()'
-		).catch(function(){});
+		wv.executeJavaScript(activationScript + '(null,null,"")').catch(function(){});
 	}
 }
 
