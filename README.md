@@ -57,6 +57,7 @@ Libro is a desktop strip for keeping browser panels and terminal sessions open s
 ### Search & Launch
 
 - Quick Launch opens a fuzzy search popup for saved apps, URL history, and command history.
+- Command Palette opens a fuzzy list of app-wide and app-specific commands.
 - Plain text searches saved entries; `:query` opens a web search; `!command` runs a terminal command.
 - Typing a URL or hostname offers a direct `Browse` action.
 - A `Browser` entry opens an empty browser panel with the URL bar focused.
@@ -81,6 +82,7 @@ Libro is a desktop strip for keeping browser panels and terminal sessions open s
 
 - `⌘ + N` — open launcher on the right
 - `⌘ + Ctrl + N` — open launcher on the left
+- `⌘ + ;` — open command palette
 - `⌘ + W` — close current app
 - `⌘ + R` — open resize popup
 - `⌘ + F` — toggle full width

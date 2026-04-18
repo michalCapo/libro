@@ -36,6 +36,7 @@ const (
 	ManageDialogID    = "manage-dialog"
 	URLPopupID        = "url-popup"
 	ResizePopupID     = "resize-popup"
+	CommandPopupID    = "command-popup"
 )
 
 // termIconInfo stores the icon details for a known terminal command.
@@ -2132,6 +2133,228 @@ func renderResizePopup(sid string) *r.Node {
 		)
 }
 
+// renderCommandPopup renders the command palette for app-wide and app-specific commands.
+func renderCommandPopup() *r.Node {
+	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
+		ID(CommandPopupID).
+		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", CommandPopupID))).
+		Render(
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
+				OnClick(r.JS("event.stopPropagation()")).
+				Render(
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
+						r.Input("w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
+							ID("command-popup-input").
+							Attr("type", "text").
+							Attr("placeholder", "Run command...").
+							Attr("autocomplete", "off").
+							Attr("spellcheck", "false").
+							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();}"),
+					),
+					r.Div("max-h-80 overflow-y-auto").ID("command-popup-results"),
+					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+						r.Span("").Text("↑↓ navigate"),
+						r.Span("").Text("Enter run"),
+						r.Span("").Text("Esc close"),
+					),
+				),
+		)
+}
+
+// commandPopupJS returns the JS that powers the global command palette.
+func commandPopupJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	if(window.__libroCommandRegistered)return;
+	window.__libroCommandRegistered=true;
+
+	var dlg=document.getElementById('%s');
+	var inp=document.getElementById('command-popup-input');
+	var res=document.getElementById('command-popup-results');
+	var selIdx=0;
+	var filtered=[];
+
+	function fuzzyMatch(text,query){
+		text=(text||'').toLowerCase();query=(query||'').toLowerCase();
+		var ti=0,qi=0,score=0,lastMatch=-1;
+		while(ti<text.length&&qi<query.length){
+			if(text[ti]===query[qi]){
+				score+=1;
+				if(lastMatch===ti-1)score+=2;
+				if(ti===0||text[ti-1]===' '||text[ti-1]==='/'||text[ti-1]==='-'||text[ti-1]==='_')score+=3;
+				lastMatch=ti;qi++;
+			}
+			ti++;
+		}
+		return qi===query.length?score:0;
+	}
+
+	function selectedAppInfo(){
+		var appId=window.__libroSelectedApp||'';
+		if(!appId)return null;
+		var el=document.querySelector('[data-app-id="'+appId+'"]');
+		if(!el)return null;
+		return {
+			id: appId,
+			isBrowser: !!el.querySelector('webview[data-webview-app]'),
+			isTerminal: !!el.querySelector('iframe') && !el.querySelector('webview[data-webview-app]')
+		};
+	}
+
+	function commandDefinitions(){
+		var selected=selectedAppInfo();
+		var commands=[
+			{id:'new',label:'New',scope:'app',icon:'add',keywords:'launcher quick launch create app open new',run:function(){
+				closePalette();
+				if(window.__libroOpenSearch)window.__libroOpenSearch('right');
+			}},
+			{id:'apps',label:'Apps',scope:'app',icon:'apps',keywords:'manage saved applications app list',run:function(){
+				closePalette();
+				__ws.call('app.manage.open',{sid:'%s'});
+			}},
+			{id:'close',label:'Close all apps in project',scope:'project',icon:'close',keywords:'close project apps clear strip remember opened apps',run:function(){
+				closePalette();
+				__ws.call('project.apps.close',{sid:'%s'});
+			}},
+			{id:'console',label:'App console',scope:'app',icon:'code',keywords:'devtools app console inspector developer tools',run:function(){
+				closePalette();
+				if(window.libroElectron&&window.libroElectron.toggleDevTools)window.libroElectron.toggleDevTools();
+			}},
+			{id:'keymap',label:'Keymap',scope:'app',icon:'keyboard',keywords:'shortcuts keyboard help key bindings',run:function(){
+				closePalette();
+				if(window.__libroOpenShortcuts)window.__libroOpenShortcuts();
+			}},
+			{id:'open',label:'Reopen closed apps',scope:'project',icon:'history',keywords:'restore reopen closed project apps last closed strip',run:function(){
+				closePalette();
+				__ws.call('project.apps.open',{sid:'%s'});
+			}},
+			{id:'sidebar',label:'Toggle sidebar',scope:'app',icon:'menu_open',keywords:'sidebar project tree collapse expand navigation',run:function(){
+				closePalette();
+				__ws.call('sidebar.toggle',{sid:'%s'});
+			}},
+			{id:'zen',label:'Zen',scope:'app',icon:'fullscreen',keywords:'focus chrome toggle minimal',run:function(){
+				closePalette();
+				__ws.call('zen.toggle',{sid:'%s'});
+			}},
+		];
+		if(selected){
+			commands.push({
+				id:'resize',
+				label:'Resize',
+				scope:'selected app',
+				icon:'aspect_ratio',
+				keywords:'width active app panel size',
+				run:function(){
+					closePalette();
+					if(window.__libroOpenResizePopup)window.__libroOpenResizePopup();
+				},
+			});
+		}
+		if(selected&&selected.isBrowser){
+			commands.push({
+				id:'console-browser',
+				label:'Browser console',
+				scope:'selected browser',
+				icon:'terminal',
+				keywords:'devtools inspector selected browser webview console',
+				run:function(){
+					closePalette();
+					if(window.__libroOpenConsole)window.__libroOpenConsole(selected.id);
+				},
+			});
+		}
+		return commands;
+	}
+
+	function render(){
+		var dk=document.documentElement.classList.contains('dark');
+		res.innerHTML='';
+		if(filtered.length===0){
+			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No commands</div>';
+			return;
+		}
+		filtered.forEach(function(cmd,i){
+			var row=document.createElement('div');
+			var sel=i===selIdx;
+			var txtCls=dk?'text-zinc-200':'text-gray-800';
+			var subCls=dk?'text-zinc-500':'text-gray-400';
+			var badgeCls=dk?'bg-zinc-700 text-zinc-400':'bg-gray-200 text-gray-500';
+			row.className='flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
+				+(sel?(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500')
+				:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'));
+			row.innerHTML='<i class="material-icons-round text-blue-500 text-lg shrink-0">'+cmd.icon+'</i>'
+				+'<div class="flex-1 min-w-0"><div class="text-sm truncate '+txtCls+'">'+cmd.id+'</div>'
+				+'<div class="text-[11px] truncate '+subCls+'">'+cmd.label+'</div></div>'
+				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+cmd.scope+'</span>';
+			row.onmouseenter=function(){
+				if(selIdx===i)return;
+				selIdx=i;
+				render();
+			};
+			row.onclick=function(){execute();};
+			res.appendChild(row);
+		});
+		var sel=res.children[selIdx];
+		if(sel)sel.scrollIntoView({block:'nearest'});
+	}
+
+	function filter(){
+		var q=(inp.value||'').trim();
+		var commands=commandDefinitions();
+		if(!q){
+			filtered=commands;
+		}else{
+			filtered=commands.map(function(cmd){
+				var hay=cmd.id+' '+cmd.label+' '+cmd.scope+' '+(cmd.keywords||'');
+				return {cmd:cmd,score:fuzzyMatch(hay,q)};
+			}).filter(function(entry){return entry.score>0;})
+				.sort(function(a,b){return b.score-a.score;})
+				.map(function(entry){return entry.cmd;});
+		}
+		selIdx=0;
+		render();
+	}
+
+	function execute(){
+		if(filtered.length===0)return;
+		filtered[selIdx].run();
+	}
+
+	function openPalette(){
+		dlg.classList.remove('hidden');
+		inp.value='';
+		filter();
+		setTimeout(function(){inp.focus();},50);
+	}
+
+	function closePalette(){
+		dlg.classList.add('hidden');
+		inp.value='';
+	}
+
+	inp.addEventListener('input',filter);
+	inp.addEventListener('keydown',function(e){
+		e.stopImmediatePropagation();
+		if(e.key==='ArrowDown'){
+			e.preventDefault();
+			if(selIdx<filtered.length-1){selIdx++;render();}
+		}else if(e.key==='ArrowUp'){
+			e.preventDefault();
+			if(selIdx>0){selIdx--;render();}
+		}else if(e.key==='Enter'){
+			e.preventDefault();
+			execute();
+		}else if(e.key==='Escape'){
+			e.preventDefault();
+			closePalette();
+		}
+	});
+
+	window.__libroOpenCommandPalette=openPalette;
+})();
+`, CommandPopupID, sid, sid, sid, sid, sid)
+}
+
 // resizePopupJS returns JS that powers the Win+R / Win+F resize popup.
 // Supports j/k keyboard navigation and Enter to confirm.
 func resizePopupJS(sid string) string {
@@ -2276,6 +2499,7 @@ func renderShortcutsDialog() *r.Node {
 		{"Apps", "", []shortcut{
 			{"⌘ + N", "New app (right of current)"},
 			{"⌘ + Ctrl + N", "New app (left of current)"},
+			{"⌘ + ;", "Command palette"},
 			{"⌘ + W", "Close current app"},
 			{"⌘ + R", "Resize app popup"},
 			{"⌘ + F", "Toggle full width"},
@@ -3825,10 +4049,16 @@ func keyboardShortcutsJS(sid string) string {
 					if (window.__libroOpenSearch) window.__libroOpenSearch('right');
 					return;
 				}
-				if (e.metaKey && (e.key === 'b' || e.key === 'B') && !e.ctrlKey) {
+			if (e.metaKey && (e.key === 'b' || e.key === 'B') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					__ws.call('sidebar.toggle', {"sid": "%s"});
+					return;
+				}
+				if (e.metaKey && !e.ctrlKey && (e.key === ';' || e.code === 'Semicolon')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenCommandPalette) window.__libroOpenCommandPalette();
 					return;
 				}
 				if (e.metaKey && (e.key === 'x' || e.key === 'X' || e.code === 'KeyX') && !e.ctrlKey) {
@@ -3940,4 +4170,4 @@ func keyboardShortcutsJS(sid string) string {
 			});
 		})();
 		`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
-	}
+}
