@@ -21,6 +21,17 @@ info() { echo -e "\033[1;34m==>\033[0m $*"; }
 ok() { echo -e "\033[1;32m==>\033[0m $*"; }
 err() { echo -e "\033[1;31m==>\033[0m $*" >&2; }
 
+copy_if_changed() {
+    local source="$1"
+    local target="$2"
+    mkdir -p "$(dirname "$target")"
+    if [[ -f "$target" ]] && cmp -s "$source" "$target"; then
+        return 1
+    fi
+    cp "$source" "$target"
+    return 0
+}
+
 # ---------------------------------------------------------------------------
 # Detect OS and set install directory + binary name
 # ---------------------------------------------------------------------------
@@ -122,15 +133,21 @@ mv "$SCRIPT_DIR/$BIN_NAME" "$LIBRO_DIR/$BIN_NAME"
 chmod +x "$LIBRO_DIR/$BIN_NAME"
 
 # Copy Electron app files used by repo-based installs
-cp "$SCRIPT_DIR/package.json" "$LIBRO_DIR/"
-cp "$SCRIPT_DIR/electron/main.js" "$LIBRO_DIR/electron/"
-cp "$SCRIPT_DIR/electron/preload.js" "$LIBRO_DIR/electron/"
-cp "$SCRIPT_DIR/winres/icon.png" "$LIBRO_DIR/winres/"
+APP_FILES_CHANGED=false
+if copy_if_changed "$SCRIPT_DIR/package.json" "$LIBRO_DIR/package.json"; then APP_FILES_CHANGED=true; fi
+if copy_if_changed "$SCRIPT_DIR/package-lock.json" "$LIBRO_DIR/package-lock.json"; then APP_FILES_CHANGED=true; fi
+if copy_if_changed "$SCRIPT_DIR/electron/main.js" "$LIBRO_DIR/electron/main.js"; then APP_FILES_CHANGED=true; fi
+if copy_if_changed "$SCRIPT_DIR/electron/preload.js" "$LIBRO_DIR/electron/preload.js"; then APP_FILES_CHANGED=true; fi
+if copy_if_changed "$SCRIPT_DIR/winres/icon.png" "$LIBRO_DIR/winres/icon.png"; then APP_FILES_CHANGED=true; fi
 
-# Install the local Electron runtime for this source-built install
-info "Installing Electron..."
-(cd "$LIBRO_DIR" && npm install --no-fund --no-audit --omit=dev 2>&1 | tail -1)
-ok "Electron installed"
+# Install or refresh the local Electron runtime only when needed
+if [[ ! -d "$LIBRO_DIR/node_modules/electron" || "$APP_FILES_CHANGED" == true ]]; then
+    info "Installing Electron..."
+    (cd "$LIBRO_DIR" && npm install --no-fund --no-audit --omit=dev 2>&1 | tail -1)
+    ok "Electron installed"
+else
+    ok "Electron already installed"
+fi
 
 # Create launcher symlink in bin dir
 ln -sf "$LIBRO_DIR/$BIN_NAME" "$INSTALL_DIR/$BIN_NAME"

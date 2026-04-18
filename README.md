@@ -10,25 +10,11 @@ A Go + Electron application using [g-sui](https://github.com/michalCapo/g-sui) t
 
 Release downloads are self-contained single binaries. On first launch, Libro extracts its bundled Electron runtime into the user cache directory and starts the desktop app.
 
-For macOS and Linux, download the latest release binary to `~/.local/bin`:
-
-```bash
-OS="$(uname -s | tr '[:upper:]' '[:lower:]')"; ARCH="$(uname -m)"; case "$ARCH" in x86_64) ARCH="amd64" ;; aarch64|arm64) ARCH="arm64" ;; esac; mkdir -p "$HOME/.local/bin" && curl -fsSL "https://github.com/michalCapo/libro/releases/latest/download/libro-${OS}-${ARCH}" -o "$HOME/.local/bin/libro" && chmod +x "$HOME/.local/bin/libro"
-```
-
 [![Download Linux amd64](https://img.shields.io/badge/Linux-amd64-1f6feb?style=for-the-badge)](https://github.com/michalCapo/libro/releases/latest/download/libro-linux-amd64)
 [![Download Linux arm64](https://img.shields.io/badge/Linux-arm64-1f6feb?style=for-the-badge)](https://github.com/michalCapo/libro/releases/latest/download/libro-linux-arm64)
 [![Download macOS amd64](https://img.shields.io/badge/macOS-amd64-111827?style=for-the-badge)](https://github.com/michalCapo/libro/releases/latest/download/libro-darwin-amd64)
 [![Download macOS arm64](https://img.shields.io/badge/macOS-arm64-111827?style=for-the-badge)](https://github.com/michalCapo/libro/releases/latest/download/libro-darwin-arm64)
 [![Download Windows amd64](https://img.shields.io/badge/Windows-amd64-0ea5e9?style=for-the-badge)](https://github.com/michalCapo/libro/releases/latest/download/libro-windows-amd64.exe)
-
-### Run From Source
-
-```bash
-go run .
-```
-
-If Electron is not installed locally, Libro will try to install it with `npm install` from the repo root.
 
 ## Architecture
 

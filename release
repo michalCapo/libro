@@ -17,6 +17,7 @@ BUILD_DIR="$SCRIPT_DIR/dist"
 BUNDLE_DIR="$SCRIPT_DIR/internal/desktopbundledata"
 BUNDLE_APP_DIR="$BUNDLE_DIR/electron-app"
 BUNDLE_RUNTIME_DIR="$BUNDLE_DIR/electron-runtime"
+DOWNLOAD_CACHE_DIR="$SCRIPT_DIR/.cache/electron"
 
 DRY_RUN=false
 
@@ -74,9 +75,27 @@ stage_embedded_app_files() {
     mkdir -p "$BUNDLE_APP_DIR/electron" "$BUNDLE_APP_DIR/winres"
     rm -f "$BUNDLE_APP_DIR/README.md"
     cp "$SCRIPT_DIR/package.json" "$BUNDLE_APP_DIR/package.json"
+    cp "$SCRIPT_DIR/package-lock.json" "$BUNDLE_APP_DIR/package-lock.json"
     cp "$SCRIPT_DIR/electron/main.js" "$BUNDLE_APP_DIR/electron/main.js"
     cp "$SCRIPT_DIR/electron/preload.js" "$BUNDLE_APP_DIR/electron/preload.js"
     cp "$SCRIPT_DIR/winres/icon.png" "$BUNDLE_APP_DIR/winres/icon.png"
+}
+
+cache_electron_zip() {
+    local zip_name="$1"
+    local url="$2"
+    local cached_zip="$DOWNLOAD_CACHE_DIR/$zip_name"
+
+    mkdir -p "$DOWNLOAD_CACHE_DIR"
+    if [[ -s "$cached_zip" ]]; then
+        info "Using cached Electron runtime $zip_name" >&2
+        printf '%s\n' "$cached_zip"
+        return 0
+    fi
+
+    info "Downloading Electron runtime $zip_name..." >&2
+    curl -L "$url" -o "$cached_zip"
+    printf '%s\n' "$cached_zip"
 }
 
 prepare_embedded_runtime() {
@@ -85,6 +104,7 @@ prepare_embedded_runtime() {
     local platform_id
     local zip_name
     local url
+    local cached_zip
 
     platform_id="$(electron_platform_id "$os" "$arch")"
     zip_name="electron-v${ELECTRON_VERSION}-${platform_id}.zip"
@@ -93,8 +113,8 @@ prepare_embedded_runtime() {
     reset_embedded_bundle_dirs
     stage_embedded_app_files
 
-    info "Downloading Electron ${ELECTRON_VERSION} for ${os}/${arch}..."
-    curl -L "$url" -o "$BUNDLE_RUNTIME_DIR/$zip_name"
+    cached_zip="$(cache_electron_zip "$zip_name" "$url")"
+    cp "$cached_zip" "$BUNDLE_RUNTIME_DIR/$zip_name"
     ok "Embedded desktop payload staged for ${os}/${arch}"
 }
 
