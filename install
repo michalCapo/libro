@@ -2,7 +2,11 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# install — Build libro and install to ~/.local/bin/
+# install — Build Libro from source and install it locally.
+#
+# This path is for repo-based installs. It installs the Go binary plus the
+# Electron app files under ~/.local/share/libro and links the launcher into
+# ~/.local/bin. Release downloads are self-contained and do not use this flow.
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -95,10 +99,10 @@ if [[ "$GOOS" == "windows" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Build
+# Build from the current repo checkout
 # ---------------------------------------------------------------------------
 
-info "Building libro v${VERSION} (production, port 8100)..."
+info "Building libro v${VERSION}..."
 GOOS="$GOOS" GOARCH="$GOARCH" go build -ldflags "$LDFLAGS" -o "$SCRIPT_DIR/$BIN_NAME" .
 ok "Built $BIN_NAME"
 
@@ -106,7 +110,7 @@ ok "Built $BIN_NAME"
 rm -f "$SCRIPT_DIR/"*.syso
 
 # ---------------------------------------------------------------------------
-# Install
+# Install the source-built app bundle
 # ---------------------------------------------------------------------------
 
 LIBRO_DIR="$HOME/.local/share/libro"
@@ -117,12 +121,12 @@ mkdir -p "$INSTALL_DIR" "$LIBRO_DIR/electron"
 mv "$SCRIPT_DIR/$BIN_NAME" "$LIBRO_DIR/$BIN_NAME"
 chmod +x "$LIBRO_DIR/$BIN_NAME"
 
-# Copy Electron files
+# Copy Electron app files used by repo-based installs
 cp "$SCRIPT_DIR/package.json" "$LIBRO_DIR/"
 cp "$SCRIPT_DIR/electron/main.js" "$LIBRO_DIR/electron/"
 cp "$SCRIPT_DIR/electron/preload.js" "$LIBRO_DIR/electron/"
 
-# Install Electron
+# Install the local Electron runtime for this source-built install
 info "Installing Electron..."
 (cd "$LIBRO_DIR" && npm install --no-fund --no-audit --omit=dev 2>&1 | tail -1)
 ok "Electron installed"
@@ -172,5 +176,6 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
 fi
 
 echo ""
-echo "  Run 'libro' to start, or 'libro --no-desktop' for server-only mode."
+echo "  Installed source build. Run 'libro' to start,"
+echo "  or 'libro --no-desktop' for server-only mode."
 echo ""

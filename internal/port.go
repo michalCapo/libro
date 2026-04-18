@@ -1,5 +1,3 @@
-//go:build !dev
-
 package libro
 
 func Port() string {

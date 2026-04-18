@@ -4,8 +4,7 @@
   "description": "Application Manager",
   "main": "electron/main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "LIBRO_PORT=1439 electron ."
+    "start": "electron ."
   },
   "dependencies": {
     "electron": "^36.0.0"
