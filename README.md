@@ -8,8 +8,8 @@ A Go + Electron application using [g-sui](https://github.com/michalCapo/g-sui) t
 
 ## Recent Changes
 
-- Command Palette now exposes app and project actions, including saving the current strip, clearing saved reopen state, and reopening the last closed project apps.
-- Projects remember the last closed strip, so you can restore a project's browser and terminal layout after closing everything.
+- Command Palette now exposes app and project actions, including saving the current strip, clearing saved reopen state, and reopening saved project apps.
+- Projects can save a strip explicitly, so you can restore a project's browser and terminal layout later with the save and reopen commands.
 - The selected app can be moved left or right to reorder the strip without reopening panels.
 - Manage Apps is available directly from the top bar as a popup for editing or deleting saved entries.
 - The desktop top bar now behaves more like a native title bar: it is draggable, supports double-click maximize/restore, and includes a dedicated close button.
