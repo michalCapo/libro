@@ -46,6 +46,70 @@ type projectSnapshot struct {
 	SelectedIndex int
 }
 
+func cloneApplications(apps []Application) []Application {
+	if len(apps) == 0 {
+		return nil
+	}
+	return append([]Application(nil), apps...)
+}
+
+func persistClosedProjectSnapshot(projectName string, snap *projectSnapshot) {
+	if projectName == "" {
+		return
+	}
+	if snap == nil || len(snap.Apps) == 0 {
+		DBClearClosedProjectApps(projectName)
+		return
+	}
+	closedApps := make([]ClosedProjectApp, 0, len(snap.Apps))
+	for i, app := range snap.Apps {
+		closedApps = append(closedApps, ClosedProjectApp{
+			ProjectName:   projectName,
+			Type:          string(app.Type),
+			URL:           app.URL,
+			Command:       app.Command,
+			Width:         string(app.Width),
+			PreviousWidth: string(app.PreviousWidth),
+			Writable:      app.Writable,
+			Name:          app.Name,
+			IconURL:       app.IconURL,
+			Position:      i,
+			SelectedIndex: snap.SelectedIndex,
+		})
+	}
+	DBSaveClosedProjectApps(projectName, closedApps)
+}
+
+func loadClosedSnapshots(projects []Project) map[string]*projectSnapshot {
+	closed := make(map[string]*projectSnapshot)
+	for _, p := range projects {
+		rows := DBLoadClosedProjectApps(p.Name)
+		if len(rows) == 0 {
+			continue
+		}
+		apps := make([]Application, 0, len(rows))
+		selectedIndex := 0
+		for _, row := range rows {
+			selectedIndex = row.SelectedIndex
+			apps = append(apps, Application{
+				Type:          AppType(row.Type),
+				URL:           row.URL,
+				Command:       row.Command,
+				Width:         Width(row.Width),
+				PreviousWidth: Width(row.PreviousWidth),
+				Writable:      row.Writable,
+				Name:          row.Name,
+				IconURL:       row.IconURL,
+			})
+		}
+		closed[p.Name] = &projectSnapshot{
+			Apps:          apps,
+			SelectedIndex: selectedIndex,
+		}
+	}
+	return closed
+}
+
 // AppState holds the per-session state
 type AppState struct {
 	Apps          []Application
@@ -145,13 +209,14 @@ func (sm *StateManager) NewSession() string {
 		rendered[projects[0].Name] = true
 	}
 	navSlots, navProjectSlots := navSlotsFromProjects(projects)
+	closedSnapshots := loadClosedSnapshots(projects)
 
 	zenMode := DBGetSetting("zen_mode", "0") == "1"
 	sm.states[sid] = &AppState{
 		Projects:         projects,
 		ActiveProject:    projects[0].Name,
 		snapshots:        make(map[string]*projectSnapshot),
-		closedSnapshots:  make(map[string]*projectSnapshot),
+		closedSnapshots:  closedSnapshots,
 		renderedProjects: rendered,
 		EditIndex:        -1,
 		NavSlots:         navSlots,
@@ -176,12 +241,13 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 		rendered[projects[0].Name] = true
 	}
 	navSlots, navProjectSlots := navSlotsFromProjects(projects)
+	closedSnapshots := loadClosedSnapshots(projects)
 	zenMode := DBGetSetting("zen_mode", "0") == "1"
 	s := &AppState{
 		Projects:         projects,
 		ActiveProject:    projects[0].Name,
 		snapshots:        make(map[string]*projectSnapshot),
-		closedSnapshots:  make(map[string]*projectSnapshot),
+		closedSnapshots:  closedSnapshots,
 		renderedProjects: rendered,
 		EditIndex:        -1,
 		NavSlots:         navSlots,
@@ -499,14 +565,54 @@ func (sm *StateManager) CloseActiveProjectApps(sessionID string) (string, []Appl
 	if len(s.Apps) == 0 {
 		return projectName, nil
 	}
-	appsCopy := append([]Application(nil), s.Apps...)
-	s.closedSnapshots[projectName] = &projectSnapshot{
+	appsCopy := cloneApplications(s.Apps)
+	snap := &projectSnapshot{
 		Apps:          appsCopy,
 		SelectedIndex: s.SelectedIndex,
 	}
+	s.closedSnapshots[projectName] = snap
+	persistClosedProjectSnapshot(projectName, snap)
 	s.Apps = nil
 	s.SelectedIndex = 0
 	return projectName, appsCopy
+}
+
+// SaveActiveProjectApps remembers the active project's running apps without closing them.
+func (sm *StateManager) SaveActiveProjectApps(sessionID string) (string, int) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return "", 0
+	}
+	projectName := s.ActiveProject
+	if len(s.Apps) == 0 {
+		return projectName, 0
+	}
+	snap := &projectSnapshot{
+		Apps:          cloneApplications(s.Apps),
+		SelectedIndex: s.SelectedIndex,
+	}
+	s.closedSnapshots[projectName] = snap
+	persistClosedProjectSnapshot(projectName, snap)
+	return projectName, len(s.Apps)
+}
+
+// ClearClosedProjectApps removes the remembered reopen snapshot for the active project.
+func (sm *StateManager) ClearClosedProjectApps(sessionID string) (string, bool) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return "", false
+	}
+	projectName := s.ActiveProject
+	snap, ok := s.closedSnapshots[projectName]
+	if ok {
+		delete(s.closedSnapshots, projectName)
+	}
+	DBClearClosedProjectApps(projectName)
+	return projectName, ok && snap != nil && len(snap.Apps) > 0
 }
 
 // TakeClosedProjectApps returns and clears the last remembered closed apps for the active project.
@@ -523,8 +629,9 @@ func (sm *StateManager) TakeClosedProjectApps(sessionID string) (string, *projec
 		return projectName, nil
 	}
 	delete(s.closedSnapshots, projectName)
+	DBClearClosedProjectApps(projectName)
 	return projectName, &projectSnapshot{
-		Apps:          append([]Application(nil), snap.Apps...),
+		Apps:          cloneApplications(snap.Apps),
 		SelectedIndex: snap.SelectedIndex,
 	}
 }
@@ -538,9 +645,10 @@ func (sm *StateManager) RememberClosedProjectApps(sessionID, projectName string,
 		return
 	}
 	s.closedSnapshots[projectName] = &projectSnapshot{
-		Apps:          append([]Application(nil), snap.Apps...),
+		Apps:          cloneApplications(snap.Apps),
 		SelectedIndex: snap.SelectedIndex,
 	}
+	persistClosedProjectSnapshot(projectName, snap)
 }
 
 // RestoreActiveProjectApps replaces the active project's running apps.
