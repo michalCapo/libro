@@ -3183,6 +3183,7 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 
 	btnCls := "w-9 h-9 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-gray-200 dark:hover:bg-zinc-700 relative group/ico"
 	tipCls := "absolute top-full mt-1 px-2 py-1 text-xs rounded bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg"
+	noDragStyle := "-webkit-app-region:no-drag"
 
 	appIcons := make([]*r.Node, 0, len(savedApps)+2)
 	for _, app := range savedApps {
@@ -3222,6 +3223,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		}
 
 		btn := r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
 			Render(iconNode, r.Span(tipCls).Text(label)).
 			OnClick(&r.Action{Name: "app.start", Data: map[string]any{
 				"sid": sid, "type": app.Type, "url": app.URL,
@@ -3235,6 +3238,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 	// Quick launch button (combined browse + run)
 	appIcons = append(appIcons,
 		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("search"),
 				r.Span(tipCls).Text("Quick launch"),
@@ -3245,6 +3250,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 	// Add button
 	appIcons = append(appIcons,
 		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 text-[18px]").Text("add"),
 				r.Span(tipCls).Text("Add app"),
@@ -3255,6 +3262,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 	// Manage apps button (icon style, matching other app icons)
 	appIcons = append(appIcons,
 		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("apps"),
 				r.Span(tipCls).Text("Manage apps"),
@@ -3265,18 +3274,24 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 	// Action buttons in icon style (same as app icons)
 	appIcons = append(appIcons,
 		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
 			Attr("onclick", "if(window.__libroOpenCommandPalette)window.__libroOpenCommandPalette();").
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("menu_open"),
 				r.Span(tipCls).Text("Commands"),
 			),
 		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
 			Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.toggle('hidden');", ShortcutsDialogID)).
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("keyboard"),
 				r.Span(tipCls).Text("Shortcuts"),
 			),
 		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
 			Attr("onclick", "if(window.libroElectron&&window.libroElectron.toggleDevTools)window.libroElectron.toggleDevTools();").
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("code"),
@@ -3287,6 +3302,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 	// Zen mode button
 	appIcons = append(appIcons,
 		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
 			OnClick(&r.Action{Name: "zen.toggle", Data: sidData(sid)}).
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400 text-xl libro-zen-icon").Text(func() string {
@@ -3309,8 +3326,12 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 
 	return r.Div("flex items-center gap-1.5 px-3 py-1.5 border-b border-gray-200 dark:border-zinc-800 shrink-0").
 		ID(TopBarID).
+		Attr("style", "-webkit-app-region:drag").
+		Attr("ondblclick", "if(event.target&&event.target.closest&&event.target.closest('[data-libro-no-drag]'))return;if(window.libroElectron&&window.libroElectron.toggleMaximize)window.libroElectron.toggleMaximize();").
 		Render(
 			r.Button("shrink-0 cursor-pointer hover:opacity-70 transition-opacity duration-75 flex items-center gap-1.5").
+				Attr("data-libro-no-drag", "true").
+				Attr("style", noDragStyle).
 				Attr("title", "Toggle sidebar (⌘B)").
 				OnClick(&r.Action{Name: "sidebar.toggle", Data: sidData(sid)}).
 				Render(
@@ -3319,7 +3340,10 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 				),
 			r.Div("flex items-center gap-0.5 ml-2").Render(appIcons...),
 			r.Div("ml-auto flex items-center gap-1").Render(appPreview),
-			r.ThemeSwitcher(),
+			r.Div("").
+				Attr("data-libro-no-drag", "true").
+				Attr("style", noDragStyle).
+				Render(r.ThemeSwitcher()),
 		)
 }
 
@@ -3386,6 +3410,8 @@ func renderAppPreview(state *AppState, sid string) *r.Node {
 		}
 
 		card := r.Button(cardCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", "-webkit-app-region:no-drag").
 			Attr("title", label).
 			OnClick(&r.Action{Name: "app.select", Data: sidData(sid, "index", i)}).
 			Render(

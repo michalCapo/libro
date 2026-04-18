@@ -490,6 +490,15 @@ function createWindow() {
     contents.openDevTools({ mode: 'detach', activate: false })
   })
 
+  ipcMain.on('libro-toggle-maximize', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize()
+      return
+    }
+    mainWindow.maximize()
+  })
+
   ipcMain.on('libro-toggle-webview-devtools', (event, targetId, bounds, panel) => {
     const pair = ensureDevtoolsOverlay(targetId, bounds)
     if (!pair) return
