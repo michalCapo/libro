@@ -605,7 +605,7 @@ func navigateJS(state *AppState, sid string) string {
 						if (iframeWrap) { iframeWrap.appendChild(ov); } else { child.appendChild(ov); }
 					}
 					var zenClose2 = child.querySelector('[data-zen-close]');
-					if (zenClose2) zenClose2.style.display = 'none';
+					if (zenClose2) zenClose2.style.display = zenMode ? 'flex' : 'none';
 				}
 			}
 
@@ -1057,7 +1057,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string, zenMo
 			Data: sidData(sid, "id", app.ID),
 		}).
 		Render(r.I("material-icons-round text-[16px] leading-none block").Text("close"))
-	if zen && selected {
+	if zen {
 		zenCloseBtn = zenCloseBtn.Attr("style", "display:flex")
 	}
 
