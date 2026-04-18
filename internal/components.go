@@ -300,6 +300,16 @@ func projectHasRunningApps(state *AppState, projectName string) bool {
 	return false
 }
 
+func projectHasClosedApps(state *AppState, projectName string) bool {
+	if state == nil || projectName == "" {
+		return false
+	}
+	if snap, ok := state.closedSnapshots[projectName]; ok {
+		return snap != nil && len(snap.Apps) > 0
+	}
+	return false
+}
+
 // renderEmptyState renders the saved apps list with "+ Add App" button
 func renderEmptyState(state *AppState, sid string) *r.Node {
 	savedApps := DBLoadVisibleSavedApps(savedAppsProjectName(state, state.ActiveProject))
@@ -317,18 +327,31 @@ func renderEmptyState(state *AppState, sid string) *r.Node {
 		)
 	}
 
+	actionButtons := []*r.Node{}
+	if projectHasClosedApps(state, state.ActiveProject) {
+		actionButtons = append(actionButtons,
+			r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
+				Render(r.I("material-icons-round text-[18px]").Text("history"), r.Span("").Text("Reopen")).
+				OnClick(&r.Action{Name: "project.apps.open", Data: sidData(sid)}),
+		)
+	} else {
+		actionButtons = append(actionButtons,
+			r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
+				Render(r.I("material-icons-round text-[18px]").Text("add"), r.Span("").Text("Add App")).
+				OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
+		)
+	}
+	actionButtons = append(actionButtons,
+		r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
+			Render(r.I("material-icons-round text-[18px]").Text("search"), r.Span("").Text("Quick Launch")).
+			OnClick(&r.Action{Name: "app.run.new", Data: sidData(sid)}),
+	)
+
 	container := r.Div("flex-1 flex items-center justify-center").ID(projectMainID(state.ActiveProject)).Render(
 		r.Div("flex flex-col items-center gap-2 w-full max-w-md").Render(
 			guideNode,
 			r.Div("flex flex-col gap-1.5 w-full").Render(appButtons...),
-			r.Div("flex gap-2 w-full mt-1").Render(
-				r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
-					Render(r.I("material-icons-round text-[18px]").Text("add"), r.Span("").Text("Add App")).
-					OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
-				r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
-					Render(r.I("material-icons-round text-[18px]").Text("search"), r.Span("").Text("Quick Launch")).
-					OnClick(&r.Action{Name: "app.run.new", Data: sidData(sid)}),
-			),
+			r.Div("flex gap-2 w-full mt-1").Render(actionButtons...),
 		),
 	)
 	return container
