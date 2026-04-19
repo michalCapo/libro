@@ -115,8 +115,8 @@ function activateDevToolsPicker(devtoolsContents) {
 
 function normalizeBounds(bounds) {
   if (!bounds) return null
-  const x = Math.max(0, Math.round(Number(bounds.x) || 0))
-  const y = Math.max(0, Math.round(Number(bounds.y) || 0))
+  const x = Math.round(Number(bounds.x) || 0)
+  const y = Math.round(Number(bounds.y) || 0)
   const width = Math.max(1, Math.round(Number(bounds.width) || 0))
   const height = Math.max(1, Math.round(Number(bounds.height) || 0))
   return { x, y, width, height }
@@ -130,6 +130,36 @@ function resetDevtoolsZoom(contents) {
   try {
     contents.setVisualZoomLevelLimits(1, 1)
   } catch (err) {}
+}
+
+function refocusDevtoolsTarget(target) {
+  if (!target || target.isDestroyed()) return
+  for (const delay of [0, 40, 120, 260]) {
+    setTimeout(() => {
+      try {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.focus()
+      } catch (err) {}
+      try {
+        if (!target.isDestroyed()) target.focus()
+      } catch (err) {}
+    }, delay)
+  }
+}
+
+function closeDevtoolsOverlay(target) {
+  if (!target || target.isDestroyed()) return
+  try {
+    if (target.isDevToolsOpened()) {
+      target.closeDevTools()
+    }
+  } catch (err) {}
+  const entry = devtoolsOverlays.get(target.id)
+  if (entry) entry.opened = false
+  hideDevtoolsOverlay(target.id)
+  refocusDevtoolsTarget(target)
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('libro-webview-devtools-closed', target.id)
+  }
 }
 
 function ensureDevtoolsOverlay(targetId, bounds) {
@@ -154,6 +184,14 @@ function ensureDevtoolsOverlay(targetId, bounds) {
       devtoolsOverlays.delete(target.id)
       return null
     }
+    view.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown' && input.type !== 'rawKeyDown') return
+      const key = (input.key || '').toLowerCase()
+      if (input.meta || input.control || input.alt || input.shift || key !== 'c') return
+      event.preventDefault()
+      closeDevtoolsOverlay(target)
+      refocusDevtoolsTarget(target)
+    })
   }
 
   try {
@@ -512,6 +550,7 @@ function createWindow() {
         resetDevtoolsZoom(pair.devtools)
         pair.entry.opened = true
         selectDevToolsPanel(pair.devtools, panel)
+        refocusDevtoolsTarget(pair.target)
       }
     } catch (err) {
       console.error('Failed to toggle webview DevTools:', err.message)
@@ -528,6 +567,7 @@ function createWindow() {
       }
       resetDevtoolsZoom(pair.devtools)
       selectDevToolsPanel(pair.devtools, panel)
+      refocusDevtoolsTarget(pair.target)
     } catch (err) {
       console.error('Failed to open webview DevTools:', err.message)
     }
@@ -537,12 +577,7 @@ function createWindow() {
     const target = withWebContents(targetId)
     if (!target) return
     try {
-      if (target.isDevToolsOpened()) {
-        target.closeDevTools()
-      }
-      const entry = devtoolsOverlays.get(target.id)
-      if (entry) entry.opened = false
-      hideDevtoolsOverlay(targetId)
+      closeDevtoolsOverlay(target)
     } catch (err) {
       console.error('Failed to close webview DevTools:', err.message)
     }
@@ -560,6 +595,7 @@ function createWindow() {
       pair.target.inspectElement(Number(x) || 0, Number(y) || 0)
       selectDevToolsPanel(pair.devtools, 'elements')
       activateDevToolsPicker(pair.devtools)
+      refocusDevtoolsTarget(pair.target)
     } catch (err) {
       console.error('Failed to inspect webview element:', err.message)
     }
