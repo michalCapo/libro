@@ -891,37 +891,86 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 	});
 cleanupObserver.observe(document.body, { childList: true, subtree: true });
 
+function syncBrowserFallbackFrames(root) {
+	var scope = root && root.querySelectorAll ? root : document;
+	var useElectron = !!window.libroElectron;
+	scope.querySelectorAll('webview[data-webview-app]').forEach(function(wv) {
+		wv.style.display = useElectron ? 'inline-flex' : 'none';
+	});
+	scope.querySelectorAll('iframe[data-browser-iframe-app]').forEach(function(frame) {
+		frame.style.display = useElectron ? 'none' : 'block';
+	});
+}
+
+function getBrowserFallbackFrame(appID) {
+	return document.querySelector('iframe[data-browser-iframe-app="' + appID + '"]');
+}
+
 // Global helpers — safe to call before dom-ready (calls are queued)
 window.__libroWvBack = function(appID) {
 	var wv = window.__libroWebviews[appID];
-	if (!wv) return;
-	whenReady(appID, function() { if (wv.canGoBack()) wv.goBack(); });
+	if (wv) {
+		whenReady(appID, function() { if (wv.canGoBack()) wv.goBack(); });
+		return;
+	}
+	var frame = getBrowserFallbackFrame(appID);
+	if (!frame) return;
+	try { frame.contentWindow.history.back(); } catch (e) {}
 };
 window.__libroWvForward = function(appID) {
 	var wv = window.__libroWebviews[appID];
-	if (!wv) return;
-	whenReady(appID, function() { if (wv.canGoForward()) wv.goForward(); });
+	if (wv) {
+		whenReady(appID, function() { if (wv.canGoForward()) wv.goForward(); });
+		return;
+	}
+	var frame = getBrowserFallbackFrame(appID);
+	if (!frame) return;
+	try { frame.contentWindow.history.forward(); } catch (e) {}
 };
 window.__libroWvReload = function(appID) {
 	var wv = window.__libroWebviews[appID];
-	if (!wv) return;
-	whenReady(appID, function() { wv.reload(); });
+	if (wv) {
+		whenReady(appID, function() { wv.reload(); });
+		return;
+	}
+	var frame = getBrowserFallbackFrame(appID);
+	if (!frame) return;
+	try {
+		frame.contentWindow.location.reload();
+	} catch (e) {
+		frame.setAttribute('src', frame.getAttribute('src') || 'about:blank');
+	}
 };
 window.__libroOpenNewTab = function(url) {
+	if (url === 'about:blank') url = '';
 	// Find the sid from any webview with a data-sid attribute
-	var wv = document.querySelector('webview[data-sid]');
-	var sid = wv ? wv.getAttribute('data-sid') : 'default';
+	var host = document.querySelector('webview[data-sid], iframe[data-browser-iframe-app][data-sid]');
+	var sid = host ? host.getAttribute('data-sid') : 'default';
 	__ws.call('app.start', {sid: sid, type: 'url', url: url, width: 'lg', side: 'right'});
 };
 window.__libroWvNavigate = function(appID, url) {
 	var wv = window.__libroWebviews[appID];
-	if (!wv) return;
-	if (ready[appID]) {
-		wv.loadURL(url).catch(function(){});
-	} else {
-		// Not ready yet — set src attribute to trigger initial load
-		wv.setAttribute('src', url);
+	if (wv) {
+		if (ready[appID]) {
+			wv.loadURL(url).catch(function(){});
+		} else {
+			// Not ready yet — set src attribute to trigger initial load
+			wv.setAttribute('src', url);
+		}
+		return;
 	}
+	var frame = getBrowserFallbackFrame(appID);
+	if (!frame) return;
+	frame.setAttribute('src', url || 'about:blank');
 };
+syncBrowserFallbackFrames(document);
+var runtimeFrameObserver = new MutationObserver(function(mutations) {
+	mutations.forEach(function(mutation) {
+		mutation.addedNodes.forEach(function(node) {
+			syncBrowserFallbackFrames(node);
+		});
+	});
+});
+runtimeFrameObserver.observe(document.body, { childList: true, subtree: true });
 })();
 `

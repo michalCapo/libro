@@ -655,18 +655,31 @@ app.on('web-contents-created', (event, contents) => {
     })
 
     contents.setWindowOpenHandler(({ url, disposition }) => {
-      if (url && url !== 'about:blank') {
-        // Download links (e.g. <a download>) — trigger download instead of opening a tab
-        if (disposition === 'save-to-disk') {
-          contents.downloadURL(url)
-          return { action: 'deny' }
+      // Download links (e.g. <a download>) — trigger download instead of opening a tab
+      if (disposition === 'save-to-disk' && url && url !== 'about:blank') {
+        contents.downloadURL(url)
+        return { action: 'deny' }
+      }
+      // Allow script-driven about:blank popups to open as native windows.
+      // Some sites render generated content into the new window after calling
+      // window.open(), so converting these to Libro tabs loses the content.
+      if (url === 'about:blank') {
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: {
+            autoHideMenuBar: true,
+            parent: mainWindow || undefined,
+            width: 960,
+            height: 720
+          }
         }
-        if (mainWindow) {
-          const safeUrl = url.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-          mainWindow.webContents.executeJavaScript(`
-            if (window.__libroOpenNewTab) window.__libroOpenNewTab('${safeUrl}');
-          `)
-        }
+      }
+      if (mainWindow) {
+        const nextUrl = url || ''
+        const safeUrl = nextUrl.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+        mainWindow.webContents.executeJavaScript(`
+          if (window.__libroOpenNewTab) window.__libroOpenNewTab('${safeUrl}');
+        `)
       }
       return { action: 'deny' }
     })

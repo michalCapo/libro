@@ -351,11 +351,10 @@ func Run(assets embed.FS) {
 		// URL app
 		url, _ := data["url"].(string)
 		url = strings.TrimSpace(url)
-		if url == "" {
-			return r.Notify("error", "URL is required")
+		if url != "" {
+			url = strings.ReplaceAll(url, "__dir__", pwd)
+			url = ensureScheme(url)
 		}
-		url = strings.ReplaceAll(url, "__dir__", pwd)
-		url = ensureScheme(url)
 
 		// Check if strip already exists
 		stateBefore := sm.Get(sid)

@@ -935,7 +935,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string, zenMo
 			Attr("value", app.URL).
 			Attr("spellcheck", "false").
 			Attr("autocomplete", "off").
-			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value.trim();if(u&&!u.startsWith('http://')&&!u.startsWith('https://')){if(/\s/.test(u)||(!u.includes('.')&&!u.includes(':'))){u='https://www.google.com/search?q='+encodeURIComponent(u);}else{u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;}}event.target.value=u;window.__libroWvNavigate('%s',u);__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});event.target.blur();var wv=document.querySelector('[data-webview-app="%s"]');if(wv)wv.focus();}`, app.ID, sid, app.ID, app.ID)))
+			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value.trim();if(u&&!u.startsWith('http://')&&!u.startsWith('https://')){if(/\s/.test(u)||(!u.includes('.')&&!u.includes(':'))){u='https://www.google.com/search?q='+encodeURIComponent(u);}else{u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;}}event.target.value=u;window.__libroWvNavigate('%s',u);__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});event.target.blur();var target=document.querySelector('[data-webview-app="%s"], iframe[data-browser-iframe-app="%s"]');if(target)target.focus();}`, app.ID, sid, app.ID, app.ID, app.ID)))
 
 		// Globe icon in badge
 		globeBadgeCls := "inline-flex items-center justify-center w-6 h-6 rounded shrink-0"
@@ -1104,23 +1104,34 @@ func renderAppFrame(app Application, index int, selected bool, sid string, zenMo
 
 func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 	if app.Type == AppTypeURL {
-		// Electron webview: native rendering, no screencast needed.
-		// z-30 to sit above the click overlay (z-20)
+		// Render both the Electron webview and an iframe fallback for plain
+		// browser mode. Runtime JS decides which one is visible.
 		webviewSrc := app.URL
 		if webviewSrc == "" {
 			webviewSrc = "about:blank"
 		}
 		wv := r.El("webview", "").
-			ID(frameID).
+			ID(fmt.Sprintf("webview-%s", app.ID)).
 			Attr("data-webview-app", app.ID).
 			Attr("data-sid", sid).
 			Attr("src", webviewSrc).
 			Attr("partition", "persist:libro").
 			Attr("allow", "microphone; camera; display-capture; speaker-selection; autoplay; clipboard-read; clipboard-write; fullscreen").
 			Attr("allowpopups", "").
-			Attr("style", "display:inline-flex;width:100%;height:100%")
+			Attr("style", "display:none;width:100%;height:100%")
 		// Force closing tag by adding empty text content
 		wv.Text("")
+		browserSrc := iframeSrc
+		if browserSrc == "" {
+			browserSrc = "about:blank"
+		}
+		browserFallback := r.Iframe("w-full h-full border-0").
+			ID(frameID).
+			Attr("data-browser-iframe-app", app.ID).
+			Attr("data-sid", sid).
+			Attr("src", browserSrc).
+			Attr("loading", "lazy").
+			Attr("style", "display:none")
 		devtoolsCloseBtn := r.Button("hidden w-5 h-5 cursor-pointer pointer-events-auto items-center justify-center rounded-full bg-red-500 text-white shadow-sm ring-1 ring-red-600/50 hover:bg-red-600").
 			ID(fmt.Sprintf("devtools-close-%s", app.ID)).
 			Attr("title", "Close DevTools").
@@ -1135,6 +1146,7 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			)
 		webviewWrapper := r.Div("relative flex-1 min-h-0").Render(
 			wv,
+			browserFallback,
 			devtoolsControls,
 		)
 		devtoolsPanel := r.Div("hidden border-t border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-zinc-900").
@@ -1950,7 +1962,7 @@ func urlPopupJS(sid string) string {
 		if(!appId)return '';
 		var el=document.querySelector('[data-app-id="'+appId+'"]');
 		if(!el)return '';
-		return el.querySelector('webview[data-webview-app]')?appId:'';
+		return el.querySelector('webview[data-webview-app], iframe[data-browser-iframe-app]')?appId:'';
 	}
 
 	function renderHistory(query){
@@ -2209,8 +2221,8 @@ func commandPopupJS(sid string) string {
 		if(!el)return null;
 		return {
 			id: appId,
-			isBrowser: !!el.querySelector('webview[data-webview-app]'),
-			isTerminal: !!el.querySelector('iframe') && !el.querySelector('webview[data-webview-app]')
+			isBrowser: !!el.querySelector('webview[data-webview-app], iframe[data-browser-iframe-app]'),
+			isTerminal: !!el.querySelector('iframe:not([data-browser-iframe-app])') && !el.querySelector('webview[data-webview-app], iframe[data-browser-iframe-app]')
 		};
 	}
 
@@ -4232,7 +4244,7 @@ func keyboardShortcutsJS(sid string) string {
 				if (e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L')) {
 					var selectedApp = window.__libroSelectedApp || '';
 					var selectedEl = selectedApp ? document.querySelector('[data-app-id="' + selectedApp + '"]') : null;
-					var selectedIsBrowser = !!(selectedEl && selectedEl.querySelector('webview[data-webview-app]'));
+					var selectedIsBrowser = !!(selectedEl && selectedEl.querySelector('webview[data-webview-app], iframe[data-browser-iframe-app]'));
 					if (!selectedIsBrowser) return;
 					e.preventDefault();
 					e.stopImmediatePropagation();
