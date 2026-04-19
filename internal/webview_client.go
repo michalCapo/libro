@@ -160,11 +160,16 @@ window.__libroToggleConsole = function(appID) {
 			if (!targetId) return;
 			var panel = document.getElementById('devtools-panel-' + appID);
 			var opening = !!(panel && panel.classList.contains('hidden'));
-			setDevtoolsPanelVisible(appID, opening);
+			if (!opening) {
+				window.libroElectron.closeWebviewDevTools(targetId);
+				setDevtoolsPanelVisible(appID, false);
+				return;
+			}
+			setDevtoolsPanelVisible(appID, true);
 			var bounds = devtoolsPanelBounds(appID);
 			if (!bounds) return;
 			window.libroElectron.toggleWebviewDevTools(targetId, bounds, 'console');
-			if (!opening) setDevtoolsPanelVisible(appID, false);
+			refocusWebview(appID, wv);
 		} catch (err) {}
 	});
 };
@@ -180,6 +185,7 @@ window.__libroOpenConsole = function(appID) {
 			var bounds = devtoolsPanelBounds(appID);
 			if (!bounds) return;
 			window.libroElectron.openWebviewDevTools(targetId, bounds, 'console');
+			refocusWebview(appID, wv);
 		} catch (err) {}
 	});
 };
@@ -200,9 +206,41 @@ window.__libroCloseConsole = function(appID) {
 // --- Find-in-page state per webview ---
 var searchState = {}; // appID -> {query, barEl, inputEl, countEl}
 var devtoolsPanelObservers = {};
+var devtoolsPanelSyncers = {};
 
 function injectBrowserShortcuts(wv, appID) {
 	try { wv.executeJavaScript(browserShortcutsScript); } catch(err) {}
+}
+
+function refocusWebview(appID, wv) {
+	if (!wv) return;
+	function attempt() {
+		if ((window.__libroSelectedApp || '') !== appID) return;
+		try { window.focus(); } catch(err) {}
+		try { wv.focus(); } catch(err) {}
+	}
+	attempt();
+	setTimeout(attempt, 40);
+	setTimeout(attempt, 120);
+	setTimeout(attempt, 260);
+}
+
+if (window.libroElectron && typeof window.libroElectron.onWebviewDevToolsClosed === 'function' && !window.__libroDevtoolsCloseSyncRegistered) {
+	window.__libroDevtoolsCloseSyncRegistered = true;
+	window.libroElectron.onWebviewDevToolsClosed(function(targetId) {
+		var numericTargetId = Number(targetId) || 0;
+		if (!numericTargetId) return;
+		var webviews = document.querySelectorAll('webview[data-webview-app]');
+		for (var i = 0; i < webviews.length; i++) {
+			var wv = webviews[i];
+			var webviewId = 0;
+			try { webviewId = Number(wv.getWebContentsId ? wv.getWebContentsId() : 0) || 0; } catch (err) {}
+			if (webviewId !== numericTargetId) continue;
+			var appID = wv.getAttribute('data-webview-app') || '';
+			if (appID) setDevtoolsPanelVisible(appID, false);
+			break;
+		}
+	});
 }
 
 function getOrCreateSearchBar(appID) {
@@ -506,6 +544,13 @@ function setDevtoolsPanelVisible(appID, visible) {
 			closeBtn.classList.remove('inline-flex');
 		}
 	}
+	if (visible) startDevtoolsBoundsSync(appID);
+	else stopDevtoolsBoundsSync(appID);
+}
+
+function isDevtoolsPanelVisible(appID) {
+	var panel = document.getElementById('devtools-panel-' + appID);
+	return !!(panel && !panel.classList.contains('hidden') && panel.getClientRects && panel.getClientRects().length);
 }
 
 function devtoolsPanelBounds(appID) {
@@ -528,11 +573,18 @@ function devtoolsPanelBounds(appID) {
 	};
 }
 
-function updateDevtoolsBounds(appID) {
+function sameDevtoolsBounds(a, b) {
+	return !!(a && b && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height);
+}
+
+function updateDevtoolsBounds(appID, force) {
 	var wv = window.__libroWebviews[appID];
 	var targetId = webviewContentsID(wv);
 	var bounds = devtoolsPanelBounds(appID);
 	if (!targetId || !bounds || !window.libroElectron || typeof window.libroElectron.updateWebviewDevToolsBounds !== 'function') return;
+	var syncer = devtoolsPanelSyncers[appID];
+	if (!force && syncer && sameDevtoolsBounds(syncer.lastBounds, bounds)) return;
+	if (syncer) syncer.lastBounds = bounds;
 	window.libroElectron.updateWebviewDevToolsBounds(targetId, bounds);
 }
 
@@ -545,6 +597,38 @@ function observeDevtoolsPanel(appID) {
 	});
 	observer.observe(panel);
 	devtoolsPanelObservers[appID] = observer;
+}
+
+function startDevtoolsBoundsSync(appID) {
+	if (!window.requestAnimationFrame) {
+		updateDevtoolsBounds(appID, true);
+		return;
+	}
+	var syncer = devtoolsPanelSyncers[appID];
+	if (syncer && syncer.running) return;
+	syncer = syncer || {};
+	syncer.running = true;
+	syncer.lastBounds = null;
+	devtoolsPanelSyncers[appID] = syncer;
+	updateDevtoolsBounds(appID, true);
+	function tick() {
+		var current = devtoolsPanelSyncers[appID];
+		if (!current || !current.running) return;
+		if (isDevtoolsPanelVisible(appID)) updateDevtoolsBounds(appID, false);
+		current.rafId = window.requestAnimationFrame(tick);
+	}
+	syncer.rafId = window.requestAnimationFrame(tick);
+}
+
+function stopDevtoolsBoundsSync(appID) {
+	var syncer = devtoolsPanelSyncers[appID];
+	if (!syncer) return;
+	syncer.running = false;
+	syncer.lastBounds = null;
+	if (syncer.rafId && window.cancelAnimationFrame) {
+		window.cancelAnimationFrame(syncer.rafId);
+	}
+	syncer.rafId = 0;
 }
 
 function focusIfSelected(appID, wv) {
@@ -591,6 +675,8 @@ function initWebview(wv) {
 						try { devtoolsPanelObservers[oldAppID].disconnect(); } catch (err) {}
 						delete devtoolsPanelObservers[oldAppID];
 					}
+					stopDevtoolsBoundsSync(oldAppID);
+					delete devtoolsPanelSyncers[oldAppID];
 					delete window.__libroWebviews[oldAppID];
 					delete initialized[oldAppID];
 					delete ready[oldAppID];
@@ -673,7 +759,7 @@ function bindWebviewEvents(wv) {
 		else if (msg === '__libro:findprev') findInPagePrev(appID);
 		else if (msg === '__libro:searchclear') clearSearch(appID);
 		else if (msg === '__libro:enter') handleEnter(appID);
-		else if (msg === '__libro:console') window.__libroOpenConsole(appID);
+		else if (msg === '__libro:console') window.__libroToggleConsole(appID);
 		else if (msg === '__libro:copyurl') {
 			var inp = document.getElementById('urlinput-' + appID);
 			if (inp && navigator.clipboard) navigator.clipboard.writeText(inp.value);
@@ -776,6 +862,8 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 							try { devtoolsPanelObservers[id].disconnect(); } catch (err) {}
 							delete devtoolsPanelObservers[id];
 						}
+						stopDevtoolsBoundsSync(id);
+						delete devtoolsPanelSyncers[id];
 						delete window.__libroWebviews[id];
 						delete initialized[id];
 						delete ready[id];
@@ -790,6 +878,8 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 						try { devtoolsPanelObservers[id].disconnect(); } catch (err) {}
 						delete devtoolsPanelObservers[id];
 					}
+					stopDevtoolsBoundsSync(id);
+					delete devtoolsPanelSyncers[id];
 					delete window.__libroWebviews[id];
 					delete initialized[id];
 					delete ready[id];

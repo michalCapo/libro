@@ -43,5 +43,11 @@ contextBridge.exposeInMainWorld('libroElectron', {
   },
   copyToClipboard: function (text) {
     ipcRenderer.send('libro-copy-clipboard', text)
+  },
+  onWebviewDevToolsClosed: function (callback) {
+    if (typeof callback !== 'function') return
+    ipcRenderer.on('libro-webview-devtools-closed', (_event, webContentsId) => {
+      callback(webContentsId)
+    })
   }
 })
