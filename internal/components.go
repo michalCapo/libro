@@ -1567,6 +1567,17 @@ func searchDialogJS(sid string) string {
 	var res=document.getElementById('search-results');
 	var selIdx=0;
 	var filtered=[];
+	var hoverEnabled=false;
+
+	function armHoverAfterPointerMove(){
+		hoverEnabled=false;
+		if(!dlg)return;
+		var enableHover=function(){
+			hoverEnabled=true;
+			dlg.removeEventListener('mousemove',enableHover,true);
+		};
+		dlg.addEventListener('mousemove',enableHover,true);
+	}
 
 	function fuzzyMatch(text,query){
 		text=text.toLowerCase();query=query.toLowerCase();
@@ -1698,6 +1709,7 @@ func searchDialogJS(sid string) string {
 				}
 			}
 			row.onmouseenter=function(){
+				if(!hoverEnabled)return;
 				if(selIdx===i)return;
 				var prev=res.children[selIdx];
 				if(prev)prev.className=prev.className.replace(/bg-blue-900\/30|bg-blue-50/g,'').replace(/border-blue-500/g,'border-transparent')+(dk?' hover:bg-zinc-800':' hover:bg-gray-50');
@@ -1719,6 +1731,7 @@ func searchDialogJS(sid string) string {
 		addRow.innerHTML='<i class="material-icons-round text-emerald-500 text-lg shrink-0">add_circle</i>'
 			+'<div class="flex-1 min-w-0"><div class="text-sm '+addTxtCls+'">Add new application</div></div>';
 		addRow.onmouseenter=function(){
+			if(!hoverEnabled)return;
 			if(selIdx===filtered.length)return;
 			var prev=res.children[selIdx];
 			if(prev)prev.className=prev.className.replace(/bg-blue-900\/30|bg-blue-50/g,'').replace(/border-blue-500/g,'border-transparent')+(dk?' hover:bg-zinc-800':' hover:bg-gray-50');
@@ -1885,12 +1898,14 @@ func searchDialogJS(sid string) string {
 		dlg.classList.remove('hidden');
 		inp.value='';
 		filter();
+		armHoverAfterPointerMove();
 		setTimeout(function(){inp.focus();},50);
 	}
 
 	function closeSearch(){
 		dlg.classList.add('hidden');
 		inp.value='';
+		hoverEnabled=false;
 	}
 
 	inp.addEventListener('input',filter);
@@ -1981,6 +1996,9 @@ func urlPopupJS(sid string) string {
 			selectedIdx=-1;
 			return;
 		}
+		if(selectedIdx<0||selectedIdx>=filteredURLs.length){
+			selectedIdx=0;
+		}
 		var dk=document.documentElement.classList.contains('dark');
 		var html='<div class="border-t border-gray-100 dark:border-zinc-800 py-1">';
 		for(var i=0;i<filteredURLs.length&&i<20;i++){
@@ -2029,7 +2047,7 @@ func urlPopupJS(sid string) string {
 		if(inp){
 			inp.value=currentUrl;
 		}
-		selectedIdx=-1;
+		selectedIdx=0;
 		originalQuery='';
 		renderHistory('');
 		setTimeout(function(){var i=getInp();if(i){i.focus();i.select();}},50);
@@ -2073,7 +2091,7 @@ func urlPopupJS(sid string) string {
 	var inp=getInp();
 	if(inp){
 		inp.addEventListener('input',function(){
-			selectedIdx=-1;
+			selectedIdx=0;
 			originalQuery=inp.value;
 			renderHistory(inp.value);
 		});
@@ -2198,6 +2216,17 @@ func commandPopupJS(sid string) string {
 	var res=document.getElementById('command-popup-results');
 	var selIdx=0;
 	var filtered=[];
+	var hoverEnabled=false;
+
+	function armHoverAfterPointerMove(){
+		hoverEnabled=false;
+		if(!dlg)return;
+		var enableHover=function(){
+			hoverEnabled=true;
+			dlg.removeEventListener('mousemove',enableHover,true);
+		};
+		dlg.addEventListener('mousemove',enableHover,true);
+	}
 
 	function fuzzyMatch(text,query){
 		text=(text||'').toLowerCase();query=(query||'').toLowerCase();
@@ -2320,6 +2349,7 @@ func commandPopupJS(sid string) string {
 				+'<div class="text-[11px] truncate '+subCls+'">'+cmd.label+'</div></div>'
 				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">'+cmd.scope+'</span>';
 			row.onmouseenter=function(){
+				if(!hoverEnabled)return;
 				if(selIdx===i)return;
 				selIdx=i;
 				render();
@@ -2357,12 +2387,14 @@ func commandPopupJS(sid string) string {
 		dlg.classList.remove('hidden');
 		inp.value='';
 		filter();
+		armHoverAfterPointerMove();
 		setTimeout(function(){inp.focus();},50);
 	}
 
 	function closePalette(){
 		dlg.classList.add('hidden');
 		inp.value='';
+		hoverEnabled=false;
 	}
 
 	inp.addEventListener('input',filter);
@@ -2443,13 +2475,8 @@ func resizePopupJS(sid string) string {
 		if(!dlg)return;
 		var contentArea=document.querySelector('[data-app-content="'+appId+'"]');
 		if(contentArea)contentArea.appendChild(dlg);
-		var curWidth=getCurrentWidth(appId);
 		var btns=getBtns();
-		var idx=0;
-		btns.forEach(function(b,i){
-			if(b.getAttribute('data-resize-width')===curWidth)idx=i;
-		});
-		highlightFocused(idx);
+		if(btns.length>0)highlightFocused(0);
 		dlg.classList.remove('hidden');
 		setTimeout(function(){dlg.focus();},50);
 	}
@@ -2817,10 +2844,22 @@ func worktreePickerPopupJS(sid string) string {
 (function(){
 	var selectedIdx=0;
 	var filtered=[];
+	var hoverEnabled=false;
 
 	function getDlg(){return document.getElementById('%s');}
 	function getInp(){return document.getElementById('worktree-picker-input');}
 	function getResults(){return document.getElementById('worktree-picker-results');}
+
+	function armHoverAfterPointerMove(){
+		hoverEnabled=false;
+		var dlg=getDlg();
+		if(!dlg)return;
+		var enableHover=function(){
+			hoverEnabled=true;
+			dlg.removeEventListener('mousemove',enableHover,true);
+		};
+		dlg.addEventListener('mousemove',enableHover,true);
+	}
 
 	function fuzzyMatch(text,query){
 		text=(text||'').toLowerCase();
@@ -2863,6 +2902,7 @@ func worktreePickerPopupJS(sid string) string {
 		res.innerHTML=html;
 		res.querySelectorAll('[data-worktree-idx]').forEach(function(el){
 			el.addEventListener('mouseenter',function(){
+				if(!hoverEnabled)return;
 				var idx=parseInt(el.getAttribute('data-worktree-idx'),10);
 				if(!Number.isNaN(idx)&&idx!==selectedIdx){
 					selectedIdx=idx;
@@ -2905,6 +2945,7 @@ func worktreePickerPopupJS(sid string) string {
 		var inp=getInp();
 		if(dlg)dlg.classList.add('hidden');
 		if(inp)inp.value='';
+		hoverEnabled=false;
 	}
 
 	function launch(){
@@ -2921,6 +2962,7 @@ func worktreePickerPopupJS(sid string) string {
 		dlg.classList.remove('hidden');
 		inp.value='';
 		filter();
+		armHoverAfterPointerMove();
 		setTimeout(function(){inp.focus();},50);
 	}
 
