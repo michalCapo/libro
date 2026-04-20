@@ -614,7 +614,10 @@ func (sm *StateManager) ClearClosedProjectApps(sessionID string) (string, bool) 
 	return projectName, ok && snap != nil && len(snap.Apps) > 0
 }
 
-// TakeClosedProjectApps returns and clears the last remembered closed apps for the active project.
+// TakeClosedProjectApps returns the last remembered closed apps for the active
+// project without clearing the persisted snapshot. The reopen action should stay
+// available across restarts until the user explicitly saves a new snapshot or
+// clears it.
 func (sm *StateManager) TakeClosedProjectApps(sessionID string) (string, *projectSnapshot) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -627,8 +630,6 @@ func (sm *StateManager) TakeClosedProjectApps(sessionID string) (string, *projec
 	if !ok || snap == nil || len(snap.Apps) == 0 {
 		return projectName, nil
 	}
-	delete(s.closedSnapshots, projectName)
-	DBClearClosedProjectApps(projectName)
 	return projectName, &projectSnapshot{
 		Apps:          cloneApplications(snap.Apps),
 		SelectedIndex: snap.SelectedIndex,
