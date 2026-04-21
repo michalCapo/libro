@@ -2475,8 +2475,13 @@ func resizePopupJS(sid string) string {
 		if(!dlg)return;
 		var contentArea=document.querySelector('[data-app-content="'+appId+'"]');
 		if(contentArea)contentArea.appendChild(dlg);
+		var curWidth=getCurrentWidth(appId);
 		var btns=getBtns();
-		if(btns.length>0)highlightFocused(0);
+		var idx=0;
+		btns.forEach(function(b,i){
+			if(b.getAttribute('data-resize-width')===curWidth)idx=i;
+		});
+		if(btns.length>0)highlightFocused(idx);
 		dlg.classList.remove('hidden');
 		setTimeout(function(){dlg.focus();},50);
 	}
