@@ -845,7 +845,6 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		return r.NewResponse().
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Add(worktreesJS(state)).
 			Build()
 	})
 
@@ -876,6 +875,10 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		isActive := state.ActiveProject == project
 		isParentOfActive := false
+		closeDevtoolsJS := ""
+		if !isActive {
+			closeDevtoolsJS = closeDevtoolsForAppsJS(state.Apps)
+		}
 		for _, p := range state.Projects {
 			if p.Virtual && p.ParentProject == project && p.Name == state.ActiveProject {
 				isParentOfActive = true
@@ -902,6 +905,7 @@ func Run(assets embed.FS) {
 		return r.NewResponse().
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
+			Add(closeDevtoolsJS).
 			Add(jsSwitch).
 			Add(updateHashJS(project)).
 			Add(focusSelectedAppJS(state)).
@@ -934,10 +938,7 @@ func Run(assets embed.FS) {
 		}
 
 		prevState := sm.Get(sid)
-		prevAppID := ""
-		if prevState.SelectedIndex >= 0 && prevState.SelectedIndex < len(prevState.Apps) {
-			prevAppID = prevState.Apps[prevState.SelectedIndex].ID
-		}
+		closeDevtoolsJS := closeDevtoolsForAppsJS(prevState.Apps)
 
 		// Branch shortcuts can exist before their virtual project has been created
 		// in the current session. Resolve the matching worktree lazily.
@@ -976,7 +977,7 @@ func Run(assets embed.FS) {
 		return r.NewResponse().
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(closeDevtoolsForAppJS(prevAppID)).
+			Add(closeDevtoolsJS).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
@@ -1061,6 +1062,7 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		return r.NewResponse().
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(worktreesJS(state)).
 			Build()
 	})
 
@@ -1077,6 +1079,7 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		return r.NewResponse().
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(worktreesJS(state)).
 			Build()
 	})
 
@@ -1297,6 +1300,8 @@ func Run(assets embed.FS) {
 			return ""
 		}
 		sm.OpenProjectTree(sid, parentProject)
+		prevState := sm.Get(sid)
+		closeDevtoolsJS := closeDevtoolsForAppsJS(prevState.Apps)
 
 		vtName := parentProject + "/" + branch
 
@@ -1319,6 +1324,7 @@ func Run(assets embed.FS) {
 		return r.NewResponse().
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
+			Add(closeDevtoolsJS).
 			Add(jsSwitch).
 			Add(updateHashJS(vtName)).
 			Add(focusSelectedAppJS(state)).
@@ -1330,13 +1336,17 @@ func Run(assets embed.FS) {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		parentProject, _ := data["project"].(string)
+		sourcePath, _ := data["sourcePath"].(string)
 		branch, _ := data["branch"].(string)
 		branch = strings.TrimSpace(branch)
 		if parentProject == "" || branch == "" {
 			return r.Notify("error", "Branch name is required")
 		}
 
-		projectPath := sm.GetProjectPath(sid, parentProject)
+		projectPath := strings.TrimSpace(sourcePath)
+		if projectPath == "" {
+			projectPath = sm.GetProjectPath(sid, parentProject)
+		}
 		if projectPath == "" {
 			return r.Notify("error", "Project not found")
 		}
@@ -1351,6 +1361,7 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		return r.NewResponse().
 			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(worktreesJS(state)).
 			Build()
 	})
 

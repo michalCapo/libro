@@ -1241,6 +1241,27 @@ func closeDevtoolsForAppJS(appID string) string {
 })();`, jsString(appID))
 }
 
+// closeDevtoolsForAppsJS closes Electron devtools overlays for all apps in a project
+// before that project's DOM is hidden during a project/worktree switch.
+func closeDevtoolsForAppsJS(apps []Application) string {
+	if len(apps) == 0 {
+		return ""
+	}
+	seen := make(map[string]struct{}, len(apps))
+	js := ""
+	for _, app := range apps {
+		if app.ID == "" {
+			continue
+		}
+		if _, ok := seen[app.ID]; ok {
+			continue
+		}
+		seen[app.ID] = struct{}{}
+		js += closeDevtoolsForAppJS(app.ID)
+	}
+	return js
+}
+
 // focusSelectedAppJS returns JS that focuses the selected app's iframe after a short delay
 // and updates the tracked selected app ID for shortcut handlers.
 func focusSelectedAppJS(state *AppState) string {
@@ -2487,10 +2508,14 @@ func resizePopupJS(sid string) string {
 	}
 
 	function closePopup(){
+		var appId=currentAppId;
 		var dlg=getDlg();
 		if(dlg)dlg.classList.add('hidden');
 		currentAppId='';
 		focusedIndex=-1;
+		if(appId&&window.__libroFocusAppByID){
+			setTimeout(function(){window.__libroFocusAppByID(appId);},0);
+		}
 	}
 
 	function confirmSelection(){
@@ -2759,6 +2784,8 @@ func worktreeCreatePopupJS(sid string) string {
 	return fmt.Sprintf(`
 (function(){
 	var currentProject='';
+	var currentSourcePath='';
+	var currentSourceBranch='';
 
 	function getDlg(){return document.getElementById('%s');}
 	function getInp(){return document.getElementById('worktree-create-input');}
@@ -2770,24 +2797,33 @@ func worktreeCreatePopupJS(sid string) string {
 		if(dlg)dlg.classList.add('hidden');
 		if(inp)inp.value='';
 		currentProject='';
+		currentSourcePath='';
+		currentSourceBranch='';
 	}
 
 	function createWorktree(){
 		var inp=getInp();
 		var branch=inp?inp.value.trim():'';
 		if(!currentProject||!branch)return;
+		__ws.call('worktree.add',{sid:'%s',project:currentProject,sourcePath:currentSourcePath,sourceBranch:currentSourceBranch,branch:branch});
 		closePopup();
-		__ws.call('worktree.add',{sid:'%s',project:currentProject,branch:branch});
 	}
 
-	function openPopup(project){
+	function openPopup(project,sourcePath,sourceBranch){
+		if(project&&typeof project==='object'){
+			sourceBranch=project.branch||'';
+			sourcePath=project.path||'';
+			project=project.project||'';
+		}
 		if(!project)return;
 		currentProject=project;
+		currentSourcePath=sourcePath||'';
+		currentSourceBranch=sourceBranch||'';
 		var dlg=getDlg();
 		var inp=getInp();
 		var title=getTitle();
 		if(!dlg||!inp||!title)return;
-		title.textContent='New Worktree — '+project;
+		title.textContent='New Worktree — '+project+(currentSourceBranch?' / '+currentSourceBranch:'');
 		inp.value='';
 		dlg.classList.remove('hidden');
 		setTimeout(function(){inp.focus();},50);
@@ -3298,8 +3334,13 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 			if(window.__libroScrollToApp)window.__libroScrollToApp(el);
 		}, 80);
 	});
+	if((window.__libroSelectedApp||'')==='%s'&&window.__libroFocusAppByID){
+		window.__libroFocusAppByID('%s');
+		setTimeout(function(){window.__libroFocusAppByID('%s');},40);
+		setTimeout(function(){window.__libroFocusAppByID('%s');},120);
+	}
 })();
-`, appID, widthMap, string(width))
+`, appID, widthMap, string(width), appID, appID, appID, appID)
 }
 
 // renderProjectBar renders the horizontal project switcher bar
@@ -3805,7 +3846,7 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 					}
 					wtAdd := r.Button(wtAddCls).
 						Attr("title", "Add worktree").
-						Attr("onclick", fmt.Sprintf("event.stopPropagation();if(window.__libroOpenWorktreeCreatePopup)window.__libroOpenWorktreeCreatePopup(%s);", jsString(proj.Name))).
+						Attr("onclick", fmt.Sprintf("event.stopPropagation();if(window.__libroOpenWorktreeCreatePopup)window.__libroOpenWorktreeCreatePopup({project:%s,path:%s,branch:%s});", jsString(proj.Name), jsString(wt.Path), jsString(wt.Branch))).
 						Render(r.I("material-icons-round text-[12px]").Text("add"))
 
 					wtLeadingCls := "relative flex items-center justify-center w-4 h-4 shrink-0"
@@ -4179,6 +4220,27 @@ func keyboardShortcutsJS(sid string) string {
 				setTimeout(focusAttempt, 40);
 				setTimeout(focusAttempt, 120);
 				setTimeout(focusAttempt, 260);
+			};
+
+			window.__libroFocusAppByID = function(appID) {
+				if (!appID) return;
+				var strips = document.querySelectorAll('[id^="app-strip-"]');
+				var strip = null;
+				for (var s = 0; s < strips.length; s++) {
+					var parent = strips[s].closest('[id^="project-main-"]');
+					if (parent && parent.style.display !== 'none') {
+						strip = strips[s];
+						break;
+					}
+				}
+				if (!strip) return;
+				var sorted = window.__libroSortedApps(strip);
+				for (var i = 0; i < sorted.length; i++) {
+					if ((sorted[i].getAttribute('data-app-id') || '') === appID) {
+						window.__libroFocusApp(i);
+						return;
+					}
+				}
 			};
 
 			window.__libroMoveSelectedApp = function(direction) {
