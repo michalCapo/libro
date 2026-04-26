@@ -76,10 +76,7 @@ func Run(assets embed.FS) {
 		restored := make([]Application, 0, len(snap.Apps))
 		skipped := make([]string, 0)
 		restoredSelectedIndex := snap.SelectedIndex
-		originalSelectedIndex := snap.SelectedIndex
-		if originalSelectedIndex < 0 {
-			originalSelectedIndex = 0
-		}
+		originalSelectedIndex := max(snap.SelectedIndex, 0)
 		if originalSelectedIndex >= len(snap.Apps) {
 			originalSelectedIndex = len(snap.Apps) - 1
 		}
