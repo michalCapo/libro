@@ -86,38 +86,6 @@ func GitListWorktrees(repoPath string) ([]Worktree, error) {
 	return worktrees, nil
 }
 
-// GitAddWorktree creates a new worktree at targetPath for the given branch.
-// If the branch doesn't exist, it creates a new branch.
-func GitAddWorktree(repoPath, branch, targetPath string) error {
-	if !GitAvailable() {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Try to add worktree for existing branch first
-	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "worktree", "add", targetPath, branch)
-	if err := cmd.Run(); err != nil {
-		// Branch might not exist, try creating it
-		ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel2()
-		cmd2 := exec.CommandContext(ctx2, "git", "-C", repoPath, "worktree", "add", "-b", branch, targetPath)
-		return cmd2.Run()
-	}
-	return nil
-}
-
-// GitRemoveWorktree removes a worktree at the given path.
-func GitRemoveWorktree(repoPath, worktreePath string) error {
-	if !GitAvailable() {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "worktree", "remove", worktreePath)
-	return cmd.Run()
-}
-
 // GitListBranches returns all local branch names for the repository at repoPath.
 func GitListBranches(repoPath string) ([]string, error) {
 	if !GitAvailable() {
