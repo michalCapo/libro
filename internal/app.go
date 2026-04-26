@@ -3,8 +3,9 @@ package libro
 
 import (
 	"embed"
-	"encoding/json"
 	"fmt"
+	"libro/internal/components"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,13 +14,6 @@ import (
 
 	r "github.com/michalCapo/g-sui/ui"
 )
-
-// jsString returns a JSON-encoded string safe for embedding in JavaScript.
-// It includes the surrounding quotes.
-func jsString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
-}
 
 // dbSaveApp persists an app definition to the database for the given project.
 // If editDBID > 0, it updates the app with that DB ID; otherwise it appends.
@@ -296,9 +290,10 @@ func Run(assets embed.FS) {
 		side, _ := data["side"].(string)
 		// Compute insertion index relative to currently selected app
 		insertIdx := -1 // default: append
-		if side == "left" {
+		switch side {
+		case "left":
 			insertIdx = sm.SelectedIndex(sid)
-		} else if side == "right" {
+		case "right":
 			insertIdx = sm.SelectedIndex(sid) + 1
 		}
 
@@ -604,9 +599,10 @@ func Run(assets embed.FS) {
 		side, _ := data["side"].(string)
 		// Compute insertion index relative to currently selected app
 		insertIdx := -1 // default: append
-		if side == "left" {
+		switch side {
+		case "left":
 			insertIdx = sm.SelectedIndex(sid)
-		} else if side == "right" {
+		case "right":
 			insertIdx = sm.SelectedIndex(sid) + 1
 		}
 
@@ -655,9 +651,10 @@ func Run(assets embed.FS) {
 		}
 
 		insertIdx := -1
-		if side == "left" {
+		switch side {
+		case "left":
 			insertIdx = sm.SelectedIndex(sid)
-		} else if side == "right" {
+		case "right":
 			insertIdx = sm.SelectedIndex(sid) + 1
 		}
 
@@ -721,7 +718,7 @@ func Run(assets embed.FS) {
 		// Navigate webview and persist URL to DB
 		state := sm.Get(sid)
 		dbUpdateAppURL(state.ActiveProject, idx, newURL)
-		return fmt.Sprintf(`(function(){window.__libroWvNavigate(%s,%s);var inp=document.getElementById('urlinput-'+%s);if(inp)inp.value=%s;})();`, jsString(appID), jsString(newURL), jsString(appID), jsString(newURL))
+		return fmt.Sprintf(`(function(){window.__libroWvNavigate(%s,%s);var inp=document.getElementById('urlinput-'+%s);if(inp)inp.value=%s;})();`, components.JSString(appID), components.JSString(newURL), components.JSString(appID), components.JSString(newURL))
 	})
 
 	// Delete single history item
@@ -732,7 +729,7 @@ func Run(assets embed.FS) {
 			return ""
 		}
 		DBDeleteBrowsedURL(urlStr)
-		return fmt.Sprintf(`(function(){var u=%s;window.__libroBrowsedURLs=window.__libroBrowsedURLs.filter(function(x){return x!==u;});if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}})();`, jsString(urlStr))
+		return fmt.Sprintf(`(function(){var u=%s;window.__libroBrowsedURLs=window.__libroBrowsedURLs.filter(function(x){return x!==u;});if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}})();`, components.JSString(urlStr))
 	})
 
 	// Clear browsing history
@@ -749,7 +746,7 @@ func Run(assets embed.FS) {
 			return ""
 		}
 		DBDeleteRunCommand(command)
-		return fmt.Sprintf(`(function(){var c=%s;window.__libroRunCommands=(window.__libroRunCommands||[]).filter(function(x){return x!==c;});if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}})();`, jsString(command))
+		return fmt.Sprintf(`(function(){var c=%s;window.__libroRunCommands=(window.__libroRunCommands||[]).filter(function(x){return x!==c;});if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}})();`, components.JSString(command))
 	})
 
 	// Clear run history
@@ -1247,7 +1244,7 @@ func Run(assets embed.FS) {
 		// Build tree HTML: project > apps
 		var html strings.Builder
 		for _, pa := range projectApps {
-			html.WriteString(fmt.Sprintf(`<div class="mb-2"><div class="flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-1"><span class="material-icons-round text-sm">folder</span>%s</div>`, pa.Name))
+			fmt.Fprintf(&html, `<div class="mb-2"><div class="flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-1"><span class="material-icons-round text-sm">folder</span>%s</div>`, pa.Name)
 			for _, a := range pa.Apps {
 				icon := "language"
 				label := a.Name
@@ -1261,13 +1258,13 @@ func Run(assets embed.FS) {
 						label = a.URL
 					}
 				}
-				html.WriteString(fmt.Sprintf(`<div class="flex items-center gap-1.5 ml-5 py-0.5 text-xs text-gray-500 dark:text-zinc-500"><span class="material-icons-round text-xs">%s</span><span class="truncate">%s</span></div>`, icon, label))
+				fmt.Fprintf(&html, `<div class="flex items-center gap-1.5 ml-5 py-0.5 text-xs text-gray-500 dark:text-zinc-500"><span class="material-icons-round text-xs">%s</span><span class="truncate">%s</span></div>`, icon, label)
 			}
 			html.WriteString(`</div>`)
 		}
 
 		return fmt.Sprintf(`(function(){var el=document.getElementById('close-dialog-apps');if(el)el.innerHTML=%s;document.getElementById('%s').classList.remove('hidden');var cb=document.getElementById('close-dialog-confirm');if(cb)cb.focus();})();`,
-			jsString(html.String()), CloseDialogID)
+			components.JSString(html.String()), CloseDialogID)
 	})
 
 	// Close all running apps — the client handles window close separately
@@ -1411,7 +1408,9 @@ func Run(assets embed.FS) {
 	})
 
 	registerTtydProxy(app)
-	app.Listen(":" + Port())
+	if err := app.Listen(":" + Port()); err != nil {
+		log.Printf("libro: app.Listen on :%s failed: %v", Port(), err)
+	}
 }
 
 // ensureScheme adds http:// for local URLs and https:// for everything else.
