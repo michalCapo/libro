@@ -13,6 +13,7 @@ import (
 
 	r "github.com/michalCapo/g-sui/ui"
 
+	"libro/internal/components"
 	"libro/internal/version"
 )
 
@@ -3822,22 +3823,31 @@ func renderAppCountBadge(count int, active bool) *r.Node {
 	return r.Span(cls).Text(fmt.Sprintf("%d", count))
 }
 
-// renderProjectSidebar renders the left sidebar with project tree and worktrees.
+// renderProjectSidebar builds the input from session state and delegates
+// rendering to the components subpackage.
 func renderProjectSidebar(state *AppState, sid string) *r.Node {
-	if state.SidebarCollapsed {
-		return r.Div("w-0 shrink-0 overflow-hidden").ID(SidebarID)
+	in := components.SidebarInput{
+		Sid:       sid,
+		SidebarID: SidebarID,
+		Collapsed: state.SidebarCollapsed,
+	}
+	if in.Collapsed {
+		return components.Sidebar(in)
 	}
 
-	items := make([]*r.Node, 0, len(state.Projects)+1)
+	for _, p := range state.Projects {
+		if p.Name == state.ActiveProject {
+			in.ActivePath = p.Path
+			break
+		}
+	}
 
 	for _, proj := range state.Projects {
-		// Skip virtual projects — they're shown as worktree sub-items under their parent
 		if proj.Virtual {
 			continue
 		}
 
 		isActive := proj.Name == state.ActiveProject
-		// Also check if active project is a virtual child of this project
 		isParentOfActive := false
 		for _, p := range state.Projects {
 			if p.Virtual && p.ParentProject == proj.Name && p.Name == state.ActiveProject {
@@ -3846,261 +3856,92 @@ func renderProjectSidebar(state *AppState, sid string) *r.Node {
 			}
 		}
 
-		// Project row
-		projCls := "w-full flex items-center gap-2 px-3 py-2 text-sm font-mono rounded-md cursor-pointer transition-colors duration-75 "
-		if isActive || isParentOfActive {
-			projCls += "bg-blue-600 text-white"
-		} else {
-			projCls += "text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-800"
-		}
-
-		iconName := "folder"
-		if proj.IsGitRepo {
-			iconName = "source"
-		}
-
-		worktrees, worktreeErr := []Worktree(nil), error(nil)
 		hasBranchRows := proj.IsGitRepo && GitAvailable()
 		treeOpen := state.ProjectTreeOpen != nil && state.ProjectTreeOpen[proj.Name]
-		if treeOpen && hasBranchRows {
-			worktrees, worktreeErr = GitListWorktrees(proj.Path)
-		}
 
-		projBtn := r.Button("flex-1 min-w-0 flex items-center gap-2 text-left").
-			Attr("title", proj.Path).
-			Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('project.header.click',{sid:'%s',project:'%s'});", sid, proj.Name))
-
-		projLeadingCls := "relative flex items-center justify-center w-5 h-5 shrink-0"
-		projLeadingChildren := []*r.Node{
-			r.I("material-icons-round text-base shrink-0").Text(iconName),
+		row := components.SidebarProject{
+			Name:             proj.Name,
+			Path:             proj.Path,
+			IsGitRepo:        proj.IsGitRepo,
+			HasWorktreesUI:   hasBranchRows,
+			TreeOpen:         treeOpen,
+			IsActive:         isActive,
+			IsParentOfActive: isParentOfActive,
+			Removable:        proj.Name != "home",
 		}
-		if proj.Name != "home" {
-			removeCls := "absolute inset-0 flex items-center justify-center rounded cursor-pointer opacity-0 group-hover/projitem:opacity-100 transition-opacity duration-75 "
-			iconCls := "material-icons-round text-[14px]"
-			if isActive || isParentOfActive {
-				removeCls += "text-blue-200 hover:text-white hover:bg-white/15"
-			} else {
-				removeCls += "text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10"
-			}
-			projLeadingChildren[0] = r.I("material-icons-round text-base shrink-0 group-hover/projitem:opacity-0 transition-opacity duration-75").Text(iconName)
-			projLeadingChildren = append(projLeadingChildren,
-				r.Button(removeCls).
-					Attr("title", "Remove project").
-					Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('project.remove',{sid:'%s',name:'%s'});", sid, proj.Name)).
-					Render(r.I(iconCls).Text("close")),
-			)
-		}
-
-		btnChildren := []*r.Node{
-			r.Span(projLeadingCls).Render(projLeadingChildren...),
-			r.Span("truncate flex-1 text-left").Text(proj.Name),
-		}
-
-		// Running app count badge for non-git projects (git repos show counts on worktree sub-items)
 		if !proj.IsGitRepo {
-			if badge := renderAppCountBadge(runningAppCount(state, proj.Name), isActive || isParentOfActive); badge != nil {
-				btnChildren = append(btnChildren, badge)
+			row.AppCount = runningAppCount(state, proj.Name)
+		}
+
+		if treeOpen && hasBranchRows {
+			worktrees, err := GitListWorktrees(proj.Path)
+			if err == nil {
+				row.Worktrees = buildWorktreeRows(state, sid, proj, isActive, worktrees)
 			}
 		}
-		projBtn.Render(btnChildren...)
-		projControls := []*r.Node{}
-		if hasBranchRows {
-			toggleCls := "inline-flex items-center justify-center w-4 h-4 rounded shrink-0 cursor-pointer transition-colors duration-75 "
-			if isActive || isParentOfActive {
-				toggleCls += "text-blue-200 hover:bg-white/15 hover:text-white"
-			} else {
-				toggleCls += "text-gray-400 dark:text-zinc-600 hover:bg-gray-200 dark:hover:bg-zinc-800 hover:text-gray-700 dark:hover:text-zinc-300"
+
+		in.Projects = append(in.Projects, row)
+	}
+
+	return components.Sidebar(in)
+}
+
+func buildWorktreeRows(state *AppState, sid string, proj Project, projActive bool, worktrees []Worktree) []components.SidebarWorktree {
+	out := make([]components.SidebarWorktree, 0, len(worktrees))
+	for _, wt := range worktrees {
+		if wt.IsBare {
+			continue
+		}
+
+		vtName := proj.Name + "/" + wt.Branch
+		isMain := wt.Path == proj.Path
+		isWtActive := state.ActiveProject == vtName || (isMain && projActive)
+
+		appProject := vtName
+		if isMain {
+			appProject = proj.Name
+		}
+
+		slotName := vtName
+		switch {
+		case isMain:
+			slotName = proj.Name
+		case isWtActive && state.ActiveProject != "":
+			slotName = state.ActiveProject
+		default:
+			for _, sp := range state.Projects {
+				if sp.Virtual && sp.ParentProject == proj.Name && sp.Path == wt.Path {
+					slotName = sp.Name
+					break
+				}
 			}
-			toggleIcon := "chevron_right"
-			if treeOpen {
-				toggleIcon = "expand_more"
-			}
-			projControls = append(projControls,
-				r.Button(toggleCls).
-					Attr("title", "Toggle worktrees").
-					Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('project.worktrees.toggle',{sid:'%s',project:'%s'});", sid, proj.Name)).
-					Render(r.I("material-icons-round text-[14px]").Text(toggleIcon)),
+		}
+
+		var onClick string
+		if isMain {
+			onClick = fmt.Sprintf(
+				"history.replaceState(null,'','#%s');__ws.call('project.switch',{sid:'%s',name:'%s'});",
+				proj.Name, sid, proj.Name,
+			)
+		} else {
+			onClick = fmt.Sprintf(
+				"__ws.call('worktree.switch',{sid:'%s',project:'%s',path:'%s',branch:'%s'});",
+				sid, proj.Name, wt.Path, wt.Branch,
 			)
 		}
-		projItem := r.Div("group/projitem").Render(
-			r.Div(projCls).Render(
-				projBtn,
-				r.Div("ml-2 flex items-center gap-1 shrink-0").Render(projControls...),
-			),
-		)
 
-		// Worktree sub-items for git repos
-		if proj.IsGitRepo && GitAvailable() {
-			if treeOpen && worktreeErr == nil && len(worktrees) > 0 {
-				wtItems := make([]*r.Node, 0, len(worktrees))
-				for _, wt := range worktrees {
-					if wt.IsBare {
-						continue
-					}
-					// Check if this worktree is the active virtual project
-					vtName := proj.Name + "/" + wt.Branch
-					isWtActive := state.ActiveProject == vtName
-					// Also highlight if main worktree path matches project path and project is active
-					isMainWt := wt.Path == proj.Path
-					if isMainWt && isActive {
-						isWtActive = true
-					}
-
-					wtCls := "w-full flex items-center gap-2 pr-3 py-1.5 text-xs font-mono rounded-md cursor-pointer transition-colors duration-75 "
-					if isWtActive {
-						wtCls += "bg-blue-500/20 text-blue-700 dark:text-blue-300"
-					} else {
-						wtCls += "text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-700 dark:hover:text-zinc-300"
-					}
-
-					var wtOnClick string
-					if isMainWt {
-						wtOnClick = fmt.Sprintf(
-							"history.replaceState(null,'','#%s');__ws.call('project.switch',{sid:'%s',name:'%s'});",
-							proj.Name, sid, proj.Name,
-						)
-					} else {
-						wtOnClick = fmt.Sprintf(
-							"__ws.call('worktree.switch',{sid:'%s',project:'%s',path:'%s',branch:'%s'});",
-							sid, proj.Name, wt.Path, wt.Branch,
-						)
-					}
-
-					// Determine running app count for this worktree
-					wtProjectName := vtName
-					if isMainWt {
-						wtProjectName = proj.Name
-					}
-					wtAppCount := runningAppCount(state, wtProjectName)
-
-					// Shortcut badge for worktree. Prefer the canonical session project
-					// name for this path so virtual worktrees render their assigned slot
-					// even if the sidebar row label was reconstructed separately.
-					var wtBadge *r.Node
-					wtSlotName := vtName
-					if isMainWt {
-						wtSlotName = proj.Name
-					} else if isWtActive && state.ActiveProject != "" {
-						wtSlotName = state.ActiveProject
-					} else {
-						for _, sessionProj := range state.Projects {
-							if sessionProj.Virtual && sessionProj.ParentProject == proj.Name && sessionProj.Path == wt.Path {
-								wtSlotName = sessionProj.Name
-								break
-							}
-						}
-					}
-					if wtSlot := sm.GetNavSlotForProject(sid, wtSlotName); wtSlot > 0 {
-						wtBadgeCls := "inline-flex items-center justify-center w-4 min-w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer "
-						if isWtActive {
-							wtBadgeCls += "bg-blue-500 text-blue-100 hover:bg-red-500"
-						} else {
-							wtBadgeCls += "bg-gray-300 dark:bg-zinc-700 text-gray-500 dark:text-zinc-500 hover:bg-red-400 hover:text-white"
-						}
-						wtBadge = r.Span(wtBadgeCls).
-							Attr("title", fmt.Sprintf("Remove shortcut Ctrl+%d", wtSlot)).
-							Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.remove',{sid:'%s',name:'%s'});", sid, wtSlotName)).
-							Text(fmt.Sprintf("%d", wtSlot))
-					} else {
-						addCls := "inline-flex items-center justify-center w-4 min-w-4 h-4 rounded text-[10px] font-bold leading-none shrink-0 cursor-pointer opacity-0 group-hover/wtitem:opacity-100 transition-opacity duration-75 bg-gray-200 dark:bg-zinc-800 text-gray-400 dark:text-zinc-600 hover:bg-blue-400 hover:text-white"
-						wtBadge = r.Span(addCls).
-							Attr("title", "Add shortcut").
-							Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('nav.slot.add',{sid:'%s',name:'%s'});", sid, wtSlotName)).
-							Text("+")
-					}
-
-					wtAddCls := "flex items-center justify-center w-4 h-4 rounded cursor-pointer opacity-0 group-hover/wtitem:opacity-100 transition-opacity duration-75 shrink-0 "
-					if isWtActive {
-						wtAddCls += "text-blue-300 hover:text-white hover:bg-white/15"
-					} else {
-						wtAddCls += "text-gray-400 dark:text-zinc-600 hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10"
-					}
-					wtAdd := r.Button(wtAddCls).
-						Attr("title", "Add worktree").
-						Attr("onclick", fmt.Sprintf("event.stopPropagation();if(window.__libroOpenWorktreeCreatePopup)window.__libroOpenWorktreeCreatePopup({project:%s,path:%s,branch:%s});", jsString(proj.Name), jsString(wt.Path), jsString(wt.Branch))).
-						Render(r.I("material-icons-round text-[12px]").Text("add"))
-
-					wtLeadingCls := "relative flex items-center justify-center w-4 h-4 shrink-0"
-					wtLeadingChildren := []*r.Node{
-						r.I("material-icons-round text-sm shrink-0").Text("alt_route"),
-					}
-					if !isMainWt {
-						iconCls := "material-icons-round text-[12px]"
-						removeCls := "absolute inset-0 flex items-center justify-center rounded cursor-pointer opacity-0 group-hover/wtitem:opacity-100 transition-opacity duration-75 "
-						if isWtActive {
-							removeCls += "text-blue-300 hover:text-white hover:bg-white/15"
-						} else {
-							removeCls += "text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10"
-						}
-						wtLeadingChildren[0] = r.I("material-icons-round text-sm shrink-0 group-hover/wtitem:opacity-0 transition-opacity duration-75").Text("alt_route")
-						wtLeadingChildren = append(wtLeadingChildren,
-							r.Button(removeCls).
-								Attr("title", "Remove worktree").
-								Attr("onclick", fmt.Sprintf("event.stopPropagation();__ws.call('worktree.remove',{sid:'%s',project:'%s',path:'%s'});", sid, proj.Name, wt.Path)).
-								Render(r.I(iconCls).Text("close")),
-						)
-					}
-
-					wtBtnChildren := []*r.Node{
-						r.Span(wtLeadingCls).Render(wtLeadingChildren...),
-						r.Span("truncate flex-1 text-left").Text(wt.Branch),
-					}
-					if badge := renderAppCountBadge(wtAppCount, isWtActive); badge != nil {
-						wtBtnChildren = append(wtBtnChildren, badge)
-					}
-
-					wtBtn := r.Button("flex-1 min-w-0 flex items-center gap-2 text-left").
-						Attr("title", wt.Path).
-						OnClick(r.JS(wtOnClick)).
-						Render(wtBtnChildren...)
-
-					wtItems = append(wtItems,
-						r.Div("group/wtitem").Render(
-							r.Div(wtCls).Render(
-								wtBadge,
-								wtBtn,
-								r.Div("ml-2 flex items-center gap-1 shrink-0").Render(wtAdd),
-							),
-						),
-					)
-				}
-
-				projItem.Render(r.Div("mt-0.5").Render(wtItems...))
-			}
-		}
-
-		items = append(items, projItem)
+		out = append(out, components.SidebarWorktree{
+			Branch:   wt.Branch,
+			Path:     wt.Path,
+			IsMain:   isMain,
+			IsActive: isWtActive,
+			AppCount: runningAppCount(state, appProject),
+			NavSlot:  sm.GetNavSlotForProject(sid, slotName),
+			SlotName: slotName,
+			OnClick:  onClick,
+		})
 	}
-
-	// Add project button
-	items = append(items,
-		r.Button("w-full flex items-center gap-2 px-3 py-2 text-sm font-mono text-gray-400 dark:text-zinc-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-md cursor-pointer transition-colors duration-75 mt-1").
-			OnClick(&r.Action{Name: "project.dialog.open", Data: sidData(sid)}).
-			Render(
-				r.I("material-icons-round text-base shrink-0").Text("add"),
-				r.Span("").Text("New Project"),
-			),
-	)
-
-	// Active project path display
-	activePath := ""
-	for _, p := range state.Projects {
-		if p.Name == state.ActiveProject {
-			activePath = p.Path
-			break
-		}
-	}
-
-	return r.Div("w-52 shrink-0 flex flex-col border-r border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/50 overflow-hidden").
-		ID(SidebarID).
-		Render(
-			r.Div("flex-1 overflow-y-auto p-2 flex flex-col gap-0.5").Render(items...),
-			r.Div("px-3 py-2 border-t border-gray-200 dark:border-zinc-800").Render(
-				r.Span("text-[10px] font-mono text-gray-400 dark:text-zinc-600 truncate block").
-					Attr("title", activePath).
-					Text(activePath),
-			),
-		)
+	return out
 }
 
 // renderProjectBar kept as alias for backward compatibility in action responses.
