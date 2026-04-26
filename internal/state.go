@@ -142,12 +142,6 @@ type AppState struct {
 	// WorktreeDialogOpen tracks whether the worktree popup is shown
 	WorktreeDialogOpen bool
 
-	// SidebarCollapsed tracks whether the project sidebar is collapsed
-	SidebarCollapsed bool
-
-	// ProjectTreeOpen tracks which git projects have their worktree list expanded
-	ProjectTreeOpen map[string]bool
-
 	// ZenMode hides everything except running applications (top bar, sidebar, toolbars)
 	ZenMode bool
 
@@ -225,8 +219,6 @@ func (sm *StateManager) NewSession() string {
 		NavSlots:         navSlots,
 		NavProjectSlot:   navProjectSlots,
 		ZenMode:          zenMode,
-		SidebarCollapsed: zenMode,
-		ProjectTreeOpen:  make(map[string]bool),
 	}
 	return sid
 }
@@ -257,8 +249,6 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 		NavSlots:         navSlots,
 		NavProjectSlot:   navProjectSlots,
 		ZenMode:          zenMode,
-		SidebarCollapsed: zenMode,
-		ProjectTreeOpen:  make(map[string]bool),
 	}
 	sm.states[sessionID] = s
 	return s
@@ -874,10 +864,6 @@ func (sm *StateManager) AddProject(sessionID, name, path string) bool {
 		p.IsGitRepo = GitIsRepo(path)
 	}
 	s.Projects = append(s.Projects, p)
-	if s.ProjectTreeOpen == nil {
-		s.ProjectTreeOpen = make(map[string]bool)
-	}
-	s.ProjectTreeOpen[name] = false
 	return true
 }
 
@@ -911,7 +897,6 @@ func (sm *StateManager) RemoveProject(sessionID, projectName string) ([]Applicat
 	}
 	delete(s.closedSnapshots, projectName)
 	delete(s.renderedProjects, projectName)
-	delete(s.ProjectTreeOpen, projectName)
 	sm.clearNavSlot(s, projectName)
 
 	if s.ActiveProject == projectName {
@@ -1156,10 +1141,6 @@ func (sm *StateManager) AddVirtualProject(sessionID, name, path, parentProject s
 		Virtual:       true,
 		ParentProject: parentProject,
 	})
-	if s.ProjectTreeOpen == nil {
-		s.ProjectTreeOpen = make(map[string]bool)
-	}
-	s.ProjectTreeOpen[parentProject] = true
 	return true
 }
 
@@ -1201,34 +1182,6 @@ func (sm *StateManager) RemoveVirtualProject(sessionID, name string) ([]Applicat
 	return apps, true
 }
 
-// ToggleProjectTree flips the expanded state for a project's worktree list.
-func (sm *StateManager) ToggleProjectTree(sessionID, projectName string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return
-	}
-	if s.ProjectTreeOpen == nil {
-		s.ProjectTreeOpen = make(map[string]bool)
-	}
-	s.ProjectTreeOpen[projectName] = !s.ProjectTreeOpen[projectName]
-}
-
-// OpenProjectTree ensures a project's worktree list is expanded.
-func (sm *StateManager) OpenProjectTree(sessionID, projectName string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return
-	}
-	if s.ProjectTreeOpen == nil {
-		s.ProjectTreeOpen = make(map[string]bool)
-	}
-	s.ProjectTreeOpen[projectName] = true
-}
-
 // OpenWorktreeDialog sets the worktree dialog open flag
 func (sm *StateManager) OpenWorktreeDialog(sessionID string) {
 	sm.mu.Lock()
@@ -1249,16 +1202,6 @@ func (sm *StateManager) CloseWorktreeDialog(sessionID string) {
 	}
 }
 
-// ToggleSidebar flips the sidebar collapsed state
-func (sm *StateManager) ToggleSidebar(sessionID string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s != nil {
-		s.SidebarCollapsed = !s.SidebarCollapsed
-	}
-}
-
 // ToggleZenMode flips the zen mode state and persists it to the database.
 func (sm *StateManager) ToggleZenMode(sessionID string) {
 	sm.mu.Lock()
@@ -1266,10 +1209,6 @@ func (sm *StateManager) ToggleZenMode(sessionID string) {
 	s := sm.states[sessionID]
 	if s != nil {
 		s.ZenMode = !s.ZenMode
-		// In zen mode, always collapse sidebar
-		if s.ZenMode {
-			s.SidebarCollapsed = true
-		}
 		// Persist zen mode preference
 		val := "0"
 		if s.ZenMode {

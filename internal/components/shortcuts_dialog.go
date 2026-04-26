@@ -26,12 +26,12 @@ func ShortcutsDialog() *r.Node {
 			{"⌘ + +", "Zoom in (whole app)"},
 			{"⌘ + -", "Zoom out (whole app)"},
 		}},
-		{"Navigation", "Win + X toggles an automatic Ctrl + 2-9 assignment for the current project; sidebar badges still allow click add/remove", []shortcut{
+		{"Navigation", "Win + X toggles an automatic Ctrl + 2-9 assignment for the current project", []shortcut{
 			{"⌘ + H", "Navigate left"},
 			{"⌘ + L", "Navigate right"},
 			{"⌘ + Ctrl + U", "Move app left"},
 			{"⌘ + Ctrl + I", "Move app right"},
-			{"⌘ + B", "Toggle sidebar"},
+			{"⌘ + B", "Open project picker"},
 			{"⌘ + X", "Assign or remove current project shortcut"},
 			{"⌘ + G", "Search all worktrees"},
 			{"Ctrl + 1", "Switch to home project"},

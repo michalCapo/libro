@@ -24,7 +24,6 @@ func urlParse(rawURL string) (*url.URL, error) {
 const (
 	MainAreaID        = "main-area"
 	TopBarID          = "top-bar"
-	SidebarID         = "project-sidebar"
 	ManageDialogID    = "manage-dialog"
 	DialogID          = components.AddDialogID
 	ProjectDialogID   = components.ProjectDialogID
@@ -34,6 +33,7 @@ const (
 	CloseDialogID     = components.CloseDialogID
 	WorktreeCreateID  = components.WorktreeCreateID
 	WorktreePickerID  = components.WorktreePickerID
+	ProjectPickerID   = components.ProjectPickerID
 	URLPopupID        = components.URLPopupID
 	ResizePopupID     = components.ResizePopupID
 	CommandPopupID    = components.CommandPopupID
@@ -413,11 +413,10 @@ func projectMainID(projectName string) string {
 	return "project-main-" + projectName
 }
 
-// renderMainAreaWrapper renders the wrapper that contains the sidebar and all per-project main area divs.
+// renderMainAreaWrapper renders the wrapper that contains all per-project main area divs.
 // Only the active project's div is visible; others are hidden to preserve state.
 func renderMainAreaWrapper(state *AppState, sid string) *r.Node {
 	return r.Div("flex-1 flex flex-row overflow-hidden relative").Render(
-		renderProjectSidebar(state, sid),
 		r.Div("flex-1 flex flex-col overflow-hidden relative").ID(MainAreaID).Render(
 			renderMainArea(state, sid),
 			// Hidden pool to keep webview elements alive when their app tab is closed.
@@ -820,6 +819,28 @@ func navigateJS(state *AppState, sid string) string {
 			}
 		})();
 	`, orderJS.String(), stripID(state.ActiveProject), state.SelectedIndex, len(state.Apps), state.ZenMode, sid, selectedAppID(state))
+}
+
+// popupRegistryJS registers the global helper used by every popup opener to
+// hide any other popup that is currently visible. Pass the popup's element
+// (or its ID) as `except` to keep that one open.
+func popupRegistryJS() string {
+	return fmt.Sprintf(`
+(function(){
+	var IDS=[%q,%q,%q,%q,%q,%q,%q,%q,%q,%q,%q];
+	window.__libroCloseAllPopups=function(except){
+		var keep=null;
+		if(except){
+			keep=(typeof except==='string')?document.getElementById(except):except;
+		}
+		for(var i=0;i<IDS.length;i++){
+			var el=document.getElementById(IDS[i]);
+			if(!el||el===keep)continue;
+			if(!el.classList.contains('hidden'))el.classList.add('hidden');
+		}
+	};
+})();
+`, WorktreePickerID, ProjectPickerID, WorktreeCreateID, URLPopupID, ResizePopupID, CommandPopupID, SearchDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID)
 }
 
 func flashCSS() string {
@@ -1856,6 +1877,7 @@ func searchDialogJS(sid string) string {
 
 	function openSearch(side){
 		pendingSide=side||'right';
+		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
 		dlg.classList.remove('hidden');
 		inp.value='';
 		filter();
@@ -1981,6 +2003,7 @@ func urlPopupJS(sid string) string {
 			var urlInp=document.getElementById('urlinput-'+appId);
 			if(urlInp)currentUrl=urlInp.value||'';
 		}
+		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
 		dlg.classList.remove('hidden');
 		if(inp){
 			inp.value=currentUrl;
@@ -2173,9 +2196,9 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				__ws.call('project.apps.open',{sid:'%s'});
 			}},
-			{id:'sidebar',label:'Toggle sidebar',scope:'app',icon:'menu_open',keywords:'sidebar project tree collapse expand navigation',run:function(){
+			{id:'projects',label:'Projects',scope:'app',icon:'source',keywords:'projects switch picker sidebar navigation tree',run:function(){
 				closePalette();
-				__ws.call('sidebar.toggle',{sid:'%s'});
+				if(window.__libroOpenProjectPicker)window.__libroOpenProjectPicker();
 			}},
 			{id:'zen',label:'Zen',scope:'app',icon:'fullscreen',keywords:'focus chrome toggle minimal',run:function(){
 				closePalette();
@@ -2267,6 +2290,7 @@ func commandPopupJS(sid string) string {
 	}
 
 	function openPalette(){
+		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
 		dlg.classList.remove('hidden');
 		inp.value='';
 		filter();
@@ -2300,7 +2324,7 @@ func commandPopupJS(sid string) string {
 
 	window.__libroOpenCommandPalette=openPalette;
 })();
-`, CommandPopupID, sid, sid, sid, sid, sid, sid, sid)
+`, CommandPopupID, sid, sid, sid, sid, sid, sid)
 }
 
 // resizePopupJS returns JS that powers the Win+R / Win+F resize popup.
@@ -2365,6 +2389,7 @@ func resizePopupJS(sid string) string {
 			if(b.getAttribute('data-resize-width')===curWidth)idx=i;
 		});
 		if(btns.length>0)highlightFocused(idx);
+		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
 		dlg.classList.remove('hidden');
 		setTimeout(function(){dlg.focus();},50);
 	}
@@ -2447,6 +2472,7 @@ func shortcutsDialogJS() string {
 (function(){
 	var dlg=document.getElementById('%s');
 	window.__libroOpenShortcuts=function(){
+		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
 		dlg.classList.remove('hidden');
 	};
 	document.addEventListener('keydown',function(e){
@@ -2535,6 +2561,7 @@ func worktreeCreatePopupJS(sid string) string {
 		if(!dlg||!inp||!title)return;
 		title.textContent='New Worktree — '+project+(currentSourceBranch?' / '+currentSourceBranch:'');
 		inp.value='';
+		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
 		dlg.classList.remove('hidden');
 		setTimeout(function(){inp.focus();},50);
 	}
@@ -2684,6 +2711,7 @@ func worktreePickerPopupJS(sid string) string {
 		var dlg=getDlg();
 		var inp=getInp();
 		if(!dlg||!inp)return;
+		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
 		dlg.classList.remove('hidden');
 		inp.value='';
 		filter();
@@ -3036,7 +3064,80 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 	tipCls := "absolute top-full mt-1 px-2 py-1 text-xs rounded bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg"
 	noDragStyle := "-webkit-app-region:no-drag"
 
-	appIcons := make([]*r.Node, 0, len(savedApps)+2)
+	// Core action icons — rendered next to the libro logo.
+	coreIcons := []*r.Node{
+		// Quick launch button (combined browse + run)
+		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("search"),
+				r.Span(tipCls).Text("Quick launch"),
+			).
+			OnClick(&r.Action{Name: "app.run.new", Data: sidData(sid)}),
+		// Add app
+		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 text-[18px]").Text("add"),
+				r.Span(tipCls).Text("Add app"),
+			).
+			OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
+		// Manage apps
+		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("apps"),
+				r.Span(tipCls).Text("Manage apps"),
+			).
+			OnClick(&r.Action{Name: "app.manage.open", Data: sidData(sid)}),
+		// Commands
+		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
+			Attr("onclick", "if(window.__libroOpenCommandPalette)window.__libroOpenCommandPalette();").
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("menu_open"),
+				r.Span(tipCls).Text("Commands"),
+			),
+		// Shortcuts
+		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
+			Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.toggle('hidden');", ShortcutsDialogID)).
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("keyboard"),
+				r.Span(tipCls).Text("Shortcuts"),
+			),
+		// Console
+		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
+			Attr("onclick", "if(window.libroElectron&&window.libroElectron.toggleDevTools)window.libroElectron.toggleDevTools();").
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("code"),
+				r.Span(tipCls).Text("Console"),
+			),
+		// Zen mode
+		r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
+			OnClick(&r.Action{Name: "zen.toggle", Data: sidData(sid)}).
+			Render(
+				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400 text-xl libro-zen-icon").Text(func() string {
+					if state.ZenMode {
+						return "visibility"
+					}
+					return "self_improvement"
+				}()),
+				r.Span(tipCls).Text("Zen mode"),
+			),
+	}
+
+	// Saved app launchers
+	appIcons := make([]*r.Node, 0, len(savedApps))
 	for _, app := range savedApps {
 		var iconNode *r.Node
 		label := app.Name
@@ -3086,87 +3187,6 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		appIcons = append(appIcons, btn)
 	}
 
-	// Quick launch button (combined browse + run)
-	appIcons = append(appIcons,
-		r.Button(btnCls).
-			Attr("data-libro-no-drag", "true").
-			Attr("style", noDragStyle).
-			Render(
-				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("search"),
-				r.Span(tipCls).Text("Quick launch"),
-			).
-			OnClick(&r.Action{Name: "app.run.new", Data: sidData(sid)}),
-	)
-
-	// Add button
-	appIcons = append(appIcons,
-		r.Button(btnCls).
-			Attr("data-libro-no-drag", "true").
-			Attr("style", noDragStyle).
-			Render(
-				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 text-[18px]").Text("add"),
-				r.Span(tipCls).Text("Add app"),
-			).
-			OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
-	)
-
-	// Manage apps button (icon style, matching other app icons)
-	appIcons = append(appIcons,
-		r.Button(btnCls).
-			Attr("data-libro-no-drag", "true").
-			Attr("style", noDragStyle).
-			Render(
-				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("apps"),
-				r.Span(tipCls).Text("Manage apps"),
-			).
-			OnClick(&r.Action{Name: "app.manage.open", Data: sidData(sid)}),
-	)
-
-	// Action buttons in icon style (same as app icons)
-	appIcons = append(appIcons,
-		r.Button(btnCls).
-			Attr("data-libro-no-drag", "true").
-			Attr("style", noDragStyle).
-			Attr("onclick", "if(window.__libroOpenCommandPalette)window.__libroOpenCommandPalette();").
-			Render(
-				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("menu_open"),
-				r.Span(tipCls).Text("Commands"),
-			),
-		r.Button(btnCls).
-			Attr("data-libro-no-drag", "true").
-			Attr("style", noDragStyle).
-			Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.toggle('hidden');", ShortcutsDialogID)).
-			Render(
-				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("keyboard"),
-				r.Span(tipCls).Text("Shortcuts"),
-			),
-		r.Button(btnCls).
-			Attr("data-libro-no-drag", "true").
-			Attr("style", noDragStyle).
-			Attr("onclick", "if(window.libroElectron&&window.libroElectron.toggleDevTools)window.libroElectron.toggleDevTools();").
-			Render(
-				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("code"),
-				r.Span(tipCls).Text("Console"),
-			),
-	)
-
-	// Zen mode button
-	appIcons = append(appIcons,
-		r.Button(btnCls).
-			Attr("data-libro-no-drag", "true").
-			Attr("style", noDragStyle).
-			OnClick(&r.Action{Name: "zen.toggle", Data: sidData(sid)}).
-			Render(
-				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400 text-xl libro-zen-icon").Text(func() string {
-					if state.ZenMode {
-						return "visibility"
-					}
-					return "self_improvement"
-				}()),
-				r.Span(tipCls).Text("Zen mode"),
-			),
-	)
-
 	// Running apps preview strip
 	appPreview := renderAppPreview(state, sid)
 
@@ -3180,17 +3200,19 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		Attr("style", "-webkit-app-region:drag").
 		Attr("ondblclick", "if(event.target&&event.target.closest&&event.target.closest('[data-libro-no-drag]'))return;if(window.libroElectron&&window.libroElectron.toggleMaximize)window.libroElectron.toggleMaximize();").
 		Render(
-			r.Button("shrink-0 cursor-pointer hover:opacity-70 transition-opacity duration-75 flex items-center gap-1.5").
+			r.Button("shrink-0 cursor-pointer hover:opacity-70 transition-opacity duration-75 flex items-center").
 				Attr("data-libro-no-drag", "true").
 				Attr("style", noDragStyle).
-				Attr("title", "Toggle sidebar (⌘B)").
-				OnClick(&r.Action{Name: "sidebar.toggle", Data: sidData(sid)}).
+				Attr("title", "Open project picker (⌘B)").
+				Attr("onclick", "if(window.__libroOpenProjectPicker)window.__libroOpenProjectPicker();").
 				Render(
 					r.Img("w-7 h-7").Attr("src", "/assets/logo.svg").Attr("alt", "Libro"),
-					r.Span("text-[10px] text-gray-400 dark:text-gray-500 font-mono select-none").Text("v"+version.Version),
 				),
-			r.Div("flex items-center gap-0.5 ml-2").Render(appIcons...),
+			r.Div("flex items-center gap-0.5").Render(coreIcons...),
+			r.Div("w-px h-5 bg-gray-300 dark:bg-zinc-700 mx-1").Render(),
+			r.Div("flex items-center gap-0.5").Render(appIcons...),
 			r.Div("ml-auto flex items-center gap-1").Render(appPreview),
+			r.Span("text-[10px] text-gray-400 dark:text-gray-500 font-mono select-none ml-2").Text("v"+version.Version),
 			r.Button(btnCls).
 				Attr("data-libro-no-drag", "true").
 				Attr("style", noDragStyle).
@@ -3321,125 +3343,241 @@ func runningAppCount(state *AppState, projectName string) int {
 	return 0
 }
 
-// renderProjectSidebar builds the input from session state and delegates
-// rendering to the components subpackage.
-func renderProjectSidebar(state *AppState, sid string) *r.Node {
-	in := components.SidebarInput{
-		Sid:       sid,
-		SidebarID: SidebarID,
-		Collapsed: state.SidebarCollapsed,
-	}
-	if in.Collapsed {
-		return components.Sidebar(in)
-	}
-
-	for _, p := range state.Projects {
-		if p.Name == state.ActiveProject {
-			in.ActivePath = p.Path
-			break
-		}
-	}
-
-	for _, proj := range state.Projects {
-		if proj.Virtual {
-			continue
-		}
-
-		isActive := proj.Name == state.ActiveProject
-		isParentOfActive := false
-		for _, p := range state.Projects {
-			if p.Virtual && p.ParentProject == proj.Name && p.Name == state.ActiveProject {
-				isParentOfActive = true
-				break
-			}
-		}
-
-		hasBranchRows := proj.IsGitRepo && GitAvailable()
-		treeOpen := state.ProjectTreeOpen != nil && state.ProjectTreeOpen[proj.Name]
-
-		row := components.SidebarProject{
-			Name:             proj.Name,
-			Path:             proj.Path,
-			IsGitRepo:        proj.IsGitRepo,
-			HasWorktreesUI:   hasBranchRows,
-			TreeOpen:         treeOpen,
-			IsActive:         isActive,
-			IsParentOfActive: isParentOfActive,
-			Removable:        proj.Name != "home",
-		}
-		if !proj.IsGitRepo {
-			row.AppCount = runningAppCount(state, proj.Name)
-		}
-
-		if treeOpen && hasBranchRows {
-			worktrees, err := GitListWorktrees(proj.Path)
-			if err == nil {
-				row.Worktrees = buildWorktreeRows(state, sid, proj, isActive, worktrees)
-			}
-		}
-
-		in.Projects = append(in.Projects, row)
-	}
-
-	return components.Sidebar(in)
+// renderProjectPickerPopup renders the project picker modal.
+func renderProjectPickerPopup(sid string) *r.Node {
+	return components.ProjectPickerPopup(sid)
 }
 
-func buildWorktreeRows(state *AppState, sid string, proj Project, projActive bool, worktrees []Worktree) []components.SidebarWorktree {
-	out := make([]components.SidebarWorktree, 0, len(worktrees))
-	for _, wt := range worktrees {
-		if wt.IsBare {
+// projectPickerPopupJS wires the project picker popup: search/filter, keyboard
+// navigation, and selection. Reads from window.__libroProjects.
+func projectPickerPopupJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	var selectedIdx=0;
+	var filtered=[];
+	var hoverEnabled=false;
+
+	function getDlg(){return document.getElementById('%s');}
+	function getInp(){return document.getElementById('project-picker-input');}
+	function getResults(){return document.getElementById('project-picker-results');}
+
+	function armHoverAfterPointerMove(){
+		hoverEnabled=false;
+		var dlg=getDlg();
+		if(!dlg)return;
+		var enableHover=function(){
+			hoverEnabled=true;
+			dlg.removeEventListener('mousemove',enableHover,true);
+		};
+		dlg.addEventListener('mousemove',enableHover,true);
+	}
+
+	function fuzzyMatch(text,query){
+		text=(text||'').toLowerCase();
+		query=(query||'').toLowerCase();
+		var ti=0,qi=0,score=0,lastMatch=-1;
+		while(ti<text.length&&qi<query.length){
+			if(text[ti]===query[qi]){
+				score+=1;
+				if(lastMatch===ti-1)score+=2;
+				if(ti===0||text[ti-1]===' '||text[ti-1]==='/'||text[ti-1]==='.')score+=3;
+				lastMatch=ti;
+				qi++;
+			}
+			ti++;
+		}
+		return qi===query.length?score:0;
+	}
+
+	function escapeHtml(s){return (s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+	function render(){
+		var res=getResults();
+		if(!res)return;
+		var dk=document.documentElement.classList.contains('dark');
+		if(filtered.length===0){
+			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No projects found</div>';
+			return;
+		}
+		var html='';
+		filtered.forEach(function(item,i){
+			var sel=i===selectedIdx;
+			var icon=item.kind==='worktree'?'alt_route':(item.isGit?'source':'folder');
+			var primary=item.kind==='worktree'?item.branch:item.name;
+			var secondary=item.kind==='worktree'?item.name:item.path;
+			var activeBadge=item.isActive?'<span class="ml-2 inline-flex items-center justify-center px-1.5 h-4 rounded text-[9px] font-bold leading-none '+(dk?'bg-blue-500/30 text-blue-300':'bg-blue-100 text-blue-700')+'">ACTIVE</span>':'';
+			html+='<div class="project-picker-item flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
+				+(sel?(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500')
+				:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'))
+				+'" data-project-idx="'+i+'">';
+			html+='<i class="material-icons-round '+(dk?'text-zinc-400':'text-gray-400')+' text-lg">'+icon+'</i>';
+			html+='<div class="flex-1 min-w-0">';
+			html+='<div class="text-sm truncate '+(dk?'text-zinc-200':'text-gray-800')+'">'+escapeHtml(primary)+activeBadge+'</div>';
+			html+='<div class="text-[11px] truncate '+(dk?'text-zinc-500':'text-gray-400')+'">'+escapeHtml(secondary)+'</div>';
+			html+='</div></div>';
+		});
+		res.innerHTML=html;
+		res.querySelectorAll('[data-project-idx]').forEach(function(el){
+			el.addEventListener('mouseenter',function(){
+				if(!hoverEnabled)return;
+				var idx=parseInt(el.getAttribute('data-project-idx'),10);
+				if(!Number.isNaN(idx)&&idx!==selectedIdx){
+					selectedIdx=idx;
+					render();
+				}
+			});
+			el.addEventListener('mousedown',function(e){
+				e.preventDefault();
+				var idx=parseInt(el.getAttribute('data-project-idx'),10);
+				if(Number.isNaN(idx))return;
+				selectedIdx=idx;
+				launch();
+			});
+		});
+		var selected=res.querySelector('[data-project-idx="'+selectedIdx+'"]');
+		if(selected)selected.scrollIntoView({block:'nearest'});
+	}
+
+	function filter(){
+		var query=(getInp()&&getInp().value||'').trim();
+		var all=(window.__libroProjects||[]).slice();
+		if(!query){
+			filtered=all;
+		}else{
+			filtered=[];
+			all.forEach(function(item){
+				var hay=item.name+' '+(item.branch||'')+' '+(item.path||'');
+				var score=fuzzyMatch(hay,query);
+				if(score>0){
+					filtered.push(Object.assign({score:score},item));
+				}
+			});
+			filtered.sort(function(a,b){return b.score-a.score;});
+		}
+		selectedIdx=0;
+		for(var i=0;i<filtered.length;i++){
+			if(filtered[i].isActive){selectedIdx=i;break;}
+		}
+		render();
+	}
+
+	function closePopup(){
+		var dlg=getDlg();
+		var inp=getInp();
+		if(dlg)dlg.classList.add('hidden');
+		if(inp)inp.value='';
+		hoverEnabled=false;
+	}
+
+	function launch(){
+		if(filtered.length===0)return;
+		var item=filtered[selectedIdx];
+		closePopup();
+		if(item.kind==='worktree'){
+			__ws.call('worktree.switch',{sid:'%s',project:item.name,path:item.path,branch:item.branch});
+		}else{
+			history.replaceState(null,'','#'+item.name);
+			__ws.call('project.switch',{sid:'%s',name:item.name});
+		}
+	}
+
+	function openPopup(){
+		var dlg=getDlg();
+		var inp=getInp();
+		if(!dlg||!inp)return;
+		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
+		dlg.classList.remove('hidden');
+		inp.value='';
+		filter();
+		armHoverAfterPointerMove();
+		setTimeout(function(){inp.focus();},50);
+	}
+
+	var inp=getInp();
+	if(inp){
+		inp.addEventListener('input',filter);
+		inp.addEventListener('keydown',function(e){
+			var dlg=getDlg();
+			if(!dlg||dlg.classList.contains('hidden'))return;
+			e.stopImmediatePropagation();
+			if(e.key==='ArrowDown'){
+				e.preventDefault();
+				if(selectedIdx<filtered.length-1){selectedIdx++;render();}
+			}else if(e.key==='ArrowUp'){
+				e.preventDefault();
+				if(selectedIdx>0){selectedIdx--;render();}
+			}else if(e.key==='Enter'){
+				e.preventDefault();
+				launch();
+			}else if(e.key==='Escape'){
+				e.preventDefault();
+				closePopup();
+			}
+		});
+	}
+
+	window.__libroOpenProjectPicker=openPopup;
+})();
+`, ProjectPickerID, sid, sid)
+}
+
+// projectsJS publishes the list of projects (and their worktrees) into
+// window.__libroProjects for the project picker popup.
+func projectsJS(state *AppState) string {
+	type jsProject struct {
+		Kind     string `json:"kind"`
+		Name     string `json:"name"`
+		Path     string `json:"path"`
+		Branch   string `json:"branch,omitempty"`
+		IsGit    bool   `json:"isGit"`
+		IsActive bool   `json:"isActive"`
+	}
+	var all []jsProject
+	for _, p := range state.Projects {
+		if p.Virtual {
 			continue
 		}
-
-		vtName := proj.Name + "/" + wt.Branch
-		isMain := wt.Path == proj.Path
-		isWtActive := state.ActiveProject == vtName || (isMain && projActive)
-
-		appProject := vtName
-		if isMain {
-			appProject = proj.Name
-		}
-
-		slotName := vtName
-		switch {
-		case isMain:
-			slotName = proj.Name
-		case isWtActive && state.ActiveProject != "":
-			slotName = state.ActiveProject
-		default:
-			for _, sp := range state.Projects {
-				if sp.Virtual && sp.ParentProject == proj.Name && sp.Path == wt.Path {
-					slotName = sp.Name
-					break
-				}
-			}
-		}
-
-		var onClick string
-		if isMain {
-			onClick = fmt.Sprintf(
-				"history.replaceState(null,'','#%s');__ws.call('project.switch',{sid:'%s',name:'%s'});",
-				proj.Name, sid, proj.Name,
-			)
-		} else {
-			onClick = fmt.Sprintf(
-				"__ws.call('worktree.switch',{sid:'%s',project:'%s',path:'%s',branch:'%s'});",
-				sid, proj.Name, wt.Path, wt.Branch,
-			)
-		}
-
-		out = append(out, components.SidebarWorktree{
-			Branch:   wt.Branch,
-			Path:     wt.Path,
-			IsMain:   isMain,
-			IsActive: isWtActive,
-			AppCount: runningAppCount(state, appProject),
-			NavSlot:  sm.GetNavSlotForProject(sid, slotName),
-			SlotName: slotName,
-			OnClick:  onClick,
+		isActive := p.Name == state.ActiveProject
+		all = append(all, jsProject{
+			Kind:     "project",
+			Name:     p.Name,
+			Path:     p.Path,
+			IsGit:    p.IsGitRepo,
+			IsActive: isActive,
 		})
+
+		if !p.IsGitRepo || !GitAvailable() {
+			continue
+		}
+		wts, err := GitListWorktrees(p.Path)
+		if err != nil {
+			continue
+		}
+		for _, wt := range wts {
+			if wt.IsBare {
+				continue
+			}
+			isMain := wt.Path == p.Path
+			if isMain {
+				continue
+			}
+			vtName := p.Name + "/" + wt.Branch
+			wtActive := state.ActiveProject == vtName
+			all = append(all, jsProject{
+				Kind:     "worktree",
+				Name:     p.Name,
+				Path:     wt.Path,
+				Branch:   wt.Branch,
+				IsGit:    true,
+				IsActive: wtActive,
+			})
+		}
 	}
-	return out
+	b, _ := json.Marshal(all)
+	if b == nil {
+		b = []byte("[]")
+	}
+	return fmt.Sprintf("window.__libroProjects=%s;", string(b))
 }
 
 // renderProjectDialog renders the create project modal
@@ -3706,7 +3844,7 @@ func keyboardShortcutsJS(sid string) string {
 			if (e.metaKey && (e.key === 'b' || e.key === 'B') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					__ws.call('sidebar.toggle', {"sid": "%s"});
+					if (window.__libroOpenProjectPicker) window.__libroOpenProjectPicker();
 					return;
 				}
 				if (e.metaKey && !e.ctrlKey && (e.key === ';' || e.code === 'Semicolon')) {
@@ -3826,5 +3964,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-		`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
+		`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }

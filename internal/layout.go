@@ -17,11 +17,13 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderCloseDialog(sid),
 		renderWorktreeCreatePopup(sid),
 		renderWorktreePickerPopup(sid),
+		renderProjectPickerPopup(sid),
 		renderURLPopup(sid),
 		renderResizePopup(sid),
 		renderCommandPopup(),
 	)
-	page.JS(flashCSS() +
+	page.JS(popupRegistryJS() +
+		flashCSS() +
 		termIconSetupJS() +
 		projectToastSetupJS() +
 		keyboardShortcutsJS(sid) +
@@ -34,6 +36,8 @@ func renderPage(state *AppState, sid string) *r.Node {
 		worktreeCreatePopupJS(sid) +
 		worktreePickerPopupJS(sid) +
 		worktreesJS(state) +
+		projectPickerPopupJS(sid) +
+		projectsJS(state) +
 		urlPopupJS(sid) +
 		resizePopupJS(sid) +
 		commandPopupJS(sid) +

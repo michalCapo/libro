@@ -146,7 +146,7 @@ func Run(assets embed.FS) {
 			side = s
 		}
 		sm.OpenDialog(sid, side)
-		return r.Show(DialogID)
+		return fmt.Sprintf(`if(window.__libroCloseAllPopups)window.__libroCloseAllPopups('%s');`, DialogID) + r.Show(DialogID)
 	})
 
 	// Close add dialog
@@ -216,7 +216,7 @@ func Run(assets embed.FS) {
 			Replace(DialogID, renderAddDialog(false, sid)).
 			Replace(ManageDialogID, renderManageAppsPage(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(savedAppsJS(state))
 
 		// Refresh rendered empty-state project panes without touching live running app panes.
@@ -265,15 +265,15 @@ func Run(assets embed.FS) {
 		sm.AddApp(sid, target, WidthLG, query)
 		state := sm.Get(sid)
 
-		sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
+		projJS := projectsJS(state)
 		if hadApps > 0 {
 			lastApp := state.Apps[len(state.Apps)-1]
 			newIndex := len(state.Apps) - 1
 			frame := renderAppFrame(lastApp, newIndex, true, sid, state.ZenMode)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + sidebarJS
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + projJS
 		}
 
-		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + sidebarJS
+		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + projJS
 	})
 
 	// Start a saved/predefined application
@@ -332,13 +332,13 @@ func Run(assets embed.FS) {
 			time.Sleep(500 * time.Millisecond)
 
 			topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
-			sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
+			projJS := projectsJS(state)
 			if hadApps > 0 {
 				frame := renderAppFrame(*newApp, state.SelectedIndex, true, sid, state.ZenMode)
-				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + sidebarJS
+				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS
 			}
 
-			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + sidebarJS
+			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS
 		}
 
 		// URL app
@@ -357,14 +357,14 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
-		sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
+		projJS := projectsJS(state)
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
 			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid, state.ZenMode)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + sidebarJS
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS
 		}
 
-		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + sidebarJS
+		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS
 	})
 
 	// Close/remove application
@@ -391,16 +391,16 @@ func Run(assets embed.FS) {
 
 		state = sm.Get(sid)
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
-		sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
+		projJS := projectsJS(state)
 
 		// If no apps left, full replace to show empty state
 		// Pool the webview first so it survives the DOM replace
 		if len(state.Apps) == 0 || hadApps <= 1 {
-			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + sidebarJS
+			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS
 		}
 
 		// Otherwise, remove just the app frame and update navigation
-		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + sidebarJS
+		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + projJS
 	})
 
 	// Close current (selected) app — no app ID needed from client
@@ -422,11 +422,11 @@ func Run(assets embed.FS) {
 
 		state = sm.Get(sid)
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
-		sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
+		projJS := projectsJS(state)
 		if len(state.Apps) == 0 || hadApps <= 1 {
-			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + sidebarJS
+			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS
 		}
-		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + sidebarJS
+		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + projJS
 	})
 
 	// Close all running apps in the active project.
@@ -445,7 +445,7 @@ func Run(assets embed.FS) {
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(showToastJS("Closed apps", projectName, 1300)).
 			Build()
 	})
@@ -460,7 +460,7 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		return r.NewResponse().
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(showToastJS("Saved apps", projectName, 1300)).
 			Build()
 	})
@@ -476,7 +476,7 @@ func Run(assets embed.FS) {
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(showToastJS("Cleared saved apps", projectName, 1300)).
 			Build()
 	})
@@ -507,7 +507,7 @@ func Run(assets embed.FS) {
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(focusSelectedAppJS(state)).
 			Add(showToastJS(toastTitle, toastBody, 1800)).
 			Build()
@@ -613,18 +613,18 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
-		sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
+		projJS := projectsJS(state)
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
 			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid, state.ZenMode)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + sidebarJS +
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS +
 				fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, newApp.ID)
 		}
 
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, state.Apps[state.SelectedIndex].ID)).
 			Build()
 	})
@@ -682,17 +682,17 @@ func Run(assets embed.FS) {
 		runCmdsJS := runCommandsJS()
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
-		sidebarJS := renderProjectSidebar(state, sid).ToJSReplace(SidebarID)
+		projJS := projectsJS(state)
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
 			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid, state.ZenMode)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + sidebarJS + runCmdsJS
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + runCmdsJS
 		}
 
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(runCmdsJS).
 			Build()
 	})
@@ -780,7 +780,7 @@ func Run(assets embed.FS) {
 	app.Action("project.dialog.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		sm.OpenProjectDialog(sid)
-		return r.Show(ProjectDialogID)
+		return fmt.Sprintf(`if(window.__libroCloseAllPopups)window.__libroCloseAllPopups('%s');`, ProjectDialogID) + r.Show(ProjectDialogID)
 	})
 
 	// Close project dialog
@@ -824,87 +824,12 @@ func Run(assets embed.FS) {
 		jsSwitch := switchProjectJS(name, renderMainArea(state, sid))
 
 		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Replace(ProjectDialogID, renderProjectDialog(false, sid)).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
 			Add(focusSelectedAppJS(state)).
-			Build()
-	})
-
-	// Toggle sidebar collapsed/expanded
-	app.Action("sidebar.toggle", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		sm.ToggleSidebar(sid)
-		state := sm.Get(sid)
-		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Build()
-	})
-
-	app.Action("project.worktrees.toggle", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		project, _ := data["project"].(string)
-		if strings.TrimSpace(project) == "" {
-			return ""
-		}
-		sm.ToggleProjectTree(sid, project)
-		state := sm.Get(sid)
-		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Add(worktreesJS(state)).
-			Build()
-	})
-
-	app.Action("project.header.click", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		project, _ := data["project"].(string)
-		project = strings.TrimSpace(project)
-		if project == "" {
-			return ""
-		}
-
-		state := sm.Get(sid)
-		isActive := state.ActiveProject == project
-		isParentOfActive := false
-		closeDevtoolsJS := ""
-		if !isActive {
-			closeDevtoolsJS = closeDevtoolsForAppsJS(state.Apps)
-		}
-		for _, p := range state.Projects {
-			if p.Virtual && p.ParentProject == project && p.Name == state.ActiveProject {
-				isParentOfActive = true
-				break
-			}
-		}
-
-		projectPath := sm.GetProjectPath(sid, project)
-		if projectPath != "" && GitAvailable() && GitIsRepo(projectPath) {
-			sm.ToggleProjectTree(sid, project)
-		}
-		if !isActive || isParentOfActive {
-			sm.SwitchProject(sid, project)
-		}
-
-		state = sm.Get(sid)
-		var jsSwitch string
-		if sm.IsProjectRendered(sid, project) {
-			jsSwitch = switchProjectJS(project, nil)
-		} else {
-			jsSwitch = switchProjectJS(project, renderMainArea(state, sid))
-		}
-
-		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(closeDevtoolsJS).
-			Add(jsSwitch).
-			Add(updateHashJS(project)).
-			Add(focusSelectedAppJS(state)).
-			Add(worktreesJS(state)).
 			Build()
 	})
 
@@ -915,7 +840,7 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		resp := r.NewResponse().
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Replace(SidebarID, renderProjectSidebar(state, sid))
+			Add(projectsJS(state))
 		// Toggle toolbar visibility on all app frames and update zen borders
 		if state.ZenMode {
 			resp.Add(`document.querySelectorAll('[data-app-toolbar]').forEach(function(t){t.style.display='none';});`)
@@ -970,7 +895,7 @@ func Run(assets embed.FS) {
 		}
 
 		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(closeDevtoolsJS).
 			Add(jsSwitch).
@@ -1056,7 +981,7 @@ func Run(assets embed.FS) {
 		}
 		state := sm.Get(sid)
 		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(worktreesJS(state)).
 			Build()
 	})
@@ -1073,7 +998,7 @@ func Run(assets embed.FS) {
 		DBSetProjectNavSlot(name, 0)
 		state := sm.Get(sid)
 		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(worktreesJS(state)).
 			Build()
 	})
@@ -1109,7 +1034,7 @@ func Run(assets embed.FS) {
 
 		state := sm.Get(sid)
 		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(showToastJS(title, subtitle, 1300)).
 			Build()
 	})
@@ -1150,7 +1075,7 @@ func Run(assets embed.FS) {
 		DBRemoveProject(name)
 
 		resp := r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(fmt.Sprintf(`(function(){var el=document.getElementById('project-main-%s');if(el)el.remove();})();`, name))
 
@@ -1202,7 +1127,7 @@ func Run(assets embed.FS) {
 		resp := r.NewResponse().
 			Replace(ManageDialogID, renderManageAppsPage(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(savedAppsJS(state))
 		for projectName := range state.renderedProjects {
 			if projectHasRunningApps(state, projectName) {
@@ -1263,7 +1188,7 @@ func Run(assets embed.FS) {
 			html.WriteString(`</div>`)
 		}
 
-		return fmt.Sprintf(`(function(){var el=document.getElementById('close-dialog-apps');if(el)el.innerHTML=%s;document.getElementById('%s').classList.remove('hidden');var cb=document.getElementById('close-dialog-confirm');if(cb)cb.focus();})();`,
+		return fmt.Sprintf(`(function(){var el=document.getElementById('close-dialog-apps');if(el)el.innerHTML=%s;var dlg=document.getElementById('%s');if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);if(dlg)dlg.classList.remove('hidden');var cb=document.getElementById('close-dialog-confirm');if(cb)cb.focus();})();`,
 			components.JSString(html.String()), CloseDialogID)
 	})
 
@@ -1294,7 +1219,6 @@ func Run(assets embed.FS) {
 		if parentProject == "" || wtPath == "" || branch == "" {
 			return ""
 		}
-		sm.OpenProjectTree(sid, parentProject)
 		prevState := sm.Get(sid)
 		closeDevtoolsJS := closeDevtoolsForAppsJS(prevState.Apps)
 
@@ -1317,7 +1241,7 @@ func Run(assets embed.FS) {
 		}
 
 		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(closeDevtoolsJS).
 			Add(jsSwitch).
@@ -1355,7 +1279,7 @@ func Run(assets embed.FS) {
 
 		state := sm.Get(sid)
 		return r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(worktreesJS(state)).
 			Build()
 	})
@@ -1401,7 +1325,7 @@ func Run(assets embed.FS) {
 
 		state = sm.Get(sid)
 		resp := r.NewResponse().
-			Replace(SidebarID, renderProjectSidebar(state, sid)).
+			Add(projectsJS(state)).
 			Add(worktreesJS(state))
 
 		return resp.Build()
