@@ -1,3 +1,4 @@
+// Package version exposes the build-time version string for Libro.
 package version
 
 import (
