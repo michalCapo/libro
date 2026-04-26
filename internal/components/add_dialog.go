@@ -33,7 +33,7 @@ func AddDialog(in AddDialogInput) *r.Node {
 			radio.Attr("checked", "checked")
 		}
 		widthOptions = append(widthOptions,
-			r.Label("flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-300 dark:border-zinc-700 hover:border-gray-400 dark:hover:border-zinc-500 cursor-pointer transition-colors text-gray-700 dark:text-zinc-300 text-sm font-mono").Render(
+			r.Label("flex items-center gap-2 px-3 py-1.5 rounded border border-gray-200 dark:border-zinc-700 hover:border-gray-300 dark:hover:border-zinc-500 cursor-pointer transition-colors text-gray-700 dark:text-zinc-300 text-sm font-mono").Render(
 				radio,
 				r.Span("").Text(strings.ToUpper(w)),
 			),
@@ -58,50 +58,51 @@ func AddDialog(in AddDialogInput) *r.Node {
 
 	collectIDs := []string{"app-url", "app-command", "app-writable", "app-type", "app-name", "app-width", "app-project-specific"}
 
-	inputCls := "w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
+	inputCls := "w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono"
+	labelCls := "block text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-zinc-500 mb-1"
 
-	return r.Div("fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
+	return r.Div("fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
 		ID(AddDialogID).
 		OnClick(r.JS(HideJS(AddDialogID))).
 		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl p-5 w-full max-w-md mx-4").
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
-					r.H2("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100 mb-4 tracking-tight").Text("Add Application"),
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
+						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("add_box"),
+						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").Text("Add Application"),
+						r.Div("flex items-center gap-1").Render(
+							r.Button("px-3 py-1 text-xs font-mono border-b-2 border-blue-500 text-blue-600 cursor-pointer transition-colors").
+								ID("tab-terminal-btn").
+								Text("Terminal").
+								OnClick(r.JS(tabSwitchJS("terminal"))),
+							r.Button("px-3 py-1 text-xs font-mono border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 cursor-pointer transition-colors").
+								ID("tab-url-btn").
+								Text("URL").
+								OnClick(r.JS(tabSwitchJS("url"))),
+						),
+					),
 
 					r.IHidden("").ID("app-type").Attr("value", "terminal"),
 					r.IHidden("").ID("app-width").Attr("value", in.DefaultWidth),
 
-					r.Div("flex border-b border-gray-200 dark:border-zinc-700/50 mb-4").Render(
-						r.Button("px-4 py-2 text-sm font-mono border-b-2 border-blue-500 text-blue-600 cursor-pointer transition-colors").
-							ID("tab-terminal-btn").
-							Text("Terminal").
-							OnClick(r.JS(tabSwitchJS("terminal"))),
-						r.Button("px-4 py-2 text-sm font-mono border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 cursor-pointer transition-colors").
-							ID("tab-url-btn").
-							Text("URL").
-							OnClick(r.JS(tabSwitchJS("url"))),
-					),
-
-					r.Div("mb-5 hidden").ID("tab-url-content").Render(
-						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("URL"),
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 hidden").ID("tab-url-content").Render(
+						r.Label(labelCls).Text("URL"),
 						r.IUrl(inputCls).
 							ID("app-url").
 							Attr("placeholder", "https://example.com").
 							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-add').click();}"),
-						r.P("text-xs text-gray-400 dark:text-zinc-500 mt-1").Text("Use __dir__ as a placeholder for the project directory."),
+						r.P("text-[10px] font-mono text-gray-400 dark:text-zinc-600 mt-1").Text("Use __dir__ as a placeholder for the project directory."),
 					),
 
-					r.Div("mb-5").ID("tab-terminal-content").Render(
-						r.Div("mb-3").Render(
-							r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Command"),
-							r.IText(inputCls+" font-mono").
-								ID("app-command").
-								Attr("placeholder", "bash").
-								Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-add').click();}"),
-							r.P("text-xs text-gray-400 dark:text-zinc-500 mt-1").Text("Use __dir__ as a placeholder for the project directory."),
-						),
-						r.Label("flex items-center gap-2 cursor-pointer").Render(
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").ID("tab-terminal-content").Render(
+						r.Label(labelCls).Text("Command"),
+						r.IText(inputCls).
+							ID("app-command").
+							Attr("placeholder", "bash").
+							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-add').click();}"),
+						r.P("text-[10px] font-mono text-gray-400 dark:text-zinc-600 mt-1").Text("Use __dir__ as a placeholder for the project directory."),
+						r.Label("flex items-center gap-2 cursor-pointer mt-2").Render(
 							r.ICheckbox("accent-blue-500 cursor-pointer w-4 h-4").
 								ID("app-writable").
 								Attr("checked", "checked"),
@@ -109,19 +110,19 @@ func AddDialog(in AddDialogInput) *r.Node {
 						),
 					),
 
-					r.Div("mb-5").Render(
-						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Name (optional)"),
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
+						r.Label(labelCls).Text("Name (optional)"),
 						r.IText(inputCls).
 							ID("app-name").
 							Attr("placeholder", "e.g. My App"),
 					),
 
-					r.Div("mb-5").Render(
-						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Width"),
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
+						r.Label(labelCls).Text("Width"),
 						r.Div("flex flex-wrap gap-1.5").Render(widthOptions...),
 					),
 
-					r.Div("mb-5").Render(
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
 						r.Label("flex items-center gap-2 cursor-pointer").Render(
 							r.ICheckbox("accent-blue-500 cursor-pointer w-4 h-4").
 								ID("app-project-specific"),
@@ -129,18 +130,24 @@ func AddDialog(in AddDialogInput) *r.Node {
 						),
 					),
 
-					r.Div("flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-zinc-800").Render(
-						r.Button("px-4 py-2 text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 font-mono text-sm rounded-md hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer").
-							Text("Cancel").
-							OnClick(&r.Action{Name: "app.dialog.close", Data: map[string]any{"sid": in.Sid}}),
-						r.Button("px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md transition-colors cursor-pointer").
-							ID("btn-add").
-							Text("Save").
-							OnClick(&r.Action{
-								Name:    "app.save",
-								Data:    map[string]any{"sid": in.Sid},
-								Collect: collectIDs,
-							}),
+					r.Div("px-4 py-2 flex items-center justify-between gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+						r.Div("flex items-center gap-4").Render(
+							r.Span("").Text("Enter save"),
+							r.Span("").Text("Esc close"),
+						),
+						r.Div("flex items-center gap-2").Render(
+							r.Button("px-3 py-1 text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 font-mono text-xs rounded hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer").
+								Text("Cancel").
+								OnClick(&r.Action{Name: "app.dialog.close", Data: map[string]any{"sid": in.Sid}}),
+							r.Button("px-4 py-1 bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs font-medium rounded transition-colors cursor-pointer").
+								ID("btn-add").
+								Text("Save").
+								OnClick(&r.Action{
+									Name:    "app.save",
+									Data:    map[string]any{"sid": in.Sid},
+									Collect: collectIDs,
+								}),
+						),
 					),
 				),
 		)

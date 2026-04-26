@@ -484,8 +484,18 @@ func projectHasClosedApps(state *AppState, projectName string) bool {
 // renderEmptyState renders the saved apps list with "+ Add App" button
 func renderEmptyState(state *AppState, sid string) *r.Node {
 	savedApps := DBLoadVisibleSavedApps(savedAppsProjectName(state, state.ActiveProject))
-	appButtons := make([]*r.Node, 0, len(savedApps))
+	projectApps := make([]SavedApp, 0, len(savedApps))
+	otherApps := make([]SavedApp, 0, len(savedApps))
 	for _, app := range savedApps {
+		if app.ProjectSpecific {
+			projectApps = append(projectApps, app)
+		} else {
+			otherApps = append(otherApps, app)
+		}
+	}
+	ordered := append(projectApps, otherApps...)
+	appButtons := make([]*r.Node, 0, len(ordered))
+	for _, app := range ordered {
 		appButtons = append(appButtons, renderSavedAppButton(app, sid))
 	}
 
@@ -575,7 +585,11 @@ func renderSavedAppButton(app SavedApp, sid string) *r.Node {
 				r.Span("flex-1 truncate text-sm text-gray-800 dark:text-zinc-200").Text(label),
 			}
 			if app.ProjectSpecific {
-				nodes = append(nodes, r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400").Text("project"))
+				projectLabel := app.ProjectName
+				if projectLabel == "" {
+					projectLabel = "project"
+				}
+				nodes = append(nodes, r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400").Text(projectLabel))
 			}
 			nodes = append(nodes,
 				r.Span("px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Type),
@@ -590,19 +604,8 @@ func renderSavedAppButton(app SavedApp, sid string) *r.Node {
 			"iconUrl": app.IconURL,
 		}})
 
-	editBtn := r.Button("shrink-0 flex items-center justify-center w-9 h-9 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-zinc-700/60 transition-colors").
-		Attr("title", "Edit app").
-		Attr("onclick", fmt.Sprintf(`__ws.callSilent('app.saved.edit',{sid:'%s',dbid:%d});__ws.call('app.dialog.open',{sid:'%s'});`, sid, app.DBID, sid)+
-			savedAppEditFillJS(app)).
-		Render(r.I("material-icons-round text-lg").Text("edit"))
-
-	deleteBtn := r.Button("shrink-0 flex items-center justify-center w-9 h-9 mr-2 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors").
-		Attr("title", "Delete app").
-		Render(r.I("material-icons-round text-lg").Text("delete")).
-		OnClick(&r.Action{Name: "app.saved.delete", Data: sidData(sid, "dbid", float64(app.DBID))})
-
-	return r.Div("w-full flex items-center gap-2 bg-white dark:bg-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-zinc-700/40 hover:border-gray-300 dark:hover:border-zinc-600 rounded-lg transition-colors duration-75 shadow-sm dark:shadow-none").
-		Render(launchBtn, editBtn, deleteBtn)
+	return r.Div("w-full flex items-center gap-2 bg-white dark:bg-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-zinc-700/40 hover:border-gray-300 dark:hover:border-zinc-600 rounded-lg transition-colors duration-75 shadow-sm dark:shadow-none pr-2").
+		Render(launchBtn)
 }
 
 // savedAppEditFillJS returns JS that fills the add dialog with saved app data for editing.
@@ -2705,40 +2708,33 @@ func renderManageAppsPage(state *AppState, sid string) *r.Node {
 
 	var listNode *r.Node
 	if len(sections) == 0 {
-		listNode = r.Div("flex-1 flex items-center justify-center").Render(
+		listNode = r.Div("flex items-center justify-center py-10").Render(
 			r.P("text-sm font-mono text-gray-400 dark:text-zinc-500").Text("No saved apps yet"),
 		)
 	} else {
-		listNode = r.Div("flex-1 overflow-y-auto").Render(
-			r.Div("max-w-3xl mx-auto w-full px-4 py-6 space-y-6").Render(sections...),
-		)
+		listNode = r.Div("px-4 py-4 space-y-6").Render(sections...)
 	}
 
-	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[10vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
+	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
 		ID(ManageDialogID).
 		OnClick(r.JS(components.HideJS(ManageDialogID))).
 		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-4xl mx-4 overflow-hidden").
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-3xl mx-4 overflow-hidden").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
-					r.Div("shrink-0 border-b border-gray-200 dark:border-zinc-800 py-4 bg-white dark:bg-zinc-900").Render(
-						r.Div("w-full flex items-center gap-3 px-4").Render(
-							r.Span("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100").Text("Manage Apps"),
-							r.Div("ml-auto flex items-center gap-2").Render(
-								r.Button("flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors").
-									Render(r.I("material-icons-round text-[16px]").Text("add"), r.Span("").Text("Add App")).
-									OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}),
-								r.Button("flex items-center justify-center w-9 h-9 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors").
-									Attr("title", "Close").
-									OnClick(&r.Action{Name: "app.manage.close", Data: sidData(sid)}).
-									Render(r.I("material-icons-round text-xl").Text("close")),
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
+						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("apps"),
+						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").Text("Manage Apps"),
+						r.Button("text-[11px] font-mono text-blue-600 dark:text-blue-400 hover:underline cursor-pointer").
+							Attr("title", "Add new app").
+							OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid)}).
+							Render(
+								r.I("material-icons-round text-sm align-middle mr-0.5").Text("add"),
+								r.Span("align-middle").Text("Add App"),
 							),
-						),
 					),
-					r.Div("max-h-[70vh] overflow-y-auto bg-gray-100 dark:bg-zinc-900").Render(
-						r.Div("px-4 py-4").Render(listNode),
-					),
-					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+					r.Div("max-h-[60vh] overflow-y-auto").Render(listNode),
+					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
 						r.Span("").Text("Esc close"),
 					),
 				),
@@ -2989,7 +2985,7 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		r.Button(btnCls).
 			Attr("data-libro-no-drag", "true").
 			Attr("style", noDragStyle).
-			OnClick(&r.Action{Name: "zen.toggle", Data: sidData(sid)}).
+			OnClick(&r.Action{Name: "zen.toggle", Data: sidData(sid, "source", "click")}).
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400 text-xl libro-zen-icon").Text(func() string {
 					if state.ZenMode {
@@ -3195,17 +3191,6 @@ func updateAppPreviewJS(state *AppState) string {
 			}
 		})();
 	`, state.SelectedIndex, components.JSString(selectedCls), components.JSString(normalCls))
-}
-
-// runningAppCount returns the number of running apps for a given project name.
-func runningAppCount(state *AppState, projectName string) int {
-	if projectName == state.ActiveProject {
-		return len(state.Apps)
-	}
-	if snap, ok := state.snapshots[projectName]; ok {
-		return len(snap.Apps)
-	}
-	return 0
 }
 
 // renderProjectPickerPopup renders the project picker modal.

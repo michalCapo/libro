@@ -836,6 +836,7 @@ func Run(assets embed.FS) {
 	// Toggle zen mode — hides top bar, sidebar, and app toolbars
 	app.Action("zen.toggle", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
+		source, _ := ctx.WsData()["source"].(string)
 		sm.ToggleZenMode(sid)
 		state := sm.Get(sid)
 		resp := r.NewResponse().
@@ -849,6 +850,9 @@ func Run(assets embed.FS) {
 		}
 		// navigateJS handles zen border classes on selected/unselected apps
 		resp.Add(navigateJS(state, sid))
+		if source == "click" {
+			resp.Add(showToastJS("Zen mode", "Toggle with ⌘ + Z", 1800))
+		}
 		return resp.Build()
 	})
 
@@ -1085,14 +1089,10 @@ func Run(assets embed.FS) {
 		return resp.Build()
 	})
 
-	// Toggle manage apps overlay
+	// Open manage apps overlay
 	app.Action("app.manage.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		state := sm.Get(sid)
-		if state.ManageOpen {
-			state.ManageOpen = false
-			return r.Hide(ManageDialogID)
-		}
 		state.ManageOpen = true
 		return r.NewResponse().
 			Replace(ManageDialogID, renderManageAppsPage(state, sid)).
