@@ -9,8 +9,6 @@ const (
 	SearchDialogID        = "search-dialog"
 	ShortcutsDialogID     = "shortcuts-dialog"
 	CloseDialogID         = "close-dialog"
-	WorktreeCreateID      = "worktree-create-popup"
-	WorktreePickerID      = "worktree-picker-popup"
 	ProjectPickerID       = "project-picker-popup"
 	URLPopupID            = "url-popup"
 	ResizePopupID         = "resize-popup"

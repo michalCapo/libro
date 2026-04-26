@@ -5,8 +5,6 @@ import (
 )
 
 // ProjectPickerPopup renders the global project search/picker.
-// Modeled after WorktreePickerPopup — a fixed modal with a search input,
-// scrollable results, and a footer with hints.
 func ProjectPickerPopup(sid string) *r.Node {
 	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
 		ID(ProjectPickerID).

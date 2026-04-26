@@ -31,8 +31,6 @@ const (
 	SearchDialogID    = components.SearchDialogID
 	ShortcutsDialogID = components.ShortcutsDialogID
 	CloseDialogID     = components.CloseDialogID
-	WorktreeCreateID  = components.WorktreeCreateID
-	WorktreePickerID  = components.WorktreePickerID
 	ProjectPickerID   = components.ProjectPickerID
 	URLPopupID        = components.URLPopupID
 	ResizePopupID     = components.ResizePopupID
@@ -827,7 +825,7 @@ func navigateJS(state *AppState, sid string) string {
 func popupRegistryJS() string {
 	return fmt.Sprintf(`
 (function(){
-	var IDS=[%q,%q,%q,%q,%q,%q,%q,%q,%q,%q,%q];
+	var IDS=[%q,%q,%q,%q,%q,%q,%q,%q,%q];
 	window.__libroCloseAllPopups=function(except){
 		var keep=null;
 		if(except){
@@ -840,7 +838,7 @@ func popupRegistryJS() string {
 		}
 	};
 })();
-`, WorktreePickerID, ProjectPickerID, WorktreeCreateID, URLPopupID, ResizePopupID, CommandPopupID, SearchDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID)
+`, ProjectPickerID, URLPopupID, ResizePopupID, CommandPopupID, SearchDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID)
 }
 
 func flashCSS() string {
@@ -2512,277 +2510,6 @@ func closeDialogJS(sid string) string {
 `, sid, CloseDialogID)
 }
 
-func renderWorktreeCreatePopup(sid string) *r.Node {
-	return components.WorktreeCreatePopup(sid)
-}
-
-func worktreeCreatePopupJS(sid string) string {
-	return fmt.Sprintf(`
-(function(){
-	var currentProject='';
-	var currentSourcePath='';
-	var currentSourceBranch='';
-
-	function getDlg(){return document.getElementById('%s');}
-	function getInp(){return document.getElementById('worktree-create-input');}
-	function getTitle(){return document.getElementById('worktree-create-title');}
-
-	function closePopup(){
-		var dlg=getDlg();
-		var inp=getInp();
-		if(dlg)dlg.classList.add('hidden');
-		if(inp)inp.value='';
-		currentProject='';
-		currentSourcePath='';
-		currentSourceBranch='';
-	}
-
-	function createWorktree(){
-		var inp=getInp();
-		var branch=inp?inp.value.trim():'';
-		if(!currentProject||!branch)return;
-		__ws.call('worktree.add',{sid:'%s',project:currentProject,sourcePath:currentSourcePath,sourceBranch:currentSourceBranch,branch:branch});
-		closePopup();
-	}
-
-	function openPopup(project,sourcePath,sourceBranch){
-		if(project&&typeof project==='object'){
-			sourceBranch=project.branch||'';
-			sourcePath=project.path||'';
-			project=project.project||'';
-		}
-		if(!project)return;
-		currentProject=project;
-		currentSourcePath=sourcePath||'';
-		currentSourceBranch=sourceBranch||'';
-		var dlg=getDlg();
-		var inp=getInp();
-		var title=getTitle();
-		if(!dlg||!inp||!title)return;
-		title.textContent='New Worktree — '+project+(currentSourceBranch?' / '+currentSourceBranch:'');
-		inp.value='';
-		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
-		dlg.classList.remove('hidden');
-		setTimeout(function(){inp.focus();},50);
-	}
-
-	var inp=getInp();
-	if(inp){
-		inp.addEventListener('keydown',function(e){
-			var dlg=getDlg();
-			if(!dlg||dlg.classList.contains('hidden'))return;
-			e.stopImmediatePropagation();
-			if(e.key==='Enter'){
-				e.preventDefault();
-				createWorktree();
-			}else if(e.key==='Escape'){
-				e.preventDefault();
-				closePopup();
-			}
-		});
-	}
-
-	window.__libroOpenWorktreeCreatePopup=openPopup;
-})();
-`, WorktreeCreateID, sid)
-}
-
-func renderWorktreePickerPopup(sid string) *r.Node {
-	return components.WorktreePickerPopup(sid)
-}
-
-func worktreePickerPopupJS(sid string) string {
-	return fmt.Sprintf(`
-(function(){
-	var selectedIdx=0;
-	var filtered=[];
-	var hoverEnabled=false;
-
-	function getDlg(){return document.getElementById('%s');}
-	function getInp(){return document.getElementById('worktree-picker-input');}
-	function getResults(){return document.getElementById('worktree-picker-results');}
-
-	function armHoverAfterPointerMove(){
-		hoverEnabled=false;
-		var dlg=getDlg();
-		if(!dlg)return;
-		var enableHover=function(){
-			hoverEnabled=true;
-			dlg.removeEventListener('mousemove',enableHover,true);
-		};
-		dlg.addEventListener('mousemove',enableHover,true);
-	}
-
-	function fuzzyMatch(text,query){
-		text=(text||'').toLowerCase();
-		query=(query||'').toLowerCase();
-		var ti=0,qi=0,score=0,lastMatch=-1;
-		while(ti<text.length&&qi<query.length){
-			if(text[ti]===query[qi]){
-				score+=1;
-				if(lastMatch===ti-1)score+=2;
-				if(ti===0||text[ti-1]===' '||text[ti-1]==='/'||text[ti-1]==='.')score+=3;
-				lastMatch=ti;
-				qi++;
-			}
-			ti++;
-		}
-		return qi===query.length?score:0;
-	}
-
-	function render(){
-		var res=getResults();
-		if(!res)return;
-		var dk=document.documentElement.classList.contains('dark');
-		if(filtered.length===0){
-			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No worktrees found</div>';
-			return;
-		}
-		var html='';
-		filtered.forEach(function(item,i){
-			var sel=i===selectedIdx;
-			html+='<div class="worktree-picker-item flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
-				+(sel?(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500')
-				:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'))
-				+'" data-worktree-idx="'+i+'">';
-			html+='<i class="material-icons-round '+(dk?'text-zinc-400':'text-gray-400')+' text-lg">alt_route</i>';
-			html+='<div class="flex-1 min-w-0">';
-			html+='<div class="text-sm truncate '+(dk?'text-zinc-200':'text-gray-800')+'">'+item.branch+'</div>';
-			html+='<div class="text-[11px] truncate '+(dk?'text-zinc-500':'text-gray-400')+'">'+item.project+'</div>';
-			html+='</div></div>';
-		});
-		res.innerHTML=html;
-		res.querySelectorAll('[data-worktree-idx]').forEach(function(el){
-			el.addEventListener('mouseenter',function(){
-				if(!hoverEnabled)return;
-				var idx=parseInt(el.getAttribute('data-worktree-idx'),10);
-				if(!Number.isNaN(idx)&&idx!==selectedIdx){
-					selectedIdx=idx;
-					render();
-				}
-			});
-			el.addEventListener('mousedown',function(e){
-				e.preventDefault();
-				var idx=parseInt(el.getAttribute('data-worktree-idx'),10);
-				if(Number.isNaN(idx))return;
-				selectedIdx=idx;
-				launch();
-			});
-		});
-		var selected=res.querySelector('[data-worktree-idx="'+selectedIdx+'"]');
-		if(selected)selected.scrollIntoView({block:'nearest'});
-	}
-
-	function filter(){
-		var query=(getInp()&&getInp().value||'').trim();
-		var all=(window.__libroWorktrees||[]).slice();
-		if(!query){
-			filtered=all;
-		}else{
-			filtered=[];
-			all.forEach(function(item){
-				var score=fuzzyMatch(item.project+' '+item.branch+' '+item.path,query);
-				if(score>0){
-					filtered.push(Object.assign({score:score},item));
-				}
-			});
-			filtered.sort(function(a,b){return b.score-a.score;});
-		}
-		selectedIdx=0;
-		render();
-	}
-
-	function closePopup(){
-		var dlg=getDlg();
-		var inp=getInp();
-		if(dlg)dlg.classList.add('hidden');
-		if(inp)inp.value='';
-		hoverEnabled=false;
-	}
-
-	function launch(){
-		if(filtered.length===0)return;
-		var item=filtered[selectedIdx];
-		closePopup();
-		__ws.call('worktree.switch',{sid:'%s',project:item.project,path:item.path,branch:item.branch});
-	}
-
-	function openPopup(){
-		var dlg=getDlg();
-		var inp=getInp();
-		if(!dlg||!inp)return;
-		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
-		dlg.classList.remove('hidden');
-		inp.value='';
-		filter();
-		armHoverAfterPointerMove();
-		setTimeout(function(){inp.focus();},50);
-	}
-
-	var inp=getInp();
-	if(inp){
-		inp.addEventListener('input',filter);
-		inp.addEventListener('keydown',function(e){
-			var dlg=getDlg();
-			if(!dlg||dlg.classList.contains('hidden'))return;
-			e.stopImmediatePropagation();
-			if(e.key==='ArrowDown'){
-				e.preventDefault();
-				if(selectedIdx<filtered.length-1){selectedIdx++;render();}
-			}else if(e.key==='ArrowUp'){
-				e.preventDefault();
-				if(selectedIdx>0){selectedIdx--;render();}
-			}else if(e.key==='Enter'){
-				e.preventDefault();
-				launch();
-			}else if(e.key==='Escape'){
-				e.preventDefault();
-				closePopup();
-			}
-		});
-	}
-
-	window.__libroOpenWorktreePicker=openPopup;
-})();
-`, WorktreePickerID, sid)
-}
-
-func worktreesJS(state *AppState) string {
-	if !GitAvailable() {
-		return "window.__libroWorktrees=[];"
-	}
-	type jsWorktree struct {
-		Project string `json:"project"`
-		Branch  string `json:"branch"`
-		Path    string `json:"path"`
-	}
-	var all []jsWorktree
-	for _, p := range state.Projects {
-		if !p.IsGitRepo || p.Virtual {
-			continue
-		}
-		wts, err := GitListWorktrees(p.Path)
-		if err != nil {
-			continue
-		}
-		for _, wt := range wts {
-			if wt.IsBare {
-				continue
-			}
-			all = append(all, jsWorktree{
-				Project: p.Name,
-				Branch:  wt.Branch,
-				Path:    wt.Path,
-			})
-		}
-	}
-	b, _ := json.Marshal(all)
-	if b == nil {
-		b = []byte("[]")
-	}
-	return fmt.Sprintf("window.__libroWorktrees=%s;", string(b))
-}
-
 // renderManageAppsPage renders the manage apps popup.
 func renderManageAppsPage(state *AppState, sid string) *r.Node {
 	hiddenClass := " hidden"
@@ -3857,12 +3584,6 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					__ws.call('nav.slot.toggle.active', {"sid": "%s"});
-					return;
-				}
-				if (e.metaKey && (e.key === 'g' || e.key === 'G' || e.code === 'KeyG') && !e.ctrlKey) {
-					e.preventDefault();
-					e.stopImmediatePropagation();
-					if (window.__libroOpenWorktreePicker) window.__libroOpenWorktreePicker();
 					return;
 				}
 				if (e.metaKey && (e.key === 'q' || e.key === 'Q') && !e.ctrlKey) {

@@ -982,7 +982,6 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		return r.NewResponse().
 			Add(projectsJS(state)).
-			Add(worktreesJS(state)).
 			Build()
 	})
 
@@ -999,7 +998,6 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 		return r.NewResponse().
 			Add(projectsJS(state)).
-			Add(worktreesJS(state)).
 			Build()
 	})
 
@@ -1248,87 +1246,6 @@ func Run(assets embed.FS) {
 			Add(updateHashJS(vtName)).
 			Add(focusSelectedAppJS(state)).
 			Build()
-	})
-
-	// Add a new worktree
-	app.Action("worktree.add", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		parentProject, _ := data["project"].(string)
-		sourcePath, _ := data["sourcePath"].(string)
-		branch, _ := data["branch"].(string)
-		branch = strings.TrimSpace(branch)
-		if parentProject == "" || branch == "" {
-			return r.Notify("error", "Branch name is required")
-		}
-
-		projectPath := strings.TrimSpace(sourcePath)
-		if projectPath == "" {
-			projectPath = sm.GetProjectPath(sid, parentProject)
-		}
-		if projectPath == "" {
-			return r.Notify("error", "Project not found")
-		}
-
-		// Create worktree at sibling directory: ../projectName-branchName
-		targetPath := filepath.Join(filepath.Dir(projectPath), filepath.Base(projectPath)+"-"+branch)
-
-		if err := GitAddWorktree(projectPath, branch, targetPath); err != nil {
-			return r.Notify("error", "Failed to add worktree: "+err.Error())
-		}
-
-		state := sm.Get(sid)
-		return r.NewResponse().
-			Add(projectsJS(state)).
-			Add(worktreesJS(state)).
-			Build()
-	})
-
-	// Remove a worktree
-	app.Action("worktree.remove", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		parentProject, _ := data["project"].(string)
-		wtPath, _ := data["path"].(string)
-		if parentProject == "" || wtPath == "" {
-			return ""
-		}
-
-		projectPath := sm.GetProjectPath(sid, parentProject)
-		if projectPath == "" {
-			return r.Notify("error", "Project not found")
-		}
-
-		// Find and remove virtual project for this worktree
-		state := sm.Get(sid)
-		for _, p := range state.Projects {
-			if p.Virtual && p.Path == wtPath {
-				wasActive := state.ActiveProject == p.Name
-				apps, ok := sm.RemoveVirtualProject(sid, p.Name)
-				if ok {
-					for _, a := range apps {
-						if a.Type == AppTypeTerminal {
-							tm.Stop(a.ID)
-						}
-					}
-				}
-				if wasActive {
-					sm.SwitchProject(sid, parentProject)
-				}
-				break
-			}
-		}
-
-		if err := GitRemoveWorktree(projectPath, wtPath); err != nil {
-			return r.Notify("error", "Failed to remove worktree: "+err.Error())
-		}
-
-		state = sm.Get(sid)
-		resp := r.NewResponse().
-			Add(projectsJS(state)).
-			Add(worktreesJS(state))
-
-		return resp.Build()
 	})
 
 	registerTtydProxy(app)

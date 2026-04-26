@@ -15,8 +15,6 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderSearchDialog(sid),
 		renderShortcutsDialog(),
 		renderCloseDialog(sid),
-		renderWorktreeCreatePopup(sid),
-		renderWorktreePickerPopup(sid),
 		renderProjectPickerPopup(sid),
 		renderURLPopup(sid),
 		renderResizePopup(sid),
@@ -33,9 +31,6 @@ func renderPage(state *AppState, sid string) *r.Node {
 		shortcutsDialogJS() +
 		closeDialogJS(sid) +
 		webviewClientJS() +
-		worktreeCreatePopupJS(sid) +
-		worktreePickerPopupJS(sid) +
-		worktreesJS(state) +
 		projectPickerPopupJS(sid) +
 		projectsJS(state) +
 		urlPopupJS(sid) +
