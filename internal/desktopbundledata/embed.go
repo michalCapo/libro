@@ -1,3 +1,4 @@
+// Package desktopbundledata embeds the generated Electron app files and runtime zip used to build desktop bundles.
 package desktopbundledata
 
 import "embed"

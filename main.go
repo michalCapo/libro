@@ -1,3 +1,4 @@
+// Command libro is the Libro CLI entry point that boots the HTTP server and optional desktop window.
 package main
 
 import (

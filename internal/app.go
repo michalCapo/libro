@@ -1,3 +1,4 @@
+// Package libro implements the Libro server, desktop bundling, and UI components.
 package libro
 
 import (
