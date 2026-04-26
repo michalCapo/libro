@@ -93,14 +93,15 @@ Libro is a desktop strip for keeping browser panels and terminal sessions open s
 
 **Apps**
 
-- `⌘ + N` — open launcher on the right
-- `⌘ + Ctrl + N` — open launcher on the left
+- `⌘ + O` — open launcher on the right
+- `⌘ + Ctrl + O` — open launcher on the left
 - `⌘ + ;` — open command palette
 - `⌘ + W` — close current app
 - `⌘ + R` — open resize popup
 - `⌘ + F` — toggle full width
 - `⌘ + +` — zoom in
 - `⌘ + -` — zoom out
+- `⌘ + 0` — reset zoom
 
 **Navigation**
 
@@ -108,7 +109,7 @@ Libro is a desktop strip for keeping browser panels and terminal sessions open s
 - `⌘ + L` — select app to the right
 - `⌘ + Ctrl + U` — move app left
 - `⌘ + Ctrl + I` — move app right
-- `⌘ + B` — toggle sidebar
+- `⌘ + N` — open project & worktree picker
 - `⌘ + X` — assign or remove current project shortcut
 - `⌘ + G` — search all worktrees
 - `Ctrl + 1` — switch to `home`

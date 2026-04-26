@@ -17,21 +17,22 @@ func ShortcutsDialog() *r.Node {
 	}
 	sections := []section{
 		{"Apps", "", []shortcut{
-			{"⌘ + N", "New app (right of current)"},
-			{"⌘ + Ctrl + N", "New app (left of current)"},
+			{"⌘ + O", "New app (right of current)"},
+			{"⌘ + Ctrl + O", "New app (left of current)"},
 			{"⌘ + ;", "Command palette"},
 			{"⌘ + W", "Close current app"},
 			{"⌘ + R", "Resize app popup"},
 			{"⌘ + F", "Toggle full width"},
 			{"⌘ + +", "Zoom in (whole app)"},
 			{"⌘ + -", "Zoom out (whole app)"},
+			{"⌘ + 0", "Reset zoom (whole app)"},
 		}},
 		{"Navigation", "Win + X toggles an automatic Ctrl + 2-9 assignment for the current project", []shortcut{
 			{"⌘ + H", "Navigate left"},
 			{"⌘ + L", "Navigate right"},
 			{"⌘ + Ctrl + U", "Move app left"},
 			{"⌘ + Ctrl + I", "Move app right"},
-			{"⌘ + B", "Open project & worktree picker"},
+			{"⌘ + N", "Open project & worktree picker"},
 			{"⌘ + X", "Assign or remove current project shortcut"},
 			{"Ctrl + 1", "Switch to home project"},
 			{"Ctrl + 2–9", "Switch to assigned project or worktree"},
@@ -39,7 +40,7 @@ func ShortcutsDialog() *r.Node {
 			{"⌘ + Z", "Toggle zen mode (hide UI)"},
 			{"⌘ + Q", "Quit Libro"},
 		}},
-		{"Search", "⌘ + N or ⌘ + Ctrl + N to open", []shortcut{
+		{"Search", "⌘ + O or ⌘ + Ctrl + O to open", []shortcut{
 			{": query", "Search the internet"},
 			{"! command", "Run terminal command"},
 		}},
