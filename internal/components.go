@@ -1248,7 +1248,7 @@ func closeDevtoolsForAppsJS(apps []Application) string {
 		return ""
 	}
 	seen := make(map[string]struct{}, len(apps))
-	js := ""
+	var js strings.Builder
 	for _, app := range apps {
 		if app.ID == "" {
 			continue
@@ -1257,9 +1257,9 @@ func closeDevtoolsForAppsJS(apps []Application) string {
 			continue
 		}
 		seen[app.ID] = struct{}{}
-		js += closeDevtoolsForAppJS(app.ID)
+		js.WriteString(closeDevtoolsForAppJS(app.ID))
 	}
-	return js
+	return js.String()
 }
 
 // focusSelectedAppJS returns JS that focuses the selected app's iframe after a short delay
