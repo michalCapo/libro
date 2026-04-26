@@ -4,7 +4,6 @@
 package components
 
 import (
-	"encoding/json"
 	"fmt"
 
 	r "github.com/michalCapo/g-sui/ui"
@@ -202,7 +201,7 @@ func renderWorktreeRow(sid, projectName string, wt SidebarWorktree) *r.Node {
 	}
 	wtAdd := r.Button(wtAddCls).
 		Attr("title", "Add worktree").
-		Attr("onclick", fmt.Sprintf("event.stopPropagation();if(window.__libroOpenWorktreeCreatePopup)window.__libroOpenWorktreeCreatePopup({project:%s,path:%s,branch:%s});", jsString(projectName), jsString(wt.Path), jsString(wt.Branch))).
+		Attr("onclick", fmt.Sprintf("event.stopPropagation();if(window.__libroOpenWorktreeCreatePopup)window.__libroOpenWorktreeCreatePopup({project:%s,path:%s,branch:%s});", JSString(projectName), JSString(wt.Path), JSString(wt.Branch))).
 		Render(r.I("material-icons-round text-[12px]").Text("add"))
 
 	wtLeadingCls := "relative flex items-center justify-center w-4 h-4 shrink-0"
@@ -260,7 +259,3 @@ func renderAppCountBadge(count int, active bool) *r.Node {
 	return r.Span(cls).Text(fmt.Sprintf("%d", count))
 }
 
-func jsString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
-}

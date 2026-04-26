@@ -3,10 +3,9 @@ package libro
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -23,22 +22,21 @@ func urlParse(rawURL string) (*url.URL, error) {
 }
 
 const (
-	DialogID          = "add-dialog"
 	MainAreaID        = "main-area"
-	ProjectBarID      = "project-bar" // kept for backward compat references
 	TopBarID          = "top-bar"
 	SidebarID         = "project-sidebar"
-	ProjectDialogID   = "project-dialog"
-	DirBrowserID      = "dir-browser"
-	SearchDialogID    = "search-dialog"
-	ShortcutsDialogID = "shortcuts-dialog"
-	CloseDialogID     = "close-dialog"
-	WorktreeCreateID  = "worktree-create-popup"
-	WorktreePickerID  = "worktree-picker-popup"
 	ManageDialogID    = "manage-dialog"
-	URLPopupID        = "url-popup"
-	ResizePopupID     = "resize-popup"
-	CommandPopupID    = "command-popup"
+	DialogID          = components.AddDialogID
+	ProjectDialogID   = components.ProjectDialogID
+	DirBrowserID      = components.DirBrowserID
+	SearchDialogID    = components.SearchDialogID
+	ShortcutsDialogID = components.ShortcutsDialogID
+	CloseDialogID     = components.CloseDialogID
+	WorktreeCreateID  = components.WorktreeCreateID
+	WorktreePickerID  = components.WorktreePickerID
+	URLPopupID        = components.URLPopupID
+	ResizePopupID     = components.ResizePopupID
+	CommandPopupID    = components.CommandPopupID
 )
 
 // termIconInfo stores the icon details for a known terminal command.
@@ -322,7 +320,9 @@ func discoverTermIconURL(command string) string {
 		if err != nil {
 			continue
 		}
-		resp.Body.Close()
+		if cerr := resp.Body.Close(); cerr != nil {
+			log.Printf("components: simpleicons HEAD %s body close failed: %v", iconURL, cerr)
+		}
 		if resp.StatusCode == 200 {
 			return iconURL
 		}
@@ -625,7 +625,7 @@ setTimeout(function(){
 	var wh=document.getElementById('app-width');if(wh)wh.value=wv;
 	var ps=document.getElementById('app-project-specific');if(ps)ps.checked=%v;
 },100);
-`, jsString(app.Type), jsString(app.Command), app.Writable, jsString(app.URL), jsString(app.Name), jsString(app.Width), app.ProjectSpecific)
+`, components.JSString(app.Type), components.JSString(app.Command), app.Writable, components.JSString(app.URL), components.JSString(app.Name), components.JSString(app.Width), app.ProjectSpecific)
 }
 
 // renderAppStrip renders the horizontal strip of applications with navigation
@@ -654,7 +654,7 @@ func renderAppStrip(state *AppState, sid string) *r.Node {
 
 func selectedAppID(state *AppState) string {
 	if state.SelectedIndex >= 0 && state.SelectedIndex < len(state.Apps) {
-		return jsString(state.Apps[state.SelectedIndex].ID)
+		return components.JSString(state.Apps[state.SelectedIndex].ID)
 	}
 	return "''"
 }
@@ -835,7 +835,7 @@ func projectToastJS(name string) string {
 		proj = before
 		branch = after
 	}
-	return fmt.Sprintf("if(window.__libroProjectToast)window.__libroProjectToast(%s,%s);", jsString(proj), jsString(branch))
+	return fmt.Sprintf("if(window.__libroProjectToast)window.__libroProjectToast(%s,%s);", components.JSString(proj), components.JSString(branch))
 }
 
 // projectToastSetupJS returns JS that registers the global toast function.
@@ -993,7 +993,7 @@ func showToastJS(title, subtitle string, durationMs int) string {
 	if durationMs <= 0 {
 		durationMs = 3000
 	}
-	return fmt.Sprintf("if(window.__libroShowToast)window.__libroShowToast(%s,%s,%d);", jsString(title), jsString(subtitle), durationMs)
+	return fmt.Sprintf("if(window.__libroShowToast)window.__libroShowToast(%s,%s,%d);", components.JSString(title), components.JSString(subtitle), durationMs)
 }
 
 // renderAppFrame renders a single application iframe with controls
@@ -1410,7 +1410,7 @@ func closeDevtoolsForAppJS(appID string) string {
 	return fmt.Sprintf(`
 (function(){
 	if(window.__libroCloseConsole) window.__libroCloseConsole(%s);
-})();`, jsString(appID))
+})();`, components.JSString(appID))
 }
 
 // closeDevtoolsForAppsJS closes Electron devtools overlays for all apps in a project
@@ -1445,7 +1445,7 @@ func focusSelectedAppJS(state *AppState) string {
 window.__libroSelectedApp=%s;
 setTimeout(function(){
 	if(window.__libroFocusApp) window.__libroFocusApp(%d);
-}, 30);`, jsString(appID), state.SelectedIndex)
+}, 30);`, components.JSString(appID), state.SelectedIndex)
 }
 
 // removeAppJS returns JS that removes an app frame by its app ID from the strip.
@@ -1494,258 +1494,26 @@ func poolWebviewJS(appID string) string {
 })();`, appID)
 }
 
-// renderSideLauncher renders a vertical icon dock: saved app icons + "+" button.
-// Now server-rendered from DB instead of client-side localStorage.
-func renderSideLauncher(sid, side, activeProject string) *r.Node {
-	state := sm.Get(sid)
-	savedApps := DBLoadVisibleSavedApps(savedAppsProjectName(state, activeProject))
-
-	tipPos := "left-full ml-2"
-	if side == "right" {
-		tipPos = "right-full mr-2"
-	}
-	btnCls := "w-12 h-12 flex items-center justify-center rounded-md cursor-pointer transition-colors duration-75 hover:bg-gray-200 dark:hover:bg-zinc-700 relative group/ico"
-	tipCls := "absolute " + tipPos + " px-2 py-1 text-xs rounded bg-white dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-zinc-700 whitespace-nowrap opacity-0 group-hover/ico:opacity-100 pointer-events-none transition-opacity z-[200] shadow-lg"
-
-	children := make([]*r.Node, 0, len(savedApps)+2)
-
-	for _, app := range savedApps {
-		var iconNode *r.Node
-		label := app.Name
-
-		if app.Type == "terminal" {
-			if label == "" {
-				label = app.Command
-			}
-			if info := lookupTermIcon(app.Command); info != nil {
-				if info.URL != "" {
-					iconNode = r.Img("w-8 h-8 rounded-sm").Attr("src", info.URL)
-				} else {
-					iconNode = r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-2xl").Text(info.MaterialIcon)
-				}
-			} else if app.IconURL != "" {
-				iconNode = r.Img("w-8 h-8 rounded-sm").Attr("src", app.IconURL)
-			} else {
-				iconNode = r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-2xl").Text("terminal")
-			}
-		} else {
-			if label == "" {
-				label = app.URL
-			}
-			iconNode = r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-2xl").Text("language")
-			if app.URL != "" {
-				if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
-					iconNode = r.Img("w-8 h-8 rounded-sm").
-						Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=32")
-					if label == app.URL {
-						h := strings.TrimPrefix(u.Hostname(), "www.")
-						label = h
-					}
-				}
-			}
-		}
-
-		btn := r.Button(btnCls).
-			Render(
-				iconNode,
-				r.Span(tipCls).Text(label),
-			).
-			OnClick(&r.Action{Name: "app.start", Data: map[string]any{
-				"sid": sid, "type": app.Type, "url": app.URL,
-				"command": app.Command, "width": app.Width,
-				"writable": app.Writable, "name": app.Name, "side": side,
-				"iconUrl": app.IconURL,
-			}})
-		children = append(children, btn)
-	}
-
-	// Quick launch button (combined browse + run)
-	launchBtn := r.Button(btnCls).
-		Render(
-			r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-2xl").Text("search"),
-			r.Span(tipCls).Text("Quick launch"),
-		).
-		OnClick(&r.Action{Name: "app.run.new", Data: sidData(sid, "side", side)})
-	children = append(children, launchBtn)
-
-	// Add button
-	addBtn := r.Button(btnCls).
-		Render(
-			r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 text-[18px]").Text("add"),
-			r.Span(tipCls).Text("Add app"),
-		).
-		OnClick(&r.Action{Name: "app.dialog.open", Data: sidData(sid, "side", side)})
-	children = append(children, addBtn)
-
-	return r.Div("shrink-0 flex items-center mx-0.5").Render(
-		r.Div("flex flex-col items-center gap-1 py-1").Render(children...),
-	)
-}
-
 // renderAddDialog renders the add application modal dialog
 func renderAddDialog(visible bool, sid string) *r.Node {
-	hiddenClass := " hidden"
-	if visible {
-		hiddenClass = ""
+	widths := AllWidths()
+	strs := make([]string, 0, len(widths))
+	for _, w := range widths {
+		strs = append(strs, string(w))
 	}
-
-	widthOptions := make([]*r.Node, 0)
-	for _, w := range AllWidths() {
-		radio := r.IRadio("accent-blue-500 cursor-pointer").
-			Attr("name", "app-width").
-			Attr("value", string(w)).
-			Attr("onchange", fmt.Sprintf("document.getElementById('app-width').value='%s'", string(w))).
-			ID(fmt.Sprintf("width-%s", w))
-		if w == WidthLG {
-			radio.Attr("checked", "checked")
-		}
-		widthOptions = append(widthOptions,
-			r.Label("flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-300 dark:border-zinc-700 hover:border-gray-400 dark:hover:border-zinc-500 cursor-pointer transition-colors text-gray-700 dark:text-zinc-300 text-sm font-mono").Render(
-				radio,
-				r.Span("").Text(strings.ToUpper(string(w))),
-			),
-		)
-	}
-
-	tabSwitchJS := func(showTab string) string {
-		return fmt.Sprintf(`
-			document.getElementById('tab-url-content').classList.toggle('hidden', '%s' !== 'url');
-			document.getElementById('tab-terminal-content').classList.toggle('hidden', '%s' !== 'terminal');
-			document.getElementById('tab-url-btn').classList.toggle('border-blue-500', '%s' === 'url');
-			document.getElementById('tab-url-btn').classList.toggle('text-blue-600', '%s' === 'url');
-			document.getElementById('tab-url-btn').classList.toggle('border-transparent', '%s' !== 'url');
-			document.getElementById('tab-url-btn').classList.toggle('text-gray-500', '%s' !== 'url');
-			document.getElementById('tab-terminal-btn').classList.toggle('border-blue-500', '%s' === 'terminal');
-			document.getElementById('tab-terminal-btn').classList.toggle('text-blue-600', '%s' === 'terminal');
-			document.getElementById('tab-terminal-btn').classList.toggle('border-transparent', '%s' !== 'terminal');
-			document.getElementById('tab-terminal-btn').classList.toggle('text-gray-500', '%s' !== 'terminal');
-			document.getElementById('app-type').value = '%s';
-		`, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab, showTab)
-	}
-
-	collectIDs := []string{"app-url", "app-command", "app-writable", "app-type", "app-name", "app-width", "app-project-specific"}
-
-	inputCls := "w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-md text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-
-	return r.Div("fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
-		ID(DialogID).
-		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden')", DialogID))).
-		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl p-5 w-full max-w-md mx-4").
-				OnClick(r.JS("event.stopPropagation()")).
-				Render(
-					r.H2("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100 mb-4 tracking-tight").Text("Add Application"),
-
-					r.IHidden("").ID("app-type").Attr("value", "terminal"),
-					r.IHidden("").ID("app-width").Attr("value", string(WidthLG)),
-
-					r.Div("flex border-b border-gray-200 dark:border-zinc-700/50 mb-4").Render(
-						r.Button("px-4 py-2 text-sm font-mono border-b-2 border-blue-500 text-blue-600 cursor-pointer transition-colors").
-							ID("tab-terminal-btn").
-							Text("Terminal").
-							OnClick(r.JS(tabSwitchJS("terminal"))),
-						r.Button("px-4 py-2 text-sm font-mono border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 cursor-pointer transition-colors").
-							ID("tab-url-btn").
-							Text("URL").
-							OnClick(r.JS(tabSwitchJS("url"))),
-					),
-
-					r.Div("mb-5 hidden").ID("tab-url-content").Render(
-						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("URL"),
-						r.IUrl(inputCls).
-							ID("app-url").
-							Attr("placeholder", "https://example.com").
-							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-add').click();}"),
-						r.P("text-xs text-gray-400 dark:text-zinc-500 mt-1").Text("Use __dir__ as a placeholder for the project directory."),
-					),
-
-					r.Div("mb-5").ID("tab-terminal-content").Render(
-						r.Div("mb-3").Render(
-							r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Command"),
-							r.IText(inputCls+" font-mono").
-								ID("app-command").
-								Attr("placeholder", "bash").
-								Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();document.getElementById('btn-add').click();}"),
-							r.P("text-xs text-gray-400 dark:text-zinc-500 mt-1").Text("Use __dir__ as a placeholder for the project directory."),
-						),
-						r.Label("flex items-center gap-2 cursor-pointer").Render(
-							r.ICheckbox("accent-blue-500 cursor-pointer w-4 h-4").
-								ID("app-writable").
-								Attr("checked", "checked"),
-							r.Span("text-sm text-gray-600 dark:text-zinc-400").Text("Writable (allow input)"),
-						),
-					),
-
-					r.Div("mb-5").Render(
-						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Name (optional)"),
-						r.IText(inputCls).
-							ID("app-name").
-							Attr("placeholder", "e.g. My App"),
-					),
-
-					r.Div("mb-5").Render(
-						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Width"),
-						r.Div("flex flex-wrap gap-1.5").Render(widthOptions...),
-					),
-
-					r.Div("mb-5").Render(
-						r.Label("flex items-center gap-2 cursor-pointer").Render(
-							r.ICheckbox("accent-blue-500 cursor-pointer w-4 h-4").
-								ID("app-project-specific"),
-							r.Span("text-sm text-gray-600 dark:text-zinc-400").Text("Project specific"),
-						),
-					),
-
-					r.Div("flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-zinc-800").Render(
-						r.Button("px-4 py-2 text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 font-mono text-sm rounded-md hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer").
-							Text("Cancel").
-							OnClick(&r.Action{Name: "app.dialog.close", Data: sidData(sid)}),
-						r.Button("px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md transition-colors cursor-pointer").
-							ID("btn-add").
-							Text("Save").
-							OnClick(&r.Action{
-								Name:    "app.save",
-								Data:    sidData(sid),
-								Collect: collectIDs,
-							}),
-					),
-				),
-		)
+	return components.AddDialog(components.AddDialogInput{
+		Sid:          sid,
+		Visible:      visible,
+		Widths:       strs,
+		DefaultWidth: string(WidthLG),
+	})
 }
 
 // renderSearchDialog renders the fuzzy search popup (hidden by default).
 // All filtering, navigation, and selection logic runs client-side via JS
 // since saved apps are injected via __libroSavedApps from the DB.
 func renderSearchDialog(sid string) *r.Node {
-	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
-		ID(SearchDialogID).
-		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", SearchDialogID))).
-		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
-				OnClick(r.JS("event.stopPropagation()")).
-				Render(
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
-						r.Input("w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
-							ID("search-input").
-							Attr("type", "text").
-							Attr("placeholder", "Search applications...").
-							Attr("autocomplete", "off").
-							Attr("spellcheck", "false").
-							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();}"),
-					),
-					r.Div("max-h-80 overflow-y-auto").ID("search-results"),
-					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
-						r.Div("flex items-center gap-4").Render(
-							r.Span("").Text("↑↓ navigate"),
-							r.Span("").Text("Enter open"),
-							r.Span("").Text("Esc close"),
-						),
-						r.Span("cursor-pointer hover:text-red-400 transition-colors").
-							Attr("onclick", "event.stopPropagation();__ws.call('history.clear',{sid:'"+sid+"'});__ws.call('run.history.clear',{sid:'"+sid+"'});").
-							Text("clear history"),
-					),
-				),
-		)
+	return components.SearchDialog(sid)
 }
 
 // searchDialogJS returns the JS that powers the fuzzy search popup behavior.
@@ -2126,30 +1894,7 @@ func searchDialogJS(sid string) string {
 
 // renderURLPopup renders the URL/search popup for Ctrl+L (works in both zen and non-zen mode).
 func renderURLPopup(sid string) *r.Node {
-	return r.Div("absolute inset-0 z-[60] flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
-		ID(URLPopupID).
-		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", URLPopupID))).
-		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
-				OnClick(r.JS("event.stopPropagation()")).
-				Render(
-					r.Div("px-4 py-3 flex items-center gap-2").Render(
-						r.I("material-icons-round text-blue-500 text-lg").Text("language"),
-						r.Input("flex-1 bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
-							ID("url-popup-input").
-							Attr("type", "text").
-							Attr("placeholder", "Enter URL or search...").
-							Attr("autocomplete", "off").
-							Attr("spellcheck", "false"),
-					),
-					r.Div("max-h-[40vh] overflow-y-auto").ID("url-popup-history"),
-					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
-						r.Span("").Text("Enter navigate"),
-						r.Span("").Text("↑↓ select"),
-						r.Span("").Text("Esc close"),
-					),
-				),
-		)
+	return components.URLPopup(sid)
 }
 
 // urlPopupJS returns JS that powers the Ctrl+L URL popup.
@@ -2330,71 +2075,16 @@ func urlPopupJS(sid string) string {
 // Uses radio-style buttons navigable with j/k and confirmable with Enter.
 func renderResizePopup(sid string) *r.Node {
 	widths := AllWidths()
-	buttons := make([]*r.Node, 0, len(widths))
+	strs := make([]string, 0, len(widths))
 	for _, w := range widths {
-		label := strings.ToUpper(string(w))
-		buttons = append(buttons,
-			r.Div("resize-btn flex items-center gap-3 px-4 py-2 rounded cursor-pointer transition-colors duration-75 text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800").
-				Attr("data-resize-width", string(w)).
-				Render(
-					r.Div("w-4 h-4 rounded-full border-2 border-gray-300 dark:border-zinc-600 flex items-center justify-center shrink-0").
-						Attr("data-radio", "").
-						Render(r.Div("w-2 h-2 rounded-full bg-blue-600 hidden").Attr("data-radio-dot", "")),
-					r.Span("text-sm font-mono tracking-wider uppercase").Text(label),
-				),
-		)
+		strs = append(strs, string(w))
 	}
-
-	return r.Div("absolute inset-0 z-[60] flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden outline-none").
-		ID(ResizePopupID).
-		Attr("tabindex", "-1").
-		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", ResizePopupID))).
-		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-xs mx-4 overflow-hidden").
-				OnClick(r.JS("event.stopPropagation()")).
-				Render(
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-2").Render(
-						r.I("material-icons-round text-blue-500 text-lg").Text("aspect_ratio"),
-						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200").Text("Resize App"),
-					),
-					r.Div("px-3 py-2 flex flex-col gap-0").
-						ID("resize-popup-buttons").
-						Render(buttons...),
-					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
-						r.Span("").Text("j/k navigate"),
-						r.Span("").Text("Enter resize"),
-						r.Span("").Text("Esc close"),
-					),
-				),
-		)
+	return components.ResizePopup(sid, strs)
 }
 
 // renderCommandPopup renders the command palette for app-wide and app-specific commands.
 func renderCommandPopup() *r.Node {
-	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
-		ID(CommandPopupID).
-		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", CommandPopupID))).
-		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
-				OnClick(r.JS("event.stopPropagation()")).
-				Render(
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
-						r.Input("w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
-							ID("command-popup-input").
-							Attr("type", "text").
-							Attr("placeholder", "Run command...").
-							Attr("autocomplete", "off").
-							Attr("spellcheck", "false").
-							Attr("onkeydown", "if(event.key==='Enter'){event.preventDefault();}"),
-					),
-					r.Div("max-h-80 overflow-y-auto").ID("command-popup-results"),
-					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
-						r.Span("").Text("↑↓ navigate"),
-						r.Span("").Text("Enter run"),
-						r.Span("").Text("Esc close"),
-					),
-				),
-		)
+	return components.CommandPopup()
 }
 
 // commandPopupJS returns the JS that powers the global command palette.
@@ -2748,111 +2438,7 @@ func resizePopupJS(sid string) string {
 
 // renderShortcutsDialog renders the keyboard shortcuts popup (hidden by default).
 func renderShortcutsDialog() *r.Node {
-	type shortcut struct {
-		keys string
-		desc string
-	}
-	type section struct {
-		title     string
-		subtitle  string
-		shortcuts []shortcut
-	}
-	sections := []section{
-		{"Apps", "", []shortcut{
-			{"⌘ + N", "New app (right of current)"},
-			{"⌘ + Ctrl + N", "New app (left of current)"},
-			{"⌘ + ;", "Command palette"},
-			{"⌘ + W", "Close current app"},
-			{"⌘ + R", "Resize app popup"},
-			{"⌘ + F", "Toggle full width"},
-			{"⌘ + +", "Zoom in (whole app)"},
-			{"⌘ + -", "Zoom out (whole app)"},
-		}},
-		{"Navigation", "Win + X toggles an automatic Ctrl + 2-9 assignment for the current project; sidebar badges still allow click add/remove", []shortcut{
-			{"⌘ + H", "Navigate left"},
-			{"⌘ + L", "Navigate right"},
-			{"⌘ + Ctrl + U", "Move app left"},
-			{"⌘ + Ctrl + I", "Move app right"},
-			{"⌘ + B", "Toggle sidebar"},
-			{"⌘ + X", "Assign or remove current project shortcut"},
-			{"⌘ + G", "Search all worktrees"},
-			{"Ctrl + 1", "Switch to home project"},
-			{"Ctrl + 2–9", "Switch to assigned project or worktree"},
-			{"Ctrl + 0", "Switch to previous project"},
-			{"⌘ + Z", "Toggle zen mode (hide UI)"},
-			{"⌘ + Q", "Quit Libro"},
-		}},
-		{"Search", "⌘ + N or ⌘ + Ctrl + N to open", []shortcut{
-			{": query", "Search the internet"},
-			{"! command", "Run terminal command"},
-		}},
-		{"Browser", "", []shortcut{
-			{"Ctrl + L", "URL / search popup for browser apps"},
-			{"Ctrl + R", "Reload browser page"},
-		}},
-		{"Browser", "Vim keys — disabled in input fields", []shortcut{
-			{"g / G", "Go to top / bottom of page"},
-			{"j / k", "Scroll down / up"},
-			{"h / l", "Scroll left / right"},
-			{"/", "Find in page"},
-			{"n / p", "Find next / previous"},
-			{"Esc", "Clear search / blur input"},
-			{"b / f", "Page back / forward"},
-			{"y", "Copy selected text or URL"},
-			{"c", "Open DevTools Console tab"},
-			{"Enter", "Follow link / click button"},
-		}},
-	}
-
-	rows := make([]*r.Node, 0)
-	for i, sec := range sections {
-		mt := "mt-10"
-		if i == 0 {
-			mt = "mt-0"
-		}
-		sectionRows := make([]*r.Node, 0, len(sec.shortcuts))
-		for _, s := range sec.shortcuts {
-			sectionRows = append(sectionRows,
-				r.Div("flex items-center justify-between py-2 px-1").Render(
-					r.Span("text-sm text-gray-700 dark:text-zinc-300").Text(s.desc),
-					r.Span("text-xs font-mono px-2 py-0.5 rounded bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400").Text(s.keys),
-				),
-			)
-		}
-		header := []*r.Node{
-			r.Div("px-1 pb-1 text-lg font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-400").Text(sec.title),
-		}
-		if sec.subtitle != "" {
-			header = append(header,
-				r.Div("px-1 pb-1 text-xs text-gray-400 dark:text-zinc-500").Text(sec.subtitle),
-			)
-		}
-		rows = append(rows,
-			r.Div(mt).Render(
-				append(header, r.Div("").Render(sectionRows...))...,
-			),
-		)
-	}
-
-	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
-		ID(ShortcutsDialogID).
-		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", ShortcutsDialogID))).
-		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden").
-				OnClick(r.JS("event.stopPropagation()")).
-				Render(
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center justify-between").Render(
-						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200").Text("Keyboard Shortcuts"),
-						r.Button("text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 cursor-pointer").
-							Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", ShortcutsDialogID)).
-							Render(r.I("material-icons-round text-base").Text("close")),
-					),
-					r.Div("px-4 py-2 max-h-[60vh] overflow-y-auto").Render(rows...),
-					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
-						r.Span("").Text("Esc to close"),
-					),
-				),
-		)
+	return components.ShortcutsDialog()
 }
 
 // shortcutsDialogJS returns JS to open/close the shortcuts dialog and handle Esc.
@@ -2876,31 +2462,7 @@ func shortcutsDialogJS() string {
 // renderCloseDialog renders the close confirmation dialog (hidden by default).
 // It is populated dynamically via JS when the user attempts to close the window.
 func renderCloseDialog(sid string) *r.Node {
-	return r.Div("fixed inset-0 z-[70] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
-		ID(CloseDialogID).
-		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden").
-				OnClick(r.JS("event.stopPropagation()")).
-				Render(
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-2").Render(
-						r.I("material-icons-round text-base text-amber-500").Text("warning"),
-						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200").Text("Close Libro?"),
-					),
-					r.Div("px-4 py-3").Render(
-						r.P("text-sm text-gray-600 dark:text-zinc-400 mb-3").Text("The following applications are still running:"),
-						r.Div("max-h-60 overflow-y-auto").ID("close-dialog-apps"),
-					),
-					r.Div("px-4 py-3 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-end gap-2").Render(
-						r.Button("px-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-zinc-600 text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800 cursor-pointer").
-							Text("Cancel").
-							Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.add('hidden');if(window.__electronCloseAbort)window.__electronCloseAbort();", CloseDialogID)),
-						r.Button("px-3 py-1.5 text-sm rounded-md bg-red-500 hover:bg-red-600 text-white cursor-pointer").
-							ID("close-dialog-confirm").
-							Text("Yes, close all").
-							Attr("onclick", fmt.Sprintf("__ws.callSilent('app.close.all',{sid:'%s'});document.getElementById('%s').classList.add('hidden');if(window.libroElectron)window.libroElectron.forceClose();else window.close();", sid, CloseDialogID)),
-					),
-				),
-		)
+	return components.CloseDialog(sid)
 }
 
 // closeDialogJS returns JS to show/hide the close confirmation dialog.
@@ -2925,31 +2487,7 @@ func closeDialogJS(sid string) string {
 }
 
 func renderWorktreeCreatePopup(sid string) *r.Node {
-	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
-		ID(WorktreeCreateID).
-		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", WorktreeCreateID))).
-		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden").
-				OnClick(r.JS("event.stopPropagation()")).
-				Render(
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
-						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("add"),
-						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").ID("worktree-create-title").Text("New Worktree"),
-					),
-					r.Div("px-4 py-3").Render(
-						r.Input("w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
-							ID("worktree-create-input").
-							Attr("type", "text").
-							Attr("placeholder", "Branch name...").
-							Attr("autocomplete", "off").
-							Attr("spellcheck", "false"),
-					),
-					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
-						r.Span("").Text("Enter create"),
-						r.Span("").Text("Esc close"),
-					),
-				),
-		)
+	return components.WorktreeCreatePopup(sid)
 }
 
 func worktreeCreatePopupJS(sid string) string {
@@ -3023,33 +2561,7 @@ func worktreeCreatePopupJS(sid string) string {
 }
 
 func renderWorktreePickerPopup(sid string) *r.Node {
-	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
-		ID(WorktreePickerID).
-		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", WorktreePickerID))).
-		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
-				OnClick(r.JS("event.stopPropagation()")).
-				Render(
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
-						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("alt_route"),
-						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").Text("Worktrees"),
-					),
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
-						r.Input("w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
-							ID("worktree-picker-input").
-							Attr("type", "text").
-							Attr("placeholder", "Type project or branch...").
-							Attr("autocomplete", "off").
-							Attr("spellcheck", "false"),
-					),
-					r.Div("max-h-80 overflow-y-auto").ID("worktree-picker-results"),
-					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
-						r.Span("").Text("↑↓ navigate"),
-						r.Span("").Text("Enter select"),
-						r.Span("").Text("Esc close"),
-					),
-				),
-		)
+	return components.WorktreePickerPopup(sid)
 }
 
 func worktreePickerPopupJS(sid string) string {
@@ -3311,7 +2823,7 @@ func renderManageAppsPage(state *AppState, sid string) *r.Node {
 
 	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[10vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
 		ID(ManageDialogID).
-		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", ManageDialogID))).
+		OnClick(r.JS(components.HideJS(ManageDialogID))).
 		Render(
 			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-4xl mx-4 overflow-hidden").
 				OnClick(r.JS("event.stopPropagation()")).
@@ -3342,17 +2854,17 @@ func renderManageAppsPage(state *AppState, sid string) *r.Node {
 
 func manageAppsJS() string {
 	return fmt.Sprintf(`
-(function(){
-	var dlg=document.getElementById('%s');
-	if(!dlg)return;
-	document.addEventListener('keydown',function(e){
-		if(e.key==='Escape'&&!dlg.classList.contains('hidden')){
-			e.preventDefault();e.stopImmediatePropagation();
-			dlg.classList.add('hidden');
-		}
-	},true);
-})();
-`, ManageDialogID)
+		(function(){
+			var dlg=document.getElementById('%s');
+			if(!dlg)return;
+			document.addEventListener('keydown',function(e){
+				if(e.key==='Escape'&&!dlg.classList.contains('hidden')){
+					e.preventDefault();e.stopImmediatePropagation();
+					dlg.classList.add('hidden');
+				}
+			},true);
+		})();
+	`, ManageDialogID)
 }
 
 func renderManageAppSection(title, subtitle string, apps []SavedApp, sid string) *r.Node {
@@ -3795,7 +3307,7 @@ func updateAppPreviewJS(state *AppState) string {
 				}
 			}
 		})();
-	`, state.SelectedIndex, jsString(selectedCls), jsString(normalCls))
+	`, state.SelectedIndex, components.JSString(selectedCls), components.JSString(normalCls))
 }
 
 // runningAppCount returns the number of running apps for a given project name.
@@ -3807,20 +3319,6 @@ func runningAppCount(state *AppState, projectName string) int {
 		return len(snap.Apps)
 	}
 	return 0
-}
-
-// renderAppCountBadge renders a small count badge for running apps. Returns nil if count is 0.
-func renderAppCountBadge(count int, active bool) *r.Node {
-	if count == 0 {
-		return nil
-	}
-	cls := "inline-flex items-center justify-center min-w-[16px] h-4 rounded-full text-[10px] font-bold leading-none shrink-0 px-1 "
-	if active {
-		cls += "bg-white text-blue-600"
-	} else {
-		cls += "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
-	}
-	return r.Span(cls).Text(fmt.Sprintf("%d", count))
 }
 
 // renderProjectSidebar builds the input from session state and delegates
@@ -3944,125 +3442,19 @@ func buildWorktreeRows(state *AppState, sid string, proj Project, projActive boo
 	return out
 }
 
-// renderProjectBar kept as alias for backward compatibility in action responses.
-func renderProjectBar(state *AppState, sid string) *r.Node {
-	return renderProjectSidebar(state, sid)
-}
-
 // renderProjectDialog renders the create project modal
 func renderProjectDialog(visible bool, sid string) *r.Node {
-	hiddenClass := " hidden"
-	if visible {
-		hiddenClass = ""
-	}
-
-	homeDir, _ := os.UserHomeDir()
-	if homeDir == "" {
-		homeDir = "/"
-	}
-
-	return r.Div("fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
-		ID(ProjectDialogID).
-		OnClick(r.JS(fmt.Sprintf("document.getElementById('%s').classList.add('hidden')", ProjectDialogID))).
-		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl p-5 w-full max-w-2xl mx-4").
-				OnClick(r.JS("event.stopPropagation()")).
-				Render(
-					r.H2("text-lg font-mono font-bold text-gray-900 dark:text-zinc-100 mb-4 tracking-tight").Text("New Project"),
-
-					// Directory picker
-					r.Div("mb-4").Render(
-						r.Label("block text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1.5").Text("Select Folder"),
-						renderDirBrowser(homeDir, sid),
-					),
-
-					// Hidden input for selected path
-					r.IHidden("").ID("project-path").Attr("value", homeDir),
-
-					r.Div("flex justify-end gap-2 pt-2 border-t border-gray-100 dark:border-zinc-800").Render(
-						r.Button("px-4 py-2 text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 font-mono text-sm rounded-md hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer").
-							Text("Cancel").
-							OnClick(&r.Action{Name: "project.dialog.close", Data: sidData(sid)}),
-						r.Button("px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-medium rounded-md transition-colors cursor-pointer").
-							ID("btn-create-project").
-							Text("Create").
-							OnClick(&r.Action{
-								Name:    "project.create",
-								Data:    sidData(sid),
-								Collect: []string{"project-path"},
-							}),
-					),
-				),
-		)
+	return components.ProjectDialog(visible, sid)
 }
 
 // renderDirBrowser renders the directory browser component
 func renderDirBrowser(currentPath string, sid string) *r.Node {
-	dirCls := "flex items-center gap-2 px-3 py-1.5 text-sm font-mono text-gray-700 dark:text-zinc-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded cursor-pointer transition-colors"
-	selectedCls := "flex items-center gap-2 px-3 py-1.5 text-sm font-mono text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 rounded font-medium"
-
-	// Read directories
-	entries, err := os.ReadDir(currentPath)
-	var dirs []string
-	if err == nil {
-		for _, e := range entries {
-			if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
-				dirs = append(dirs, e.Name())
-			}
-		}
-		sort.Strings(dirs)
-	}
-
-	// Current path display
-	pathBar := r.Div("mb-2").Render(
-		r.Div("px-3 py-2 bg-gray-50 dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-md text-xs font-mono text-gray-600 dark:text-zinc-400 truncate").
-			Attr("title", currentPath).
-			Text(currentPath),
-	)
-
-	// Parent directory entry
-	var items []*r.Node
-	parentPath := filepath.Dir(currentPath)
-	if parentPath != currentPath {
-		items = append(items, r.Div(dirCls).Render(
-			r.I("material-icons-round text-gray-400 dark:text-zinc-500 text-base").Text("arrow_upward"),
-			r.Span("").Text(".."),
-		).OnClick(&r.Action{
-			Name: "project.browse",
-			Data: map[string]any{"sid": sid, "path": parentPath},
-		}))
-	}
-
-	// Directory entries
-	for _, d := range dirs {
-		fullPath := filepath.Join(currentPath, d)
-		items = append(items, r.Div(dirCls).Render(
-			r.I("material-icons-round text-amber-500 dark:text-amber-400 text-base").Text("folder"),
-			r.Span("truncate").Text(d),
-		).OnClick(&r.Action{
-			Name: "project.browse",
-			Data: map[string]any{"sid": sid, "path": fullPath},
-		}))
-	}
-
-	// Highlight current path as selected
-	_ = selectedCls
-
-	dirList := r.Div("max-h-80 overflow-y-auto space-y-0.5 border border-gray-200 dark:border-zinc-700 rounded-md p-1.5 bg-gray-50/50 dark:bg-zinc-800/50")
-	if len(items) == 0 {
-		dirList.Render(
-			r.Div("px-3 py-2 text-xs font-mono text-gray-400 dark:text-zinc-600 italic").Text("No subdirectories"),
-		)
-	} else {
-		dirList.Render(items...)
-	}
-
-	return r.Div("").ID(DirBrowserID).Render(pathBar, dirList)
+	return components.DirBrowser(currentPath, sid)
 }
 
 // updateHashJS returns JS that updates the URL hash to the given project name
 func updateHashJS(name string) string {
-	return fmt.Sprintf("history.replaceState(null,'','#%s');document.title=%s;", name, jsString(name+" — Libro"))
+	return fmt.Sprintf("history.replaceState(null,'','#%s');document.title=%s;", name, components.JSString(name+" — Libro"))
 }
 
 // savedAppsJS returns JS that sets the global __libroSavedApps and __libroBrowsedURLs variables from DB data.
