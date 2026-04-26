@@ -15,6 +15,10 @@ func SearchDialog(sid string) *r.Node {
 			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
+						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("search"),
+						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").Text("Search"),
+					),
 					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
 						r.Input("w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
 							ID("search-input").

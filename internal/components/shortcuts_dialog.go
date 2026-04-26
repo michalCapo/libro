@@ -33,6 +33,7 @@ func ShortcutsDialog() *r.Node {
 			{"⌘ + Ctrl + U", "Move app left"},
 			{"⌘ + Ctrl + I", "Move app right"},
 			{"⌘ + N", "Open project & worktree picker"},
+			{"⌘ + G", "Create worktree from current branch"},
 			{"⌘ + X", "Assign or remove current project shortcut"},
 			{"Ctrl + 1", "Switch to home project"},
 			{"Ctrl + 2–9", "Switch to assigned project or worktree"},
@@ -99,8 +100,9 @@ func ShortcutsDialog() *r.Node {
 			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center justify-between").Render(
-						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200").Text("Keyboard Shortcuts"),
+					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
+						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("keyboard"),
+						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").Text("Keyboard Shortcuts"),
 						r.Button("text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 cursor-pointer").
 							Attr("onclick", HideJS(ShortcutsDialogID)).
 							Render(r.I("material-icons-round text-base").Text("close")),
