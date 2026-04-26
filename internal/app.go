@@ -1248,6 +1248,89 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
+	// Create a new worktree from the active project's current branch and switch to it.
+	app.Action("worktree.create", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		branch, _ := data["branch"].(string)
+		branch = strings.TrimSpace(branch)
+		if branch == "" {
+			return r.Notify("error", "Branch name cannot be empty")
+		}
+		if strings.ContainsAny(branch, " \t\n\r~^:?*[\\") {
+			return r.Notify("error", "Branch name contains invalid characters")
+		}
+
+		state := sm.Get(sid)
+		if state == nil {
+			return ""
+		}
+
+		var parentName, repoPath string
+		for _, p := range state.Projects {
+			if p.Name != state.ActiveProject {
+				continue
+			}
+			if p.Virtual {
+				parentName = p.ParentProject
+				for _, pp := range state.Projects {
+					if pp.Name == parentName {
+						repoPath = pp.Path
+						break
+					}
+				}
+			} else {
+				parentName = p.Name
+				repoPath = p.Path
+			}
+			break
+		}
+		if repoPath == "" || !GitIsRepo(repoPath) {
+			return r.Notify("error", "Current project is not a git repository")
+		}
+
+		vtName := parentName + "/" + branch
+		for _, p := range state.Projects {
+			if p.Name == vtName {
+				return r.Notify("error", "Worktree for this branch already exists")
+			}
+		}
+
+		safeBranch := strings.ReplaceAll(branch, "/", "-")
+		wtPath := filepath.Join(filepath.Dir(repoPath), filepath.Base(repoPath)+"-"+safeBranch)
+
+		if err := GitCreateWorktree(repoPath, branch, wtPath); err != nil {
+			return r.Notify("error", "Failed to create worktree: "+err.Error())
+		}
+
+		prevState := sm.Get(sid)
+		closeDevtoolsJS := closeDevtoolsForAppsJS(prevState.Apps)
+
+		sm.AddVirtualProject(sid, vtName, wtPath, parentName)
+
+		if !sm.SwitchProject(sid, vtName) {
+			return r.Notify("error", "Worktree created but failed to switch")
+		}
+
+		state = sm.Get(sid)
+
+		var jsSwitch string
+		if sm.IsProjectRendered(sid, vtName) {
+			jsSwitch = switchProjectJS(vtName, nil)
+		} else {
+			jsSwitch = switchProjectJS(vtName, renderMainArea(state, sid))
+		}
+
+		return r.NewResponse().
+			Add(projectsJS(state)).
+			Replace(TopBarID, renderTopBar(state, sid)).
+			Add(closeDevtoolsJS).
+			Add(jsSwitch).
+			Add(updateHashJS(vtName)).
+			Add(focusSelectedAppJS(state)).
+			Build()
+	})
+
 	registerTtydProxy(app)
 	if err := app.Listen(":" + Port()); err != nil {
 		log.Printf("libro: app.Listen on :%s failed: %v", Port(), err)

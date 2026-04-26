@@ -32,9 +32,10 @@ const (
 	ShortcutsDialogID = components.ShortcutsDialogID
 	CloseDialogID     = components.CloseDialogID
 	ProjectPickerID   = components.ProjectPickerID
-	URLPopupID        = components.URLPopupID
-	ResizePopupID     = components.ResizePopupID
-	CommandPopupID    = components.CommandPopupID
+	URLPopupID            = components.URLPopupID
+	ResizePopupID         = components.ResizePopupID
+	CommandPopupID        = components.CommandPopupID
+	WorktreeCreatePopupID = components.WorktreeCreatePopupID
 )
 
 // termIconInfo stores the icon details for a known terminal command.
@@ -825,7 +826,7 @@ func navigateJS(state *AppState, sid string) string {
 func popupRegistryJS() string {
 	return fmt.Sprintf(`
 (function(){
-	var IDS=[%q,%q,%q,%q,%q,%q,%q,%q,%q];
+	var IDS=[%q,%q,%q,%q,%q,%q,%q,%q,%q,%q];
 	window.__libroCloseAllPopups=function(except){
 		var keep=null;
 		if(except){
@@ -838,7 +839,7 @@ func popupRegistryJS() string {
 		}
 	};
 })();
-`, ProjectPickerID, URLPopupID, ResizePopupID, CommandPopupID, SearchDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID)
+`, ProjectPickerID, URLPopupID, ResizePopupID, CommandPopupID, WorktreeCreatePopupID, SearchDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID)
 }
 
 func flashCSS() string {
@@ -2198,6 +2199,10 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroOpenProjectPicker)window.__libroOpenProjectPicker();
 			}},
+			{id:'worktree-new',label:'New worktree from current branch',scope:'project',icon:'alt_route',keywords:'worktree branch git fork create new',run:function(){
+				closePalette();
+				if(window.__libroOpenWorktreeCreate)window.__libroOpenWorktreeCreate();
+			}},
 			{id:'zen',label:'Zen',scope:'app',icon:'fullscreen',keywords:'focus chrome toggle minimal',run:function(){
 				closePalette();
 				__ws.call('zen.toggle',{sid:'%s'});
@@ -2323,6 +2328,139 @@ func commandPopupJS(sid string) string {
 	window.__libroOpenCommandPalette=openPalette;
 })();
 `, CommandPopupID, sid, sid, sid, sid, sid, sid)
+}
+
+// renderWorktreeCreatePopup renders the popup used to create a new worktree
+// from the current branch (Cmd+G).
+func renderWorktreeCreatePopup() *r.Node {
+	return components.WorktreeCreatePopup()
+}
+
+// worktreeCreatePopupJS wires the worktree-create popup: input handling,
+// branch submission, and Esc-to-close.
+func worktreeCreatePopupJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	function getDlg(){return document.getElementById('%s');}
+	function getInp(){return document.getElementById('worktree-create-input');}
+	function getCtx(){return document.getElementById('worktree-create-context');}
+	function getList(){return document.getElementById('worktree-create-branches');}
+
+	function escapeHtml(s){return (s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+	function activeProject(){
+		var projects=window.__libroProjects||[];
+		for(var i=0;i<projects.length;i++){
+			if(projects[i].isActive)return projects[i];
+		}
+		return null;
+	}
+
+	function findParentProject(active){
+		if(!active)return null;
+		if(active.kind!=='worktree')return active;
+		var projects=window.__libroProjects||[];
+		for(var i=0;i<projects.length;i++){
+			if(projects[i].kind==='project'&&projects[i].name===active.name)return projects[i];
+		}
+		return null;
+	}
+
+	function renderBranches(active,parent){
+		var list=getList();
+		if(!list)return;
+		var dk=document.documentElement.classList.contains('dark');
+		var branches=(parent&&parent.branches)||[];
+		var refs=(parent&&parent.worktreeRefs)||[];
+		var refSet={};
+		for(var i=0;i<refs.length;i++)refSet[refs[i]]=true;
+		var forkBase=active.kind==='worktree'?active.branch:(parent&&parent.currentBranch)||'';
+		if(branches.length===0){
+			list.innerHTML='<div class="px-3 py-3 text-[11px] font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No branches found</div>';
+			return;
+		}
+		var sorted=branches.slice().sort(function(a,b){
+			if(a===forkBase)return -1;
+			if(b===forkBase)return 1;
+			return a.localeCompare(b);
+		});
+		var html='';
+		for(var j=0;j<sorted.length;j++){
+			var b=sorted[j];
+			var isFork=b===forkBase;
+			var inUse=!!refSet[b]&&!isFork;
+			var rowCls='flex items-center gap-2 px-3 py-1.5 text-xs font-mono border-l-2 ';
+			if(isFork){
+				rowCls+=(dk?'bg-blue-900/30 border-blue-500 text-blue-200':'bg-blue-50 border-blue-500 text-blue-700');
+			}else{
+				rowCls+='border-transparent '+(dk?'text-zinc-400':'text-gray-600');
+			}
+			html+='<div class="'+rowCls+'">';
+			html+='<i class="material-icons-round text-sm '+(isFork?(dk?'text-blue-300':'text-blue-500'):(dk?'text-zinc-600':'text-gray-400'))+'">'+(isFork?'arrow_right':(inUse?'alt_route':'commit'))+'</i>';
+			html+='<span class="flex-1 truncate">'+escapeHtml(b)+'</span>';
+			if(isFork){
+				html+='<span class="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded '+(dk?'bg-blue-500/30 text-blue-200':'bg-blue-100 text-blue-700')+'">Fork base</span>';
+			}else if(inUse){
+				html+='<span class="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded '+(dk?'bg-zinc-700 text-zinc-400':'bg-gray-200 text-gray-500')+'">In use</span>';
+			}
+			html+='</div>';
+		}
+		list.innerHTML=html;
+	}
+
+	function openPopup(){
+		var dlg=getDlg();
+		var inp=getInp();
+		var ctx=getCtx();
+		if(!dlg||!inp)return;
+		var active=activeProject();
+		if(!active||!active.isGit){
+			if(window.__libroShowToast)window.__libroShowToast('Not a git repository','Switch to a git project first',2200);
+			return;
+		}
+		var parent=findParentProject(active);
+		if(ctx){
+			var forkBase=active.kind==='worktree'?active.branch:((parent&&parent.currentBranch)||'(unknown)');
+			var projName=active.kind==='worktree'?active.name:active.name;
+			ctx.textContent='From: '+projName+' @ '+forkBase;
+		}
+		renderBranches(active,parent);
+		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
+		dlg.classList.remove('hidden');
+		inp.value='';
+		setTimeout(function(){inp.focus();},50);
+	}
+
+	function closePopup(){
+		var dlg=getDlg();
+		var inp=getInp();
+		if(dlg)dlg.classList.add('hidden');
+		if(inp)inp.value='';
+	}
+
+	function submit(){
+		var inp=getInp();
+		if(!inp)return;
+		var name=(inp.value||'').trim();
+		if(!name)return;
+		closePopup();
+		__ws.call('worktree.create',{sid:'%s',branch:name});
+	}
+
+	var inp=getInp();
+	if(inp){
+		inp.addEventListener('keydown',function(e){
+			var dlg=getDlg();
+			if(!dlg||dlg.classList.contains('hidden'))return;
+			e.stopImmediatePropagation();
+			if(e.key==='Enter'){e.preventDefault();submit();}
+			else if(e.key==='Escape'){e.preventDefault();closePopup();}
+		});
+	}
+
+	window.__libroOpenWorktreeCreate=openPopup;
+})();
+`, WorktreeCreatePopupID, sid)
 }
 
 // resizePopupJS returns JS that powers the Win+R / Win+F resize popup.
@@ -3252,12 +3390,15 @@ func projectPickerPopupJS(sid string) string {
 // window.__libroProjects for the project picker popup.
 func projectsJS(state *AppState) string {
 	type jsProject struct {
-		Kind     string `json:"kind"`
-		Name     string `json:"name"`
-		Path     string `json:"path"`
-		Branch   string `json:"branch,omitempty"`
-		IsGit    bool   `json:"isGit"`
-		IsActive bool   `json:"isActive"`
+		Kind          string   `json:"kind"`
+		Name          string   `json:"name"`
+		Path          string   `json:"path"`
+		Branch        string   `json:"branch,omitempty"`
+		IsGit         bool     `json:"isGit"`
+		IsActive      bool     `json:"isActive"`
+		Branches      []string `json:"branches,omitempty"`
+		CurrentBranch string   `json:"currentBranch,omitempty"`
+		WorktreeRefs  []string `json:"worktreeRefs,omitempty"`
 	}
 	var all []jsProject
 	for _, p := range state.Projects {
@@ -3265,13 +3406,22 @@ func projectsJS(state *AppState) string {
 			continue
 		}
 		isActive := p.Name == state.ActiveProject
-		all = append(all, jsProject{
+		entry := jsProject{
 			Kind:     "project",
 			Name:     p.Name,
 			Path:     p.Path,
 			IsGit:    p.IsGitRepo,
 			IsActive: isActive,
-		})
+		}
+
+		if p.IsGitRepo && GitAvailable() {
+			if branches, err := GitListBranches(p.Path); err == nil {
+				entry.Branches = branches
+			}
+			entry.CurrentBranch = GitCurrentBranch(p.Path)
+		}
+
+		all = append(all, entry)
 
 		if !p.IsGitRepo || !GitAvailable() {
 			continue
@@ -3279,6 +3429,19 @@ func projectsJS(state *AppState) string {
 		wts, err := GitListWorktrees(p.Path)
 		if err != nil {
 			continue
+		}
+		var refs []string
+		for _, wt := range wts {
+			if wt.Branch != "" && wt.Branch != "(detached)" {
+				refs = append(refs, wt.Branch)
+			}
+		}
+		// attach worktree refs back to the project entry
+		for i := range all {
+			if all[i].Name == p.Name && all[i].Kind == "project" {
+				all[i].WorktreeRefs = refs
+				break
+			}
 		}
 		for _, wt := range wts {
 			if wt.IsBare {
@@ -3578,6 +3741,12 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					if (window.__libroOpenCommandPalette) window.__libroOpenCommandPalette();
+					return;
+				}
+				if (e.metaKey && (e.key === 'g' || e.key === 'G' || e.code === 'KeyG') && !e.ctrlKey) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenWorktreeCreate) window.__libroOpenWorktreeCreate();
 					return;
 				}
 				if (e.metaKey && (e.key === 'x' || e.key === 'X' || e.code === 'KeyX') && !e.ctrlKey) {

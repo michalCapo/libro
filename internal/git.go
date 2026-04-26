@@ -3,6 +3,7 @@ package libro
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"os/exec"
 	"strings"
 	"time"
@@ -84,6 +85,46 @@ func GitListWorktrees(repoPath string) ([]Worktree, error) {
 		worktrees = append(worktrees, current)
 	}
 	return worktrees, nil
+}
+
+// GitCurrentBranch returns the short name of the branch currently checked out
+// at repoPath, or an empty string for detached HEAD or on error.
+func GitCurrentBranch(repoPath string) string {
+	if !GitAvailable() {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "rev-parse", "--abbrev-ref", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	branch := strings.TrimSpace(string(out))
+	if branch == "HEAD" {
+		return ""
+	}
+	return branch
+}
+
+// GitCreateWorktree creates a new git worktree at wtPath, checking out a new
+// branch named branch based on the current HEAD of the repository at repoPath.
+func GitCreateWorktree(repoPath, branch, wtPath string) error {
+	if !GitAvailable() {
+		return fmt.Errorf("git is not available")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "worktree", "add", "-b", branch, wtPath)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg == "" {
+			return err
+		}
+		return fmt.Errorf("%s", msg)
+	}
+	return nil
 }
 
 // GitListBranches returns all local branch names for the repository at repoPath.
