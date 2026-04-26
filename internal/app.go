@@ -15,6 +15,33 @@ import (
 	r "github.com/michalCapo/g-sui/ui"
 )
 
+// finalizeProjectCreate registers the project, persists it, and returns the
+// JS that switches to it and dismisses the dialog.
+func finalizeProjectCreate(sid, path, name string) string {
+	if !sm.AddProject(sid, name, path) {
+		return r.Notify("error", "Project '"+name+"' already exists")
+	}
+
+	DBSaveProject(name, path)
+
+	sm.CloseProjectDialog(sid)
+	sm.SwitchProject(sid, name)
+	sm.AssignNavSlot(sid, name)
+	sm.IsProjectRendered(sid, name)
+	state := sm.Get(sid)
+
+	jsSwitch := switchProjectJS(name, renderMainArea(state, sid))
+
+	return r.NewResponse().
+		Add(projectsJS(state)).
+		Replace(TopBarID, renderTopBar(state, sid)).
+		Replace(ProjectDialogID, renderProjectDialog(false, sid)).
+		Add(jsSwitch).
+		Add(updateHashJS(name)).
+		Add(focusSelectedAppJS(state)).
+		Build()
+}
+
 // dbSaveApp persists an app definition to the database for the given project.
 // If editDBID > 0, it updates the app with that DB ID; otherwise it appends.
 func dbSaveApp(projectName string, editDBID int64, appType, urlOrCmd, width, name string, writable, projectSpecific bool) {
@@ -48,12 +75,12 @@ func dbUpdateAppURL(projectName string, index int, newURL string) {
 
 var (
 	sm = NewStateManager()
-	tm = NewTtydManager()
+	tm = components.NewTtydManager()
 )
 
 // Run initializes and starts the Libro application server.
 func Run(assets embed.FS) {
-	KillStaleTtyd()
+	components.KillStaleTtyd()
 	InitDB()
 	defer CloseDB()
 	app := r.NewApp()
@@ -82,7 +109,7 @@ func Run(assets embed.FS) {
 				port := sm.NextPort()
 				command := strings.ReplaceAll(prev.Command, "__dir__", pwd)
 				if command == "" {
-					command = userShellBase()
+					command = components.UserShellBase()
 				}
 				if err := tm.Start(appID, port, command, prev.Writable, pwd); err != nil {
 					name := strings.TrimSpace(prev.Name)
@@ -186,7 +213,7 @@ func Run(assets embed.FS) {
 			command, _ := data["app-command"].(string)
 			command = strings.TrimSpace(command)
 			if command == "" {
-				command = userShellBase()
+				command = components.UserShellBase()
 			}
 
 			writable := true
@@ -303,7 +330,7 @@ func Run(assets embed.FS) {
 			command, _ := data["command"].(string)
 			command = strings.TrimSpace(command)
 			if command == "" {
-				command = userShellBase()
+				command = components.UserShellBase()
 			}
 			command = strings.ReplaceAll(command, "__dir__", pwd)
 
@@ -764,10 +791,8 @@ func Run(assets embed.FS) {
 		if path == "" {
 			return ""
 		}
-		// Resolve to absolute path and ensure it stays under home directory
 		path = filepath.Clean(path)
-		home, _ := os.UserHomeDir()
-		if !filepath.IsAbs(path) || !strings.HasPrefix(path, home) {
+		if !filepath.IsAbs(path) {
 			return ""
 		}
 		return r.NewResponse().
@@ -802,35 +827,50 @@ func Run(assets embed.FS) {
 			return r.Notify("error", "Folder path is required")
 		}
 
+		path = filepath.Clean(path)
+		if !filepath.IsAbs(path) {
+			return r.Notify("error", "Path must be absolute")
+		}
+
 		name := filepath.Base(path)
 		if name == "" || name == "." || name == "/" {
 			return r.Notify("error", "Invalid folder selected")
 		}
 
-		if !sm.AddProject(sid, name, path) {
-			return r.Notify("error", "Project '"+name+"' already exists")
+		// If the folder doesn't exist, surface the inline confirm bar instead
+		// of failing — the user can either confirm creation or cancel.
+		if info, statErr := os.Stat(path); statErr != nil || !info.IsDir() {
+			msg := "Folder does not exist: " + path
+			return fmt.Sprintf(
+				`(function(){var bar=document.getElementById('project-path-confirm');var msg=document.getElementById('project-path-confirm-msg');if(!bar||!msg)return;msg.textContent=%s;bar.classList.remove('hidden');bar.dataset.path=%s;})();`,
+				components.JSString(msg+" — Create it?"),
+				components.JSString(path),
+			)
 		}
 
-		// Persist project to DB
-		DBSaveProject(name, path)
+		return finalizeProjectCreate(sid, path, name)
+	})
 
-		sm.CloseProjectDialog(sid)
-		sm.SwitchProject(sid, name)
-		sm.AssignNavSlot(sid, name)
-		sm.IsProjectRendered(sid, name) // mark as rendered
-		state := sm.Get(sid)
-
-		// New project always needs a new div appended, hide old project div
-		jsSwitch := switchProjectJS(name, renderMainArea(state, sid))
-
-		return r.NewResponse().
-			Add(projectsJS(state)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Replace(ProjectDialogID, renderProjectDialog(false, sid)).
-			Add(jsSwitch).
-			Add(updateHashJS(name)).
-			Add(focusSelectedAppJS(state)).
-			Build()
+	// Confirm creating a missing project folder, then create the project.
+	app.Action("project.create.confirm", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		path, _ := ctx.WsData()["path"].(string)
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return r.Notify("error", "Folder path is required")
+		}
+		path = filepath.Clean(path)
+		if !filepath.IsAbs(path) {
+			return r.Notify("error", "Path must be absolute")
+		}
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			return r.Notify("error", "Failed to create folder: "+err.Error())
+		}
+		name := filepath.Base(path)
+		if name == "" || name == "." || name == "/" {
+			return r.Notify("error", "Invalid folder selected")
+		}
+		return finalizeProjectCreate(sid, path, name)
 	})
 
 	// Toggle zen mode — hides top bar, sidebar, and app toolbars
@@ -1331,7 +1371,7 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
-	registerTtydProxy(app)
+	components.RegisterTtydProxy(app)
 	if err := app.Listen(":" + Port()); err != nil {
 		log.Printf("libro: app.Listen on :%s failed: %v", Port(), err)
 	}
