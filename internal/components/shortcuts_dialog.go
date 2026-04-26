@@ -65,30 +65,40 @@ func ShortcutsDialog() *r.Node {
 
 	rows := make([]*r.Node, 0)
 	for i, sec := range sections {
-		mt := "mt-10"
+		mt := "mt-6"
 		if i == 0 {
 			mt = "mt-0"
 		}
 		sectionRows := make([]*r.Node, 0, len(sec.shortcuts))
-		for _, s := range sec.shortcuts {
+		for j, s := range sec.shortcuts {
+			borderCls := "border-t border-gray-100 dark:border-zinc-800"
+			if j == 0 {
+				borderCls = ""
+			}
 			sectionRows = append(sectionRows,
-				r.Div("flex items-center justify-between py-2 px-1").Render(
-					r.Span("text-sm text-gray-700 dark:text-zinc-300").Text(s.desc),
-					r.Span("text-xs font-mono px-2 py-0.5 rounded bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400").Text(s.keys),
+				r.Div("flex items-center justify-between gap-3 px-3 py-2.5 "+borderCls).Render(
+					r.Div("flex items-center gap-3 min-w-0").Render(
+						r.I("material-icons-round text-gray-400 dark:text-zinc-600 text-base").Text("keyboard"),
+						r.Span("text-sm text-gray-700 dark:text-zinc-300 truncate").Text(s.desc),
+					),
+					r.Span("text-[10px] font-mono font-semibold uppercase tracking-wider px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400").Text(s.keys),
 				),
 			)
 		}
 		header := []*r.Node{
-			r.Div("px-1 pb-1 text-lg font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-400").Text(sec.title),
+			r.Div("px-1 pb-0.5 text-sm font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300").Text(sec.title),
 		}
 		if sec.subtitle != "" {
 			header = append(header,
-				r.Div("px-1 pb-1 text-xs text-gray-400 dark:text-zinc-500").Text(sec.subtitle),
+				r.Div("px-1 pb-2 text-[10px] uppercase tracking-wider text-gray-400 dark:text-zinc-500").Text(sec.subtitle),
 			)
+		} else {
+			header = append(header, r.Div("pb-2").Text(""))
 		}
+		card := r.Div("border border-gray-200 dark:border-zinc-700/50 rounded-lg overflow-hidden").Render(sectionRows...)
 		rows = append(rows,
 			r.Div(mt).Render(
-				append(header, r.Div("").Render(sectionRows...))...,
+				append(header, card)...,
 			),
 		)
 	}
@@ -97,19 +107,16 @@ func ShortcutsDialog() *r.Node {
 		ID(ShortcutsDialogID).
 		OnClick(r.JS(HideJS(ShortcutsDialogID))).
 		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden").
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-2xl mx-4 overflow-hidden").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
 					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
 						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("keyboard"),
 						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").Text("Keyboard Shortcuts"),
-						r.Button("text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 cursor-pointer").
-							Attr("onclick", HideJS(ShortcutsDialogID)).
-							Render(r.I("material-icons-round text-base").Text("close")),
 					),
-					r.Div("px-4 py-2 max-h-[60vh] overflow-y-auto").Render(rows...),
-					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
-						r.Span("").Text("Esc to close"),
+					r.Div("max-h-[60vh] overflow-y-auto px-4 py-4").Render(rows...),
+					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+						r.Span("").Text("Esc close"),
 					),
 				),
 		)
