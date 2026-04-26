@@ -61,7 +61,7 @@ func AddDialog(in AddDialogInput) *r.Node {
 	inputCls := "w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono"
 	labelCls := "block text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-zinc-500 mb-1"
 
-	return r.Div("fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
+	return r.Div("fixed inset-0 z-[70] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
 		ID(AddDialogID).
 		OnClick(r.JS(HideJS(AddDialogID))).
 		Render(
