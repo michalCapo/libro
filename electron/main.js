@@ -308,6 +308,7 @@ function registerWindowShortcuts() {
 // When an input/textarea/select/contentEditable is focused inside a webview,
 // we must NOT intercept plain keys (j/k/h/l etc.) so the user can type.
 const webviewInputFocused = new Map()
+const webviewBrowserMode = new Map()
 const shortcutEventDedup = new Map()
 
 // Find the Go binary — look next to the electron dir, or in PATH
@@ -644,9 +645,11 @@ app.on('web-contents-created', (event, contents) => {
     // Reset focus tracking on navigation (old page is unloaded)
     contents.on('did-start-navigation', () => {
       webviewInputFocused.set(contents.id, false)
+      setWebviewBrowserMode('normal')
     })
     contents.on('destroyed', () => {
       webviewInputFocused.delete(contents.id)
+      webviewBrowserMode.delete(contents.id)
       const entry = devtoolsOverlays.get(contents.id)
       if (entry) {
         try { entry.view.webContents.close() } catch (err) {}
@@ -685,6 +688,15 @@ app.on('web-contents-created', (event, contents) => {
     })
   }
 
+  const setWebviewBrowserMode = (mode) => {
+    webviewBrowserMode.set(contents.id, mode)
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.executeJavaScript(`
+        if (window.__libroSetBrowserModeByWcId) window.__libroSetBrowserModeByWcId(${contents.id}, ${JSON.stringify(mode)});
+      `).catch(() => {})
+    }
+  }
+
   contents.on('before-input-event', (e, input) => {
     if (input.type !== 'keyDown' && input.type !== 'rawKeyDown') return
 
@@ -705,6 +717,7 @@ app.on('web-contents-created', (event, contents) => {
       const now = Date.now()
       const last = shortcutEventDedup.get(contents.id)
       if (last && last.sig === shortcutSig && now-last.at < 80) {
+        e.preventDefault()
         return true
       }
       shortcutEventDedup.set(contents.id, { sig: shortcutSig, at: now })
@@ -941,10 +954,36 @@ app.on('web-contents-created', (event, contents) => {
       }
     }
 
+    // Vim-style mode toggle: 'i' enters insert mode, 'Esc' exits.
+    // Source of truth lives here in the main process so the swap happens
+    // before any other intercept can fire on the same event loop tick.
+    if (isWebview && !input.meta && !input.control && !input.alt && !input.shift) {
+      const currentMode = webviewBrowserMode.get(contents.id) || 'normal'
+      if (currentMode !== 'insert' && key === 'i' && !webviewInputFocused.get(contents.id)) {
+        if (shouldSkipDuplicateShortcut()) return
+        e.preventDefault()
+        setWebviewBrowserMode('insert')
+        return
+      }
+      if (currentMode === 'insert' && key === 'escape') {
+        if (shouldSkipDuplicateShortcut()) return
+        e.preventDefault()
+        contents.executeJavaScript(`
+          (function(){
+            var el = document.activeElement;
+            while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
+            if (el && typeof el.blur === 'function') { try { el.blur(); } catch(err) {} }
+          })();
+        `).catch(() => {})
+        setWebviewBrowserMode('normal')
+        return
+      }
+    }
+
     // Browser vim-style keys (j/k/h/l/g/G/b/f) for webview scrolling/navigation.
     // Handled here in the main process so they work even while the page is loading,
     // before the guest-injected browserShortcutsScript is active.
-    if (isWebview && !input.meta && !input.control && !input.alt && !webviewInputFocused.get(contents.id)) {
+    if (isWebview && !input.meta && !input.control && !input.alt && !webviewInputFocused.get(contents.id) && webviewBrowserMode.get(contents.id) !== 'insert') {
       // Shift+G = scroll to bottom
       if (input.shift && key === 'g') {
         if (shouldSkipDuplicateShortcut()) return
