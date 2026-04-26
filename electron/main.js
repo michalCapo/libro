@@ -736,7 +736,7 @@ app.on('web-contents-created', (event, contents) => {
     // For the main window host page: directly invoke JS for a few Super shortcuts
     // that desktop environments or Chromium can intercept before the page sees them.
     if (isMainWindowContents) {
-      if (input.meta && input.control && code === 'keyn') {
+      if (input.meta && input.control && code === 'keyo') {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
@@ -769,7 +769,7 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
-      if (input.meta && !input.control && code === 'keyn') {
+      if (input.meta && !input.control && code === 'keyo') {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
@@ -871,8 +871,8 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, q, w, n, z, b, f, g, r, x, ;
-    if (input.meta && (['h', 'l', 'q', 'w', 'n', 'z', 'b', 'f', 'g', 'r', 'x', ';'].includes(key) || ['keyn', 'semicolon'].includes(code))) {
+    // Meta (Super/Win) shortcuts: h, l, q, w, n, z, o, f, g, r, x, ;
+    if (input.meta && (['h', 'l', 'q', 'w', 'n', 'z', 'o', 'f', 'g', 'r', 'x', ';'].includes(key) || ['keyn', 'keyo', 'semicolon'].includes(code))) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
