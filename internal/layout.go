@@ -1,6 +1,8 @@
 package libro
 
 import (
+	"libro/internal/components"
+
 	r "github.com/michalCapo/g-sui/ui"
 )
 
@@ -31,8 +33,9 @@ func renderPage(state *AppState, sid string) *r.Node {
 		searchDialogJS(sid) +
 		shortcutsDialogJS() +
 		closeDialogJS(sid) +
-		webviewClientJS() +
+		components.BrowserJS() +
 		projectPickerPopupJS(sid) +
+		projectDialogJS(sid) +
 		projectsJS(state) +
 		urlPopupJS(sid) +
 		resizePopupJS(sid) +

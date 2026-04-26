@@ -1,15 +1,15 @@
-package libro
+package components
 
-// webviewClientJS returns the JavaScript that manages Electron webview elements.
+// BrowserJS returns the JavaScript that manages Electron webview elements.
 // It initializes webview tags, handles navigation events, and provides
 // back/forward/reload/navigate functions via the webview DOM API.
 // It also injects browser-mode keyboard shortcuts (j/k/h/l/b/f/Enter)
 // into webview guest pages and provides find-in-page support (/, n, p).
-func webviewClientJS() string {
-	return webviewClientScript
+func BrowserJS() string {
+	return browserScript
 }
 
-const webviewClientScript = `
+const browserScript = `
 (function(){
 window.__libroWebviews = window.__libroWebviews || {};
 var ready = {};       // appID -> true when dom-ready has fired

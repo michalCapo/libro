@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"libro/internal/components"
 )
 
 // AppType distinguishes between web URL apps and terminal (ttyd) apps
@@ -260,7 +262,7 @@ func (sm *StateManager) NextPort() int {
 	defer sm.mu.Unlock()
 	for {
 		sm.nextPort++
-		if portFree(sm.nextPort) {
+		if components.PortFree(sm.nextPort) {
 			return sm.nextPort
 		}
 	}

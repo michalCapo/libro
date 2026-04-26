@@ -2202,6 +2202,10 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroOpenProjectPicker)window.__libroOpenProjectPicker();
 			}},
+			{id:'project-new',label:'New project (browse folder)',scope:'app',icon:'create_new_folder',keywords:'new project create folder browse directory path filesystem',run:function(){
+				closePalette();
+				if(window.__libroOpenProjectDialog)window.__libroOpenProjectDialog();
+			}},
 			{id:'worktree-new',label:'New worktree from current branch',scope:'project',icon:'alt_route',keywords:'worktree branch git fork create new',run:function(){
 				closePalette();
 				if(window.__libroOpenWorktreeCreate)window.__libroOpenWorktreeCreate();
@@ -3465,6 +3469,185 @@ func renderDirBrowser(currentPath string, sid string) *r.Node {
 	return components.DirBrowser(currentPath, sid)
 }
 
+// projectDialogJS wires the New Project dialog: live filtering of the
+// directory listing as the user types a path, Enter to descend into the
+// highlighted entry, "Select current" to use the typed path as a project
+// root, and the inline confirmation bar shown when the path doesn't exist.
+func projectDialogJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	if(window.__libroProjectDialogRegistered)return;
+	window.__libroProjectDialogRegistered=true;
+	var sid=%s;
+	var dlg=document.getElementById(%s);
+	if(!dlg)return;
+	var inp,hidden,confirmBar;
+	var loadedDir='';
+	var debounceId=0;
+
+	function refs(){
+		inp=document.getElementById('project-path-input');
+		hidden=document.getElementById('project-path');
+		confirmBar=document.getElementById('project-path-confirm');
+	}
+	function dirOf(p){
+		if(!p)return '/';
+		if(p==='/')return '/';
+		var i=p.lastIndexOf('/');
+		if(i<=0)return '/';
+		return p.substring(0,i);
+	}
+	function nameOf(p){
+		if(!p)return '';
+		var i=p.lastIndexOf('/');
+		return p.substring(i+1);
+	}
+	function items(){
+		return dlg.querySelectorAll('.dir-item');
+	}
+	function clearHighlight(){
+		items().forEach(function(el){el.classList.remove('bg-blue-100','dark:bg-blue-900/40');});
+	}
+	function highlightFirst(prefix){
+		clearHighlight();
+		var first=null;
+		items().forEach(function(el){
+			if(first)return;
+			var n=el.getAttribute('data-name')||'';
+			if(n==='..')return;
+			if(!prefix||n.toLowerCase().indexOf(prefix.toLowerCase())===0){first=el;}
+		});
+		if(first){
+			first.classList.add('bg-blue-100','dark:bg-blue-900/40');
+			first.scrollIntoView({block:'nearest'});
+		}
+		return first;
+	}
+	function applyFilter(){
+		if(!inp)return;
+		var v=inp.value||'';
+		if(hidden)hidden.value=v;
+		var prefix=v.endsWith('/')?'':nameOf(v);
+		items().forEach(function(el){
+			var n=el.getAttribute('data-name')||'';
+			var match=n==='..'||!prefix||n.toLowerCase().indexOf(prefix.toLowerCase())===0;
+			el.style.display=match?'':'none';
+		});
+		highlightFirst(prefix);
+		if(confirmBar)confirmBar.classList.add('hidden');
+	}
+	function ensureLoaded(){
+		if(!inp)return;
+		var v=inp.value||'';
+		var dir=v.endsWith('/')?(v.length>1?v.slice(0,-1):'/'):dirOf(v);
+		if(dir===loadedDir)return;
+		loadedDir=dir;
+		__ws.call('project.browse',{sid:sid,path:dir});
+	}
+	function descendHighlighted(){
+		var sel=dlg.querySelector('.dir-item.bg-blue-100, .dir-item.bg-blue-900\\/40');
+		if(!sel)return false;
+		var p=sel.getAttribute('data-path');
+		if(!p)return false;
+		inp.value=p+'/';
+		if(hidden)hidden.value=inp.value;
+		loadedDir=p;
+		__ws.call('project.browse',{sid:sid,path:p});
+		return true;
+	}
+
+	function onInput(){
+		clearTimeout(debounceId);
+		debounceId=setTimeout(function(){ensureLoaded();applyFilter();},80);
+	}
+	function onKey(e){
+		if(e.key==='Tab'){
+			e.preventDefault();
+			var sel=dlg.querySelector('.dir-item.bg-blue-100, .dir-item.bg-blue-900\\/40');
+			if(!sel)return;
+			var p=sel.getAttribute('data-path');
+			if(!p)return;
+			inp.value=p;
+			if(hidden)hidden.value=inp.value;
+			applyFilter();
+			return;
+		}
+		if(e.key==='Enter'){
+			e.preventDefault();
+			if(!descendHighlighted()){
+				__ws.call('project.create',{sid:sid,'project-path':inp.value});
+			}
+			return;
+		}
+		if(e.key==='Escape'){
+			e.preventDefault();
+			__ws.call('project.dialog.close',{sid:sid});
+		}
+	}
+
+	function bindButtons(){
+		var sel=document.getElementById('btn-select-current');
+		if(sel&&!sel.__libroBound){
+			sel.__libroBound=true;
+			sel.addEventListener('click',function(){
+				if(!inp)return;
+				__ws.call('project.create',{sid:sid,'project-path':inp.value});
+			});
+		}
+	}
+
+	function bind(){
+		refs();
+		if(!inp)return;
+		if(!inp.__libroBound){
+			inp.__libroBound=true;
+			inp.addEventListener('input',onInput);
+			inp.addEventListener('keydown',onKey);
+		}
+		bindButtons();
+		applyFilter();
+		// Inject confirm-bar buttons (Create / Cancel) once.
+		if(confirmBar&&!confirmBar.__libroBound){
+			confirmBar.__libroBound=true;
+			var btns=document.createElement('div');
+			btns.className='mt-2 flex items-center gap-2';
+			var ok=document.createElement('button');
+			ok.className='px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white font-mono text-xs font-medium rounded cursor-pointer';
+			ok.textContent='Create folder';
+			ok.addEventListener('click',function(){
+				var p=confirmBar.dataset.path||(inp&&inp.value)||'';
+				__ws.call('project.create.confirm',{sid:sid,path:p});
+			});
+			var no=document.createElement('button');
+			no.className='px-3 py-1 text-amber-700 dark:text-amber-200 font-mono text-xs rounded hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer';
+			no.textContent='Cancel';
+			no.addEventListener('click',function(){confirmBar.classList.add('hidden');});
+			btns.appendChild(ok);
+			btns.appendChild(no);
+			confirmBar.appendChild(btns);
+		}
+	}
+
+	// Re-bind on DOM updates (the dir listing is replaced on every browse).
+	var observer=new MutationObserver(function(){bind();});
+	observer.observe(dlg,{childList:true,subtree:true});
+
+	function open(){
+		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
+		dlg.classList.remove('hidden');
+		bind();
+		if(inp){
+			loadedDir=dirOf(inp.value);
+			setTimeout(function(){inp.focus();inp.select();},50);
+		}
+	}
+	window.__libroOpenProjectDialog=open;
+	bind();
+})();
+`, components.JSString(sid), components.JSString(ProjectDialogID))
+}
+
+
 // updateHashJS returns JS that updates the URL hash to the given project name
 func updateHashJS(name string) string {
 	return fmt.Sprintf("history.replaceState(null,'','#%s');document.title=%s;", name, components.JSString(name+" — Libro"))
@@ -3716,7 +3899,13 @@ func keyboardShortcutsJS(sid string) string {
 					if (window.__libroOpenSearch) window.__libroOpenSearch('right');
 					return;
 				}
-			if (e.metaKey && (e.key === 'n' || e.key === 'N' || e.code === 'KeyN') && !e.ctrlKey) {
+			if (e.metaKey && e.ctrlKey && e.code === 'KeyN') {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenProjectDialog) window.__libroOpenProjectDialog();
+					return;
+				}
+				if (e.metaKey && (e.key === 'n' || e.key === 'N' || e.code === 'KeyN') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					if (window.__libroOpenProjectPicker) window.__libroOpenProjectPicker();
