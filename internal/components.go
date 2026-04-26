@@ -22,16 +22,16 @@ func urlParse(rawURL string) (*url.URL, error) {
 }
 
 const (
-	MainAreaID        = "main-area"
-	TopBarID          = "top-bar"
-	ManageDialogID    = "manage-dialog"
-	DialogID          = components.AddDialogID
-	ProjectDialogID   = components.ProjectDialogID
-	DirBrowserID      = components.DirBrowserID
-	SearchDialogID    = components.SearchDialogID
-	ShortcutsDialogID = components.ShortcutsDialogID
-	CloseDialogID     = components.CloseDialogID
-	ProjectPickerID   = components.ProjectPickerID
+	MainAreaID            = "main-area"
+	TopBarID              = "top-bar"
+	ManageDialogID        = "manage-dialog"
+	DialogID              = components.AddDialogID
+	ProjectDialogID       = components.ProjectDialogID
+	DirBrowserID          = components.DirBrowserID
+	SearchDialogID        = components.SearchDialogID
+	ShortcutsDialogID     = components.ShortcutsDialogID
+	CloseDialogID         = components.CloseDialogID
+	ProjectPickerID       = components.ProjectPickerID
 	URLPopupID            = components.URLPopupID
 	ResizePopupID         = components.ResizePopupID
 	CommandPopupID        = components.CommandPopupID
@@ -717,7 +717,10 @@ func navigateJS(state *AppState, sid string) string {
 					var toolbar = child.children[0];
 					// Make toolbar blue for selected app
 					if (toolbar) {
-						toolbar.className = 'flex items-center gap-2 px-1.5 py-1 border-b shrink-0 bg-blue-600 border-blue-700';
+						var appID = child.getAttribute('data-app-id') || '';
+						var browserMode = window.__libroGetBrowserMode ? window.__libroGetBrowserMode(appID) : 'normal';
+						var selectedToolbarColor = browserMode === 'insert' ? ' bg-emerald-600 border-emerald-700' : ' bg-blue-600 border-blue-700';
+						toolbar.className = 'flex items-center gap-2 px-1.5 py-1 border-b shrink-0' + selectedToolbarColor;
 						// Update nav buttons to white-on-red
 						toolbar.querySelectorAll('button[title]').forEach(function(btn){
 							btn.className = btn.className.replace(/text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700/g, 'text-blue-100/70 hover:text-white hover:bg-white/15');
@@ -3646,7 +3649,6 @@ func projectDialogJS(sid string) string {
 })();
 `, components.JSString(sid), components.JSString(ProjectDialogID))
 }
-
 
 // updateHashJS returns JS that updates the URL hash to the given project name
 func updateHashJS(name string) string {

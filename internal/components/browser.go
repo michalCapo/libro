@@ -105,6 +105,10 @@ var browserShortcutsScript = '(' + function(){
 	window.addEventListener('load', syncInputFocus, true);
 	document.addEventListener('keydown', function(e) {
 		if(e.metaKey || e.ctrlKey || e.altKey) return;
+		// Insert mode is enforced in the main process (electron/main.js).
+		// When in insert mode, all the cases below are skipped because the
+		// main process has already short-circuited the matching shortcuts.
+		if (window.__libroBrowserMode === 'insert') return;
 		var ae = activeEditableElement();
 		if(ae) {
 			if(e.key==='Escape' && ae && typeof ae.blur === 'function') { ae.blur(); e.preventDefault(); e.stopPropagation(); }
@@ -207,6 +211,58 @@ window.__libroCloseConsole = function(appID) {
 var searchState = {}; // appID -> {query, barEl, inputEl, countEl}
 var devtoolsPanelObservers = {};
 var devtoolsPanelSyncers = {};
+var browserModeState = {}; // appID -> 'normal' | 'insert'
+
+function applyBrowserMode(appID, mode) {
+	if (!appID) return;
+	browserModeState[appID] = mode;
+	var container = document.querySelector('[data-app-id="' + appID + '"]');
+	if (container) {
+		var toolbar = container.querySelector('[data-app-toolbar]');
+		if (toolbar) {
+			// Only restyle the toolbar when the app is the selected one
+			// (selected toolbars use bg-blue-600). Unselected toolbars are
+			// gray/white and should remain unchanged regardless of mode.
+			var isSelected = toolbar.className.indexOf('bg-blue-600') !== -1 ||
+				toolbar.className.indexOf('bg-emerald-600') !== -1;
+			if (isSelected) {
+				if (mode === 'insert') {
+					toolbar.className = toolbar.className
+						.replace(/bg-blue-600/g, 'bg-emerald-600')
+						.replace(/border-blue-700/g, 'border-emerald-700');
+				} else {
+					toolbar.className = toolbar.className
+						.replace(/bg-emerald-600/g, 'bg-blue-600')
+						.replace(/border-emerald-700/g, 'border-blue-700');
+				}
+			}
+		}
+	}
+	// Mirror the mode flag into the guest page so its own keydown handler
+	// short-circuits in insert mode without waiting for a round-trip.
+	var wv = window.__libroWebviews[appID];
+	if (wv && wv.executeJavaScript) {
+		try { wv.executeJavaScript('window.__libroBrowserMode=' + JSON.stringify(mode) + ';'); } catch(err) {}
+	}
+}
+
+window.__libroSetBrowserModeByWcId = function(wcId, mode) {
+	wcId = Number(wcId) || 0;
+	if (!wcId) return;
+	for (var appID in window.__libroWebviews) {
+		var wv = window.__libroWebviews[appID];
+		if (!wv) continue;
+		var id = 0;
+		try { id = Number(wv.getWebContentsId ? wv.getWebContentsId() : 0) || 0; } catch(err) {}
+		if (id === wcId) { applyBrowserMode(appID, mode); return; }
+	}
+};
+
+window.__libroGetBrowserMode = function(appID) {
+	return browserModeState[appID] || 'normal';
+};
+
+window.__libroApplyBrowserMode = applyBrowserMode;
 
 function injectBrowserShortcuts(wv, appID) {
 	try { wv.executeJavaScript(browserShortcutsScript); } catch(err) {}
@@ -682,6 +738,7 @@ function initWebview(wv) {
 					delete ready[oldAppID];
 					delete queued[oldAppID];
 					delete searchState[oldAppID];
+					delete browserModeState[oldAppID];
 				}
 				window.__libroWebviews[appID] = pooled;
 				initialized[appID] = true;
@@ -733,6 +790,8 @@ function bindWebviewEvents(wv) {
 		if (!appID) return;
 		var inp = document.getElementById('urlinput-' + appID);
 		if (inp && e.url) inp.value = e.url;
+		// Full-page navigation discards page JS — reset to normal mode
+		applyBrowserMode(appID, 'normal');
 	});
 	wv.addEventListener('did-navigate-in-page', function(e) {
 		if (!e.isMainFrame) return;
@@ -869,6 +928,7 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 						delete ready[id];
 						delete queued[id];
 						delete searchState[id];
+						delete browserModeState[id];
 					}
 				});
 				if (node.tagName === 'WEBVIEW' && node.getAttribute('data-webview-app')) {
@@ -885,6 +945,7 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 					delete ready[id];
 					delete queued[id];
 					delete searchState[id];
+					delete browserModeState[id];
 				}
 			});
 		});
