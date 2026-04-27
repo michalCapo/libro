@@ -576,6 +576,75 @@ func Run(assets embed.FS) {
 		return moveAppJS(state, sid, "right") + renderTopBar(state, sid).ToJSReplace(TopBarID)
 	})
 
+	// Move selected app to another project, then activate that project.
+	app.Action("app.move.to.project", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		target, _ := data["target"].(string)
+		kind, _ := data["kind"].(string)
+		parentProject, _ := data["project"].(string)
+		wtPath, _ := data["path"].(string)
+		branch, _ := data["branch"].(string)
+		if target == "" {
+			return r.Notify("error", "Project not found")
+		}
+		if kind == "worktree" && parentProject != "" && wtPath != "" && branch != "" {
+			sm.AddVirtualProject(sid, target, wtPath, parentProject)
+		}
+
+		prevState := sm.Get(sid)
+		if len(prevState.Apps) == 0 || prevState.SelectedIndex < 0 || prevState.SelectedIndex >= len(prevState.Apps) {
+			return r.Notify("error", "No selected app")
+		}
+		sourceProject := prevState.ActiveProject
+		appID := prevState.Apps[prevState.SelectedIndex].ID
+		targetHadApps := projectHasRunningApps(prevState, target)
+		targetRenderedBefore := sm.IsProjectRendered(sid, target)
+		if sourceProject == target {
+			return focusSelectedAppJS(prevState)
+		}
+
+		moved, ok := sm.MoveSelectedAppToProject(sid, target)
+		if !ok || moved == nil {
+			return r.Notify("error", "Project not found")
+		}
+		state := sm.Get(sid)
+
+		var js strings.Builder
+		js.WriteString(closeDevtoolsForAppJS(appID))
+		if sourceSnap, ok := state.snapshots[sourceProject]; ok && sourceSnap != nil && len(sourceSnap.Apps) > 0 {
+			js.WriteString(removeAppJS(appID))
+			js.WriteString(navigateProjectJS(sourceProject, sourceSnap.Apps, sourceSnap.SelectedIndex, state.ZenMode, sid))
+		} else {
+			js.WriteString(poolWebviewJS(appID))
+			js.WriteString(renderMainAreaForProject(state, sid, sourceProject).ToJSReplace(projectMainID(sourceProject)))
+		}
+
+		if targetRenderedBefore {
+			if targetHadApps {
+				frame := renderAppFrame(*moved, state.SelectedIndex, true, sid, state.ZenMode)
+				js.WriteString(insertAppJS(frame, false, target))
+				js.WriteString(switchProjectJS(target, nil))
+				js.WriteString(navigateJS(state, sid))
+			} else {
+				js.WriteString(renderMainArea(state, sid).ToJSReplace(projectMainID(target)))
+				js.WriteString(switchProjectJS(target, nil))
+			}
+		} else {
+			js.WriteString(switchProjectJS(target, renderMainArea(state, sid)))
+		}
+
+		return r.NewResponse().
+			Add(projectsJS(state)).
+			Replace(TopBarID, renderTopBar(state, sid)).
+			Add(js.String()).
+			Add(updateHashJS(target)).
+			Add(projectToastJS(state.ActiveProject)).
+			Add(focusSelectedAppJS(state)).
+			Add(savedAppsJS(state)).
+			Build()
+	})
+
 	// Resize app to specific width — JS-only update to preserve iframes
 	app.Action("app.resize", func(ctx *r.Context) string {
 		sid := extractSID(ctx)

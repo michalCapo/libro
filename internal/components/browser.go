@@ -82,6 +82,11 @@ var browserShortcutsScript = '(' + function(){
 		return null;
 	}
 	function syncInputFocus() {
+		if (window.__libroKeyboardPassthrough) {
+			console.log('__libro:passthrough');
+			console.log('__libro:inputfocus');
+			return;
+		}
 		console.log(activeEditableElement() ? '__libro:inputfocus' : '__libro:inputblur');
 	}
 	document.addEventListener('mouseover', function(e) {
@@ -108,7 +113,7 @@ var browserShortcutsScript = '(' + function(){
 		// Insert mode is enforced in the main process (electron/main.js).
 		// When in insert mode, all the cases below are skipped because the
 		// main process has already short-circuited the matching shortcuts.
-		if (window.__libroBrowserMode === 'insert') return;
+		if (window.__libroKeyboardPassthrough || window.__libroBrowserMode === 'insert') return;
 		var ae = activeEditableElement();
 		if(ae) {
 			if(e.key==='Escape' && ae && typeof ae.blur === 'function') { ae.blur(); e.preventDefault(); e.stopPropagation(); }
@@ -702,7 +707,16 @@ function focusIfSelected(appID, wv) {
 
 function initWebview(wv) {
 	var appID = wv.getAttribute('data-webview-app');
-	if (!appID || initialized[appID]) return;
+	if (!appID) return;
+	if (initialized[appID]) {
+		var existing = window.__libroWebviews[appID];
+		var existingPool = document.getElementById('webview-pool');
+		if (existing && existingPool && existingPool.contains(existing) && existing !== wv && !wv.getAttribute('data-pool-origin')) {
+			delete initialized[appID];
+		} else {
+			return;
+		}
+	}
 	observeDevtoolsPanel(appID);
 
 	// Check pool for a webview with the same origin — reuse it to preserve session state

@@ -264,6 +264,20 @@ function moveSelectedApp(direction) {
   `)
 }
 
+function openMoveProjectPopup() {
+  const focusedWindow = BrowserWindow.getFocusedWindow()
+  if (!focusedWindow || focusedWindow !== mainWindow) {
+    console.log('[libro-shortcut] ignored move-project popup: main window not focused')
+    return
+  }
+  console.log('[libro-shortcut] firing move-project popup')
+  dispatchToMainWindow(`
+    if (window.__libroOpenMoveProject) {
+      window.__libroOpenMoveProject();
+    }
+  `)
+}
+
 function adjustMainWindowZoom(action) {
   const focusedWindow = BrowserWindow.getFocusedWindow()
   if (!focusedWindow || focusedWindow !== mainWindow || !mainWindow || mainWindow.isDestroyed()) {
@@ -287,6 +301,7 @@ function registerWindowShortcuts() {
   const shortcuts = [
     ['Super+Control+U', () => moveSelectedApp('left')],
     ['Super+Control+I', () => moveSelectedApp('right')],
+    ['Super+Control+Y', () => openMoveProjectPopup()],
     ['Super+=', () => adjustMainWindowZoom('in')],
     ['Super+Plus', () => adjustMainWindowZoom('in')],
     ['Super+-', () => adjustMainWindowZoom('out')],
@@ -309,6 +324,7 @@ function registerWindowShortcuts() {
 // we must NOT intercept plain keys (j/k/h/l etc.) so the user can type.
 const webviewInputFocused = new Map()
 const webviewBrowserMode = new Map()
+const webviewKeyboardPassthrough = new Map()
 const shortcutEventDedup = new Map()
 
 // Find the Go binary — look next to the electron dir, or in PATH
@@ -639,17 +655,33 @@ app.on('web-contents-created', (event, contents) => {
     // or let them through to text input fields.
     contents.on('console-message', (e) => {
       const message = e.message || ''
-      if (message === '__libro:inputfocus') webviewInputFocused.set(contents.id, true)
-      else if (message === '__libro:inputblur') webviewInputFocused.set(contents.id, false)
+      if (message === '__libro:passthrough') {
+        webviewKeyboardPassthrough.set(contents.id, true)
+        webviewInputFocused.set(contents.id, true)
+        setWebviewBrowserMode('insert')
+      } else if (message === '__libro:inputfocus') {
+        webviewInputFocused.set(contents.id, true)
+        setWebviewBrowserMode('insert')
+      } else if (message === '__libro:inputblur') {
+        if (webviewKeyboardPassthrough.get(contents.id)) {
+          webviewInputFocused.set(contents.id, true)
+          setWebviewBrowserMode('insert')
+        } else {
+          webviewInputFocused.set(contents.id, false)
+          setWebviewBrowserMode('normal')
+        }
+      }
     })
     // Reset focus tracking on navigation (old page is unloaded)
     contents.on('did-start-navigation', () => {
       webviewInputFocused.set(contents.id, false)
+      webviewKeyboardPassthrough.delete(contents.id)
       setWebviewBrowserMode('normal')
     })
     contents.on('destroyed', () => {
       webviewInputFocused.delete(contents.id)
       webviewBrowserMode.delete(contents.id)
+      webviewKeyboardPassthrough.delete(contents.id)
       const entry = devtoolsOverlays.get(contents.id)
       if (entry) {
         try { entry.view.webContents.close() } catch (err) {}
@@ -792,6 +824,17 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
+      // Super+Ctrl+Y: move selected app to project popup
+      if (input.meta && input.control && code === 'keyy') {
+        if (shouldSkipDuplicateShortcut()) return
+        e.preventDefault()
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            if (window.__libroOpenMoveProject) window.__libroOpenMoveProject();
+          `)
+        }
+        return
+      }
       // Super+R: resize popup — must preventDefault to block browser Reload
       if (input.meta && !input.control && code === 'keyr') {
         if (shouldSkipDuplicateShortcut()) return
@@ -861,7 +904,7 @@ app.on('web-contents-created', (event, contents) => {
     // the main host page. These child contents are not always reported as "webview",
     // so do not special-case them as host content.
 
-    // Meta+Ctrl shortcuts: u, i (move app left/right)
+    // Meta+Ctrl shortcuts: u, i, y (move app / open move-project popup)
     if (input.meta && input.control && ['keyu', 'keyi'].includes(code)) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
@@ -885,7 +928,7 @@ app.on('web-contents-created', (event, contents) => {
     }
 
     // Meta (Super/Win) shortcuts: h, l, q, w, n, z, o, f, g, r, x, ;
-    if (input.meta && (['h', 'l', 'q', 'w', 'n', 'z', 'o', 'f', 'g', 'r', 'x', ';'].includes(key) || ['keyn', 'keyo', 'semicolon'].includes(code))) {
+    if (input.meta && !input.control && (['h', 'l', 'q', 'w', 'n', 'z', 'o', 'f', 'g', 'r', 'x', ';'].includes(key) || ['keyn', 'keyo', 'semicolon'].includes(code))) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
@@ -901,6 +944,17 @@ app.on('web-contents-created', (event, contents) => {
           }));
         `)
       }
+    }
+
+    if (input.meta && input.control && code === 'keyy') {
+      if (shouldSkipDuplicateShortcut()) return
+      e.preventDefault()
+      if (mainWindow) {
+        mainWindow.webContents.executeJavaScript(`
+          if (window.__libroOpenMoveProject) window.__libroOpenMoveProject();
+        `)
+      }
+      return
     }
 
     // Ctrl+L (select URL bar) and Ctrl+R (reload) for browser apps

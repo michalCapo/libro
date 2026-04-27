@@ -35,6 +35,7 @@ const (
 	URLPopupID            = components.URLPopupID
 	ResizePopupID         = components.ResizePopupID
 	CommandPopupID        = components.CommandPopupID
+	MoveProjectPopupID    = components.MoveProjectPopupID
 	WorktreeCreatePopupID = components.WorktreeCreatePopupID
 )
 
@@ -687,10 +688,19 @@ func moveAppJS(state *AppState, sid string, _ string) string {
 }
 
 func navigateJS(state *AppState, sid string) string {
+	return navigateProjectJS(state.ActiveProject, state.Apps, state.SelectedIndex, state.ZenMode, sid)
+}
+
+func navigateProjectJS(projectName string, apps []Application, selectedIndex int, zenMode bool, sid string) string {
 	// Build JS to set CSS order on all app frames (keeps DOM stable for webviews)
 	var orderJS strings.Builder
-	for i, app := range state.Apps {
+	for i, app := range apps {
 		fmt.Fprintf(&orderJS, "var e=document.querySelector('[data-app-id=\"%s\"]');if(e)e.style.order='%d';", app.ID, i)
+	}
+
+	selectedID := "''"
+	if selectedIndex >= 0 && selectedIndex < len(apps) {
+		selectedID = components.JSString(apps[selectedIndex].ID)
 	}
 
 	return fmt.Sprintf(`
@@ -823,7 +833,7 @@ func navigateJS(state *AppState, sid string) string {
 				}
 			}
 		})();
-	`, orderJS.String(), stripID(state.ActiveProject), state.SelectedIndex, len(state.Apps), state.ZenMode, sid, selectedAppID(state))
+	`, orderJS.String(), stripID(projectName), selectedIndex, len(apps), zenMode, sid, selectedID)
 }
 
 // popupRegistryJS registers the global helper used by every popup opener to
@@ -832,7 +842,7 @@ func navigateJS(state *AppState, sid string) string {
 func popupRegistryJS() string {
 	return fmt.Sprintf(`
 (function(){
-	var IDS=[%q,%q,%q,%q,%q,%q,%q,%q,%q,%q];
+	var IDS=[%q,%q,%q,%q,%q,%q,%q,%q,%q,%q,%q];
 	window.__libroCloseAllPopups=function(except){
 		var keep=null;
 		if(except){
@@ -845,7 +855,7 @@ func popupRegistryJS() string {
 		}
 	};
 })();
-`, ProjectPickerID, URLPopupID, ResizePopupID, CommandPopupID, WorktreeCreatePopupID, SearchDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID)
+`, ProjectPickerID, URLPopupID, ResizePopupID, CommandPopupID, MoveProjectPopupID, WorktreeCreatePopupID, SearchDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID)
 }
 
 func flashCSS() string {
@@ -2115,6 +2125,10 @@ func renderCommandPopup() *r.Node {
 	return components.CommandPopup()
 }
 
+func renderMoveProjectPopup() *r.Node {
+	return components.MoveProjectPopup()
+}
+
 // commandPopupJS returns the JS that powers the global command palette.
 func commandPopupJS(sid string) string {
 	return fmt.Sprintf(`
@@ -2228,6 +2242,17 @@ func commandPopupJS(sid string) string {
 				run:function(){
 					closePalette();
 					if(window.__libroOpenResizePopup)window.__libroOpenResizePopup();
+				},
+			});
+			commands.push({
+				id:'move-project',
+				label:'Move to project',
+				scope:'selected app',
+				icon:'drive_file_move',
+				keywords:'move selected app window to another project transfer switch',
+				run:function(){
+					closePalette();
+					if(window.__libroOpenMoveProject)window.__libroOpenMoveProject();
 				},
 			});
 		}
@@ -3378,6 +3403,169 @@ func projectPickerPopupJS(sid string) string {
 `, ProjectPickerID, sid, sid)
 }
 
+func moveProjectPopupJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	var selectedIdx=0;
+	var filtered=[];
+	var hoverEnabled=false;
+
+	function getDlg(){return document.getElementById('%s');}
+	function getInp(){return document.getElementById('move-project-input');}
+	function getResults(){return document.getElementById('move-project-results');}
+	function targetName(item){return item.kind==='worktree' ? item.name+'/'+item.branch : item.name;}
+	function escapeHtml(s){return (s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+	function armHoverAfterPointerMove(){
+		hoverEnabled=false;
+		var dlg=getDlg();
+		if(!dlg)return;
+		var enableHover=function(){
+			hoverEnabled=true;
+			dlg.removeEventListener('mousemove',enableHover,true);
+		};
+		dlg.addEventListener('mousemove',enableHover,true);
+	}
+
+	function fuzzyMatch(text,query){
+		text=(text||'').toLowerCase();
+		query=(query||'').toLowerCase();
+		var ti=0,qi=0,score=0,lastMatch=-1;
+		while(ti<text.length&&qi<query.length){
+			if(text[ti]===query[qi]){
+				score+=1;
+				if(lastMatch===ti-1)score+=2;
+				if(ti===0||text[ti-1]===' '||text[ti-1]==='/'||text[ti-1]==='.')score+=3;
+				lastMatch=ti;
+				qi++;
+			}
+			ti++;
+		}
+		return qi===query.length?score:0;
+	}
+
+	function render(){
+		var res=getResults();
+		if(!res)return;
+		var dk=document.documentElement.classList.contains('dark');
+		if(filtered.length===0){
+			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No projects found</div>';
+			return;
+		}
+		var html='';
+		filtered.forEach(function(item,i){
+			var sel=i===selectedIdx;
+			var icon=item.kind==='worktree'?'alt_route':(item.isGit?'source':'folder');
+			var primary=item.kind==='worktree'?item.branch:item.name;
+			var secondary=item.kind==='worktree'?item.name:item.path;
+			var activeBadge=item.isActive?'<span class="ml-2 inline-flex items-center justify-center px-1.5 h-4 rounded text-[9px] font-bold leading-none '+(dk?'bg-blue-500/30 text-blue-300':'bg-blue-100 text-blue-700')+'">ACTIVE</span>':'';
+			html+='<div class="move-project-item flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
+				+(sel?(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500')
+				:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'))
+				+'" data-move-project-idx="'+i+'">';
+			html+='<i class="material-icons-round '+(dk?'text-zinc-400':'text-gray-400')+' text-lg">'+icon+'</i>';
+			html+='<div class="flex-1 min-w-0">';
+			html+='<div class="text-sm truncate '+(dk?'text-zinc-200':'text-gray-800')+'">'+escapeHtml(primary)+activeBadge+'</div>';
+			html+='<div class="text-[11px] truncate '+(dk?'text-zinc-500':'text-gray-400')+'">'+escapeHtml(secondary)+'</div>';
+			html+='</div></div>';
+		});
+		res.innerHTML=html;
+		res.querySelectorAll('[data-move-project-idx]').forEach(function(el){
+			el.addEventListener('mouseenter',function(){
+				if(!hoverEnabled)return;
+				var idx=parseInt(el.getAttribute('data-move-project-idx'),10);
+				if(!Number.isNaN(idx)&&idx!==selectedIdx){selectedIdx=idx;render();}
+			});
+			el.addEventListener('mousedown',function(e){
+				e.preventDefault();
+				var idx=parseInt(el.getAttribute('data-move-project-idx'),10);
+				if(Number.isNaN(idx))return;
+				selectedIdx=idx;
+				launch();
+			});
+		});
+		var selected=res.querySelector('[data-move-project-idx="'+selectedIdx+'"]');
+		if(selected)selected.scrollIntoView({block:'nearest'});
+	}
+
+	function filter(){
+		var query=(getInp()&&getInp().value||'').trim();
+		var all=(window.__libroProjects||[]).slice();
+		if(!query){
+			filtered=all;
+		}else{
+			filtered=[];
+			all.forEach(function(item){
+				var hay=targetName(item)+' '+(item.branch||'')+' '+(item.path||'');
+				var score=fuzzyMatch(hay,query);
+				if(score>0)filtered.push(Object.assign({score:score},item));
+			});
+			filtered.sort(function(a,b){return b.score-a.score;});
+		}
+		selectedIdx=0;
+		render();
+	}
+
+	function closePopup(){
+		var dlg=getDlg();
+		var inp=getInp();
+		if(dlg)dlg.classList.add('hidden');
+		if(inp)inp.value='';
+		hoverEnabled=false;
+	}
+
+	function launch(){
+		if(filtered.length===0)return;
+		var item=filtered[selectedIdx];
+		closePopup();
+		__ws.call('app.move.to.project',{sid:'%s',target:targetName(item),kind:item.kind,project:item.name,path:item.path,branch:item.branch});
+	}
+
+	function openPopup(){
+		var dlg=getDlg();
+		var inp=getInp();
+		if(!dlg||!inp)return;
+		var appId=window.__libroSelectedApp||'';
+		if(!appId){
+			if(window.__libroShowToast)window.__libroShowToast('No selected app','Select or open an app first',1800);
+			return;
+		}
+		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
+		dlg.classList.remove('hidden');
+		inp.value='';
+		filter();
+		armHoverAfterPointerMove();
+		setTimeout(function(){inp.focus();},50);
+	}
+
+	var inp=getInp();
+	if(inp){
+		inp.addEventListener('input',filter);
+		inp.addEventListener('keydown',function(e){
+			var dlg=getDlg();
+			if(!dlg||dlg.classList.contains('hidden'))return;
+			e.stopImmediatePropagation();
+			if(e.key==='ArrowDown'){
+				e.preventDefault();
+				if(selectedIdx<filtered.length-1){selectedIdx++;render();}
+			}else if(e.key==='ArrowUp'){
+				e.preventDefault();
+				if(selectedIdx>0){selectedIdx--;render();}
+			}else if(e.key==='Enter'){
+				e.preventDefault();
+				launch();
+			}else if(e.key==='Escape'){
+				e.preventDefault();
+				closePopup();
+			}
+		});
+	}
+
+	window.__libroOpenMoveProject=openPopup;
+})();
+`, MoveProjectPopupID, sid)
+}
+
 // projectsJS publishes the list of projects (and their worktrees) into
 // window.__libroProjects for the project picker popup.
 func projectsJS(state *AppState) string {
@@ -3911,6 +4099,12 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					if (window.__libroOpenProjectPicker) window.__libroOpenProjectPicker();
+					return;
+				}
+				if (e.metaKey && e.ctrlKey && (e.key === 'y' || e.key === 'Y' || e.code === 'KeyY')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenMoveProject) window.__libroOpenMoveProject();
 					return;
 				}
 				if (e.metaKey && !e.ctrlKey && (e.key === ';' || e.code === 'Semicolon')) {
