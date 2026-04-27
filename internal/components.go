@@ -2234,6 +2234,17 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroOpenWorktreeCreate)window.__libroOpenWorktreeCreate();
 			}},
+			{id:'project-remove',label:'Remove current project',scope:'project',icon:'delete_outline',keywords:'remove delete current active project unregister forget drop',run:function(){
+				closePalette();
+				var list=window.__libroProjects||[];
+				var active=null;
+				for(var i=0;i<list.length;i++){if(list[i].isActive){active=list[i];break;}}
+				if(!active){if(window.__libroShowToast)window.__libroShowToast('No active project','',2000);return;}
+				if(active.kind==='worktree'){if(window.__libroShowToast)window.__libroShowToast('Cannot remove a worktree from here','Use git worktree remove instead',2500);return;}
+				if(active.name==='home'){if(window.__libroShowToast)window.__libroShowToast('Cannot remove home project','',2000);return;}
+				if(!window.confirm('Remove project "'+active.name+'" from Libro?\n\nThis only removes it from the project list — files on disk are kept.'))return;
+				__ws.call('project.remove',{sid:'%s',name:active.name});
+			}},
 			{id:'zen',label:'Zen',scope:'app',icon:'fullscreen',keywords:'focus chrome toggle minimal',run:function(){
 				closePalette();
 				__ws.call('zen.toggle',{sid:'%s'});
@@ -2369,7 +2380,7 @@ func commandPopupJS(sid string) string {
 
 window.__libroOpenCommandPalette=openPalette;
 })();
-`, CommandPopupID, sid, sid, sid, sid, sid, sid, sid)
+`, CommandPopupID, sid, sid, sid, sid, sid, sid, sid, sid)
 }
 
 // renderWorktreeCreatePopup renders the popup used to create a new worktree
@@ -3303,10 +3314,15 @@ func projectPickerPopupJS(sid string) string {
 			html+='<div class="flex-1 min-w-0">';
 			html+='<div class="text-sm truncate '+(dk?'text-zinc-200':'text-gray-800')+'">'+escapeHtml(primary)+activeBadge+'</div>';
 			html+='<div class="text-[11px] truncate '+(dk?'text-zinc-500':'text-gray-400')+'">'+escapeHtml(secondary)+'</div>';
-			html+='</div></div>';
+			html+='</div>';
+			if(item.kind!=='worktree'&&item.name!=='home'){
+				html+='<button data-project-remove="'+i+'" title="Remove project" class="ml-2 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity p-1 rounded '+(dk?'hover:bg-red-900/40 text-zinc-500 hover:text-red-300':'hover:bg-red-50 text-gray-400 hover:text-red-600')+'"><i class="material-icons-round text-base pointer-events-none">delete_outline</i></button>';
+			}
+			html+='</div>';
 		});
 		res.innerHTML=html;
 		res.querySelectorAll('[data-project-idx]').forEach(function(el){
+			el.classList.add('group');
 			el.addEventListener('mouseenter',function(){
 				if(!hoverEnabled)return;
 				var idx=parseInt(el.getAttribute('data-project-idx'),10);
@@ -3316,11 +3332,22 @@ func projectPickerPopupJS(sid string) string {
 				}
 			});
 			el.addEventListener('mousedown',function(e){
+				if(e.target&&e.target.closest&&e.target.closest('[data-project-remove]'))return;
 				e.preventDefault();
 				var idx=parseInt(el.getAttribute('data-project-idx'),10);
 				if(Number.isNaN(idx))return;
 				selectedIdx=idx;
 				launch();
+			});
+		});
+		res.querySelectorAll('[data-project-remove]').forEach(function(btn){
+			btn.addEventListener('mousedown',function(e){e.preventDefault();e.stopPropagation();});
+			btn.addEventListener('click',function(e){
+				e.preventDefault();
+				e.stopPropagation();
+				var idx=parseInt(btn.getAttribute('data-project-remove'),10);
+				if(Number.isNaN(idx))return;
+				removeAt(idx);
 			});
 		});
 		var selected=res.querySelector('[data-project-idx="'+selectedIdx+'"]');
@@ -3370,6 +3397,15 @@ func projectPickerPopupJS(sid string) string {
 		}
 	}
 
+	function removeAt(idx){
+		if(idx<0||idx>=filtered.length)return;
+		var item=filtered[idx];
+		if(!item||item.kind==='worktree'||item.name==='home')return;
+		if(!window.confirm('Remove project "'+item.name+'" from Libro?\n\nThis only removes it from the project list — files on disk are kept.'))return;
+		closePopup();
+		__ws.call('project.remove',{sid:'%s',name:item.name});
+	}
+
 	function openPopup(){
 		var dlg=getDlg();
 		var inp=getInp();
@@ -3407,7 +3443,7 @@ func projectPickerPopupJS(sid string) string {
 
 	window.__libroOpenProjectPicker=openPopup;
 })();
-`, ProjectPickerID, sid, sid)
+`, ProjectPickerID, sid, sid, sid)
 }
 
 func moveProjectPopupJS(sid string) string {
@@ -3788,6 +3824,14 @@ func projectDialogJS(sid string) string {
 		if(sel&&!sel.__libroBound){
 			sel.__libroBound=true;
 			sel.addEventListener('click',function(){
+				if(!inp)return;
+				__ws.call('project.create',{sid:sid,'project-path':inp.value});
+			});
+		}
+		var crt=document.getElementById('btn-create-project');
+		if(crt&&!crt.__libroBound){
+			crt.__libroBound=true;
+			crt.addEventListener('click',function(){
 				if(!inp)return;
 				__ws.call('project.create',{sid:sid,'project-path':inp.value});
 			});
