@@ -672,8 +672,11 @@ app.on('web-contents-created', (event, contents) => {
         }
       }
     })
-    // Reset focus tracking on navigation (old page is unloaded)
-    contents.on('did-start-navigation', () => {
+    // Reset focus tracking only for real document navigations.
+    // In-page navigations such as history.pushState should preserve passthrough
+    // mode so apps like mail do not fall back to normal mode on j/k movement.
+    contents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
+      if (!isMainFrame || isInPlace) return
       webviewInputFocused.set(contents.id, false)
       webviewKeyboardPassthrough.delete(contents.id)
       setWebviewBrowserMode('normal')
@@ -781,16 +784,6 @@ app.on('web-contents-created', (event, contents) => {
     // For the main window host page: directly invoke JS for a few Super shortcuts
     // that desktop environments or Chromium can intercept before the page sees them.
     if (isMainWindowContents) {
-      if (input.meta && input.control && code === 'keyo') {
-        if (shouldSkipDuplicateShortcut()) return
-        e.preventDefault()
-        if (mainWindow) {
-          mainWindow.webContents.executeJavaScript(`
-            if (window.__libroOpenSearch) window.__libroOpenSearch('left');
-          `)
-        }
-        return
-      }
       // Super+Ctrl+U/I: move app left/right — must preventDefault to avoid
       // Chromium accelerators consuming the event before page JS sees it
       if (input.meta && input.control && (code === 'keyu' || code === 'keyi')) {
@@ -905,24 +898,30 @@ app.on('web-contents-created', (event, contents) => {
     // so do not special-case them as host content.
 
     // Meta+Ctrl shortcuts: u, i, y (move app / open move-project popup)
-    if (input.meta && input.control && ['keyu', 'keyi'].includes(code)) {
+    if (input.meta && input.control && ['keyu', 'keyi', 'keyy'].includes(code)) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
-        const direction = code === 'keyu' ? 'left' : 'right'
-        mainWindow.webContents.executeJavaScript(`
-          if (window.__libroMoveSelectedApp) {
-            window.__libroMoveSelectedApp('${direction}');
-          } else {
-            document.dispatchEvent(new KeyboardEvent('keydown', {
-              code: '${input.code || ''}',
-              metaKey: true,
-              ctrlKey: true,
-              bubbles: true,
-              cancelable: true
-            }));
-          }
-        `)
+        if (code === 'keyy') {
+          mainWindow.webContents.executeJavaScript(`
+            if (window.__libroOpenMoveProject) window.__libroOpenMoveProject();
+          `)
+        } else {
+          const direction = code === 'keyu' ? 'left' : 'right'
+          mainWindow.webContents.executeJavaScript(`
+            if (window.__libroMoveSelectedApp) {
+              window.__libroMoveSelectedApp('${direction}');
+            } else {
+              document.dispatchEvent(new KeyboardEvent('keydown', {
+                code: '${input.code || ''}',
+                metaKey: true,
+                ctrlKey: true,
+                bubbles: true,
+                cancelable: true
+              }));
+            }
+          `)
+        }
       }
       return
     }
