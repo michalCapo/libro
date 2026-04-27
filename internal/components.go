@@ -526,7 +526,7 @@ func renderEmptyState(state *AppState, sid string) *r.Node {
 	actionButtons = append(actionButtons,
 		r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
 			Render(r.I("material-icons-round text-[18px]").Text("search"), r.Span("").Text("Quick Launch")).
-			OnClick(&r.Action{Name: "app.run.new", Data: sidData(sid)}),
+			OnClick(&r.Action{Name: "app.run.open", Data: sidData(sid)}),
 	)
 
 	container := r.Div("flex-1 flex items-center justify-center").ID(projectMainID(state.ActiveProject)).Render(
@@ -1880,9 +1880,9 @@ func searchDialogJS(sid string) string {
 			__ws.call('app.run.execute',{sid:'%s',command:app.command,side:side});
 			return;
 		}
-		// Empty browser — use app.browse.new to open blank tab with URL bar focused
+		// Empty browser — use app.browse.open to open a blank tab with URL bar focused
 		if(item.isBrowse&&!app.url){
-			__ws.call('app.browse.new',{sid:'%s',side:side});
+			__ws.call('app.browse.open',{sid:'%s',side:side});
 			return;
 		}
 		// History items — open directly (URL is already complete)
@@ -2186,9 +2186,13 @@ func commandPopupJS(sid string) string {
 	function commandDefinitions(){
 		var selected=selectedAppInfo();
 		var commands=[
-			{id:'new',label:'New',scope:'app',icon:'add',keywords:'launcher quick launch create app open new',run:function(){
+			{id:'open',label:'Open',scope:'app',icon:'add',keywords:'launcher quick launch open create app project search run browse',run:function(){
 				closePalette();
 				if(window.__libroOpenSearch)window.__libroOpenSearch('right');
+			}},
+			{id:'new',label:'New',scope:'app',icon:'add_box',keywords:'new add create application app popup dialog project',run:function(){
+				closePalette();
+				__ws.call('app.dialog.open',{sid:'%s'});
 			}},
 			{id:'apps',label:'Apps',scope:'app',icon:'apps',keywords:'manage saved applications app list',run:function(){
 				closePalette();
@@ -2214,7 +2218,7 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroOpenShortcuts)window.__libroOpenShortcuts();
 			}},
-			{id:'open',label:'Reopen saved apps',scope:'project',icon:'history',keywords:'restore reopen saved project apps snapshot strip',run:function(){
+			{id:'reopen-saved',label:'Reopen saved apps',scope:'project',icon:'history',keywords:'restore reopen saved project apps snapshot strip',run:function(){
 				closePalette();
 				__ws.call('project.apps.open',{sid:'%s'});
 			}},
@@ -2363,9 +2367,9 @@ func commandPopupJS(sid string) string {
 		}
 	});
 
-	window.__libroOpenCommandPalette=openPalette;
+window.__libroOpenCommandPalette=openPalette;
 })();
-`, CommandPopupID, sid, sid, sid, sid, sid, sid)
+`, CommandPopupID, sid, sid, sid, sid, sid, sid, sid)
 }
 
 // renderWorktreeCreatePopup renders the popup used to create a new worktree
@@ -2970,7 +2974,7 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("search"),
 				r.Span(tipCls).Text("Quick launch"),
 			).
-			OnClick(&r.Action{Name: "app.run.new", Data: sidData(sid)}),
+			OnClick(&r.Action{Name: "app.run.open", Data: sidData(sid)}),
 		// Add app
 		r.Button(btnCls).
 			Attr("data-libro-no-drag", "true").

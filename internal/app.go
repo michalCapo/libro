@@ -688,8 +688,8 @@ func Run(assets embed.FS) {
 		return navigateJS(state, sid) + updateAppPreviewJS(state)
 	})
 
-	// Open a new empty browser panel
-	app.Action("app.browse.new", func(ctx *r.Context) string {
+	// Open an empty browser panel
+	app.Action("app.browse.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		side, _ := data["side"].(string)
@@ -725,8 +725,8 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
-	// Quick run - open search dialog for command input
-	app.Action("app.run.new", func(ctx *r.Context) string {
+	// Quick open - show the app search dialog
+	app.Action("app.run.open", func(ctx *r.Context) string {
 		data := ctx.WsData()
 		side, _ := data["side"].(string)
 		if side == "" {
