@@ -806,6 +806,60 @@ func (sm *StateManager) MoveAppRight(sessionID string) bool {
 	return true
 }
 
+// MoveSelectedAppToProject moves the selected app to another project and makes
+// that project active.
+func (sm *StateManager) MoveSelectedAppToProject(sessionID, projectName string) (*Application, bool) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil || projectName == "" || len(s.Apps) == 0 || s.SelectedIndex < 0 || s.SelectedIndex >= len(s.Apps) {
+		return nil, false
+	}
+
+	found := false
+	for _, p := range s.Projects {
+		if p.Name == projectName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, false
+	}
+
+	moved := s.Apps[s.SelectedIndex]
+	if s.ActiveProject == projectName {
+		return &moved, true
+	}
+
+	sourceProject := s.ActiveProject
+	sourceApps := append([]Application(nil), s.Apps[:s.SelectedIndex]...)
+	sourceApps = append(sourceApps, s.Apps[s.SelectedIndex+1:]...)
+	sourceSelected := s.SelectedIndex
+	if len(sourceApps) == 0 {
+		sourceSelected = 0
+	} else if sourceSelected >= len(sourceApps) {
+		sourceSelected = len(sourceApps) - 1
+	}
+
+	s.PreviousProject = sourceProject
+	s.snapshots[sourceProject] = &projectSnapshot{
+		Apps:          sourceApps,
+		SelectedIndex: sourceSelected,
+	}
+
+	targetApps := []Application(nil)
+	if snap, ok := s.snapshots[projectName]; ok && snap != nil {
+		targetApps = append(targetApps, snap.Apps...)
+		delete(s.snapshots, projectName)
+	}
+	targetApps = append(targetApps, moved)
+	s.Apps = targetApps
+	s.SelectedIndex = len(targetApps) - 1
+	s.ActiveProject = projectName
+	return &moved, true
+}
+
 // SelectApp sets the selected app index
 func (sm *StateManager) SelectApp(sessionID string, index int) {
 	sm.mu.Lock()

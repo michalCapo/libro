@@ -21,6 +21,7 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderURLPopup(sid),
 		renderResizePopup(sid),
 		renderCommandPopup(),
+		renderMoveProjectPopup(),
 		renderWorktreeCreatePopup(),
 	)
 	page.JS(popupRegistryJS() +
@@ -40,6 +41,7 @@ func renderPage(state *AppState, sid string) *r.Node {
 		urlPopupJS(sid) +
 		resizePopupJS(sid) +
 		commandPopupJS(sid) +
+		moveProjectPopupJS(sid) +
 		worktreeCreatePopupJS(sid) +
 		manageAppsJS(),
 	)

@@ -13,5 +13,6 @@ const (
 	URLPopupID            = "url-popup"
 	ResizePopupID         = "resize-popup"
 	CommandPopupID        = "command-popup"
+	MoveProjectPopupID    = "move-project-popup"
 	WorktreeCreatePopupID = "worktree-create-popup"
 )

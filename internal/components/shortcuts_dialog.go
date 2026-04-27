@@ -32,6 +32,7 @@ func ShortcutsDialog() *r.Node {
 			{"⌘ + L", "Navigate right"},
 			{"⌘ + Ctrl + U", "Move app left"},
 			{"⌘ + Ctrl + I", "Move app right"},
+			{"⌘ + Ctrl + Y", "Move app to project"},
 			{"⌘ + N", "Open project & worktree picker"},
 			{"⌘ + G", "Create worktree from current branch"},
 			{"⌘ + X", "Assign or remove current project shortcut"},
