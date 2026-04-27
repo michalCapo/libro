@@ -71,12 +71,7 @@ func ProjectDialog(visible bool, sid string) *r.Node {
 								Text("Select current"),
 							r.Button("px-4 py-1 bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs font-medium rounded transition-colors cursor-pointer").
 								ID("btn-create-project").
-								Text("Create").
-								OnClick(&r.Action{
-									Name:    "project.create",
-									Data:    map[string]any{"sid": sid},
-									Collect: []string{"project-path"},
-								}),
+								Text("Create"),
 						),
 					),
 				),
