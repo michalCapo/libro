@@ -94,7 +94,6 @@ Libro is a desktop strip for keeping browser panels and terminal sessions open s
 **Apps**
 
 - `⌘ + O` — open launcher on the right
-- `⌘ + Ctrl + O` — open launcher on the left
 - `⌘ + ;` — open command palette
 - `⌘ + W` — close current app
 - `⌘ + R` — open resize popup

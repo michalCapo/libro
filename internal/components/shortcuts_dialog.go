@@ -18,7 +18,6 @@ func ShortcutsDialog() *r.Node {
 	sections := []section{
 		{"Apps", "", []shortcut{
 			{"⌘ + O", "New app (right of current)"},
-			{"⌘ + Ctrl + O", "New app (left of current)"},
 			{"⌘ + ;", "Command palette"},
 			{"⌘ + W", "Close current app"},
 			{"⌘ + R", "Resize app popup"},
@@ -42,7 +41,7 @@ func ShortcutsDialog() *r.Node {
 			{"⌘ + Z", "Toggle zen mode (hide UI)"},
 			{"⌘ + Q", "Quit Libro"},
 		}},
-		{"Search", "⌘ + O or ⌘ + Ctrl + O to open", []shortcut{
+		{"Search", "⌘ + O to open", []shortcut{
 			{": query", "Search the internet"},
 			{"! command", "Run terminal command"},
 		}},

@@ -4080,12 +4080,6 @@ func keyboardShortcutsJS(sid string) string {
 					e.stopImmediatePropagation();
 					__ws.call('project.select.last', {"sid": "%s"});
 				}
-				if (e.metaKey && e.ctrlKey && (e.key === 'o' || e.key === 'O' || e.code === 'KeyO')) {
-					e.preventDefault();
-					e.stopImmediatePropagation();
-					if (window.__libroOpenSearch) window.__libroOpenSearch('left');
-					return;
-				}
 				if (e.metaKey && (e.key === 'o' || e.key === 'O' || e.code === 'KeyO')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
