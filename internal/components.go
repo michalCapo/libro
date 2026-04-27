@@ -664,6 +664,9 @@ func selectedAppID(state *AppState) string {
 func centerSelectedJS(state *AppState) string {
 	return fmt.Sprintf(`
 		window.__libroSelectedApp=%s;
+		if (window.__libroSelectedApp && window.__libroApplyBrowserMode && window.__libroGetBrowserMode) {
+			window.__libroApplyBrowserMode(window.__libroSelectedApp, window.__libroGetBrowserMode(window.__libroSelectedApp));
+		}
 		(function centerApp() {
 			requestAnimationFrame(function() {
 				requestAnimationFrame(function() {
@@ -717,18 +720,18 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 				var child = sorted[i];
 				if (!child) continue;
 				if (i === selectedIdx) {
-					// Zen mode: show blue border around selected app
-					var cleanCls = child.className.replace(/border-\[\dpx\]/g, '').replace(/border-t-\[\dpx\]/g, '').replace(/border-blue-500/g, '').replace(/border-gray-300 dark:border-zinc-600/g, '').replace(/border-transparent/g, '');
+					var appID = child.getAttribute('data-app-id') || '';
+					var browserMode = window.__libroGetBrowserMode ? window.__libroGetBrowserMode(appID) : 'normal';
+					var selectedBorderColor = browserMode === 'insert' ? 'border-emerald-500' : 'border-blue-500';
+					var cleanCls = child.className.replace(/border-\[\dpx\]/g, '').replace(/border-t-\[\dpx\]/g, '').replace(/border-blue-500/g, '').replace(/border-emerald-500/g, '').replace(/border-gray-300 dark:border-zinc-600/g, '').replace(/border-transparent/g, '');
 					if (zenMode) {
-						child.className = cleanCls + ' border-[1px] border-t-[10px] border-blue-500';
+						child.className = cleanCls + ' border-[1px] border-t-[10px] ' + selectedBorderColor;
 					} else {
-						child.className = cleanCls + ' border-[1px] border-blue-500';
+						child.className = cleanCls + ' border-[1px] ' + selectedBorderColor;
 					}
 					var toolbar = child.children[0];
 					// Make toolbar blue for selected app
 					if (toolbar) {
-						var appID = child.getAttribute('data-app-id') || '';
-						var browserMode = window.__libroGetBrowserMode ? window.__libroGetBrowserMode(appID) : 'normal';
 						var selectedToolbarColor = browserMode === 'insert' ? ' bg-emerald-600 border-emerald-700' : ' bg-blue-600 border-blue-700';
 						toolbar.className = 'flex items-center gap-2 px-1.5 py-1 border-b shrink-0' + selectedToolbarColor;
 						// Update nav buttons to white-on-red

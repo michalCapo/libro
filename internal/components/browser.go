@@ -223,14 +223,23 @@ function applyBrowserMode(appID, mode) {
 	browserModeState[appID] = mode;
 	var container = document.querySelector('[data-app-id="' + appID + '"]');
 	if (container) {
+		var isSelected = container.className.indexOf('border-blue-500') !== -1 ||
+			container.className.indexOf('border-emerald-500') !== -1;
+		if (isSelected) {
+			if (mode === 'insert') {
+				container.className = container.className.replace(/border-blue-500/g, 'border-emerald-500');
+			} else {
+				container.className = container.className.replace(/border-emerald-500/g, 'border-blue-500');
+			}
+		}
 		var toolbar = container.querySelector('[data-app-toolbar]');
 		if (toolbar) {
 			// Only restyle the toolbar when the app is the selected one
 			// (selected toolbars use bg-blue-600). Unselected toolbars are
 			// gray/white and should remain unchanged regardless of mode.
-			var isSelected = toolbar.className.indexOf('bg-blue-600') !== -1 ||
+			var toolbarIsSelected = toolbar.className.indexOf('bg-blue-600') !== -1 ||
 				toolbar.className.indexOf('bg-emerald-600') !== -1;
-			if (isSelected) {
+			if (toolbarIsSelected) {
 				if (mode === 'insert') {
 					toolbar.className = toolbar.className
 						.replace(/bg-blue-600/g, 'bg-emerald-600')
