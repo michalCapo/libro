@@ -1,6 +1,7 @@
 tmp/
 __debug*
 libro
+dist/
 *.syso
 node_modules/
 libro.db*
