@@ -8,7 +8,7 @@ A Go + Electron application using [g-sui](https://github.com/michalCapo/g-sui) t
 
 ## Recent Changes
 
-- The project sidebar now expands git projects into an inline worktree tree; clicking a project header toggles the tree and creating a worktree opens its parent automatically.
+- The project sidebar has been removed; projects and worktrees are now reached through a popup picker (`⌘ + N`).
 - `⌘ + G` creates a new worktree from the current branch and switches to it.
 - Command Palette exposes app and project actions, including saving the current strip, clearing saved reopen state, and reopening saved project apps.
 - Projects can save a strip explicitly, so you can restore a project's browser and terminal layout later with the save and reopen commands.
@@ -86,7 +86,7 @@ Libro is a desktop strip for keeping browser panels and terminal sessions open s
 - App previews appear in the top bar for fast switching.
 - The top bar also provides Quick Launch, Manage Apps, command access, and desktop window controls.
 - Zen mode hides most chrome and leaves the running apps visible.
-- The sidebar can be collapsed, and the current app can be toggled to full width.
+- The current app can be toggled to full width.
 - The current app version is shown in the header.
 
 ### Keyboard Shortcuts
