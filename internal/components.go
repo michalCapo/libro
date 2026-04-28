@@ -955,6 +955,72 @@ func projectToastSetupJS() string {
 		el.style.animation='libro-toast-slide-down .04s ease-in forwards';
 		setTimeout(function(){if(el.parentNode)el.remove();},50);
 	}
+	var dlCompleted={};
+	var dlToolbar=null;
+	function dlEsc(s){
+		return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+	}
+	function dlCompletedList(){
+		return Object.keys(dlCompleted).sort(function(a,b){return Number(a)-Number(b);}).map(function(k){return dlCompleted[k];});
+	}
+	function dlRemoveCompleted(id){
+		delete dlCompleted[id];
+		dlRenderToolbar();
+	}
+	function dlClearCompleted(){
+		dlCompleted={};
+		dlRenderToolbar();
+	}
+	function dlEnsureToolbar(){
+		if(dlToolbar&&dlToolbar.parentNode)return dlToolbar;
+		dlToolbar=document.createElement('div');
+		dlToolbar.id='libro-dl-toolbar';
+		document.body.appendChild(dlToolbar);
+		return dlToolbar;
+	}
+	function dlRenderToolbar(){
+		var files=dlCompletedList();
+		if(files.length===0){
+			if(dlToolbar&&dlToolbar.parentNode)dlDismiss(dlToolbar);
+			dlToolbar=null;
+			return;
+		}
+		var el=dlEnsureToolbar();
+		var t=dlTheme();
+		el.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9999;padding:8px 12px;background:'+t.bg+';border-top:1px solid '+t.border+';display:flex;align-items:center;gap:8px;font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,monospace;font-size:13px;box-shadow:0 -6px 18px rgba(0,0,0,.08);animation:libro-toast-slide-up .04s ease-out forwards;';
+		var label=files.length===1?'Downloaded':'Downloads';
+		var html='<span class="material-icons-round" style="font-size:18px;color:'+t.accent+';flex:0 0 auto">download_done</span>'+
+			'<span style="color:'+t.fg+';font-size:12px;white-space:nowrap;flex:0 0 auto">'+label+'</span>'+
+			'<div data-dl-files style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow-x:auto;padding:1px 0"></div>'+
+			'<button type="button" data-dl-folder title="Open downloads folder" style="border:0;background:transparent;color:'+t.dim+';cursor:pointer;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:6px;flex:0 0 auto"><span class="material-icons-round" style="font-size:19px">folder_open</span></button>'+
+			'<button type="button" data-dl-close title="Clear downloads" style="border:0;background:transparent;color:'+t.dim+';cursor:pointer;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:6px;flex:0 0 auto"><span class="material-icons-round" style="font-size:19px">close</span></button>';
+		el.innerHTML=html;
+		var list=el.querySelector('[data-dl-files]');
+		files.forEach(function(file){
+			var a=document.createElement('a');
+			a.href='#';
+			a.dataset.dlId=String(file.id);
+			a.style.cssText='display:inline-flex;align-items:center;max-width:260px;min-width:0;padding:5px 8px;border:1px solid '+t.border+';border-radius:6px;color:'+t.accent+';background:'+(document.documentElement.classList.contains('dark')?'rgba(255,255,255,.04)':'rgba(255,255,255,.7)')+';text-decoration:none;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto';
+			a.title='Open '+file.filename;
+			a.innerHTML='<span style="overflow:hidden;text-overflow:ellipsis">'+dlEsc(file.filename)+'</span>';
+			a.addEventListener('click',function(e){
+				e.preventDefault();
+				var id=this.dataset.dlId;
+				var item=dlCompleted[id];
+				if(item&&window.libroElectron&&window.libroElectron.openPath)window.libroElectron.openPath(item.filePath);
+				dlRemoveCompleted(id);
+			});
+			list.appendChild(a);
+		});
+		el.querySelector('[data-dl-folder]').addEventListener('click',function(){
+			if(window.__libroOpenDownloadsFolder)window.__libroOpenDownloadsFolder();
+		});
+		el.querySelector('[data-dl-close]').addEventListener('click',function(){dlClearCompleted();});
+	}
+	window.__libroOpenDownloadsFolder=function(){
+		if(window.libroElectron&&window.libroElectron.openDownloadsFolder)window.libroElectron.openDownloadsFolder();
+		dlClearCompleted();
+	};
 	function formatBytes(b){
 		if(b<=0)return '0 B';
 		var u=['B','KB','MB','GB'];var i=Math.floor(Math.log(b)/Math.log(1024));
@@ -991,17 +1057,10 @@ func projectToastSetupJS() string {
 
 	// Download complete — show clickable filename
 	window.__libroShowDownloadToast=function(id,filename,filePath){
-		var el=dlBase(id);
-		var t=dlTheme();
-		el.innerHTML='<span class="material-icons-round" style="font-size:18px;color:'+t.accent+'">download_done</span>'+
-			'<a href="#" style="color:'+t.accent+';text-decoration:none;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:400px" title="Open '+filename.replace(/"/g,'&quot;')+'">'+filename.replace(/</g,'&lt;')+'</a>'+
-			'<span style="margin-left:auto;cursor:pointer;color:'+t.dim+';font-size:18px;line-height:1" class="material-icons-round">close</span>';
-		el.querySelector('a').addEventListener('click',function(e){
-			e.preventDefault();
-			if(window.libroElectron&&window.libroElectron.openPath)window.libroElectron.openPath(filePath);
-		});
-		el.querySelector('span:last-child').addEventListener('click',function(){dlDismiss(el);});
-		setTimeout(function(){if(el.parentNode)dlDismiss(el);},8000);
+		var progressEl=document.getElementById('libro-dl-'+id);
+		if(progressEl)dlDismiss(progressEl);
+		dlCompleted[id]={id:id,filename:filename,filePath:filePath};
+		dlRenderToolbar();
 	};
 
 	// Download failed
@@ -2197,6 +2256,11 @@ func commandPopupJS(sid string) string {
 			{id:'apps',label:'Apps',scope:'app',icon:'apps',keywords:'manage saved applications app list',run:function(){
 				closePalette();
 				__ws.call('app.manage.open',{sid:'%s'});
+			}},
+			{id:'downloads',label:'Downloads',scope:'app',icon:'folder_open',keywords:'download downloads downloaded files folder directory open file manager',run:function(){
+				closePalette();
+				if(window.__libroOpenDownloadsFolder)window.__libroOpenDownloadsFolder();
+				else if(window.libroElectron&&window.libroElectron.openDownloadsFolder)window.libroElectron.openDownloadsFolder();
 			}},
 			{id:'close',label:'Close all apps in project',scope:'project',icon:'close',keywords:'close project apps clear strip remove opened apps',run:function(){
 				closePalette();

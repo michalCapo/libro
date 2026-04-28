@@ -639,6 +639,10 @@ function createWindow() {
     shell.openPath(filePath)
   })
 
+  ipcMain.on('libro-open-downloads-folder', () => {
+    shell.openPath(app.getPath('downloads'))
+  })
+
   ipcMain.on('libro-zoom-in', () => {
     adjustMainWindowZoom('in')
   })

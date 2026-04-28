@@ -47,6 +47,9 @@ contextBridge.exposeInMainWorld('libroElectron', {
   openPath: function (filePath) {
     ipcRenderer.send('libro-open-path', filePath)
   },
+  openDownloadsFolder: function () {
+    ipcRenderer.send('libro-open-downloads-folder')
+  },
   cancelDownload: function (id) {
     ipcRenderer.send('libro-cancel-download', id)
   },
