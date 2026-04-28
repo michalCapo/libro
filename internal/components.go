@@ -513,7 +513,7 @@ func renderEmptyState(state *AppState, sid string) *r.Node {
 	if projectHasClosedApps(state, state.ActiveProject) {
 		actionButtons = append(actionButtons,
 			r.Button("flex-1 flex items-center justify-center gap-1 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-sm font-medium rounded-md cursor-pointer transition-colors duration-75").
-				Render(r.I("material-icons-round text-[18px]").Text("history"), r.Span("").Text("Reopen")).
+				Render(r.I("material-icons-round text-[18px]").Text("history"), r.Span("").Text("Restore")).
 				OnClick(&r.Action{Name: "project.apps.open", Data: sidData(sid)}),
 		)
 	} else {
@@ -2218,7 +2218,7 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroOpenShortcuts)window.__libroOpenShortcuts();
 			}},
-			{id:'reopen-saved',label:'Reopen saved apps',scope:'project',icon:'history',keywords:'restore reopen saved project apps snapshot strip',run:function(){
+			{id:'restore',label:'Restore saved apps',scope:'project',icon:'history',keywords:'restore reopen saved project apps snapshot strip',run:function(){
 				closePalette();
 				__ws.call('project.apps.open',{sid:'%s'});
 			}},
