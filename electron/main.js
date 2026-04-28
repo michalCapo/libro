@@ -27,6 +27,8 @@ let goProcess = null
 let mainWindow = null
 let isQuitting = false
 const devtoolsOverlays = new Map()
+const MAIN_WINDOW_ZOOM_STEP = 0.15
+let lastMainWindowZoomAction = { action: '', at: 0 }
 
 function resolveAppIconPath() {
   const candidates = [
@@ -285,14 +287,20 @@ function adjustMainWindowZoom(action) {
     return
   }
 
+  const now = Date.now()
+  if (lastMainWindowZoomAction.action === action && now - lastMainWindowZoomAction.at < 80) {
+    return
+  }
+  lastMainWindowZoomAction = { action, at: now }
+
   const wc = mainWindow.webContents
   const current = wc.getZoomLevel()
   if (action === 'reset') {
     wc.setZoomLevel(0)
   } else if (action === 'out') {
-    wc.setZoomLevel(current - 0.5)
+    wc.setZoomLevel(current - MAIN_WINDOW_ZOOM_STEP)
   } else {
-    wc.setZoomLevel(current + 0.5)
+    wc.setZoomLevel(current + MAIN_WINDOW_ZOOM_STEP)
   }
   console.log(`[libro-shortcut] zoom ${action}: ${wc.getZoomLevel()}`)
 }
@@ -631,6 +639,18 @@ function createWindow() {
     shell.openPath(filePath)
   })
 
+  ipcMain.on('libro-zoom-in', () => {
+    adjustMainWindowZoom('in')
+  })
+
+  ipcMain.on('libro-zoom-out', () => {
+    adjustMainWindowZoom('out')
+  })
+
+  ipcMain.on('libro-zoom-reset', () => {
+    adjustMainWindowZoom('reset')
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
     if (isQuitting) {
@@ -767,17 +787,7 @@ app.on('web-contents-created', (event, contents) => {
     if (input.meta && !input.control && !input.alt && (isZoomInKey || isZoomOutKey || isZoomResetKey)) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
-      if (mainWindow) {
-        const wc = mainWindow.webContents
-        const current = wc.getZoomLevel()
-        if (isZoomResetKey) {
-          wc.setZoomLevel(0)
-        } else if (isZoomOutKey) {
-          wc.setZoomLevel(current - 0.5)
-        } else {
-          wc.setZoomLevel(current + 0.5)
-        }
-      }
+      adjustMainWindowZoom(isZoomResetKey ? 'reset' : (isZoomOutKey ? 'out' : 'in'))
       return
     }
 

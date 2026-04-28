@@ -2218,6 +2218,18 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroOpenShortcuts)window.__libroOpenShortcuts();
 			}},
+			{id:'zoom-in',label:'Zoom in',scope:'app',icon:'zoom_in',keywords:'zoom increase larger bigger app scale',run:function(){
+				closePalette();
+				if(window.libroElectron&&window.libroElectron.zoomIn)window.libroElectron.zoomIn();
+			}},
+			{id:'zoom-out',label:'Zoom out',scope:'app',icon:'zoom_out',keywords:'zoom decrease smaller app scale',run:function(){
+				closePalette();
+				if(window.libroElectron&&window.libroElectron.zoomOut)window.libroElectron.zoomOut();
+			}},
+			{id:'zoom-reset',label:'Reset zoom',scope:'app',icon:'filter_center_focus',keywords:'zoom reset normal default app scale',run:function(){
+				closePalette();
+				if(window.libroElectron&&window.libroElectron.zoomReset)window.libroElectron.zoomReset();
+			}},
 			{id:'restore',label:'Restore saved apps',scope:'project',icon:'history',keywords:'restore reopen saved project apps snapshot strip',run:function(){
 				closePalette();
 				__ws.call('project.apps.open',{sid:'%s'});
