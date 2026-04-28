@@ -35,6 +35,15 @@ contextBridge.exposeInMainWorld('libroElectron', {
       return 1
     }
   },
+  zoomIn: function () {
+    ipcRenderer.send('libro-zoom-in')
+  },
+  zoomOut: function () {
+    ipcRenderer.send('libro-zoom-out')
+  },
+  zoomReset: function () {
+    ipcRenderer.send('libro-zoom-reset')
+  },
   openPath: function (filePath) {
     ipcRenderer.send('libro-open-path', filePath)
   },
