@@ -675,6 +675,25 @@ func Run(assets embed.FS) {
 		return resizeJS(state, newWidth, appID)
 	})
 
+	// Step selected app width by one tier up/down.
+	app.Action("app.resize.step", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		delta := 0
+		if v, ok := data["delta"].(float64); ok {
+			delta = int(v)
+		}
+		if delta == 0 {
+			return "/* noop */"
+		}
+		newWidth, appID := sm.StepSelectedAppWidth(sid, delta)
+		if appID == "" {
+			return "/* noop */"
+		}
+		state := sm.Get(sid)
+		return resizeJS(state, newWidth, appID)
+	})
+
 	// Select specific app - JS-only update to preserve iframes
 	app.Action("app.select", func(ctx *r.Context) string {
 		sid := extractSID(ctx)

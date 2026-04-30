@@ -252,6 +252,14 @@ function dispatchToMainWindow(js) {
   })
 }
 
+function showQuitCommandOnlyToast() {
+  dispatchToMainWindow(`
+    if (window.__libroNotifyQuitCommandOnly) {
+      window.__libroNotifyQuitCommandOnly();
+    }
+  `)
+}
+
 function moveSelectedApp(direction) {
   const focusedWindow = BrowserWindow.getFocusedWindow()
   if (!focusedWindow || focusedWindow !== mainWindow) {
@@ -276,6 +284,20 @@ function openMoveProjectPopup() {
   dispatchToMainWindow(`
     if (window.__libroOpenMoveProject) {
       window.__libroOpenMoveProject();
+    }
+  `)
+}
+
+function triggerTerminalAppShortcut() {
+  const focusedWindow = BrowserWindow.getFocusedWindow()
+  if (!focusedWindow || focusedWindow !== mainWindow) {
+    console.log('[libro-shortcut] ignored terminal: main window not focused')
+    return
+  }
+  console.log('[libro-shortcut] firing terminal')
+  dispatchToMainWindow(`
+    if (window.__libroOpenTerminalApp) {
+      window.__libroOpenTerminalApp();
     }
   `)
 }
@@ -307,9 +329,10 @@ function adjustMainWindowZoom(action) {
 
 function registerWindowShortcuts() {
   const shortcuts = [
-    ['Super+Control+U', () => moveSelectedApp('left')],
-    ['Super+Control+I', () => moveSelectedApp('right')],
+    ['Super+[', () => moveSelectedApp('left')],
+    ['Super+]', () => moveSelectedApp('right')],
     ['Super+Control+Y', () => openMoveProjectPopup()],
+    ['Super+Enter', () => triggerTerminalAppShortcut()],
     ['Super+=', () => adjustMainWindowZoom('in')],
     ['Super+Plus', () => adjustMainWindowZoom('in')],
     ['Super+-', () => adjustMainWindowZoom('out')],
@@ -522,14 +545,11 @@ function createWindow() {
 
   mainWindow.loadURL(serverURL)
 
-  // Intercept close to show confirmation dialog when apps are running
+  // Native window-close requests are ignored unless quit was requested explicitly.
   mainWindow.on('close', (e) => {
     if (isQuitting) return
     e.preventDefault()
-    // Ask the renderer to check for running apps
-    mainWindow.webContents.executeJavaScript(`
-      if (window.__libroShowCloseDialog) window.__libroShowCloseDialog();
-    `)
+    showQuitCommandOnlyToast()
   })
 
   // Renderer signals that user confirmed close (or no apps were running)
@@ -853,6 +873,24 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
+      if (input.meta && !input.control && (code === 'comma' || code === 'period')) {
+        if (shouldSkipDuplicateShortcut()) return
+        e.preventDefault()
+        if (mainWindow) {
+          const safeKey = input.key.replace(/'/g, "\\'")
+          const safeCode = (input.code || '').replace(/'/g, "\\'")
+          mainWindow.webContents.executeJavaScript(`
+            document.dispatchEvent(new KeyboardEvent('keydown', {
+              key: '${safeKey}',
+              code: '${safeCode}',
+              metaKey: true,
+              bubbles: true,
+              cancelable: true
+            }));
+          `)
+        }
+        return
+      }
       // Super+;: command palette
       if (input.meta && !input.control && code === 'semicolon') {
         if (shouldSkipDuplicateShortcut()) return
@@ -940,8 +978,8 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, q, w, n, z, o, f, g, r, x, ;
-    if (input.meta && !input.control && (['h', 'l', 'q', 'w', 'n', 'z', 'o', 'f', 'g', 'r', 'x', ';'].includes(key) || ['keyn', 'keyo', 'semicolon'].includes(code))) {
+    // Meta (Super/Win) shortcuts: h, l, q, n, z, o, f, g, r, x, ;, ,, .
+    if (input.meta && !input.control && (['h', 'l', 'q', 'n', 'z', 'o', 'f', 'g', 'r', 'x', ';', ',', '.'].includes(key) || ['keyn', 'keyo', 'semicolon', 'comma', 'period'].includes(code))) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
@@ -957,6 +995,7 @@ app.on('web-contents-created', (event, contents) => {
           }));
         `)
       }
+      return
     }
 
     if (input.meta && input.control && code === 'keyy') {
@@ -1097,11 +1136,7 @@ app.on('ready', async () => {
 app.on('before-quit', (e) => {
   if (isQuitting) return
   e.preventDefault()
-  quitApp().catch((err) => {
-    console.error('Failed to quit cleanly:', err.message)
-    isQuitting = true
-    app.quit()
-  })
+  showQuitCommandOnlyToast()
 })
 
 app.on('window-all-closed', () => {

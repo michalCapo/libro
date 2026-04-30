@@ -730,6 +730,24 @@ func (sm *StateManager) ToggleMaxWidth(sessionID string) (Width, string) {
 	return WidthFull, app.ID
 }
 
+// StepSelectedAppWidth moves the selected app width by one tier and returns the new width and app ID.
+func (sm *StateManager) StepSelectedAppWidth(sessionID string, delta int) (Width, string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil || len(s.Apps) == 0 || s.SelectedIndex < 0 || s.SelectedIndex >= len(s.Apps) {
+		return "", ""
+	}
+	app := &s.Apps[s.SelectedIndex]
+	current := app.Width
+	if current == "" {
+		current = WidthLG
+	}
+	next := current.Step(delta)
+	applyAppWidth(app, next)
+	return next, app.ID
+}
+
 // SetAppURLByID changes the URL of an app by its ID. Returns the app index or -1.
 func (sm *StateManager) SetAppURLByID(sessionID, appID, newURL string) int {
 	sm.mu.Lock()

@@ -2171,7 +2171,7 @@ func urlPopupJS(sid string) string {
 `, URLPopupID, sid)
 }
 
-// renderResizePopup renders the resize popup for Win+R / Win+F (works in both zen and non-zen mode).
+// renderResizePopup renders the resize popup for Win+R (works in both zen and non-zen mode).
 // Uses radio-style buttons navigable with j/k and confirmable with Enter.
 func renderResizePopup(sid string) *r.Node {
 	widths := AllWidths()
@@ -2261,6 +2261,14 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroOpenDownloadsFolder)window.__libroOpenDownloadsFolder();
 				else if(window.libroElectron&&window.libroElectron.openDownloadsFolder)window.libroElectron.openDownloadsFolder();
+			}},
+			{id:'terminal',label:'Open terminal',scope:'app',icon:'terminal',keywords:'terminal shell console bash tty panel libro',run:function(){
+				closePalette();
+				if(window.__libroOpenTerminalApp)window.__libroOpenTerminalApp();
+			}},
+			{id:'quit',label:'Quit Libro',scope:'app',icon:'close',keywords:'quit close exit app window desktop',run:function(){
+				closePalette();
+				if(window.__libroShowCloseDialog)window.__libroShowCloseDialog();
 			}},
 			{id:'close',label:'Close all apps in project',scope:'project',icon:'close',keywords:'close project apps clear strip remove opened apps',run:function(){
 				closePalette();
@@ -2592,7 +2600,7 @@ func worktreeCreatePopupJS(sid string) string {
 `, WorktreeCreatePopupID, sid)
 }
 
-// resizePopupJS returns JS that powers the Win+R / Win+F resize popup.
+// resizePopupJS returns JS that powers the Win+R resize popup.
 // Supports j/k keyboard navigation and Enter to confirm.
 func resizePopupJS(sid string) string {
 	return fmt.Sprintf(`
@@ -3203,11 +3211,11 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			r.Button(btnCls).
 				Attr("data-libro-no-drag", "true").
 				Attr("style", noDragStyle).
-				Attr("title", "Close Libro").
-				Attr("onclick", "if(window.__libroShowCloseDialog)window.__libroShowCloseDialog();").
+				Attr("title", "Use quit command").
+				Attr("onclick", "if(window.__libroNotifyQuitCommandOnly)window.__libroNotifyQuitCommandOnly();").
 				Render(
 					r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-red-600 dark:hover:text-red-400 text-xl").Text("close"),
-					r.Span(tipCls).Text("Close Libro"),
+					r.Span(tipCls).Text("Use quit command"),
 				),
 			r.Div("").
 				Attr("data-libro-no-drag", "true").
@@ -4171,13 +4179,25 @@ func keyboardShortcutsJS(sid string) string {
 			};
 
 			function libroKeyHandler(e) {
-				if (e.metaKey && e.ctrlKey && e.code === 'KeyU') {
+				if (e.metaKey && !e.ctrlKey && (e.key === ',' || e.code === 'Comma')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					__ws.call('app.resize.step', {"sid": "%s", "delta": -1});
+					return;
+				}
+				if (e.metaKey && !e.ctrlKey && (e.key === '.' || e.code === 'Period')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					__ws.call('app.resize.step', {"sid": "%s", "delta": 1});
+					return;
+				}
+				if (e.metaKey && !e.ctrlKey && (e.key === '[' || e.code === 'BracketLeft')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					window.__libroMoveSelectedApp('left');
 					return;
 				}
-				if (e.metaKey && e.ctrlKey && e.code === 'KeyI') {
+				if (e.metaKey && !e.ctrlKey && (e.key === ']' || e.code === 'BracketRight')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					window.__libroMoveSelectedApp('right');
@@ -4203,6 +4223,12 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					__ws.call('project.select.last', {"sid": "%s"});
+				}
+				if (e.metaKey && e.key === 'Enter' && !e.ctrlKey) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenTerminalApp) window.__libroOpenTerminalApp();
+					return;
 				}
 				if (e.metaKey && (e.key === 'o' || e.key === 'O' || e.code === 'KeyO')) {
 					e.preventDefault();
@@ -4249,12 +4275,6 @@ func keyboardShortcutsJS(sid string) string {
 				if (e.metaKey && (e.key === 'q' || e.key === 'Q') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					if (window.__libroShowCloseDialog) window.__libroShowCloseDialog();
-					return;
-				}
-				if (e.metaKey && (e.key === 'w' || e.key === 'W') && !e.ctrlKey) {
-					e.preventDefault();
-					e.stopImmediatePropagation();
 					__ws.call('app.close.current', {"sid": "%s"});
 					return;
 				}
@@ -4297,6 +4317,14 @@ func keyboardShortcutsJS(sid string) string {
 					}
 				}
 			}
+
+			window.__libroOpenTerminalApp = function() {
+				__ws.call('app.start',{sid:'%s',type:'terminal',url:'',command:'',width:'lg',writable:true,name:'',iconUrl:'',side:'right'});
+			};
+
+			window.__libroCloseCurrentApp = function() {
+				__ws.call('app.close.current', {"sid": "%s"});
+			};
 
 			document.addEventListener('keydown', libroKeyHandler, true);
 
@@ -4345,5 +4373,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-		`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
+		`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }
