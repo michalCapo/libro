@@ -45,8 +45,8 @@ func OpenDesktop(url string) <-chan struct{} {
 		return done
 	}
 
-	// Unbind GNOME's Super+D (show-desktop) so it reaches the app
-	unbindGnomeSuperD()
+	// Unbind GNOME shortcuts Libro uses so they reach the app.
+	unbindGnomeGlobalShortcuts()
 
 	cmd := exec.Command(electron, projectRoot, "--gtk-version=3")
 	cmd.Dir = projectRoot
@@ -189,14 +189,16 @@ func findProjectRoot() string {
 	return ""
 }
 
-// unbindGnomeSuperD disables the GNOME show-desktop shortcut (Super+D)
-// so it can be used by the app. The binding is restored when not needed.
-func unbindGnomeSuperD() {
+// unbindGnomeGlobalShortcuts disables GNOME shortcuts that Libro remaps.
+func unbindGnomeGlobalShortcuts() {
 	if runtime.GOOS != "linux" {
 		return
 	}
 	if _, err := exec.LookPath("gsettings"); err != nil {
 		return
 	}
+	// Free Super+D for Libro zoom/desktop-level shortcuts.
 	exec.Command("gsettings", "set", "org.gnome.desktop.wm.keybindings", "show-desktop", "['']").Run()
+	// Free Super+Q for closing the selected Libro app instead of the window manager closing the window.
+	exec.Command("gsettings", "set", "org.gnome.desktop.wm.keybindings", "close", "['']").Run()
 }

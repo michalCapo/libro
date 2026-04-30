@@ -17,6 +17,26 @@ func AllWidths() []Width {
 	return []Width{WidthSM, WidthMD, WidthLG, WidthXL, Width2XL, WidthFull}
 }
 
+// Step returns the neighboring width tier clamped to the valid range.
+func (w Width) Step(delta int) Width {
+	widths := AllWidths()
+	idx := 0
+	for i, candidate := range widths {
+		if candidate == w {
+			idx = i
+			break
+		}
+	}
+	idx += delta
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(widths) {
+		idx = len(widths) - 1
+	}
+	return widths[idx]
+	}
+
 // Label returns the display label for a width
 func (w Width) Label() string {
 	switch w {
