@@ -1650,7 +1650,14 @@ func searchDialogJS(sid string) string {
 			}
 			ti++;
 		}
-		return qi===query.length?score:0;
+		if(qi!==query.length)return 0;
+		var idx=text.indexOf(query);
+		if(idx>=0){
+			score+=12;
+			if(idx===0)score+=8;
+			if(idx===0||text[idx-1]===' '||text[idx-1]==='/'||text[idx-1]==='.'||text[idx-1]==='-'||text[idx-1]==='_')score+=6;
+		}
+		return score;
 	}
 
 	function getApps(){
