@@ -712,6 +712,7 @@ func Run(assets embed.FS) {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		side, _ := data["side"].(string)
+		popup, _ := data["popup"].(bool)
 		// Compute insertion index relative to currently selected app
 		insertIdx := -1 // default: append
 		switch side {
@@ -732,15 +733,23 @@ func Run(assets embed.FS) {
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
 			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid, state.ZenMode)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS +
-				fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, newApp.ID)
+			focusJS := fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, newApp.ID)
+			if popup {
+				focusJS = fmt.Sprintf(`setTimeout(function(){if(window.__libroOpenURLPopupFor)window.__libroOpenURLPopupFor(%s,'');},220);`, components.JSString(newApp.ID))
+			}
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + focusJS
+		}
+
+		focusJS := fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, state.Apps[state.SelectedIndex].ID)
+		if popup {
+			focusJS = fmt.Sprintf(`setTimeout(function(){if(window.__libroOpenURLPopupFor)window.__libroOpenURLPopupFor(%s,'');},220);`, components.JSString(state.Apps[state.SelectedIndex].ID))
 		}
 
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(projectsJS(state)).
-			Add(fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, state.Apps[state.SelectedIndex].ID)).
+			Add(focusJS).
 			Build()
 	})
 
