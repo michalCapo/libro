@@ -197,8 +197,7 @@ func unbindGnomeGlobalShortcuts() {
 	if _, err := exec.LookPath("gsettings"); err != nil {
 		return
 	}
-	// Free Super+D for Libro zoom/desktop-level shortcuts.
-	exec.Command("gsettings", "set", "org.gnome.desktop.wm.keybindings", "show-desktop", "['']").Run()
-	// Free Super+Q for closing the selected Libro app instead of the window manager closing the window.
-	exec.Command("gsettings", "set", "org.gnome.desktop.wm.keybindings", "close", "['']").Run()
+	// Disabled: Libro should not mutate the user's GNOME global shortcuts.
+	// exec.Command("gsettings", "set", "org.gnome.desktop.wm.keybindings", "show-desktop", "['']").Run()
+	// exec.Command("gsettings", "set", "org.gnome.desktop.wm.keybindings", "close", "['']").Run()
 }

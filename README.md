@@ -125,6 +125,7 @@ Libro is a desktop strip for keeping browser panels and terminal sessions open s
 
 **Browser**
 
+- `⌘ + T` — open a new empty browser and focus the URL/search popup
 - `Ctrl + L` — open URL/search popup for the selected browser app
 - `Ctrl + R` — reload selected browser app
 - `/` — find in page

@@ -49,6 +49,7 @@ func ShortcutsDialog() *r.Node {
 			{"! command", "Run terminal command"},
 		}},
 		{"Browser", "", []shortcut{
+			{"⌘ + T", "New browser with URL popup"},
 			{"Ctrl + L", "URL / search popup for browser apps"},
 			{"Ctrl + R", "Reload browser page"},
 		}},

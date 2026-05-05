@@ -302,6 +302,20 @@ function triggerTerminalAppShortcut() {
   `)
 }
 
+function triggerBrowserAppShortcut() {
+  const focusedWindow = BrowserWindow.getFocusedWindow()
+  if (!focusedWindow || focusedWindow !== mainWindow) {
+    console.log('[libro-shortcut] ignored browser: main window not focused')
+    return
+  }
+  console.log('[libro-shortcut] firing browser')
+  dispatchToMainWindow(`
+    if (window.__libroOpenBrowserApp) {
+      window.__libroOpenBrowserApp();
+    }
+  `)
+}
+
 function adjustMainWindowZoom(action) {
   const focusedWindow = BrowserWindow.getFocusedWindow()
   if (!focusedWindow || focusedWindow !== mainWindow || !mainWindow || mainWindow.isDestroyed()) {
@@ -333,6 +347,7 @@ function registerWindowShortcuts() {
     ['Super+]', () => moveSelectedApp('right')],
     ['Super+Control+Y', () => openMoveProjectPopup()],
     ['Super+Enter', () => triggerTerminalAppShortcut()],
+    ['Super+T', () => triggerBrowserAppShortcut()],
     ['Super+=', () => adjustMainWindowZoom('in')],
     ['Super+Plus', () => adjustMainWindowZoom('in')],
     ['Super+-', () => adjustMainWindowZoom('out')],
@@ -862,6 +877,18 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
+      // Super+T: new browser with URL popup — must preventDefault to block
+      // Chromium new-tab handling before page JS sees it
+      if (input.meta && !input.control && code === 'keyt') {
+        if (shouldSkipDuplicateShortcut()) return
+        e.preventDefault()
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            if (window.__libroOpenBrowserApp) window.__libroOpenBrowserApp();
+          `)
+        }
+        return
+      }
       // Super+R: resize popup — must preventDefault to block browser Reload
       if (input.meta && !input.control && code === 'keyr') {
         if (shouldSkipDuplicateShortcut()) return
@@ -978,8 +1005,8 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, q, n, z, o, f, g, r, x, ;, ,, .
-    if (input.meta && !input.control && (['h', 'l', 'q', 'n', 'z', 'o', 'f', 'g', 'r', 'x', ';', ',', '.'].includes(key) || ['keyn', 'keyo', 'semicolon', 'comma', 'period'].includes(code))) {
+    // Meta (Super/Win) shortcuts: h, l, q, n, t, z, o, f, g, r, x, ;, ,, .
+    if (input.meta && !input.control && (['h', 'l', 'q', 'n', 't', 'z', 'o', 'f', 'g', 'r', 'x', ';', ',', '.'].includes(key) || ['keyn', 'keyo', 'keyt', 'semicolon', 'comma', 'period'].includes(code))) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
