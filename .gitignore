@@ -9,6 +9,7 @@ libro.db*
 .gocache
 .cache/
 macos/
+todo.md
 internal/desktopbundledata/electron-app/package.json
 internal/desktopbundledata/electron-app/package-lock.json
 internal/desktopbundledata/electron-app/electron/
