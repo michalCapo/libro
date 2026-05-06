@@ -1,24 +1,21 @@
 # Libro
 
-A Go + Electron application using [g-sui](https://github.com/michalCapo/g-sui) that manages and displays web applications and terminal sessions in a horizontal strip layout. URL apps render natively via Electron `<webview>` tags, and terminals run via ttyd iframes.
-
-## Demo
+Libro is a Go + Electron desktop app for keeping browser panels and terminal sessions open side by side in a horizontal strip. Browser apps render in native Electron `<webview>`s, terminal apps run through `ttyd`, and project/worktree context stays attached to the strip you are working in.
 
 ![Demo](demo/demo.gif)
 
-## Recent Changes
+## What It Does
 
-- The project sidebar has been removed; projects and worktrees are now reached through a popup picker (`⌘ + N`).
-- `⌘ + G` creates a new worktree from the current branch and switches to it.
-- Command Palette exposes app and project actions, including saving the current strip, clearing saved reopen state, and reopening saved project apps.
-- Projects can save a strip explicitly, so you can restore a project's browser and terminal layout later with the save and reopen commands.
-- The selected app can be moved left or right to reorder the strip without reopening panels.
-- Manage Apps is available directly from the top bar as a popup for editing or deleting saved entries.
-- The desktop top bar now behaves more like a native title bar: it is draggable, supports double-click maximize/restore, and the app only quits through the `quit` command.
+- Opens browser and terminal panels in one desktop window.
+- Keeps per-project strip state in memory while you switch between projects.
+- Saves reusable app definitions in SQLite, either globally or per project.
+- Integrates Git worktrees into the project picker and shortcut system.
+- Supports browser-oriented shortcuts, including URL popup, vim-style navigation, and per-panel DevTools.
+- Downloads files from webviews into the system Downloads folder with in-app progress toasts.
 
 ## Install
 
-Release downloads are self-contained single binaries. On first launch, Libro extracts its bundled Electron runtime into the user cache directory and starts the desktop app.
+Release downloads are single self-contained binaries. On first launch, Libro extracts its bundled Electron runtime into the user cache directory and starts the desktop app.
 
 [![Download Linux amd64](https://img.shields.io/badge/Linux-amd64-1f6feb?style=for-the-badge)](https://github.com/michalCapo/libro/releases/latest/download/libro-linux-amd64)
 [![Download Linux arm64](https://img.shields.io/badge/Linux-arm64-1f6feb?style=for-the-badge)](https://github.com/michalCapo/libro/releases/latest/download/libro-linux-arm64)
@@ -26,143 +23,134 @@ Release downloads are self-contained single binaries. On first launch, Libro ext
 [![Download macOS arm64](https://img.shields.io/badge/macOS-arm64-111827?style=for-the-badge)](https://github.com/michalCapo/libro/releases/latest/download/libro-darwin-arm64)
 [![Download Windows amd64](https://img.shields.io/badge/Windows-amd64-0ea5e9?style=for-the-badge)](https://github.com/michalCapo/libro/releases/latest/download/libro-windows-amd64.exe)
 
-## Architecture
+## Build From Source
 
-- **Backend**: Go with g-sui (server-rendered UI via WebSocket)
-- **Desktop Shell**: Electron with `<webview>` tag support for native web rendering
-- **Frontend**: Minimal client JS for webview lifecycle, navigation tracking, and input forwarding
-- **Styling**: Tailwind CSS classes (built into g-sui) with full dark mode support
-- **State**: Server-side in-memory (application list, selected index, project snapshots)
-- **Persistence**: SQLite database (`~/.local/share/libro/libro.db`)
-- **Communication**: WebSocket for UI interactions (g-sui)
+Prerequisites:
 
-## Width System
+- Go `1.25.x`
+- Node.js + `npm`
+- `git` if you want worktree integration
 
-Each width defines a fixed pixel width:
+Run from the repo:
 
-| Width | Fixed Width |
-|-------|-------------|
-| SM    | 480px       |
-| MD    | 640px       |
-| LG    | 960px       |
-| XL    | 1280px      |
-| 2XL   | 1920px      |
-| FULL  | 100%        |
+```bash
+go run .
+```
 
-Each app uses its configured fixed pixel width. FULL takes 100% of the viewport.
+Desktop mode is the default. If local Electron is missing, Libro installs the repo's runtime dependencies with `npm install --no-fund --no-audit --omit=dev` and then launches Electron.
+
+Useful entry points:
+
+```bash
+go run . --no-desktop
+go run . --version
+./install
+```
+
+`./install` builds Libro, installs it under `~/.local/share/libro`, refreshes the Electron app files used by repo-based installs, and creates a launcher symlink in `~/.local/bin`.
+
+## Runtime Model
+
+- Go server: serves the host UI over HTTP/WebSocket using [`g-sui`](https://github.com/michalCapo/g-sui)
+- Electron shell: opens the host page in a frameless `BrowserWindow`
+- Browser apps: render in native Electron `<webview>`s with a persistent `persist:libro` session
+- Terminal apps: render `ttyd` instances inside the strip
+- Persistence: SQLite database plus a few settings stored in `libro.db`
+- Fallback: if no Electron runtime is available, Libro opens the UI in the default browser
+
+Native window-close requests are intentionally ignored. Quitting is routed through the `quit` command so Libro can flush session data cleanly.
+
+## Data Locations
+
+- Linux: `~/.local/share/libro/libro.db`
+- macOS: `~/Library/Application Support/libro/libro.db`
+- Windows: `%APPDATA%/libro/libro.db`
+
+Bundled Electron runtimes extracted from release binaries are stored under the user cache directory, in a versioned `libro/desktop/...` path.
 
 ## Features
 
-Libro is a desktop strip for keeping browser panels and terminal sessions open side by side.
+### Apps
 
-### Core
+- Browser apps support editable URLs, history-backed URL popup, reload, copy URL/text, downloads, and DevTools.
+- Terminal apps default to the user's shell when no command is provided.
+- The selected app can be moved, resized, toggled full-width, or closed.
+- Width presets are `SM`, `MD`, `LG`, `XL`, `2XL`, and `FULL`.
 
-- Browser apps render in Electron `<webview>`s with a persistent session.
-- Terminal apps run through [ttyd](https://github.com/tsl0922/ttyd).
-- Apps live in a horizontal strip with fixed widths (`SM` through `FULL`).
-- The selected app can be resized, moved left/right, reloaded, or closed.
-- Browser panels support navigation, editable URL input, copy URL, reload, and per-panel DevTools.
-- Downloads from webviews are saved to the system Downloads folder with in-app progress toasts.
+### Search And Commands
 
-### Search & Launch
+- `⌘ + O` opens the launcher for saved apps, URL history, and command history.
+- Plain text searches saved entries.
+- `:query` opens a web search.
+- `!command` runs a terminal command.
+- `⌘ + ;` opens the command palette for app and project actions.
 
-- Quick Launch opens a fuzzy search popup for saved apps, URL history, and command history.
-- Command Palette opens a fuzzy list of app-wide and app-specific commands.
-- The `quit` command is the only way to close the Electron app; native window-close requests are ignored.
-- Plain text searches saved entries; `:query` opens a web search; `!command` runs a terminal command.
-- Typing a URL or hostname offers a direct `Browse` action.
-- A `Browser` entry opens an empty browser panel with the URL bar focused.
+### Projects And Worktrees
 
-### Projects
+- `home` is the default project.
+- Projects are tied to directories.
+- Each project keeps its own in-memory running strip while inactive projects stay hidden.
+- Open strips can be saved and later restored per project.
+- Git repositories expose worktrees in the project picker.
+- `⌘ + N` opens the project/worktree picker.
+- `⌘ + G` creates a new worktree from the current branch.
+- `Ctrl + 2-9` can switch to assigned project or worktree slots.
 
-- Projects are tied to directories, with `home` as the default project.
-- Each project keeps its own running strip state while inactive projects stay hidden.
-- Closed app strips can be saved and reopened per project from the command palette.
-- Saved apps can be global or project-specific.
-- Git repositories integrate with worktrees: `⌘ + N` opens a fuzzy picker across all projects and worktrees, and `⌘ + G` creates a new worktree from the current branch.
-- Projects and worktrees can be assigned to `Ctrl + 2-9` slots.
+### Browser Workflow
 
-### Interface
+- `Ctrl + L` opens the selected browser app's URL/search popup.
+- `Ctrl + R` reloads the selected browser app.
+- Plain-key browser navigation is supported outside input fields:
+  - `g / G` top / bottom
+  - `j / k` scroll down / up
+  - `h / l` scroll left / right
+  - `b / f` back / forward
+  - `/`, `n`, `p`, `Esc` for in-page find
+  - `y` copy selected text or current URL
+  - `c` open the selected webview's DevTools console
+  - `i` enter insert mode
 
-- App previews appear in the top bar for fast switching.
-- The top bar also provides Quick Launch, Manage Apps, command access, and desktop window controls.
-- The top-bar close icon does not quit the app; it reminds you to use the `quit` command instead.
-- Zen mode hides most chrome and leaves the running apps visible.
-- The current app can be toggled to full width.
-- The current app version is shown in the header.
+## Keyboard Shortcuts
 
-### Keyboard Shortcuts
+### Apps
 
-**Apps**
+- `⌘ + O` new app on the right
+- `⌘ + Enter` open terminal in Libro
+- `⌘ + ;` open command palette
+- `⌘ + Q` close current app
+- `⌘ + R` open resize popup
+- `⌘ + ,` decrease selected app width
+- `⌘ + .` increase selected app width
+- `⌘ + F` toggle full width
+- `⌘ + +` zoom in
+- `⌘ + -` zoom out
+- `⌘ + 0` reset zoom
+- `quit` quit Libro from the command palette
 
-- `⌘ + O` — open launcher on the right
-- `⌘ + Enter` — open a terminal panel in Libro
-- `⌘ + ;` — open command palette
-- `⌘ + Q` — close current app
-- `⌘ + R` — open resize popup
-- `⌘ + ,` — decrease selected app width
-- `⌘ + .` — increase selected app width
-- `⌘ + F` — toggle full width
-- `⌘ + +` — zoom in
-- `⌘ + -` — zoom out
-- `⌘ + 0` — reset zoom
-- `quit` — quit Libro from the command palette
+### Navigation
 
-**Navigation**
+- `⌘ + H` select app to the left
+- `⌘ + L` select app to the right
+- `⌘ + [` move app left
+- `⌘ + ]` move app right
+- `⌘ + Ctrl + Y` move app to another project
+- `⌘ + N` open project and worktree picker
+- `⌘ + G` create worktree from current branch
+- `⌘ + X` assign or remove current project shortcut
+- `Ctrl + 1` switch to `home`
+- `Ctrl + 2-9` switch to assigned project or worktree
+- `Ctrl + 0` switch to previous project
+- `⌘ + Z` toggle zen mode
 
-- `⌘ + H` — select app to the left
-- `⌘ + L` — select app to the right
-- `⌘ + [` — move app left
-- `⌘ + ]` — move app right
-- `⌘ + Ctrl + Y` — move app to another project
-- `⌘ + N` — open project & worktree picker
-- `⌘ + G` — create worktree from current branch
-- `⌘ + X` — assign or remove current project shortcut
-- `Ctrl + 1` — switch to `home`
-- `Ctrl + 2–9` — switch to assigned project or worktree
-- `Ctrl + 0` — switch to previous project
-- `⌘ + Z` — toggle zen mode
+### Browser
 
-**Browser**
+- `⌘ + T` new browser with URL popup
+- `Ctrl + L` open URL/search popup
+- `Ctrl + R` reload page
 
-- `⌘ + T` — open a new empty browser and focus the URL/search popup
-- `Ctrl + L` — open URL/search popup for the selected browser app
-- `Ctrl + R` — reload selected browser app
-- `/` — find in page
-- `n / p` — next / previous find result
-- `g / G`, `j / k`, `h / l`, `b / f` — vim-style page navigation
-- `y` — copy selected text or current URL
-- `c` — open DevTools Console for the selected webview
+## Development Notes
 
-## Desktop Mode
-
-Libro runs as a desktop application using Electron. The Go backend starts an HTTP/WebSocket server, and Electron opens a `BrowserWindow` pointing to it.
-
-```bash
-libro              # starts server + opens Electron window
-libro --no-desktop # starts server only (no window)
-libro --version    # show version and exit (also -v)
-```
-
-The Go binary launches Electron as a child process, passing the server port via `LIBRO_PORT`. When running from the repo, if Electron is not installed locally, Libro runs `npm install` automatically. Release builds embed the Electron app files and a platform-specific Electron runtime, extract them on first launch, and start the desktop UI without any extra files next to the binary. If no desktop runtime is available, Libro falls back to opening the UI in the system browser instead of failing at startup. In desktop mode, native window-close requests are ignored and Libro exits only through the `quit` command.
-
-Electron is configured with `webviewTag: true` for native web rendering. Keyboard shortcuts that would be consumed by webview guest pages are intercepted at the Electron main process level and forwarded to the host page. The top bar is integrated with Electron window controls, so dragging the bar moves the window and double-clicking it toggles maximize.
-
-### Dependencies
-
-- **Electron** for the desktop shell
-- **Node.js / npm** only when running from source or building from the repo
-- **g-sui** for server-rendered UI over WebSocket
-- **modernc.org/sqlite** for persistence (pure Go, no CGO)
-
-## Key Technical Decisions
-
-1. **Electron webviews over iframes/CDP**: URL apps use Electron `<webview>` tags for native rendering. This eliminates X-Frame-Options/CSP restrictions without the complexity and resource overhead of CDP screencast.
-2. **Viewport panning**: CSS `transform: translateX()` on the strip container, controlled by server state. The offset is calculated based on selected app index and total widths.
-3. **App container sizing**: Each app container gets a CSS class based on its width setting. Tailwind responsive utilities or inline styles computed server-side.
-4. **Session state**: g-sui's WebSocket connection context maintains per-user state. Each connected client has its own `AppState`.
-5. **SQLite persistence**: Application definitions and project config are stored in a SQLite database using a pure-Go driver (no CGO dependency). WAL mode enabled for concurrent reads.
-6. **Width classes**: Width enum maps to actual CSS max-width values. Uses Tailwind's responsive prefixes (sm:, md:, lg:, xl:, 2xl:).
-7. **Keyboard forwarding**: Electron's main process intercepts shortcuts from webview guest pages via `before-input-event` and forwards them as synthetic KeyboardEvents to the host page.
-8. **Virtual projects**: Git worktrees create temporary virtual projects that share nav slots with their parent project and are not persisted to the database.
-9. **Port allocation**: ttyd ports are allocated starting from 7681, automatically skipping occupied ports.
+- Electron shortcuts are intercepted in the main process and forwarded to the host page so they still work while a webview has focus.
+- Browser guest pages intentionally run with broad web compatibility; this is a desktop shell for arbitrary external sites, not a locked-down Electron app.
+- Release builds embed both the Electron app files and a platform-specific Electron runtime zip.
+- `./release` bumps the patch version, stages the embedded desktop payload, builds cross-platform binaries into `dist/`, tags the release, and publishes assets through GitHub CLI.
