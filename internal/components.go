@@ -529,11 +529,11 @@ func renderEmptyState(state *AppState, sid string) *r.Node {
 			OnClick(&r.Action{Name: "app.run.open", Data: sidData(sid)}),
 	)
 
-	container := r.Div("flex-1 flex items-center justify-center").ID(projectMainID(state.ActiveProject)).Render(
-		r.Div("flex flex-col items-center gap-2 w-full max-w-md").Render(
+	container := r.Div("flex-1 flex items-center justify-center px-4 py-6 overflow-y-auto").ID(projectMainID(state.ActiveProject)).Render(
+		r.Div("flex flex-col items-center gap-3 w-full max-w-6xl").Render(
 			guideNode,
-			r.Div("flex flex-col gap-1.5 w-full").Render(appButtons...),
-			r.Div("flex gap-2 w-full mt-1").Render(actionButtons...),
+			r.Div("grid w-full grid-cols-2 gap-3 max-[420px]:grid-cols-1 xl:grid-cols-3").Render(appButtons...),
+			r.Div("flex gap-2 w-full max-w-xl mt-1 flex-wrap").Render(actionButtons...),
 		),
 	)
 	return container
@@ -605,7 +605,7 @@ func renderSavedAppButton(app SavedApp, sid string) *r.Node {
 			"iconUrl": app.IconURL,
 		}})
 
-	return r.Div("w-full flex items-center gap-2 bg-white dark:bg-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-zinc-700/40 hover:border-gray-300 dark:hover:border-zinc-600 rounded-lg transition-colors duration-75 shadow-sm dark:shadow-none pr-2").
+	return r.Div("w-full flex items-center bg-white dark:bg-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-zinc-700/40 hover:border-gray-300 dark:hover:border-zinc-600 rounded-lg transition-colors duration-75 shadow-sm dark:shadow-none").
 		Render(launchBtn)
 }
 
@@ -2878,11 +2878,11 @@ func renderManageAppsPage(state *AppState, sid string) *r.Node {
 		listNode = r.Div("px-4 py-4 space-y-6").Render(sections...)
 	}
 
-	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
+	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[8vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75" + hiddenClass).
 		ID(ManageDialogID).
 		OnClick(r.JS(components.HideJS(ManageDialogID))).
 		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-3xl mx-4 overflow-hidden").
+			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-6xl mx-4 overflow-hidden").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
 					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
@@ -2933,7 +2933,9 @@ func renderManageAppSection(title, subtitle string, apps []SavedApp, sid string)
 	if subtitle != "" {
 		children = append(children, r.Div("px-1 text-[11px] font-mono uppercase tracking-[0.14em] text-gray-400 dark:text-zinc-500").Text(subtitle))
 	}
-	children = append(children, r.Div("overflow-hidden rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60").Render(rows...))
+	children = append(children,
+		r.Div("grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3").Render(rows...),
+	)
 
 	return r.Div("space-y-2").Render(children...)
 }
@@ -2987,13 +2989,18 @@ func renderManageAppRow(app SavedApp, sid string) *r.Node {
 		Render(r.I("material-icons-round text-lg").Text("delete")).
 		OnClick(&r.Action{Name: "app.saved.delete", Data: sidData(sid, "dbid", float64(app.DBID))})
 
-	children := []*r.Node{iconNode}
-	children = append(children, r.Span("flex-1 truncate text-sm text-gray-800 dark:text-zinc-200").Text(label))
-	children = append(children, badges...)
-	children = append(children, editBtn, deleteBtn)
+	headerChildren := []*r.Node{
+		iconNode,
+		r.Div("min-w-0 flex-1").Render(
+			r.Span("block truncate text-sm font-medium text-gray-800 dark:text-zinc-200").Text(label),
+		),
+	}
 
-	return r.Div("flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors").
-		Render(children...)
+	return r.Div("flex h-full min-h-[112px] flex-col gap-3 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors").Render(
+		r.Div("flex items-center gap-3 min-w-0").Render(headerChildren...),
+		r.Div("flex flex-wrap items-center gap-2").Render(badges...),
+		r.Div("mt-auto flex items-center justify-end gap-2").Render(editBtn, deleteBtn),
+	)
 }
 
 func savedAppDisplayLabel(app SavedApp) string {
