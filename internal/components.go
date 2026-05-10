@@ -831,6 +831,11 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 				selected.offsetHeight;
 				selected.style.animation='libro-app-select .08s ease-out';
 				if(window.__libroScrollToApp)window.__libroScrollToApp(selected);
+				var selectedTermFrame = selected.querySelector('iframe[data-terminal-iframe]');
+				if (selectedTermFrame && window.__libroFitTerminalFrame) {
+					window.__libroFitTerminalFrame(selectedTermFrame);
+					setTimeout(function(){ window.__libroFitTerminalFrame(selectedTermFrame); }, 250);
+				}
 				if (window.__libroFocusApp) {
 					setTimeout(function() { window.__libroFocusApp(selectedIdx); }, 30);
 				}
@@ -1451,7 +1456,7 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 		ID(frameID).
 		Attr("data-terminal-iframe", app.ID).
 		Attr("src", iframeSrc).
-		Attr("loading", "lazy").
+		Attr("loading", "eager").
 		Attr("sandbox", sandbox)
 	if app.Type == AppTypeTerminal {
 		iframe.Attr("scrolling", "no")
@@ -1465,6 +1470,21 @@ func insertAppJS(node *r.Node, _ bool, projectName string) string {
 	// CSS order on the app frame (set in renderAppFrame) handles visual positioning,
 	// so we just append to the strip — no DOM repositioning needed.
 	return node.ToJSAppend(stripID(projectName))
+}
+
+func settleAppFrameJS(appID string) string {
+	return fmt.Sprintf(`
+(function(){
+	var appID=%s;
+	function run(){
+		if(window.__libroSettleAppFrame)window.__libroSettleAppFrame(appID);
+	}
+	run();
+	setTimeout(run, 100);
+	setTimeout(run, 500);
+	setTimeout(run, 1500);
+})();
+`, components.JSString(appID))
 }
 
 // hideAllProjectsJS returns JS that hides all project divs inside the wrapper.
@@ -4126,6 +4146,133 @@ func termIconSetupJS() string {
 `, knownTermIconsJS())
 }
 
+func terminalFrameSetupJS() string {
+	return `
+		(function() {
+			if (window.__libroTerminalFramesRegistered) return;
+			window.__libroTerminalFramesRegistered = true;
+
+			var observed = new WeakSet();
+			var resizeObserver = null;
+			var intersectionObserver = null;
+			if (window.ResizeObserver) {
+				resizeObserver = new ResizeObserver(function(entries) {
+					entries.forEach(function(entry) {
+						var frame = entry.target.querySelector && entry.target.querySelector('iframe[data-terminal-iframe]');
+						if (frame) window.__libroFitTerminalFrame(frame);
+					});
+				});
+			}
+			if (window.IntersectionObserver) {
+				intersectionObserver = new IntersectionObserver(function(entries) {
+					entries.forEach(function(entry) {
+						if (entry.isIntersecting && entry.target) window.__libroFitTerminalFrame(entry.target);
+					});
+				}, { threshold: 0.01 });
+			}
+
+			window.__libroFitTerminalFrame = function(frameOrAppID) {
+				var frame = frameOrAppID;
+				if (typeof frameOrAppID === 'string') {
+					frame = document.querySelector('iframe[data-terminal-iframe="' + frameOrAppID.replace(/"/g, '\\"') + '"]');
+				}
+				if (!frame || !frame.contentWindow) return;
+
+				function nudge() {
+					try {
+						frame.style.width = '100%';
+						frame.style.height = '100%';
+						frame.style.minWidth = '0';
+						frame.style.minHeight = '0';
+						frame.style.willChange = 'transform';
+						frame.style.transform = 'translateZ(0)';
+						frame.getBoundingClientRect();
+						var ResizeEvent = frame.contentWindow.Event || Event;
+						window.dispatchEvent(new Event('resize'));
+						frame.contentWindow.dispatchEvent(new ResizeEvent('resize'));
+						var doc = frame.contentDocument || frame.contentWindow.document;
+						if (doc) {
+							if (doc.documentElement) {
+								doc.documentElement.style.width = '100%';
+								doc.documentElement.style.height = '100%';
+								doc.documentElement.style.overflow = 'hidden';
+							}
+							if (doc.body) {
+								doc.body.style.width = '100%';
+								doc.body.style.height = '100%';
+								doc.body.style.margin = '0';
+								doc.body.style.overflow = 'hidden';
+							}
+							doc.dispatchEvent(new ResizeEvent('resize'));
+							if (doc.defaultView) doc.defaultView.dispatchEvent(new ResizeEvent('resize'));
+						}
+					} catch (err) {}
+				}
+
+				requestAnimationFrame(function() {
+					nudge();
+					requestAnimationFrame(nudge);
+				});
+				setTimeout(nudge, 80);
+				setTimeout(nudge, 180);
+				setTimeout(nudge, 420);
+				setTimeout(nudge, 900);
+			};
+
+			window.__libroSettleAppFrame = function(appID) {
+				var app = document.querySelector('[data-app-id="' + String(appID).replace(/"/g, '\\"') + '"]');
+				if (!app) return;
+				var termFrame = app.querySelector('iframe[data-terminal-iframe]');
+				function settle() {
+					if (window.__libroScrollToApp) window.__libroScrollToApp(app);
+					app.style.transform = 'translateZ(0)';
+					app.getBoundingClientRect();
+					if (termFrame && window.__libroFitTerminalFrame) window.__libroFitTerminalFrame(termFrame);
+					if ((window.__libroSelectedApp || '') === appID && window.__libroFocusAppByID) {
+						window.__libroFocusAppByID(appID);
+					}
+				}
+				requestAnimationFrame(function() {
+					settle();
+					requestAnimationFrame(settle);
+				});
+				[80, 180, 350, 700, 1200, 2200, 4200].forEach(function(delay) {
+					setTimeout(settle, delay);
+				});
+			};
+
+			function watch(frame) {
+				if (!frame || observed.has(frame)) return;
+				observed.add(frame);
+				frame.addEventListener('load', function() {
+					window.__libroFitTerminalFrame(frame);
+					var app = frame.closest('[data-app-id]');
+					if (app && window.__libroSettleAppFrame) {
+						window.__libroSettleAppFrame(app.getAttribute('data-app-id') || '');
+					}
+				});
+				if (intersectionObserver) intersectionObserver.observe(frame);
+				var app = frame.closest('[data-app-id]');
+				if (app && resizeObserver) resizeObserver.observe(app);
+				window.__libroFitTerminalFrame(frame);
+			}
+
+			function scan(root) {
+				var scope = root && root.querySelectorAll ? root : document;
+				if (scope.matches && scope.matches('iframe[data-terminal-iframe]')) watch(scope);
+				scope.querySelectorAll('iframe[data-terminal-iframe]').forEach(watch);
+			}
+
+			scan(document);
+			new MutationObserver(function(mutations) {
+				mutations.forEach(function(mutation) {
+					mutation.addedNodes.forEach(scan);
+				});
+			}).observe(document.body, { childList: true, subtree: true });
+		})();
+`
+}
+
 func keyboardShortcutsJS(sid string) string {
 	return fmt.Sprintf(`
 		(function() {
@@ -4180,6 +4327,9 @@ func keyboardShortcutsJS(sid string) string {
 
 					var iframe = container.querySelector('iframe');
 					if (!iframe) return;
+					if (iframe.getAttribute('data-terminal-iframe') && window.__libroFitTerminalFrame) {
+						window.__libroFitTerminalFrame(iframe);
+					}
 					iframe.focus();
 					try {
 						iframe.contentWindow.focus();
