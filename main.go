@@ -36,6 +36,7 @@ func main() {
 
 			// When the browser window closes, exit the process
 			<-done
+			libro.CleanupRuntime()
 			os.Exit(0)
 		}()
 	}

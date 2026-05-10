@@ -70,6 +70,11 @@ func killStaleTtydSessions() {
 	}
 }
 
+// KillLibroTtydSessions removes tmux sessions created by Libro terminals.
+func KillLibroTtydSessions() {
+	killStaleTtydSessions()
+}
+
 // TtydManager manages ttyd processes
 type TtydManager struct {
 	mu        sync.Mutex
