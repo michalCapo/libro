@@ -40,6 +40,36 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }
 
+func ttydSessionName(appID string) string {
+	var b strings.Builder
+	b.WriteString("libro-")
+	for _, r := range appID {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	return b.String()
+}
+
+func killTtydSession(appID string) {
+	_ = exec.Command("tmux", "kill-session", "-t", ttydSessionName(appID)).Run()
+}
+
+func killStaleTtydSessions() {
+	out, err := exec.Command("tmux", "list-sessions", "-F", "#{session_name}").Output()
+	if err != nil {
+		return
+	}
+	for _, session := range strings.Split(string(out), "\n") {
+		session = strings.TrimSpace(session)
+		if strings.HasPrefix(session, "libro-app-") {
+			_ = exec.Command("tmux", "kill-session", "-t", session).Run()
+		}
+	}
+}
+
 // TtydManager manages ttyd processes
 type TtydManager struct {
 	mu        sync.Mutex
@@ -59,6 +89,7 @@ func KillStaleTtyd() {
 	_ = exec.Command("pkill", "-f", "^ttyd ").Run()
 	time.Sleep(200 * time.Millisecond)
 	_ = exec.Command("pkill", "-9", "-f", "^ttyd ").Run()
+	killStaleTtydSessions()
 	time.Sleep(100 * time.Millisecond)
 }
 
@@ -86,6 +117,17 @@ func waitForPort(port int, timeout time.Duration) bool {
 	return false
 }
 
+func waitForPortFree(port int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if PortFree(port) {
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return PortFree(port)
+}
+
 // Start launches a ttyd process for the given app.
 // If pwd is non-empty, the command is prefixed with cd to that directory.
 func (tm *TtydManager) Start(appID string, port int, command string, writable bool, pwd string) error {
@@ -107,9 +149,25 @@ func (tm *TtydManager) Start(appID string, port int, command string, writable bo
 	// to avoid user profile scripts (e.g. .bashrc launching editors).
 	shell := userShell()
 	shellCmd := command + "; exec " + shell + " --norc --noprofile"
+	fallbackCmd := shellCmd
 	if pwd != "" {
-		shellCmd = fmt.Sprintf("cd %s && %s", shellQuote(pwd), shellCmd)
+		fallbackCmd = fmt.Sprintf("cd %s && %s", shellQuote(pwd), fallbackCmd)
 	}
+	sessionName := ttydSessionName(appID)
+	cwdArg := ""
+	if pwd != "" {
+		cwdArg = " -c " + shellQuote(pwd)
+	}
+	// ttyd creates a fresh child process after client reconnects. tmux keeps the
+	// terminal session alive when suspend/resume breaks the WebSocket connection.
+	shellCmd = fmt.Sprintf(`if command -v tmux >/dev/null 2>&1; then
+	if ! tmux has-session -t %s 2>/dev/null; then
+		tmux new-session -d -s %s%s %s
+		tmux set-option -t %s status off
+	fi
+	exec tmux attach-session -t %s
+fi
+%s`, shellQuote(sessionName), shellQuote(sessionName), cwdArg, shellQuote(shellCmd), shellQuote(sessionName), shellQuote(sessionName), fallbackCmd)
 	args = append(args, shell, "--norc", "--noprofile", "-c", shellCmd)
 
 	cmd := exec.Command("ttyd", args...)
@@ -123,7 +181,9 @@ func (tm *TtydManager) Start(appID string, port int, command string, writable bo
 	go func() {
 		_ = cmd.Wait()
 		tm.mu.Lock()
-		delete(tm.processes, appID)
+		if tm.processes[appID] == cmd {
+			delete(tm.processes, appID)
+		}
 		tm.mu.Unlock()
 		log.Printf("ttyd process for app %s exited", appID)
 	}()
@@ -151,6 +211,16 @@ func (tm *TtydManager) Stop(appID string) {
 		delete(tm.processes, appID)
 		log.Printf("ttyd stopped for app %s", appID)
 	}
+	killTtydSession(appID)
+}
+
+// Restart kills the ttyd process and tmux session for an app, then starts it again.
+func (tm *TtydManager) Restart(appID string, port int, command string, writable bool, pwd string) error {
+	tm.Stop(appID)
+	if !waitForPortFree(port, 3*time.Second) {
+		return fmt.Errorf("port %d is still in use", port)
+	}
+	return tm.Start(appID, port, command, writable, pwd)
 }
 
 // StopAll kills all running ttyd processes
@@ -163,6 +233,7 @@ func (tm *TtydManager) StopAll() {
 			_ = cmd.Process.Kill()
 		}
 		delete(tm.processes, id)
+		killTtydSession(id)
 	}
 }
 

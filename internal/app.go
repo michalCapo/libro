@@ -456,6 +456,36 @@ func Run(assets embed.FS) {
 		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + projJS
 	})
 
+	// Emergency restart for a terminal app's ttyd backend and tmux session.
+	app.Action("app.terminal.restart", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		appID, _ := data["id"].(string)
+		if appID == "" {
+			return r.Notify("error", "No terminal app selected")
+		}
+
+		state := sm.Get(sid)
+		var term *Application
+		for i := range state.Apps {
+			if state.Apps[i].ID == appID {
+				term = &state.Apps[i]
+				break
+			}
+		}
+		if term == nil || term.Type != AppTypeTerminal || term.Command == "" || term.Port == 0 {
+			return r.Notify("error", "Selected app is not a running terminal")
+		}
+
+		pwd := sm.GetActiveProjectPath(sid)
+		if err := tm.Restart(term.ID, term.Port, term.Command, term.Writable, pwd); err != nil {
+			return r.Notify("error", "Failed to restart terminal: "+err.Error())
+		}
+
+		return fmt.Sprintf(`(function(){var f=document.querySelector('iframe[data-terminal-iframe="%s"]');if(f){var src=f.getAttribute('src')||%s;var base=src.split('#')[0].split('?')[0];f.setAttribute('src',base+'?restart='+Date.now());}})();`,
+			term.ID, components.JSString(term.URL)) + r.Notify("success", "Terminal restarted")
+	})
+
 	// Close all running apps in the active project.
 	app.Action("project.apps.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)

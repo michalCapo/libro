@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, session, ipcMain, shell, clipboard, globalShortcut, webContents, WebContentsView, nativeImage } = require('electron')
+const { app, BrowserWindow, Menu, session, ipcMain, shell, clipboard, globalShortcut, webContents, WebContentsView, nativeImage, powerMonitor } = require('electron')
 const { spawn } = require('child_process')
 const fs = require('fs')
 const path = require('path')
@@ -29,6 +29,7 @@ let isQuitting = false
 const devtoolsOverlays = new Map()
 const MAIN_WINDOW_ZOOM_STEP = 0.15
 let lastMainWindowZoomAction = { action: '', at: 0 }
+let lastResumeTerminalRefreshAt = 0
 
 function resolveAppIconPath() {
   const candidates = [
@@ -400,6 +401,30 @@ function startGoServer() {
     console.log('Go server exited with code', code)
     goProcess = null
   })
+}
+
+function refreshTerminalFramesAfterResume() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const now = Date.now()
+  if (now - lastResumeTerminalRefreshAt < 3000) return
+  lastResumeTerminalRefreshAt = now
+  setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.executeJavaScript(`
+      (function(){
+        var frames = document.querySelectorAll('iframe[data-terminal-iframe]');
+        for (var i = 0; i < frames.length; i++) {
+          var frame = frames[i];
+          var src = frame.getAttribute('src') || '';
+          if (!src || src.indexOf('/ttyd/') === -1) continue;
+          var base = src.split('#')[0].split('?')[0];
+          frame.setAttribute('src', base + '?resume=' + Date.now());
+        }
+      })();
+    `).catch((err) => {
+      console.error('Failed to refresh terminal frames after resume:', err.message)
+    })
+  }, 1000)
 }
 
 // Check if the Go server is already running (launched by the Go binary in desktop mode)
@@ -1158,6 +1183,7 @@ app.on('ready', async () => {
   }
   registerWindowShortcuts()
   createWindow()
+  powerMonitor.on('resume', refreshTerminalFramesAfterResume)
 })
 
 app.on('before-quit', (e) => {

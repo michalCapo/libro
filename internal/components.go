@@ -1449,6 +1449,7 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 	sandbox := "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin"
 	iframe := r.Iframe("w-full h-full border-0").
 		ID(frameID).
+		Attr("data-terminal-iframe", app.ID).
 		Attr("src", iframeSrc).
 		Attr("loading", "lazy").
 		Attr("sandbox", sandbox)
@@ -2400,6 +2401,19 @@ func commandPopupJS(sid string) string {
 				},
 			});
 		}
+		if(selected&&selected.isTerminal){
+			commands.push({
+				id:'restart-terminal',
+				label:'Restart terminal backend',
+				scope:'selected terminal',
+				icon:'restart_alt',
+				keywords:'terminal ttyd tmux kill restart emergency reset backend websocket session',
+				run:function(){
+					closePalette();
+					__ws.call('app.terminal.restart',{sid:'%s',id:selected.id});
+				},
+			});
+		}
 		return commands;
 	}
 
@@ -2493,7 +2507,7 @@ func commandPopupJS(sid string) string {
 
 window.__libroOpenCommandPalette=openPalette;
 })();
-`, CommandPopupID, sid, sid, sid, sid, sid, sid, sid, sid)
+`, CommandPopupID, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }
 
 // renderWorktreeCreatePopup renders the popup used to create a new worktree

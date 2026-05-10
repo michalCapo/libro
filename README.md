@@ -133,6 +133,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - `⌘ + L` select app to the right
 - `⌘ + [` move app left
 - `⌘ + ]` move app right
+- `⌘ + Enter` open terminal in Libro
 - `⌘ + Ctrl + Y` move app to another project
 - `⌘ + N` open project and worktree picker
 - `⌘ + G` create worktree from current branch
