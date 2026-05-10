@@ -362,10 +362,10 @@ func Run(assets embed.FS) {
 			projJS := projectsJS(state)
 			if hadApps > 0 {
 				frame := renderAppFrame(*newApp, state.SelectedIndex, true, sid, state.ZenMode)
-				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS
+				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + settleAppFrameJS(newApp.ID)
 			}
 
-			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS
+			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS + settleAppFrameJS(newApp.ID)
 		}
 
 		// URL app
@@ -483,7 +483,7 @@ func Run(assets embed.FS) {
 		}
 
 		return fmt.Sprintf(`(function(){var f=document.querySelector('iframe[data-terminal-iframe="%s"]');if(f){var src=f.getAttribute('src')||%s;var base=src.split('#')[0].split('?')[0];f.setAttribute('src',base+'?restart='+Date.now());}})();`,
-			term.ID, components.JSString(term.URL)) + r.Notify("success", "Terminal restarted")
+			term.ID, components.JSString(term.URL)) + settleAppFrameJS(term.ID) + r.Notify("success", "Terminal restarted")
 	})
 
 	// Close all running apps in the active project.
@@ -840,14 +840,16 @@ func Run(assets embed.FS) {
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
 			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid, state.ZenMode)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + runCmdsJS
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + runCmdsJS + settleAppFrameJS(newApp.ID)
 		}
 
+		newApp := state.Apps[state.SelectedIndex]
 		return r.NewResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(projectsJS(state)).
 			Add(runCmdsJS).
+			Add(settleAppFrameJS(newApp.ID)).
 			Build()
 	})
 

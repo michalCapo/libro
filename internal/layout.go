@@ -27,6 +27,7 @@ func renderPage(state *AppState, sid string) *r.Node {
 	page.JS(popupRegistryJS() +
 		flashCSS() +
 		termIconSetupJS() +
+		terminalFrameSetupJS() +
 		projectToastSetupJS() +
 		keyboardShortcutsJS(sid) +
 		savedAppsJS(state) +
