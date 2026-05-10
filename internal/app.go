@@ -8,8 +8,11 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	r "github.com/michalCapo/g-sui/ui"
@@ -74,15 +77,42 @@ func dbUpdateAppURL(projectName string, index int, newURL string) {
 }
 
 var (
-	sm = NewStateManager()
-	tm = components.NewTtydManager()
+	sm                  = NewStateManager()
+	tm                  = components.NewTtydManager()
+	shutdownCleanupOnce sync.Once
+	signalHandlerOnce   sync.Once
 )
+
+// CleanupRuntime tears down terminal backends and related tmux sessions.
+func CleanupRuntime() {
+	shutdownCleanupOnce.Do(func() {
+		tm.StopAll()
+		components.KillLibroTtydSessions()
+	})
+}
+
+func installShutdownSignalHandler() {
+	signalHandlerOnce.Do(func() {
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+		go func() {
+			sig := <-ch
+			log.Printf("libro: received %s, cleaning up terminal sessions", sig)
+			CleanupRuntime()
+			CloseDB()
+			signal.Stop(ch)
+			os.Exit(0)
+		}()
+	})
+}
 
 // Run initializes and starts the Libro application server.
 func Run(assets embed.FS) {
 	components.KillStaleTtyd()
+	installShutdownSignalHandler()
 	InitDB()
 	defer CloseDB()
+	defer CleanupRuntime()
 	app := r.NewApp()
 	app.Title = "Libro"
 	app.Description = "Application Manager"

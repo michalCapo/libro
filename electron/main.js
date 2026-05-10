@@ -26,6 +26,7 @@ const serverURL = `http://localhost:${port}`
 let goProcess = null
 let mainWindow = null
 let isQuitting = false
+let goProcessForceKillTimer = null
 const devtoolsOverlays = new Map()
 const MAIN_WINDOW_ZOOM_STEP = 0.15
 let lastMainWindowZoomAction = { action: '', at: 0 }
@@ -399,8 +400,32 @@ function startGoServer() {
   })
   goProcess.on('exit', (code) => {
     console.log('Go server exited with code', code)
+    if (goProcessForceKillTimer) {
+      clearTimeout(goProcessForceKillTimer)
+      goProcessForceKillTimer = null
+    }
     goProcess = null
   })
+}
+
+function stopGoServer() {
+  if (!goProcess) return
+  const child = goProcess
+  try {
+    child.kill('SIGTERM')
+  } catch (err) {
+    console.error('Failed to stop Go server:', err.message)
+  }
+  if (goProcessForceKillTimer) clearTimeout(goProcessForceKillTimer)
+  goProcessForceKillTimer = setTimeout(() => {
+    if (goProcess === child) {
+      try {
+        child.kill('SIGKILL')
+      } catch (err) {}
+      goProcess = null
+    }
+    goProcessForceKillTimer = null
+  }, 2500)
 }
 
 function refreshTerminalFramesAfterResume() {
@@ -1200,8 +1225,5 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
-  if (goProcess) {
-    goProcess.kill()
-    goProcess = null
-  }
+  stopGoServer()
 })
