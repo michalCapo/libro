@@ -4,7 +4,7 @@ import (
 	r "github.com/michalCapo/g-sui/ui"
 )
 
-// URLPopup renders the Ctrl+L URL/search popup that floats over a browser app.
+// URLPopup renders the URL/search popup (opened with bare 'o' in normal mode) that floats over a browser app.
 // The sid parameter is reserved for future server actions (currently the
 // popup is fully driven by injected JS).
 func URLPopup(_ string) *r.Node {

@@ -50,13 +50,13 @@ func ShortcutsDialog() *r.Node {
 		}},
 		{"Browser", "", []shortcut{
 			{"⌘ + T", "New browser with URL popup"},
-			{"Ctrl + L", "URL / search popup for browser apps"},
-			{"Ctrl + R", "Reload browser page"},
 		}},
-		{"Browser", "Vim keys — disabled in input fields", []shortcut{
+		{"Browser", "Vim keys — disabled in input fields / insert mode", []shortcut{
 			{"g / G", "Go to top / bottom of page"},
 			{"j / k", "Scroll down / up"},
 			{"h / l", "Scroll left / right"},
+			{"o", "URL / search popup for browser apps"},
+			{"r", "Reload browser page"},
 			{"/", "Find in page"},
 			{"n / p", "Find next / previous"},
 			{"Esc", "Clear search / blur input"},

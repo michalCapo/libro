@@ -3,7 +3,7 @@ package components
 // BrowserJS returns the JavaScript that manages Electron webview elements.
 // It initializes webview tags, handles navigation events, and provides
 // back/forward/reload/navigate functions via the webview DOM API.
-// It also injects browser-mode keyboard shortcuts (j/k/h/l/b/f/Enter)
+// It also injects browser-mode keyboard shortcuts (j/k/h/l/b/f/o/r/Enter)
 // into webview guest pages and provides find-in-page support (/, n, p).
 func BrowserJS() string {
 	return browserScript
@@ -141,6 +141,8 @@ var browserShortcutsScript = '(' + function(){
 			case 'c':
 				console.log('__libro:console');
 				break;
+			case 'o': console.log('__libro:urlpopup'); break;
+			case 'r': console.log('__libro:reload'); break;
 			case '/': console.log('__libro:search'); break;
 			case 'n': console.log('__libro:findnext'); break;
 			case 'N': console.log('__libro:findprev'); break;
@@ -172,6 +174,7 @@ window.__libroToggleConsole = function(appID) {
 			if (!opening) {
 				window.libroElectron.closeWebviewDevTools(targetId);
 				setDevtoolsPanelVisible(appID, false);
+				refocusWebview(appID, wv);
 				return;
 			}
 			setDevtoolsPanelVisible(appID, true);
@@ -208,6 +211,7 @@ window.__libroCloseConsole = function(appID) {
 			if (!targetId) return;
 			window.libroElectron.closeWebviewDevTools(targetId);
 			setDevtoolsPanelVisible(appID, false);
+			refocusWebview(appID, wv);
 		} catch (err) {}
 	});
 };
@@ -307,7 +311,10 @@ if (window.libroElectron && typeof window.libroElectron.onWebviewDevToolsClosed 
 			try { webviewId = Number(wv.getWebContentsId ? wv.getWebContentsId() : 0) || 0; } catch (err) {}
 			if (webviewId !== numericTargetId) continue;
 			var appID = wv.getAttribute('data-webview-app') || '';
-			if (appID) setDevtoolsPanelVisible(appID, false);
+			if (appID) {
+				setDevtoolsPanelVisible(appID, false);
+				refocusWebview(appID, wv);
+			}
 			break;
 		}
 	});
@@ -842,6 +849,8 @@ function bindWebviewEvents(wv) {
 		else if (msg === '__libro:searchclear') clearSearch(appID);
 		else if (msg === '__libro:enter') handleEnter(appID);
 		else if (msg === '__libro:console') window.__libroToggleConsole(appID);
+		else if (msg === '__libro:urlpopup') { if (window.__libroOpenURLPopup) window.__libroOpenURLPopup(); }
+		else if (msg === '__libro:reload') { if (window.__libroWvReload) window.__libroWvReload(appID); }
 		else if (msg === '__libro:copyurl') {
 			var inp = document.getElementById('urlinput-' + appID);
 			if (inp && navigator.clipboard) navigator.clipboard.writeText(inp.value);
