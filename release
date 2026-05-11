@@ -123,6 +123,28 @@ cleanup_generated_bundle() {
     rm -f "$SCRIPT_DIR/"*.syso
 }
 
+cleanup_old_releases() {
+    local current_tag="$1"
+    local old_tag
+    local deleted=0
+
+    info "Removing older GitHub releases and matching remote tags..."
+
+    while IFS=$'\t' read -r old_tag _; do
+        [[ -z "$old_tag" || "$old_tag" == "$current_tag" ]] && continue
+
+        info "Deleting ${old_tag}..."
+        gh release delete "$old_tag" --yes --cleanup-tag
+        deleted=$((deleted + 1))
+    done < <(gh release list --limit 1000)
+
+    if [[ "$deleted" -eq 0 ]]; then
+        ok "No older releases found"
+    else
+        ok "Removed ${deleted} older release(s)"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Pre-flight checks
 # ---------------------------------------------------------------------------
@@ -209,6 +231,7 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "  Git push:       git push && git push --tags"
     echo ""
     echo "  GitHub release: gh release create $TAG --generate-notes <binaries...>"
+    echo "  Cleanup:        delete older GitHub releases and matching remote tags"
     echo ""
     exit 0
 fi
@@ -293,6 +316,8 @@ gh release create "${TAG}" "${ASSETS[@]}" \
     --generate-notes
 
 ok "GitHub release created: ${TAG}"
+
+cleanup_old_releases "${TAG}"
 
 # ---------------------------------------------------------------------------
 # Cleanup
