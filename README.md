@@ -98,9 +98,9 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 
 ### Browser Workflow
 
-- `Ctrl + L` opens the selected browser app's URL/search popup.
-- `Ctrl + R` reloads the selected browser app.
-- Plain-key browser navigation is supported outside input fields:
+- Plain-key browser navigation is supported in normal mode (outside input fields, not in insert mode):
+  - `o` open URL/search popup
+  - `r` reload page
   - `g / G` top / bottom
   - `j / k` scroll down / up
   - `h / l` scroll left / right
@@ -146,8 +146,8 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 ### Browser
 
 - `⌘ + T` new browser with URL popup
-- `Ctrl + L` open URL/search popup
-- `Ctrl + R` reload page
+- `o` open URL/search popup (normal mode)
+- `r` reload page (normal mode)
 
 ## Development Notes
 

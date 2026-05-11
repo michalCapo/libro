@@ -138,7 +138,7 @@ function resetDevtoolsZoom(contents) {
 
 function refocusDevtoolsTarget(target) {
   if (!target || target.isDestroyed()) return
-  for (const delay of [0, 40, 120, 260]) {
+  for (const delay of [0, 40, 120, 260, 500]) {
     setTimeout(() => {
       try {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.focus()
@@ -146,8 +146,34 @@ function refocusDevtoolsTarget(target) {
       try {
         if (!target.isDestroyed()) target.focus()
       } catch (err) {}
+      try {
+        if (!target.isDestroyed()) target.executeJavaScript('window.focus();').catch(() => {})
+      } catch (err) {}
     }, delay)
   }
+}
+
+function destroyDevtoolsOverlay(targetId) {
+  const target = withWebContents(targetId)
+  const entry = target ? devtoolsOverlays.get(target.id) : devtoolsOverlays.get(Number(targetId))
+  if (!entry) return
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      if (entry.attached && mainWindow.contentView && typeof mainWindow.contentView.removeChildView === 'function') {
+        mainWindow.contentView.removeChildView(entry.view)
+      }
+    } catch (err) {
+      console.error('Failed to detach DevTools view:', err.message)
+    }
+  }
+  try {
+    if (entry.view && entry.view.webContents && !entry.view.webContents.isDestroyed()) {
+      entry.view.webContents.close()
+    }
+  } catch (err) {
+    console.error('Failed to destroy DevTools view:', err.message)
+  }
+  devtoolsOverlays.delete(Number(targetId))
 }
 
 function closeDevtoolsOverlay(target) {
@@ -157,9 +183,7 @@ function closeDevtoolsOverlay(target) {
       target.closeDevTools()
     }
   } catch (err) {}
-  const entry = devtoolsOverlays.get(target.id)
-  if (entry) entry.opened = false
-  hideDevtoolsOverlay(target.id)
+  destroyDevtoolsOverlay(target.id)
   refocusDevtoolsTarget(target)
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('libro-webview-devtools-closed', target.id)
@@ -174,7 +198,7 @@ function ensureDevtoolsOverlay(targetId, bounds) {
   let entry = devtoolsOverlays.get(target.id)
   if (!entry) {
     const view = new WebContentsView()
-    entry = { view, opened: false }
+    entry = { view, opened: false, attached: false }
     devtoolsOverlays.set(target.id, entry)
     resetDevtoolsZoom(view.webContents)
     view.webContents.on('did-finish-load', () => {
@@ -184,7 +208,7 @@ function ensureDevtoolsOverlay(targetId, bounds) {
       target.setDevToolsWebContents(view.webContents)
     } catch (err) {
       console.error('Failed to bind DevTools view:', err.message)
-      view.webContents.close()
+      try { view.webContents.close() } catch (closeErr) {}
       devtoolsOverlays.delete(target.id)
       return null
     }
@@ -194,7 +218,6 @@ function ensureDevtoolsOverlay(targetId, bounds) {
       if (input.meta || input.control || input.alt || input.shift || key !== 'c') return
       event.preventDefault()
       closeDevtoolsOverlay(target)
-      refocusDevtoolsTarget(target)
     })
   }
 
@@ -204,23 +227,13 @@ function ensureDevtoolsOverlay(targetId, bounds) {
       entry.attached = true
     }
     entry.view.setBounds(normalizedBounds)
+    entry.view.setVisible(true)
   } catch (err) {
     console.error('Failed to place DevTools view:', err.message)
     return null
   }
 
   return { target, devtools: entry.view.webContents, entry }
-}
-
-function hideDevtoolsOverlay(targetId) {
-  const target = withWebContents(targetId)
-  const entry = target ? devtoolsOverlays.get(target.id) : null
-  if (!entry || !mainWindow || mainWindow.isDestroyed()) return
-  try {
-    entry.view.setBounds({ x: 0, y: 0, width: 1, height: 1 })
-  } catch (err) {
-    console.error('Failed to hide DevTools view:', err.message)
-  }
 }
 
 const allowedPermissions = new Set([
@@ -652,9 +665,7 @@ function createWindow() {
     if (!pair) return
     try {
       if (pair.entry.opened && pair.target.isDevToolsOpened()) {
-        pair.target.closeDevTools()
-        pair.entry.opened = false
-        hideDevtoolsOverlay(targetId)
+        closeDevtoolsOverlay(pair.target)
       } else {
         pair.target.openDevTools({ mode: 'detach', activate: false })
         resetDevtoolsZoom(pair.devtools)
@@ -712,8 +723,10 @@ function createWindow() {
   })
 
   ipcMain.on('libro-update-webview-devtools-bounds', (event, targetId, bounds) => {
-    const pair = ensureDevtoolsOverlay(targetId, bounds)
-    if (!pair) return
+    const target = withWebContents(targetId)
+    const entry = target ? devtoolsOverlays.get(target.id) : null
+    if (!entry || !entry.opened || !target.isDevToolsOpened()) return
+    ensureDevtoolsOverlay(targetId, bounds)
   })
 
   ipcMain.on('libro-copy-clipboard', (event, text) => {
@@ -794,11 +807,7 @@ app.on('web-contents-created', (event, contents) => {
       webviewInputFocused.delete(contents.id)
       webviewBrowserMode.delete(contents.id)
       webviewKeyboardPassthrough.delete(contents.id)
-      const entry = devtoolsOverlays.get(contents.id)
-      if (entry) {
-        try { entry.view.webContents.close() } catch (err) {}
-        devtoolsOverlays.delete(contents.id)
-      }
+      destroyDevtoolsOverlay(contents.id)
     })
 
     contents.setWindowOpenHandler(({ url, disposition }) => {
@@ -1086,40 +1095,6 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Ctrl+L (select URL bar) and Ctrl+R (reload) for browser apps
-    if (input.control && !input.meta && ['l', 'r'].includes(key)) {
-      if (shouldSkipDuplicateShortcut()) return
-      e.preventDefault()
-      if (mainWindow) {
-        const safeKey = input.key.replace(/'/g, "\\'")
-        const safeCode = (input.code || '').replace(/'/g, "\\'")
-        // First try dispatching to document for compatibility
-        mainWindow.webContents.executeJavaScript(`
-          document.dispatchEvent(new KeyboardEvent('keydown', {
-            key: '${safeKey}',
-            code: '${safeCode}',
-            ctrlKey: true,
-            bubbles: true,
-            cancelable: true
-          }));
-        `)
-        // Also directly access the selected webview to ensure the action works
-        // This handles cases where the main document event doesn't reach handlers
-        const reloadOrFocusJS = key === 'r' ? `
-          (function() {
-            var appId = window.__libroSelectedApp || '';
-            if (appId && window.__libroWvReload) {
-              window.__libroWvReload(appId);
-            }
-          })();` : `
-          (function() {
-            if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();
-          })();`
-        mainWindow.webContents.executeJavaScript(reloadOrFocusJS)
-      }
-      return
-    }
-
     // Ctrl+0–9 shortcuts (project switching)
     if (input.control && key >= '0' && key <= '9') {
       if (shouldSkipDuplicateShortcut()) return
@@ -1187,6 +1162,18 @@ app.on('web-contents-created', (event, contents) => {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         contents.executeJavaScript(browserKeyActions[key]).catch(() => {})
+        return
+      }
+      // Bare 'o' opens URL popup, bare 'r' reloads — host-window actions.
+      if (!input.shift && (key === 'o' || key === 'r')) {
+        if (shouldSkipDuplicateShortcut()) return
+        e.preventDefault()
+        if (mainWindow) {
+          const js = key === 'o'
+            ? `if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();`
+            : `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroWvReload) window.__libroWvReload(a);})();`
+          mainWindow.webContents.executeJavaScript(js).catch(() => {})
+        }
         return
       }
     }

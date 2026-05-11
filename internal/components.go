@@ -2019,12 +2019,12 @@ func searchDialogJS(sid string) string {
 `, SearchDialogID, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }
 
-// renderURLPopup renders the URL/search popup for Ctrl+L (works in both zen and non-zen mode).
+// renderURLPopup renders the URL/search popup opened by bare 'o' (works in both zen and non-zen mode).
 func renderURLPopup(sid string) *r.Node {
 	return components.URLPopup(sid)
 }
 
-// urlPopupJS returns JS that powers the Ctrl+L URL popup.
+// urlPopupJS returns JS that powers the URL popup.
 func urlPopupJS(sid string) string {
 	return fmt.Sprintf(`
 (function(){
@@ -2139,12 +2139,25 @@ func urlPopupJS(sid string) string {
 		var dlg=getDlg();
 		var inp=getInp();
 		var historyContainer=getHistory();
+		var appId=currentAppId;
 		if(dlg)dlg.classList.add('hidden');
-		if(inp)inp.value='';
+		if(inp){try{inp.blur();}catch(e){}inp.value='';}
 		currentAppId='';
 		selectedIdx=-1;
 		originalQuery='';
 		if(historyContainer)historyContainer.innerHTML='';
+		if(appId){
+			var wv=window.__libroWebviews&&window.__libroWebviews[appId];
+			function refocus(){
+				if((window.__libroSelectedApp||'')!==appId)return;
+				try{window.focus();}catch(e){}
+				if(wv){try{wv.focus();}catch(e){}}
+			}
+			refocus();
+			setTimeout(refocus,40);
+			setTimeout(refocus,120);
+			setTimeout(refocus,260);
+		}
 	}
 
 	function navigate(){
@@ -4499,28 +4512,11 @@ func keyboardShortcutsJS(sid string) string {
 					__ws.call('app.maximize.toggle', {"sid": "%s"});
 					return;
 				}
-				if (e.ctrlKey && !e.metaKey && (e.key === 'l' || e.key === 'L')) {
-					var selectedApp = window.__libroSelectedApp || '';
-					var selectedEl = selectedApp ? document.querySelector('[data-app-id="' + selectedApp + '"]') : null;
-					var selectedIsBrowser = !!(selectedEl && selectedEl.querySelector('webview[data-webview-app], iframe[data-browser-iframe-app]'));
-					if (!selectedIsBrowser) return;
-					e.preventDefault();
-					e.stopImmediatePropagation();
-					if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();
-				}
 				if (e.metaKey && (e.key === 'r' || e.key === 'R') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					if (window.__libroOpenResizePopup) window.__libroOpenResizePopup();
 					return;
-				}
-				if (e.ctrlKey && !e.metaKey && (e.key === 'r' || e.key === 'R')) {
-					var appId2 = window.__libroSelectedApp || '';
-					if (appId2 && window.__libroWebviews && window.__libroWebviews[appId2]) {
-						e.preventDefault();
-						e.stopImmediatePropagation();
-						window.__libroWvReload(appId2);
-					}
 				}
 			}
 
