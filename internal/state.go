@@ -503,6 +503,65 @@ func (sm *StateManager) InsertPendingTerminal(sessionID, appID string, width Wid
 	s.LastAppCreatedProject = s.ActiveProject
 }
 
+// InsertTerminalPlaceholder adds a terminal shell before ttyd has been started.
+func (sm *StateManager) InsertTerminalPlaceholder(sessionID, appID string, width Width, command string, writable bool, name string, iconURL string, index int) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		s = &AppState{
+			Projects:        []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject:   "home",
+			snapshots:       make(map[string]*projectSnapshot),
+			closedSnapshots: make(map[string]*projectSnapshot),
+			EditIndex:       -1,
+		}
+		sm.states[sessionID] = s
+	}
+	app := Application{
+		ID:       appID,
+		Type:     AppTypeTerminal,
+		Width:    width,
+		Command:  command,
+		Writable: writable,
+		Name:     name,
+		IconURL:  iconURL,
+	}
+	if index < 0 || index > len(s.Apps) {
+		s.Apps = append(s.Apps, app)
+		s.SelectedIndex = len(s.Apps) - 1
+	} else {
+		s.Apps = append(s.Apps, Application{})
+		copy(s.Apps[index+1:], s.Apps[index:])
+		s.Apps[index] = app
+		s.SelectedIndex = index
+	}
+	s.LastAppCreatedProject = s.ActiveProject
+}
+
+// HydrateTerminalByID attaches the ttyd runtime details to an existing
+// terminal placeholder.
+func (sm *StateManager) HydrateTerminalByID(sessionID, appID string, port int) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return false
+	}
+	for i := range s.Apps {
+		if s.Apps[i].ID != appID {
+			continue
+		}
+		if s.Apps[i].Type != AppTypeTerminal || s.Apps[i].Command == "" {
+			return false
+		}
+		s.Apps[i].Port = port
+		s.Apps[i].URL = fmt.Sprintf("/ttyd/%d/", port)
+		return true
+	}
+	return false
+}
+
 // RemoveApp removes an application by index and returns it (for cleanup)
 func (sm *StateManager) RemoveApp(sessionID string, index int) *Application {
 	sm.mu.Lock()
