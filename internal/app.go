@@ -3,6 +3,7 @@ package libro
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"libro/internal/components"
 	"log"
@@ -17,6 +18,43 @@ import (
 
 	r "github.com/michalCapo/g-sui/ui"
 )
+
+func hydrateAppAfterScrollJS(appID string, data map[string]any) string {
+	payload, err := json.Marshal(data)
+	if err != nil {
+		return "/* hydrate payload error */"
+	}
+	return fmt.Sprintf(`
+(function(){
+	var appID=%s;
+	var payload=%s;
+	function hydrate(){
+		if(typeof __ws!=='undefined'&&__ws.call)__ws.call('app.hydrate',payload);
+	}
+	requestAnimationFrame(function(){
+		var app=document.querySelector('[data-app-id="'+String(appID).replace(/"/g,'\\"')+'"]');
+		if(app&&window.__libroScrollToApp)window.__libroScrollToApp(app);
+		requestAnimationFrame(hydrate);
+	});
+})();
+`, components.JSString(appID), string(payload))
+}
+
+func settleHydratedAppContentJS(appID string) string {
+	return fmt.Sprintf(`
+(function(){
+	var appID=%s;
+	var app=document.querySelector('[data-app-id="'+String(appID).replace(/"/g,'\\"')+'"]');
+	function settle(){
+		if(app&&window.__libroScrollToApp)window.__libroScrollToApp(app);
+		var termFrame=document.querySelector('iframe[data-terminal-iframe="'+String(appID).replace(/"/g,'\\"')+'"]');
+		if(termFrame&&window.__libroFitTerminalFrame)window.__libroFitTerminalFrame(termFrame);
+		if((window.__libroSelectedApp||'')===appID&&window.__libroFocusAppByID)window.__libroFocusAppByID(appID);
+	}
+	requestAnimationFrame(function(){settle();requestAnimationFrame(settle);});
+})();
+`, components.JSString(appID))
+}
 
 // finalizeProjectCreate registers the project, persists it, and returns the
 // JS that switches to it and dismisses the dialog.
@@ -323,14 +361,15 @@ func Run(assets embed.FS) {
 		state := sm.Get(sid)
 
 		projJS := projectsJS(state)
+		hydrateJS := hydrateAppAfterScrollJS(state.Apps[state.SelectedIndex].ID, sidData(sid, "id", state.Apps[state.SelectedIndex].ID))
 		if hadApps > 0 {
-			lastApp := state.Apps[len(state.Apps)-1]
-			newIndex := len(state.Apps) - 1
-			frame := renderAppFrame(lastApp, newIndex, true, sid, state.ZenMode)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + projJS
+			newIndex := state.SelectedIndex
+			newApp := state.Apps[newIndex]
+			frame := renderAppFramePlaceholder(newApp, newIndex, true, sid, state.ZenMode)
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + projJS + hydrateJS
 		}
 
-		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + projJS
+		return renderMainAreaWithPlaceholder(state, sid, state.Apps[state.SelectedIndex].ID).ToJSReplace(projectMainID(state.ActiveProject)) + projJS + navigateJS(state, sid) + hydrateJS
 	})
 
 	// Start a saved/predefined application
@@ -376,26 +415,20 @@ func Run(assets embed.FS) {
 			hadApps := len(stateBefore.Apps)
 
 			appID := sm.NextAppID()
-			port := sm.NextPort()
-			if err := tm.Start(appID, port, command, writable, pwd); err != nil {
-				return r.Notify("error", "Failed to start ttyd: "+err.Error())
-			}
-
-			sm.InsertTerminalApp(sid, appID, command, port, writable, width, name, iconURL, insertIdx)
+			sm.InsertTerminalPlaceholder(sid, appID, width, command, writable, name, iconURL, insertIdx)
 
 			state := sm.Get(sid)
 			newApp := &state.Apps[state.SelectedIndex]
 
-			time.Sleep(500 * time.Millisecond)
-
 			topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
 			projJS := projectsJS(state)
+			hydrateJS := hydrateAppAfterScrollJS(newApp.ID, sidData(sid, "id", newApp.ID))
 			if hadApps > 0 {
-				frame := renderAppFrame(*newApp, state.SelectedIndex, true, sid, state.ZenMode)
-				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + settleAppFrameJS(newApp.ID)
+				frame := renderAppFramePlaceholder(*newApp, state.SelectedIndex, true, sid, state.ZenMode)
+				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
 			}
 
-			return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS + settleAppFrameJS(newApp.ID)
+			return renderMainAreaWithPlaceholder(state, sid, newApp.ID).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS + navigateJS(state, sid) + hydrateJS
 		}
 
 		// URL app
@@ -415,13 +448,64 @@ func Run(assets embed.FS) {
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
 		projJS := projectsJS(state)
+		hydrateJS := hydrateAppAfterScrollJS(state.Apps[state.SelectedIndex].ID, sidData(sid, "id", state.Apps[state.SelectedIndex].ID))
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
-			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid, state.ZenMode)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS
+			frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid, state.ZenMode)
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
 		}
 
-		return renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS
+		return renderMainAreaWithPlaceholder(state, sid, state.Apps[state.SelectedIndex].ID).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS + navigateJS(state, sid) + hydrateJS
+	})
+
+	app.Action("app.hydrate", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		appID, _ := data["id"].(string)
+		if appID == "" {
+			return "/* noop */"
+		}
+
+		state := sm.Get(sid)
+		idx := -1
+		for i := range state.Apps {
+			if state.Apps[i].ID == appID {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			return "/* noop */"
+		}
+
+		if state.Apps[idx].Type == AppTypeTerminal && state.Apps[idx].Port == 0 {
+			term := state.Apps[idx]
+			port := sm.NextPort()
+			pwd := sm.GetActiveProjectPath(sid)
+			if err := tm.Start(term.ID, port, term.Command, term.Writable, pwd); err != nil {
+				sm.RemoveAppByID(sid, term.ID)
+				state = sm.Get(sid)
+				return removeAppJS(term.ID) + navigateJS(state, sid) + renderTopBar(state, sid).ToJSReplace(TopBarID) + projectsJS(state) + r.Notify("error", "Failed to start ttyd: "+err.Error())
+			}
+			if !sm.HydrateTerminalByID(sid, term.ID, port) {
+				tm.Stop(term.ID)
+				return r.Notify("error", "Terminal placeholder disappeared")
+			}
+			state = sm.Get(sid)
+			for i := range state.Apps {
+				if state.Apps[i].ID == appID {
+					idx = i
+					break
+				}
+			}
+		}
+
+		contentJS := renderAppContent(state.Apps[idx], sid, false, nil).ToJSReplace(appContentID(appID))
+		return fmt.Sprintf(`
+(function(){
+	%s
+})();
+`, contentJS) + settleHydratedAppContentJS(appID)
 	})
 
 	// Close/remove application
@@ -790,14 +874,15 @@ func Run(assets embed.FS) {
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
 		projJS := projectsJS(state)
+		hydrateJS := hydrateAppAfterScrollJS(state.Apps[state.SelectedIndex].ID, sidData(sid, "id", state.Apps[state.SelectedIndex].ID))
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
-			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid, state.ZenMode)
+			frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid, state.ZenMode)
 			focusJS := fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, newApp.ID)
 			if popup {
 				focusJS = fmt.Sprintf(`setTimeout(function(){if(window.__libroOpenURLPopupFor)window.__libroOpenURLPopupFor(%s,'');},220);`, components.JSString(newApp.ID))
 			}
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + focusJS
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS + focusJS
 		}
 
 		focusJS := fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, state.Apps[state.SelectedIndex].ID)
@@ -806,9 +891,11 @@ func Run(assets embed.FS) {
 		}
 
 		return r.NewResponse().
-			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
+			Replace(projectMainID(state.ActiveProject), renderMainAreaWithPlaceholder(state, sid, state.Apps[state.SelectedIndex].ID)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(projectsJS(state)).
+			Add(navigateJS(state, sid)).
+			Add(hydrateJS).
 			Add(focusJS).
 			Build()
 	})
@@ -846,20 +933,10 @@ func Run(assets embed.FS) {
 		hadApps := len(stateBefore.Apps)
 
 		appID := sm.NextAppID()
-		port := sm.NextPort()
-		pwd := sm.GetActiveProjectPath(sid)
-
-		if err := tm.Start(appID, port, command, true, pwd); err != nil {
-			return r.Notify("error", "Failed to start: "+err.Error())
-		}
+		sm.InsertTerminalPlaceholder(sid, appID, WidthLG, command, true, "", "", insertIdx)
 
 		// Save to run history
 		go DBSaveRunCommand(command)
-
-		time.Sleep(500 * time.Millisecond)
-
-		// Insert a fully running terminal (not pending)
-		sm.InsertTerminal(sid, appID, WidthLG, command, port, insertIdx)
 		state := sm.Get(sid)
 
 		// Update run commands JS
@@ -867,19 +944,21 @@ func Run(assets embed.FS) {
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
 		projJS := projectsJS(state)
+		hydrateJS := hydrateAppAfterScrollJS(appID, sidData(sid, "id", appID))
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
-			frame := renderAppFrame(newApp, state.SelectedIndex, true, sid, state.ZenMode)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + runCmdsJS + settleAppFrameJS(newApp.ID)
+			frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid, state.ZenMode)
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + runCmdsJS + hydrateJS
 		}
 
 		newApp := state.Apps[state.SelectedIndex]
 		return r.NewResponse().
-			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
+			Replace(projectMainID(state.ActiveProject), renderMainAreaWithPlaceholder(state, sid, newApp.ID)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(projectsJS(state)).
 			Add(runCmdsJS).
-			Add(settleAppFrameJS(newApp.ID)).
+			Add(navigateJS(state, sid)).
+			Add(hydrateJS).
 			Build()
 	})
 

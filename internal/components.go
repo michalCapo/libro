@@ -397,6 +397,15 @@ func stripID(projectName string) string {
 	return "app-strip-" + projectName
 }
 
+func appContentID(appID string) string {
+	return "app-content-" + appID
+}
+
+func appFrameStyle(app Application, index int) string {
+	width := app.Width.PixelWidth()
+	return fmt.Sprintf("order:%d;width:%s;flex:0 0 %s", index, width, width)
+}
+
 // sidData creates a data map with the session ID included
 func sidData(sid string, extra ...any) map[string]any {
 	m := map[string]any{"sid": sid}
@@ -433,6 +442,13 @@ func renderMainArea(state *AppState, sid string) *r.Node {
 		return renderEmptyState(state, sid)
 	}
 	return renderAppStrip(state, sid)
+}
+
+func renderMainAreaWithPlaceholder(state *AppState, sid, placeholderAppID string) *r.Node {
+	if len(state.Apps) == 0 {
+		return renderEmptyState(state, sid)
+	}
+	return renderAppStripWithPlaceholder(state, sid, placeholderAppID)
 }
 
 func savedAppsProjectName(state *AppState, projectName string) string {
@@ -632,10 +648,18 @@ setTimeout(function(){
 
 // renderAppStrip renders the horizontal strip of applications with navigation
 func renderAppStrip(state *AppState, sid string) *r.Node {
+	return renderAppStripWithPlaceholder(state, sid, "")
+}
+
+func renderAppStripWithPlaceholder(state *AppState, sid, placeholderAppID string) *r.Node {
 	// Build strip children: left spacer + apps + right spacer
 	stripChildren := make([]*r.Node, 0, len(state.Apps)+2)
 	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0").Attr("style", "order:-1"))
 	for i, app := range state.Apps {
+		if app.ID == placeholderAppID {
+			stripChildren = append(stripChildren, renderAppFramePlaceholder(app, i, i == state.SelectedIndex, sid, state.ZenMode))
+			continue
+		}
 		stripChildren = append(stripChildren, renderAppFrame(app, i, i == state.SelectedIndex, sid, state.ZenMode))
 	}
 	stripChildren = append(stripChildren, r.Div("flex-1 shrink min-w-0").Attr("style", "order:99999"))
@@ -830,7 +854,9 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 				selected.style.animation='none';
 				selected.offsetHeight;
 				selected.style.animation='libro-app-select .08s ease-out';
-				if(window.__libroScrollToApp)window.__libroScrollToApp(selected);
+				requestAnimationFrame(function(){
+					if(window.__libroScrollToApp)window.__libroScrollToApp(selected);
+				});
 				var selectedTermFrame = selected.querySelector('iframe[data-terminal-iframe]');
 				if (selectedTermFrame && window.__libroFitTerminalFrame) {
 					window.__libroFitTerminalFrame(selectedTermFrame);
@@ -1099,8 +1125,18 @@ func showToastJS(title, subtitle string, durationMs int) string {
 	return fmt.Sprintf("if(window.__libroShowToast)window.__libroShowToast(%s,%s,%d);", components.JSString(title), components.JSString(subtitle), durationMs)
 }
 
-// renderAppFrame renders a single application iframe with controls
 func renderAppFrame(app Application, index int, selected bool, sid string, zenMode ...bool) *r.Node {
+	return renderAppFrameBase(app, index, selected, sid, false, zenMode...)
+}
+
+// renderAppFramePlaceholder renders a width-correct app shell without creating
+// the Electron webview or terminal iframe yet.
+func renderAppFramePlaceholder(app Application, index int, selected bool, sid string, zenMode ...bool) *r.Node {
+	return renderAppFrameBase(app, index, selected, sid, true, zenMode...)
+}
+
+// renderAppFrameBase renders a single application frame with controls.
+func renderAppFrameBase(app Application, index int, selected bool, sid string, placeholder bool, zenMode ...bool) *r.Node {
 	zen := len(zenMode) > 0 && zenMode[0]
 	var borderClass string
 	if zen {
@@ -1116,10 +1152,6 @@ func renderAppFrame(app Application, index int, selected bool, sid string, zenMo
 			borderClass = "border-[1px] border-transparent"
 		}
 	}
-
-	frameID := fmt.Sprintf("frame-%s", app.ID)
-
-	iframeSrc := app.URL
 
 	// Size badge bar + close (right side of toolbar)
 	badgeBase := "px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase rounded-sm cursor-pointer transition-colors duration-75"
@@ -1364,16 +1396,40 @@ func renderAppFrame(app Application, index int, selected bool, sid string, zenMo
 	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-all duration-50").
 		ID(fmt.Sprintf("frame-%s", app.ID)).
 		Attr("data-app-id", app.ID).
-		Attr("style", fmt.Sprintf("order:%d", index)).
+		Attr("style", appFrameStyle(app, index)).
 		Render(
 			toolbar,
-			r.Div("relative flex-1 min-h-0").
-				Attr("data-app-content", app.ID).
-				Render(
-					renderIframe(app, frameID, iframeSrc, sid),
-					clickOverlay,
-				),
+			renderAppContent(app, sid, placeholder, clickOverlay),
 			zenCloseBtn,
+		)
+}
+
+func renderAppContent(app Application, sid string, placeholder bool, clickOverlay *r.Node) *r.Node {
+	content := renderIframe(app, fmt.Sprintf("frame-%s", app.ID), app.URL, sid)
+	if placeholder {
+		content = renderAppPlaceholder(app)
+	}
+	return r.Div("relative flex-1 min-h-0").
+		ID(appContentID(app.ID)).
+		Attr("data-app-content", app.ID).
+		Render(
+			content,
+			clickOverlay,
+		)
+}
+
+func renderAppPlaceholder(app Application) *r.Node {
+	icon := "language"
+	if app.Type == AppTypeTerminal {
+		icon = "terminal"
+	}
+	return r.Div("w-full h-full flex items-center justify-center bg-gray-50 dark:bg-zinc-950").
+		Attr("data-app-placeholder", app.ID).
+		Render(
+			r.Div("flex flex-col items-center gap-2 text-gray-400 dark:text-zinc-600").Render(
+				r.I("material-icons-round text-3xl").Text(icon),
+				r.Span("font-mono text-xs").Text("Loading"),
+			),
 		)
 }
 
@@ -1480,9 +1536,6 @@ func settleAppFrameJS(appID string) string {
 		if(window.__libroSettleAppFrame)window.__libroSettleAppFrame(appID);
 	}
 	run();
-	setTimeout(run, 100);
-	setTimeout(run, 500);
-	setTimeout(run, 1500);
 })();
 `, components.JSString(appID))
 }
@@ -3068,11 +3121,16 @@ func savedAppDisplayLabel(app SavedApp) string {
 func resizeJS(_ *AppState, width Width, appID string) string {
 	// Build a map of width value -> container classes
 	widthMap := ""
+	pixelMap := ""
 	for _, w := range AllWidths() {
 		if widthMap != "" {
 			widthMap += ","
 		}
+		if pixelMap != "" {
+			pixelMap += ","
+		}
 		widthMap += fmt.Sprintf("'%s':'%s'", string(w), w.ContainerClasses())
+		pixelMap += fmt.Sprintf("'%s':'%s'", string(w), w.PixelWidth())
 	}
 
 	return fmt.Sprintf(`
@@ -3081,8 +3139,10 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 	if (!el) return;
 
 	var widths = {%s};
+	var pixels = {%s};
 	var newWidth = '%s';
 	var newCls = widths[newWidth];
+	var newPixel = pixels[newWidth] || '960px';
 
 	// Remove old width classes and apply new ones
 	var keep = [];
@@ -3096,6 +3156,8 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 	});
 	newCls.split(/\s+/).forEach(function(c){ keep.push(c); });
 	el.className = keep.join(' ');
+	el.style.width = newPixel;
+	el.style.flex = '0 0 ' + newPixel;
 
 	// Update size badges: highlight active, dim others
 	var topBar = el.querySelector('[data-size-badges]');
@@ -3130,7 +3192,7 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 		setTimeout(function(){window.__libroFocusAppByID('%s');},120);
 	}
 })();
-`, appID, widthMap, string(width), appID, appID, appID, appID)
+`, appID, widthMap, pixelMap, string(width), appID, appID, appID, appID)
 }
 
 // renderProjectBar renders the horizontal project switcher bar
@@ -4248,9 +4310,6 @@ func terminalFrameSetupJS() string {
 				requestAnimationFrame(function() {
 					settle();
 					requestAnimationFrame(settle);
-				});
-				[80, 180, 350, 700, 1200, 2200, 4200].forEach(function(delay) {
-					setTimeout(settle, delay);
 				});
 			};
 
