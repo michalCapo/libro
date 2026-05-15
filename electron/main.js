@@ -27,6 +27,7 @@ let goProcess = null
 let mainWindow = null
 let isQuitting = false
 let goProcessForceKillTimer = null
+let webviewPreloadRegistered = false
 const devtoolsOverlays = new Map()
 const MAIN_WINDOW_ZOOM_STEP = 0.15
 let lastMainWindowZoomAction = { action: '', at: 0 }
@@ -497,6 +498,29 @@ function waitForServer(retries = 50) {
   })
 }
 
+function registerLibroWebviewPreload(libroSession) {
+  if (webviewPreloadRegistered) return
+
+  const id = 'libro-webview-quirks'
+  try {
+    if (typeof libroSession.getPreloadScripts === 'function') {
+      const existing = libroSession.getPreloadScripts().some((script) => script.id === id)
+      if (existing) {
+        webviewPreloadRegistered = true
+        return
+      }
+    }
+    libroSession.registerPreloadScript({
+      id,
+      type: 'frame',
+      filePath: path.join(__dirname, 'webview-preload.js'),
+    })
+    webviewPreloadRegistered = true
+  } catch (err) {
+    console.error('Failed to register webview preload:', err.message)
+  }
+}
+
 async function flushLibroSessionData() {
   const libroSession = session.fromPartition('persist:libro')
   try {
@@ -525,6 +549,7 @@ async function quitApp() {
 function createWindow() {
   // Persistent partition for webview sessions (shared cookies across webviews)
   const libroSession = session.fromPartition('persist:libro')
+  registerLibroWebviewPreload(libroSession)
 
   // Allow embedded browser apps to use media devices and related browser APIs.
   // Teams relies on `media` for microphone/camera/speaker access and
