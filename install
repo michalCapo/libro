@@ -138,6 +138,7 @@ if copy_if_changed "$SCRIPT_DIR/package.json" "$LIBRO_DIR/package.json"; then AP
 if copy_if_changed "$SCRIPT_DIR/package-lock.json" "$LIBRO_DIR/package-lock.json"; then APP_FILES_CHANGED=true; fi
 if copy_if_changed "$SCRIPT_DIR/electron/main.js" "$LIBRO_DIR/electron/main.js"; then APP_FILES_CHANGED=true; fi
 if copy_if_changed "$SCRIPT_DIR/electron/preload.js" "$LIBRO_DIR/electron/preload.js"; then APP_FILES_CHANGED=true; fi
+if copy_if_changed "$SCRIPT_DIR/electron/webview-preload.js" "$LIBRO_DIR/electron/webview-preload.js"; then APP_FILES_CHANGED=true; fi
 if copy_if_changed "$SCRIPT_DIR/winres/icon.png" "$LIBRO_DIR/winres/icon.png"; then APP_FILES_CHANGED=true; fi
 
 # Install or refresh the local Electron runtime only when needed

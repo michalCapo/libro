@@ -78,6 +78,7 @@ stage_embedded_app_files() {
     cp "$SCRIPT_DIR/package-lock.json" "$BUNDLE_APP_DIR/package-lock.json"
     cp "$SCRIPT_DIR/electron/main.js" "$BUNDLE_APP_DIR/electron/main.js"
     cp "$SCRIPT_DIR/electron/preload.js" "$BUNDLE_APP_DIR/electron/preload.js"
+    cp "$SCRIPT_DIR/electron/webview-preload.js" "$BUNDLE_APP_DIR/electron/webview-preload.js"
     cp "$SCRIPT_DIR/winres/icon.png" "$BUNDLE_APP_DIR/winres/icon.png"
 }
 
