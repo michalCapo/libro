@@ -381,7 +381,7 @@ func Run(assets embed.FS) {
 			name = "vim"
 		}
 		if cmd == "" {
-			return showToastJS("Editor not installed", "Install nvim or vim to use Win+E", 2600)
+			return showToastJS("Editor not installed", "Install nvim or vim to use ⌘/Win+E", 2600)
 		}
 		return fmt.Sprintf(`__ws.call('app.start',{sid:%s,type:'terminal',url:'',command:%s,width:'lg',writable:true,name:%s,iconUrl:'',side:'right'});`, components.JSString(sid), components.JSString(cmd), components.JSString(name))
 	})
