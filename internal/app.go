@@ -109,11 +109,6 @@ func dbSaveApp(projectName string, editDBID int64, appType, urlOrCmd, width, nam
 	}
 }
 
-// dbUpdateAppURL updates the URL of a saved app at the given index.
-func dbUpdateAppURL(projectName string, index int, newURL string) {
-	DBUpdateSavedAppURL(projectName, index, newURL)
-}
-
 var (
 	sm                  = NewStateManager()
 	tm                  = components.NewTtydManager()
@@ -962,7 +957,7 @@ func Run(assets embed.FS) {
 			Build()
 	})
 
-	// Set URL for an app — navigates the iframe to a new URL
+	// Set URL for a running app — navigates the iframe and updates session state only.
 	app.Action("app.url.set", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
@@ -980,9 +975,8 @@ func Run(assets embed.FS) {
 		}
 		// Save to browsed URL history (user-typed URLs only)
 		go DBSaveBrowsedURL(newURL)
-		// Navigate webview and persist URL to DB
-		state := sm.Get(sid)
-		dbUpdateAppURL(state.ActiveProject, idx, newURL)
+		// Navigate webview. Do not update saved_apps here: a running app's current
+		// URL may diverge from the saved launcher URL (e.g. trello.com -> a board).
 		return fmt.Sprintf(`(function(){window.__libroWvNavigate(%s,%s);var inp=document.getElementById('urlinput-'+%s);if(inp)inp.value=%s;})();`, components.JSString(appID), components.JSString(newURL), components.JSString(appID), components.JSString(newURL))
 	})
 
