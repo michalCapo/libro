@@ -3048,20 +3048,20 @@ func renderManageAppRow(app SavedApp, sid string) *r.Node {
 	if app.Type == "terminal" {
 		if info := lookupTermIcon(app.Command); info != nil {
 			if info.URL != "" {
-				iconNode = r.Img("w-6 h-6 shrink-0 rounded-sm").Attr("src", info.URL)
+				iconNode = r.Img("w-5 h-5 shrink-0 rounded-sm").Attr("src", info.URL)
 			} else {
-				iconNode = r.I("material-icons-round text-xl shrink-0 text-gray-400 dark:text-zinc-500").Text(info.MaterialIcon)
+				iconNode = r.I("material-icons-round text-lg shrink-0 text-gray-400 dark:text-zinc-500").Text(info.MaterialIcon)
 			}
 		} else if app.IconURL != "" {
-			iconNode = r.Img("w-6 h-6 shrink-0 rounded-sm").Attr("src", app.IconURL)
+			iconNode = r.Img("w-5 h-5 shrink-0 rounded-sm").Attr("src", app.IconURL)
 		} else {
-			iconNode = r.I("material-icons-round text-xl shrink-0 text-gray-400 dark:text-zinc-500").Text("terminal")
+			iconNode = r.I("material-icons-round text-lg shrink-0 text-gray-400 dark:text-zinc-500").Text("terminal")
 		}
 	} else {
-		iconNode = r.I("material-icons-round text-xl shrink-0 text-gray-400 dark:text-zinc-500").Text("language")
+		iconNode = r.I("material-icons-round text-lg shrink-0 text-gray-400 dark:text-zinc-500").Text("language")
 		if app.URL != "" {
 			if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
-				iconNode = r.Img("w-6 h-6 shrink-0 rounded-sm").
+				iconNode = r.Img("w-5 h-5 shrink-0 rounded-sm").
 					Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=32")
 				if label == app.URL {
 					h := strings.TrimPrefix(u.Hostname(), "www.")
@@ -3073,33 +3073,31 @@ func renderManageAppRow(app SavedApp, sid string) *r.Node {
 
 	badges := make([]*r.Node, 0, 3)
 	if app.ProjectSpecific {
-		badges = append(badges, r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400").Text("project"))
+		projectLabel := app.ProjectName
+		if projectLabel == "" {
+			projectLabel = "project"
+		}
+		badges = append(badges, r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400").Text(projectLabel))
 	}
 	badges = append(badges,
 		r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Type),
 		r.Span("px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded shrink-0 bg-gray-200 dark:bg-zinc-700 text-gray-600 dark:text-zinc-300").Text(app.Width),
 	)
 
-	editBtn := r.Button("flex items-center justify-center w-8 h-8 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors").
-		Render(r.I("material-icons-round text-lg").Text("edit")).
+	editBtn := r.Button("flex items-center justify-center w-7 h-7 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors").
+		Render(r.I("material-icons-round text-base").Text("edit")).
 		Attr("onclick", fmt.Sprintf(`__ws.callSilent('app.saved.edit',{sid:'%s',dbid:%d});__ws.call('app.dialog.open',{sid:'%s'});`, sid, app.DBID, sid)+
 			savedAppEditFillJS(app))
 
-	deleteBtn := r.Button("flex items-center justify-center w-8 h-8 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors").
-		Render(r.I("material-icons-round text-lg").Text("delete")).
+	deleteBtn := r.Button("flex items-center justify-center w-7 h-7 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors").
+		Render(r.I("material-icons-round text-base").Text("delete")).
 		OnClick(&r.Action{Name: "app.saved.delete", Data: sidData(sid, "dbid", float64(app.DBID))})
 
-	headerChildren := []*r.Node{
+	return r.Div("group relative w-full flex items-center bg-white dark:bg-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-zinc-700/40 hover:border-gray-300 dark:hover:border-zinc-600 rounded-lg transition-colors duration-75 shadow-sm dark:shadow-none px-4 py-3 min-h-[46px]").Render(
 		iconNode,
-		r.Div("min-w-0 flex-1").Render(
-			r.Span("block truncate text-sm font-medium text-gray-800 dark:text-zinc-200").Text(label),
-		),
-	}
-
-	return r.Div("flex h-full min-h-[112px] flex-col gap-3 rounded-xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors").Render(
-		r.Div("flex items-center gap-3 min-w-0").Render(headerChildren...),
-		r.Div("flex flex-wrap items-center gap-2").Render(badges...),
-		r.Div("mt-auto flex items-center justify-end gap-2").Render(editBtn, deleteBtn),
+		r.Span("ml-3 flex-1 min-w-0 truncate text-sm text-gray-800 dark:text-zinc-200").Text(label),
+		r.Div("flex items-center gap-2 ml-3 group-hover:opacity-0 transition-opacity").Render(badges...),
+		r.Div("absolute right-3 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1 bg-white dark:bg-zinc-800 pl-2").Render(editBtn, deleteBtn),
 	)
 }
 
