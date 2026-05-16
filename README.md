@@ -116,6 +116,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 
 - `⌘ + O` new app on the right
 - `⌘ + Enter` open terminal in Libro
+- `⌘ + E` open `nvim` in Libro, falling back to `vim`; shows a notice if neither is installed
 - `⌘ + ;` open command palette
 - `⌘ + Q` close current app
 - `⌘ + R` open resize popup
@@ -145,7 +146,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 
 ### Browser
 
-- `⌘ + T` new browser with URL popup
+- `⌘ + B` new browser with URL popup
 - `o` open URL/search popup (normal mode)
 - `r` reload page (normal mode)
 
