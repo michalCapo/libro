@@ -332,6 +332,20 @@ function triggerBrowserAppShortcut() {
   `)
 }
 
+function triggerNvimAppShortcut() {
+  const focusedWindow = BrowserWindow.getFocusedWindow()
+  if (!focusedWindow || focusedWindow !== mainWindow) {
+    console.log('[libro-shortcut] ignored nvim: main window not focused')
+    return
+  }
+  console.log('[libro-shortcut] firing nvim')
+  dispatchToMainWindow(`
+    if (window.__libroOpenNvimApp) {
+      window.__libroOpenNvimApp();
+    }
+  `)
+}
+
 function adjustMainWindowZoom(action) {
   const focusedWindow = BrowserWindow.getFocusedWindow()
   if (!focusedWindow || focusedWindow !== mainWindow || !mainWindow || mainWindow.isDestroyed()) {
@@ -363,7 +377,8 @@ function registerWindowShortcuts() {
     ['Super+]', () => moveSelectedApp('right')],
     ['Super+Control+Y', () => openMoveProjectPopup()],
     ['Super+Enter', () => triggerTerminalAppShortcut()],
-    ['Super+T', () => triggerBrowserAppShortcut()],
+    ['Super+B', () => triggerBrowserAppShortcut()],
+    ['Super+E', () => triggerNvimAppShortcut()],
     ['Super+=', () => adjustMainWindowZoom('in')],
     ['Super+Plus', () => adjustMainWindowZoom('in')],
     ['Super+-', () => adjustMainWindowZoom('out')],
@@ -961,14 +976,24 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
-      // Super+T: new browser with URL popup — must preventDefault to block
-      // Chromium new-tab handling before page JS sees it
-      if (input.meta && !input.control && code === 'keyt') {
+      // Super+B: new browser with URL popup
+      if (input.meta && !input.control && code === 'keyb') {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
           mainWindow.webContents.executeJavaScript(`
             if (window.__libroOpenBrowserApp) window.__libroOpenBrowserApp();
+          `)
+        }
+        return
+      }
+      // Super+E: open nvim terminal app
+      if (input.meta && !input.control && code === 'keye') {
+        if (shouldSkipDuplicateShortcut()) return
+        e.preventDefault()
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            if (window.__libroOpenNvimApp) window.__libroOpenNvimApp();
           `)
         }
         return
@@ -1090,7 +1115,7 @@ app.on('web-contents-created', (event, contents) => {
     }
 
     // Meta (Super/Win) shortcuts: h, l, q, n, t, z, o, f, g, r, x, ;, ,, .
-    if (input.meta && !input.control && (['h', 'l', 'q', 'n', 't', 'z', 'o', 'f', 'g', 'r', 'x', ';', ',', '.'].includes(key) || ['keyn', 'keyo', 'keyt', 'semicolon', 'comma', 'period'].includes(code))) {
+    if (input.meta && !input.control && (['h', 'l', 'q', 'n', 'b', 'e', 'z', 'o', 'f', 'g', 'r', 'x', ';', ',', '.'].includes(key) || ['keyn', 'keyo', 'keyb', 'keye', 'semicolon', 'comma', 'period'].includes(code))) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {

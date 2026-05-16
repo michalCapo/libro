@@ -49,7 +49,8 @@ func ShortcutsDialog() *r.Node {
 			{"! command", "Run terminal command"},
 		}},
 		{"Browser", "", []shortcut{
-			{"⌘ + T", "New browser with URL popup"},
+			{"⌘ + B", "New browser with URL popup"},
+			{"⌘ + E", "Open nvim in Libro"},
 		}},
 		{"Browser", "Vim keys — disabled in input fields / insert mode", []shortcut{
 			{"g / G", "Go to top / bottom of page"},
