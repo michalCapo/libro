@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -365,6 +366,24 @@ func Run(assets embed.FS) {
 		}
 
 		return renderMainAreaWithPlaceholder(state, sid, state.Apps[state.SelectedIndex].ID).ToJSReplace(projectMainID(state.ActiveProject)) + projJS + navigateJS(state, sid) + hydrateJS
+	})
+
+	// Open Neovim if available, otherwise fall back to Vim; notify if neither exists.
+	app.Action("app.nvim.open", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		cmd := ""
+		name := ""
+		if _, err := exec.LookPath("nvim"); err == nil {
+			cmd = "nvim"
+			name = "nvim"
+		} else if _, err := exec.LookPath("vim"); err == nil {
+			cmd = "vim"
+			name = "vim"
+		}
+		if cmd == "" {
+			return showToastJS("Editor not installed", "Install nvim or vim to use Win+E", 2600)
+		}
+		return fmt.Sprintf(`__ws.call('app.start',{sid:%s,type:'terminal',url:'',command:%s,width:'lg',writable:true,name:%s,iconUrl:'',side:'right'});`, components.JSString(sid), components.JSString(cmd), components.JSString(name))
 	})
 
 	// Start a saved/predefined application

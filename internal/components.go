@@ -3341,7 +3341,7 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			r.Button("shrink-0 cursor-pointer hover:opacity-70 transition-opacity duration-75 flex items-center").
 				Attr("data-libro-no-drag", "true").
 				Attr("style", noDragStyle).
-				Attr("title", "Open project picker (⌘B)").
+				Attr("title", "Open project picker (⌘N)").
 				Attr("onclick", "if(window.__libroOpenProjectPicker)window.__libroOpenProjectPicker();").
 				Render(
 					r.Img("w-7 h-7").Attr("src", "/assets/logo.svg").Attr("alt", "Libro"),
@@ -4506,10 +4506,16 @@ func keyboardShortcutsJS(sid string) string {
 					if (window.__libroOpenSearch) window.__libroOpenSearch('right');
 					return;
 				}
-				if (e.metaKey && (e.key === 't' || e.key === 'T' || e.code === 'KeyT') && !e.ctrlKey) {
+				if (e.metaKey && (e.key === 'b' || e.key === 'B' || e.code === 'KeyB') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					if (window.__libroOpenBrowserApp) window.__libroOpenBrowserApp();
+					return;
+				}
+				if (e.metaKey && (e.key === 'e' || e.key === 'E' || e.code === 'KeyE') && !e.ctrlKey) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenNvimApp) window.__libroOpenNvimApp();
 					return;
 				}
 				if (e.metaKey && e.ctrlKey && e.code === 'KeyN') {
@@ -4585,6 +4591,10 @@ func keyboardShortcutsJS(sid string) string {
 				__ws.call('app.browse.open',{sid:'%s',side:'right',popup:true});
 			};
 
+			window.__libroOpenNvimApp = function() {
+				__ws.call('app.nvim.open',{sid:'%s'});
+			};
+
 			window.__libroCloseCurrentApp = function() {
 				__ws.call('app.close.current', {"sid": "%s"});
 			};
@@ -4636,5 +4646,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-		`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
+		`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }
