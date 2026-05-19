@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -27,11 +29,9 @@ const (
 	ManageDialogID        = "manage-dialog"
 	DialogID              = components.AddDialogID
 	ProjectDialogID       = components.ProjectDialogID
-	DirBrowserID          = components.DirBrowserID
 	SearchDialogID        = components.SearchDialogID
 	ShortcutsDialogID     = components.ShortcutsDialogID
 	CloseDialogID         = components.CloseDialogID
-	ProjectPickerID       = components.ProjectPickerID
 	URLPopupID            = components.URLPopupID
 	ResizePopupID         = components.ResizePopupID
 	CommandPopupID        = components.CommandPopupID
@@ -457,6 +457,9 @@ func savedAppsProjectName(state *AppState, projectName string) string {
 			if project.Virtual && project.ParentProject != "" {
 				return project.ParentProject
 			}
+			if project.Transient {
+				return "home"
+			}
 			break
 		}
 	}
@@ -876,7 +879,7 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 func popupRegistryJS() string {
 	return fmt.Sprintf(`
 (function(){
-	var IDS=[%q,%q,%q,%q,%q,%q,%q,%q,%q,%q,%q];
+	var IDS=[%q,%q,%q,%q,%q,%q,%q,%q,%q,%q];
 	window.__libroCloseAllPopups=function(except){
 		var keep=null;
 		if(except){
@@ -889,7 +892,7 @@ func popupRegistryJS() string {
 		}
 	};
 })();
-`, ProjectPickerID, URLPopupID, ResizePopupID, CommandPopupID, MoveProjectPopupID, WorktreeCreatePopupID, SearchDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID)
+`, URLPopupID, ResizePopupID, CommandPopupID, MoveProjectPopupID, WorktreeCreatePopupID, SearchDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID)
 }
 
 func flashCSS() string {
@@ -2422,9 +2425,9 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				__ws.call('project.apps.open',{sid:'%s'});
 			}},
-			{id:'projects',label:'Projects',scope:'app',icon:'source',keywords:'projects switch picker sidebar navigation tree',run:function(){
+			{id:'projects',label:'Projects',scope:'app',icon:'source',keywords:'projects switch dialog sidebar navigation tree',run:function(){
 				closePalette();
-				if(window.__libroOpenProjectPicker)window.__libroOpenProjectPicker();
+				if(window.__libroOpenProjectDialog)window.__libroOpenProjectDialog();
 			}},
 			{id:'project-new',label:'New project (browse folder)',scope:'app',icon:'create_new_folder',keywords:'new project create folder browse directory path filesystem',run:function(){
 				closePalette();
@@ -3341,8 +3344,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			r.Button("shrink-0 cursor-pointer hover:opacity-70 transition-opacity duration-75 flex items-center").
 				Attr("data-libro-no-drag", "true").
 				Attr("style", noDragStyle).
-				Attr("title", "Open project picker (⌘N)").
-				Attr("onclick", "if(window.__libroOpenProjectPicker)window.__libroOpenProjectPicker();").
+				Attr("title", "Open projects (⌘N)").
+				Attr("onclick", "if(window.__libroOpenProjectDialog)window.__libroOpenProjectDialog();").
 				Render(
 					r.Img("w-7 h-7").Attr("src", "/assets/logo.svg").Attr("alt", "Libro"),
 				),
@@ -3470,23 +3473,26 @@ func updateAppPreviewJS(state *AppState) string {
 	`, state.SelectedIndex, components.JSString(selectedCls), components.JSString(normalCls))
 }
 
-// renderProjectPickerPopup renders the project picker modal.
-func renderProjectPickerPopup(sid string) *r.Node {
-	return components.ProjectPickerPopup(sid)
-}
-
-// projectPickerPopupJS wires the project picker popup: search/filter, keyboard
-// navigation, and selection. Reads from window.__libroProjects.
-func projectPickerPopupJS(sid string) string {
+// projectDialogJS wires the unified project dialog: project search keeps
+// the existing switch behavior, while empty searches fall through to folder
+// lookup so the same dialog can open a directory as a new project.
+func projectDialogJS(sid string) string {
 	return fmt.Sprintf(`
 (function(){
 	var selectedIdx=0;
 	var filtered=[];
+	var dirMatches=[];
 	var hoverEnabled=false;
+	var lookupSeq=0;
+	var lookupTimer=0;
+	var lookupQuery='';
+	var lookupLoading=false;
 
 	function getDlg(){return document.getElementById('%s');}
-	function getInp(){return document.getElementById('project-picker-input');}
-	function getResults(){return document.getElementById('project-picker-results');}
+	function getInp(){return document.getElementById('project-input');}
+	function getResults(){return document.getElementById('project-results');}
+	function query(){return (getInp()&&getInp().value||'').trim();}
+	function inDirectoryMode(){return query()!==''&&filtered.length===0;}
 
 	function armHoverAfterPointerMove(){
 		hoverEnabled=false;
@@ -3517,31 +3523,37 @@ func projectPickerPopupJS(sid string) string {
 	}
 
 	function escapeHtml(s){return (s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+	function itemIcon(item){return item.kind==='worktree'?'alt_route':(item.isGit?'source':'folder');}
+	function simplifyPath(path){
+		path=path||'';
+		var home=(document.getElementById('project-dialog')||{}).getAttribute&&document.getElementById('project-dialog').getAttribute('data-project-home')||'';
+		if(home&&path===home)return '~';
+		if(home&&path.indexOf(home+'/')===0)return '~/'+path.substring(home.length+1);
+		return path;
+	}
+	function leafName(name){
+		name=name||'';
+		var parts=name.split('/').filter(Boolean);
+		return parts.length?parts[parts.length-1]:name;
+	}
 
-	function render(){
-		var res=getResults();
-		if(!res)return;
-		var dk=document.documentElement.classList.contains('dark');
-		if(filtered.length===0){
-			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No projects found</div>';
-			return;
-		}
+	function renderProjectItems(res,dk){
+		if(filtered.length===0){return false;}
 		var html='';
 		filtered.forEach(function(item,i){
 			var sel=i===selectedIdx;
-			var icon=item.kind==='worktree'?'alt_route':(item.isGit?'source':'folder');
+			var icon=itemIcon(item);
 			var primary=item.kind==='worktree'?item.branch:item.name;
-			var secondary=item.kind==='worktree'?item.name:item.path;
+			var secondary=item.kind==='worktree'?(item.name+' · '+simplifyPath(item.path)):simplifyPath(item.path);
 			var activeBadge=item.isActive?'<span class="ml-2 inline-flex items-center justify-center px-1.5 h-4 rounded text-[9px] font-bold leading-none '+(dk?'bg-blue-500/30 text-blue-300':'bg-blue-100 text-blue-700')+'">ACTIVE</span>':'';
-			html+='<div class="project-picker-item flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
+			var tempBadge=item.transient?'<span class="ml-2 inline-flex items-center justify-center px-1.5 h-4 rounded text-[9px] font-bold leading-none '+(dk?'bg-zinc-700 text-zinc-300':'bg-gray-100 text-gray-600')+'">TEMP</span>':'';
+			html+='<div class="project-item group flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
 				+(sel?(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500')
 				:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'))
 				+'" data-project-idx="'+i+'">';
 			html+='<i class="material-icons-round '+(dk?'text-zinc-400':'text-gray-400')+' text-lg">'+icon+'</i>';
-			html+='<div class="flex-1 min-w-0">';
-			html+='<div class="text-sm truncate '+(dk?'text-zinc-200':'text-gray-800')+'">'+escapeHtml(primary)+activeBadge+'</div>';
-			html+='<div class="text-[11px] truncate '+(dk?'text-zinc-500':'text-gray-400')+'">'+escapeHtml(secondary)+'</div>';
-			html+='</div>';
+			html+='<div class="flex-1 min-w-0"><div class="text-sm truncate '+(dk?'text-zinc-200':'text-gray-800')+'">'+escapeHtml(primary)+activeBadge+tempBadge+'</div>';
+			html+='<div class="text-[11px] truncate '+(dk?'text-zinc-500':'text-gray-400')+'">'+escapeHtml(secondary)+'</div></div>';
 			if(item.kind!=='worktree'&&item.name!=='home'){
 				html+='<button data-project-remove="'+i+'" title="Remove project" class="ml-2 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity p-1 rounded '+(dk?'hover:bg-red-900/40 text-zinc-500 hover:text-red-300':'hover:bg-red-50 text-gray-400 hover:text-red-600')+'"><i class="material-icons-round text-base pointer-events-none">delete_outline</i></button>';
 			}
@@ -3549,14 +3561,10 @@ func projectPickerPopupJS(sid string) string {
 		});
 		res.innerHTML=html;
 		res.querySelectorAll('[data-project-idx]').forEach(function(el){
-			el.classList.add('group');
 			el.addEventListener('mouseenter',function(){
 				if(!hoverEnabled)return;
 				var idx=parseInt(el.getAttribute('data-project-idx'),10);
-				if(!Number.isNaN(idx)&&idx!==selectedIdx){
-					selectedIdx=idx;
-					render();
-				}
+				if(!Number.isNaN(idx)&&idx!==selectedIdx){selectedIdx=idx;render();}
 			});
 			el.addEventListener('mousedown',function(e){
 				if(e.target&&e.target.closest&&e.target.closest('[data-project-remove]'))return;
@@ -3564,43 +3572,99 @@ func projectPickerPopupJS(sid string) string {
 				var idx=parseInt(el.getAttribute('data-project-idx'),10);
 				if(Number.isNaN(idx))return;
 				selectedIdx=idx;
-				launch();
+				launchProject();
 			});
 		});
 		res.querySelectorAll('[data-project-remove]').forEach(function(btn){
 			btn.addEventListener('mousedown',function(e){e.preventDefault();e.stopPropagation();});
 			btn.addEventListener('click',function(e){
-				e.preventDefault();
-				e.stopPropagation();
+				e.preventDefault();e.stopPropagation();
 				var idx=parseInt(btn.getAttribute('data-project-remove'),10);
-				if(Number.isNaN(idx))return;
-				removeAt(idx);
+				if(!Number.isNaN(idx))removeAt(idx);
 			});
 		});
-		var selected=res.querySelector('[data-project-idx="'+selectedIdx+'"]');
+		return true;
+	}
+
+	function renderDirectoryItems(res,dk){
+		var q=query();
+		if(!q){
+			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">Type a project name, branch, folder name, or absolute path</div>';
+			return;
+		}
+		if(lookupLoading&&dirMatches.length===0){
+			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">Searching folders…</div>';
+			return;
+		}
+		if(dirMatches.length===0){
+			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No project found. Type a folder name like <span class="text-blue-500">github</span>, or a path.</div>';
+			return;
+		}
+		var html='<div class="px-4 py-2 text-[10px] font-mono uppercase tracking-wide '+(dk?'text-zinc-500 bg-zinc-900':'text-gray-400 bg-gray-50')+'">Open folder as new project</div>';
+		dirMatches.forEach(function(item,i){
+			var sel=i===selectedIdx;
+			var icon=item.parent?'arrow_upward':'folder';
+			html+='<div class="project-dir-item flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
+				+(sel?(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500'):(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'))
+				+'" data-dir-idx="'+i+'">';
+			html+='<i class="material-icons-round '+(item.parent?(dk?'text-zinc-500':'text-gray-400'):'text-amber-500 dark:text-amber-400')+' text-lg">'+icon+'</i>';
+			html+='<div class="flex-1 min-w-0"><div class="text-sm truncate '+(dk?'text-zinc-200':'text-gray-800')+'">'+escapeHtml(item.name)+'</div>';
+			html+='<div class="text-[11px] truncate '+(dk?'text-zinc-500':'text-gray-400')+'">'+escapeHtml(item.path)+'</div></div>';
+			html+='</div>';
+		});
+		res.innerHTML=html;
+		res.querySelectorAll('[data-dir-idx]').forEach(function(el){
+			el.addEventListener('mouseenter',function(){
+				if(!hoverEnabled)return;
+				var idx=parseInt(el.getAttribute('data-dir-idx'),10);
+				if(!Number.isNaN(idx)&&idx!==selectedIdx){selectedIdx=idx;render();}
+			});
+			el.addEventListener('mousedown',function(e){
+				e.preventDefault();
+				var idx=parseInt(el.getAttribute('data-dir-idx'),10);
+				if(Number.isNaN(idx))return;
+				selectedIdx=idx;
+				openSelectedDirectory();
+			});
+		});
+	}
+
+	function render(){
+		var res=getResults();
+		if(!res)return;
+		var dk=document.documentElement.classList.contains('dark');
+		if(renderProjectItems(res,dk)){}else{renderDirectoryItems(res,dk);}
+		var selected=res.querySelector('[data-project-idx="'+selectedIdx+'"],[data-dir-idx="'+selectedIdx+'"]');
 		if(selected)selected.scrollIntoView({block:'nearest'});
 	}
 
+	function scheduleLookup(){
+		var q=query();
+		clearTimeout(lookupTimer);
+		if(!q||filtered.length>0){dirMatches=[];lookupLoading=false;render();return;}
+		lookupLoading=true;
+		render();
+		lookupTimer=setTimeout(function(){
+			lookupQuery=q;
+			__ws.call('project.lookup',{sid:'%s',query:q,seq:++lookupSeq});
+		},90);
+	}
+
 	function filter(){
-		var query=(getInp()&&getInp().value||'').trim();
+		var q=query();
 		var all=(window.__libroProjects||[]).slice();
-		if(!query){
-			filtered=all;
-		}else{
+		if(!q){filtered=all;}else{
 			filtered=[];
 			all.forEach(function(item){
-				var hay=item.name+' '+(item.branch||'')+' '+(item.path||'');
-				var score=fuzzyMatch(hay,query);
-				if(score>0){
-					filtered.push(Object.assign({score:score},item));
-				}
+				var hay=item.name+' '+(item.displayName||'')+' '+(item.branch||'')+' '+(item.path||'');
+				var score=fuzzyMatch(hay,q);
+				if(score>0){filtered.push(Object.assign({score:score},item));}
 			});
 			filtered.sort(function(a,b){return b.score-a.score;});
 		}
 		selectedIdx=0;
-		for(var i=0;i<filtered.length;i++){
-			if(filtered[i].isActive){selectedIdx=i;break;}
-		}
+		for(var i=0;i<filtered.length;i++){if(filtered[i].isActive){selectedIdx=i;break;}}
+		scheduleLookup();
 		render();
 	}
 
@@ -3609,10 +3673,11 @@ func projectPickerPopupJS(sid string) string {
 		var inp=getInp();
 		if(dlg)dlg.classList.add('hidden');
 		if(inp)inp.value='';
+		dirMatches=[];
 		hoverEnabled=false;
 	}
 
-	function launch(){
+	function launchProject(){
 		if(filtered.length===0)return;
 		var item=filtered[selectedIdx];
 		closePopup();
@@ -3624,11 +3689,49 @@ func projectPickerPopupJS(sid string) string {
 		}
 	}
 
+	function selectedDirectory(){
+		if(dirMatches.length===0)return null;
+		return dirMatches[Math.max(0,Math.min(selectedIdx,dirMatches.length-1))]||null;
+	}
+	function typedDirectoryPath(){
+		var q=query();
+		if(!q)return '';
+		// If the user typed an explicit directory and ended it with '/', Enter
+		// should open that typed directory, not the highlighted child or '..'.
+		if((q.charAt(0)==='/'||q.indexOf('~/')===0||q==='~')&&/\/$/.test(q)&&q!=='/'){
+			return q.replace(/\/+$/,'');
+		}
+		return '';
+	}
+	function openSelectedDirectory(){
+		var typed=typedDirectoryPath();
+		if(typed){
+			closePopup();
+			__ws.call('project.create',{sid:'%s','project-path':typed});
+			return;
+		}
+		var item=selectedDirectory();
+		if(!item)return;
+		closePopup();
+		__ws.call('project.create',{sid:'%s','project-path':item.path});
+	}
+	function completeSelectedDirectory(){
+		var item=selectedDirectory();
+		var inp=getInp();
+		if(!item||!inp)return;
+		inp.value=item.path.replace(/\/$/,'')+'/';
+		selectedIdx=0;
+		dirMatches=[];
+		lookupLoading=true;
+		render();
+		__ws.call('project.lookup',{sid:'%s',query:inp.value,seq:++lookupSeq});
+	}
+
 	function removeAt(idx){
 		if(idx<0||idx>=filtered.length)return;
 		var item=filtered[idx];
 		if(!item||item.kind==='worktree'||item.name==='home')return;
-		if(!window.confirm('Remove project "'+item.name+'" from Libro?\n\nThis only removes it from the project list — files on disk are kept.'))return;
+		if(!window.confirm('Remove project "'+item.name+'" from Libro?\n\nThis only removes it from the project list. Files on disk are kept.'))return;
 		closePopup();
 		__ws.call('project.remove',{sid:'%s',name:item.name});
 	}
@@ -3637,6 +3740,10 @@ func projectPickerPopupJS(sid string) string {
 		var dlg=getDlg();
 		var inp=getInp();
 		if(!dlg||!inp)return;
+		if(!dlg.classList.contains('hidden')){
+			setTimeout(function(){inp.focus();},0);
+			return;
+		}
 		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
 		dlg.classList.remove('hidden');
 		inp.value='';
@@ -3644,33 +3751,62 @@ func projectPickerPopupJS(sid string) string {
 		armHoverAfterPointerMove();
 		setTimeout(function(){inp.focus();},50);
 	}
+	function openBrowse(){
+		openPopup();
+		setTimeout(function(){
+			var dlg=getDlg();
+			var inp=getInp();
+			if(!dlg||!inp)return;
+			inp.value=(dlg.getAttribute('data-project-home')||'')+'/';
+			filter();
+			inp.focus();
+		},0);
+	}
 
 	var inp=getInp();
-	if(inp){
+	if(inp&&!inp.__libroProjectDialogBound){
+		inp.__libroProjectDialogBound=true;
 		inp.addEventListener('input',filter);
 		inp.addEventListener('keydown',function(e){
 			var dlg=getDlg();
 			if(!dlg||dlg.classList.contains('hidden'))return;
 			e.stopImmediatePropagation();
+			var max=inDirectoryMode()?dirMatches.length:filtered.length;
 			if(e.key==='ArrowDown'){
 				e.preventDefault();
-				if(selectedIdx<filtered.length-1){selectedIdx++;render();}
+				if(selectedIdx<max-1){selectedIdx++;render();}
 			}else if(e.key==='ArrowUp'){
 				e.preventDefault();
 				if(selectedIdx>0){selectedIdx--;render();}
+			}else if(e.key==='Tab'){
+				e.preventDefault();
+				if(inDirectoryMode())completeSelectedDirectory();
 			}else if(e.key==='Enter'){
 				e.preventDefault();
-				launch();
+				if(inDirectoryMode())openSelectedDirectory();else launchProject();
 			}else if(e.key==='Escape'){
-				e.preventDefault();
-				closePopup();
+				e.preventDefault();closePopup();
 			}
 		});
 	}
-
-	window.__libroOpenProjectPicker=openPopup;
+	window.__libroProjectDialogSetDirMatches=function(payload){
+		payload=payload||{};
+		if(payload.seq&&payload.seq<lookupSeq)return;
+		if(payload.query&&payload.query!==query())return;
+		dirMatches=payload.matches||[];
+		lookupLoading=false;
+		if(inDirectoryMode()&&selectedIdx>=dirMatches.length)selectedIdx=0;
+		render();
+	};
+	window.__libroOpenProjectDialog=openBrowse;
+	window.__libroOpenProjectDialogSearch=openPopup;
+	window.__libroOpenProjectDialogBrowse=openBrowse;
+	// Backward-compatible aliases for command palette / older Electron preload code.
+	window.__libroOpenProjectDialog=openBrowse;
+	window.__libroOpenProjectDialogSearch=openPopup;
+	window.__libroOpenProjectDialogBrowse=openBrowse;
 })();
-`, ProjectPickerID, sid, sid, sid)
+`, ProjectDialogID, sid, sid, sid, sid, sid, sid, sid)
 }
 
 func moveProjectPopupJS(sid string) string {
@@ -3837,11 +3973,23 @@ func moveProjectPopupJS(sid string) string {
 }
 
 // projectsJS publishes the list of projects (and their worktrees) into
-// window.__libroProjects for the project picker popup.
+// window.__libroProjects for the project dialog.
 func projectsJS(state *AppState) string {
+	displayProjectName := func(name, path string) string {
+		if path == "" {
+			return name
+		}
+		base := filepath.Base(path)
+		parent := filepath.Base(filepath.Dir(path))
+		if name == base && parent != "" && parent != "." && parent != string(os.PathSeparator) {
+			return parent + "/" + base
+		}
+		return name
+	}
 	type jsProject struct {
 		Kind          string   `json:"kind"`
 		Name          string   `json:"name"`
+		DisplayName   string   `json:"displayName,omitempty"`
 		Path          string   `json:"path"`
 		Branch        string   `json:"branch,omitempty"`
 		IsGit         bool     `json:"isGit"`
@@ -3849,6 +3997,7 @@ func projectsJS(state *AppState) string {
 		Branches      []string `json:"branches,omitempty"`
 		CurrentBranch string   `json:"currentBranch,omitempty"`
 		WorktreeRefs  []string `json:"worktreeRefs,omitempty"`
+		Transient     bool     `json:"transient,omitempty"`
 	}
 	var all []jsProject
 	for _, p := range state.Projects {
@@ -3857,11 +4006,13 @@ func projectsJS(state *AppState) string {
 		}
 		isActive := p.Name == state.ActiveProject
 		entry := jsProject{
-			Kind:     "project",
-			Name:     p.Name,
-			Path:     p.Path,
-			IsGit:    p.IsGitRepo,
-			IsActive: isActive,
+			Kind:        "project",
+			Name:        p.Name,
+			DisplayName: displayProjectName(p.Name, p.Path),
+			Path:        p.Path,
+			IsGit:       p.IsGitRepo,
+			IsActive:    isActive,
+			Transient:   p.Transient,
 		}
 
 		if p.IsGitRepo && GitAvailable() {
@@ -3922,198 +4073,7 @@ func projectsJS(state *AppState) string {
 
 // renderProjectDialog renders the create project modal
 func renderProjectDialog(visible bool, sid string) *r.Node {
-	return components.ProjectDialog(visible, sid)
-}
-
-// renderDirBrowser renders the directory browser component
-func renderDirBrowser(currentPath string, sid string) *r.Node {
-	return components.DirBrowser(currentPath, sid)
-}
-
-// projectDialogJS wires the New Project dialog: live filtering of the
-// directory listing as the user types a path, Enter to descend into the
-// highlighted entry, "Select current" to use the typed path as a project
-// root, and the inline confirmation bar shown when the path doesn't exist.
-func projectDialogJS(sid string) string {
-	return fmt.Sprintf(`
-(function(){
-	if(window.__libroProjectDialogRegistered)return;
-	window.__libroProjectDialogRegistered=true;
-	var sid=%s;
-	var dlg=document.getElementById(%s);
-	if(!dlg)return;
-	var inp,hidden,confirmBar;
-	var loadedDir='';
-	var debounceId=0;
-
-	function refs(){
-		inp=document.getElementById('project-path-input');
-		hidden=document.getElementById('project-path');
-		confirmBar=document.getElementById('project-path-confirm');
-	}
-	function dirOf(p){
-		if(!p)return '/';
-		if(p==='/')return '/';
-		var i=p.lastIndexOf('/');
-		if(i<=0)return '/';
-		return p.substring(0,i);
-	}
-	function nameOf(p){
-		if(!p)return '';
-		var i=p.lastIndexOf('/');
-		return p.substring(i+1);
-	}
-	function items(){
-		return dlg.querySelectorAll('.dir-item');
-	}
-	function clearHighlight(){
-		items().forEach(function(el){el.classList.remove('bg-blue-100','dark:bg-blue-900/40');});
-	}
-	function highlightFirst(prefix){
-		clearHighlight();
-		var first=null;
-		items().forEach(function(el){
-			if(first)return;
-			var n=el.getAttribute('data-name')||'';
-			if(n==='..')return;
-			if(!prefix||n.toLowerCase().indexOf(prefix.toLowerCase())===0){first=el;}
-		});
-		if(first){
-			first.classList.add('bg-blue-100','dark:bg-blue-900/40');
-			first.scrollIntoView({block:'nearest'});
-		}
-		return first;
-	}
-	function applyFilter(){
-		if(!inp)return;
-		var v=inp.value||'';
-		if(hidden)hidden.value=v;
-		var prefix=v.endsWith('/')?'':nameOf(v);
-		items().forEach(function(el){
-			var n=el.getAttribute('data-name')||'';
-			var match=n==='..'||!prefix||n.toLowerCase().indexOf(prefix.toLowerCase())===0;
-			el.style.display=match?'':'none';
-		});
-		highlightFirst(prefix);
-		if(confirmBar)confirmBar.classList.add('hidden');
-	}
-	function ensureLoaded(){
-		if(!inp)return;
-		var v=inp.value||'';
-		var dir=v.endsWith('/')?(v.length>1?v.slice(0,-1):'/'):dirOf(v);
-		if(dir===loadedDir)return;
-		loadedDir=dir;
-		__ws.call('project.browse',{sid:sid,path:dir});
-	}
-	function descendHighlighted(){
-		var sel=dlg.querySelector('.dir-item.bg-blue-100, .dir-item.bg-blue-900\\/40');
-		if(!sel)return false;
-		var p=sel.getAttribute('data-path');
-		if(!p)return false;
-		inp.value=p+'/';
-		if(hidden)hidden.value=inp.value;
-		loadedDir=p;
-		__ws.call('project.browse',{sid:sid,path:p});
-		return true;
-	}
-
-	function onInput(){
-		clearTimeout(debounceId);
-		debounceId=setTimeout(function(){ensureLoaded();applyFilter();},80);
-	}
-	function onKey(e){
-		if(e.key==='Tab'){
-			e.preventDefault();
-			var sel=dlg.querySelector('.dir-item.bg-blue-100, .dir-item.bg-blue-900\\/40');
-			if(!sel)return;
-			var p=sel.getAttribute('data-path');
-			if(!p)return;
-			inp.value=p;
-			if(hidden)hidden.value=inp.value;
-			applyFilter();
-			return;
-		}
-		if(e.key==='Enter'){
-			e.preventDefault();
-			if(!descendHighlighted()){
-				__ws.call('project.create',{sid:sid,'project-path':inp.value});
-			}
-			return;
-		}
-		if(e.key==='Escape'){
-			e.preventDefault();
-			__ws.call('project.dialog.close',{sid:sid});
-		}
-	}
-
-	function bindButtons(){
-		var sel=document.getElementById('btn-select-current');
-		if(sel&&!sel.__libroBound){
-			sel.__libroBound=true;
-			sel.addEventListener('click',function(){
-				if(!inp)return;
-				__ws.call('project.create',{sid:sid,'project-path':inp.value});
-			});
-		}
-		var crt=document.getElementById('btn-create-project');
-		if(crt&&!crt.__libroBound){
-			crt.__libroBound=true;
-			crt.addEventListener('click',function(){
-				if(!inp)return;
-				__ws.call('project.create',{sid:sid,'project-path':inp.value});
-			});
-		}
-	}
-
-	function bind(){
-		refs();
-		if(!inp)return;
-		if(!inp.__libroBound){
-			inp.__libroBound=true;
-			inp.addEventListener('input',onInput);
-			inp.addEventListener('keydown',onKey);
-		}
-		bindButtons();
-		applyFilter();
-		// Inject confirm-bar buttons (Create / Cancel) once.
-		if(confirmBar&&!confirmBar.__libroBound){
-			confirmBar.__libroBound=true;
-			var btns=document.createElement('div');
-			btns.className='mt-2 flex items-center gap-2';
-			var ok=document.createElement('button');
-			ok.className='px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white font-mono text-xs font-medium rounded cursor-pointer';
-			ok.textContent='Create folder';
-			ok.addEventListener('click',function(){
-				var p=confirmBar.dataset.path||(inp&&inp.value)||'';
-				__ws.call('project.create.confirm',{sid:sid,path:p});
-			});
-			var no=document.createElement('button');
-			no.className='px-3 py-1 text-amber-700 dark:text-amber-200 font-mono text-xs rounded hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer';
-			no.textContent='Cancel';
-			no.addEventListener('click',function(){confirmBar.classList.add('hidden');});
-			btns.appendChild(ok);
-			btns.appendChild(no);
-			confirmBar.appendChild(btns);
-		}
-	}
-
-	// Re-bind on DOM updates (the dir listing is replaced on every browse).
-	var observer=new MutationObserver(function(){bind();});
-	observer.observe(dlg,{childList:true,subtree:true});
-
-	function open(){
-		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
-		dlg.classList.remove('hidden');
-		bind();
-		if(inp){
-			loadedDir=dirOf(inp.value);
-			setTimeout(function(){inp.focus();inp.select();},50);
-		}
-	}
-	window.__libroOpenProjectDialog=open;
-	bind();
-})();
-`, components.JSString(sid), components.JSString(ProjectDialogID))
+	return components.ProjectDialog(sid)
 }
 
 // updateHashJS returns JS that updates the URL hash to the given project name
@@ -4449,6 +4409,17 @@ func keyboardShortcutsJS(sid string) string {
 			};
 
 			function libroKeyHandler(e) {
+				// Project dialog is browse-first now. A repeated Win/Cmd+N just refocuses
+				// the same dialog, it does not toggle modes or open another UI.
+				var projectDialog = document.getElementById('project-dialog');
+				if (projectDialog && !projectDialog.classList.contains('hidden') && e.metaKey && (e.key === 'n' || e.key === 'N' || e.code === 'KeyN')) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					var pickerInput = document.getElementById('project-input');
+					if (pickerInput) pickerInput.focus();
+					return;
+				}
+
 				if (e.metaKey && !e.ctrlKey && (e.key === ',' || e.code === 'Comma')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
@@ -4518,16 +4489,10 @@ func keyboardShortcutsJS(sid string) string {
 					if (window.__libroOpenNvimApp) window.__libroOpenNvimApp();
 					return;
 				}
-				if (e.metaKey && e.ctrlKey && e.code === 'KeyN') {
-					e.preventDefault();
-					e.stopImmediatePropagation();
-					if (window.__libroOpenProjectDialog) window.__libroOpenProjectDialog();
-					return;
-				}
 				if (e.metaKey && (e.key === 'n' || e.key === 'N' || e.code === 'KeyN') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					if (window.__libroOpenProjectPicker) window.__libroOpenProjectPicker();
+					if (window.__libroOpenProjectDialog) window.__libroOpenProjectDialog();
 					return;
 				}
 				if (e.metaKey && e.ctrlKey && (e.key === 'y' || e.key === 'Y' || e.code === 'KeyY')) {

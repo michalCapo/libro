@@ -57,31 +57,191 @@ func settleHydratedAppContentJS(appID string) string {
 `, components.JSString(appID))
 }
 
-// finalizeProjectCreate registers the project, persists it, and returns the
-// JS that switches to it and dismisses the dialog.
-func finalizeProjectCreate(sid, path, name string) string {
-	if !sm.AddProject(sid, name, path) {
+// finalizeProjectCreate registers the project, optionally persists it, and
+// returns the JS that switches to it and dismisses the dialog.
+func finalizeProjectCreate(sid, path, name string, transient bool) string {
+	if !sm.AddProjectWithOptions(sid, name, path, transient) {
 		return r.Notify("error", "Project '"+name+"' already exists")
 	}
 
-	DBSaveProject(name, path)
+	if !transient {
+		DBSaveProject(name, path)
+	}
 
 	sm.CloseProjectDialog(sid)
 	sm.SwitchProject(sid, name)
-	sm.AssignNavSlot(sid, name)
+	if !transient {
+		sm.AssignNavSlot(sid, name)
+	}
 	sm.IsProjectRendered(sid, name)
 	state := sm.Get(sid)
 
 	jsSwitch := switchProjectJS(name, renderMainArea(state, sid))
 
-	return r.NewResponse().
+	resp := r.NewResponse().
 		Add(projectsJS(state)).
 		Replace(TopBarID, renderTopBar(state, sid)).
 		Replace(ProjectDialogID, renderProjectDialog(false, sid)).
 		Add(jsSwitch).
 		Add(updateHashJS(name)).
-		Add(focusSelectedAppJS(state)).
-		Build()
+		Add(focusSelectedAppJS(state))
+	if transient {
+		resp.Add(showToastJS("Opened folder", path, 1600))
+	}
+	return resp.Build()
+}
+
+type projectDirLookupMatch struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Parent bool   `json:"parent,omitempty"`
+}
+
+func expandUserPath(path string) string {
+	home, _ := os.UserHomeDir()
+	if path == "~" {
+		return home
+	}
+	if strings.HasPrefix(path, "~/") && home != "" {
+		return filepath.Join(home, strings.TrimPrefix(path, "~/"))
+	}
+	return path
+}
+
+func projectDirLookup(query string) []projectDirLookupMatch {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil
+	}
+
+	home, _ := os.UserHomeDir()
+	children := func(dir, prefix string) []projectDirLookupMatch {
+		dir = filepath.Clean(expandUserPath(dir))
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return nil
+		}
+		var out []projectDirLookupMatch
+		if parent := filepath.Dir(dir); parent != dir {
+			out = append(out, projectDirLookupMatch{Name: "..", Path: parent, Parent: true})
+		}
+		prefix = strings.ToLower(prefix)
+		for _, e := range entries {
+			name := e.Name()
+			if !e.IsDir() || strings.HasPrefix(name, ".") {
+				continue
+			}
+			if prefix != "" && !strings.HasPrefix(strings.ToLower(name), prefix) {
+				continue
+			}
+			out = append(out, projectDirLookupMatch{Name: name, Path: filepath.Join(dir, name)})
+			if len(out) >= 80 {
+				break
+			}
+		}
+		return out
+	}
+
+	expanded := expandUserPath(query)
+	if filepath.IsAbs(expanded) {
+		if strings.HasSuffix(query, string(os.PathSeparator)) {
+			return children(expanded, "")
+		}
+		if info, err := os.Stat(expanded); err == nil && info.IsDir() {
+			return append([]projectDirLookupMatch{{Name: filepath.Base(expanded), Path: filepath.Clean(expanded)}}, children(expanded, "")...)
+		}
+		return children(filepath.Dir(expanded), filepath.Base(expanded))
+	}
+
+	target := strings.ToLower(query)
+	roots := []string{}
+	if home != "" {
+		roots = append(roots, filepath.Join(home, "code"), home)
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		roots = append(roots, cwd)
+	}
+	seenRoot := map[string]bool{}
+	seen := map[string]bool{}
+	var out []projectDirLookupMatch
+	for _, root := range roots {
+		root = filepath.Clean(root)
+		if seenRoot[root] {
+			continue
+		}
+		seenRoot[root] = true
+		info, err := os.Stat(root)
+		if err != nil || !info.IsDir() {
+			continue
+		}
+		rootDepth := len(strings.Split(strings.Trim(filepath.Clean(root), string(os.PathSeparator)), string(os.PathSeparator)))
+		_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+			if err != nil || len(out) >= 80 {
+				return nil
+			}
+			name := d.Name()
+			if path != root && d.IsDir() {
+				if strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor" || name == "dist" || name == "build" {
+					return filepath.SkipDir
+				}
+				depth := len(strings.Split(strings.Trim(filepath.Clean(path), string(os.PathSeparator)), string(os.PathSeparator))) - rootDepth
+				if depth > 5 {
+					return filepath.SkipDir
+				}
+				if strings.Contains(strings.ToLower(name), target) || fuzzyMatchPath(name, target) {
+					clean := filepath.Clean(path)
+					if !seen[clean] {
+						seen[clean] = true
+						out = append(out, projectDirLookupMatch{Name: name, Path: clean})
+					}
+				}
+			}
+			return nil
+		})
+	}
+	return out
+}
+
+func fuzzyMatchPath(text, query string) bool {
+	text = strings.ToLower(text)
+	query = strings.ToLower(query)
+	if query == "" {
+		return true
+	}
+	j := 0
+	for i := 0; i < len(text) && j < len(query); i++ {
+		if text[i] == query[j] {
+			j++
+		}
+	}
+	return j == len(query)
+}
+
+func projectNameForPath(sid, path string) (string, bool) {
+	base := filepath.Base(path)
+	if base == "" || base == "." || base == "/" {
+		return "", false
+	}
+	parent := filepath.Base(filepath.Dir(path))
+	name := base
+	if parent != "" && parent != "." && parent != string(os.PathSeparator) {
+		name = parent + "/" + base
+	}
+	state := sm.Get(sid)
+	used := make(map[string]bool, len(state.Projects))
+	for _, p := range state.Projects {
+		used[p.Name] = true
+	}
+	if !used[name] {
+		return name, true
+	}
+	for i := 2; i < 1000; i++ {
+		candidate := fmt.Sprintf("%s-%d", name, i)
+		if !used[candidate] {
+			return candidate, true
+		}
+	}
+	return "", false
 }
 
 // dbSaveApp persists an app definition to the database for the given project.
@@ -271,6 +431,13 @@ func Run(assets embed.FS) {
 		projectSpecific := false
 		if val, ok := data["app-project-specific"].(bool); ok {
 			projectSpecific = val
+		}
+		if projectSpecific {
+			for _, p := range state.Projects {
+				if p.Name == state.ActiveProject && p.Transient {
+					return r.Notify("error", "Temporary folders cannot save project-specific apps")
+				}
+			}
 		}
 
 		if appType == "terminal" {
@@ -1033,30 +1200,24 @@ func Run(assets embed.FS) {
 		return `window.__libroRunCommands=[];if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}`
 	})
 
-	// Browse directories for project picker
-	app.Action("project.browse", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
+	// Lookup directories for the unified project dialog. Bare terms search common
+	// code roots recursively; absolute paths list matching child directories.
+	app.Action("project.lookup", func(ctx *r.Context) string {
 		data := ctx.WsData()
-		path, _ := data["path"].(string)
-		path = strings.TrimSpace(path)
-		if path == "" {
-			return ""
-		}
-		path = filepath.Clean(path)
-		if !filepath.IsAbs(path) {
-			return ""
-		}
-		return r.NewResponse().
-			Add(renderDirBrowser(path, sid).ToJSReplace(DirBrowserID)).
-			Add(fmt.Sprintf("document.getElementById('project-path').value='%s';", path)).
-			Build()
+		query, _ := data["query"].(string)
+		seq, _ := data["seq"].(float64)
+		matches := projectDirLookup(query)
+		payload, _ := json.Marshal(map[string]any{
+			"query":   strings.TrimSpace(query),
+			"seq":     int(seq),
+			"matches": matches,
+		})
+		return fmt.Sprintf(`if(window.__libroProjectDialogSetDirMatches)window.__libroProjectDialogSetDirMatches(%s);`, string(payload))
 	})
 
-	// Open project dialog
+	// Open the unified project dialog in folder-browse mode.
 	app.Action("project.dialog.open", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		sm.OpenProjectDialog(sid)
-		return fmt.Sprintf(`if(window.__libroCloseAllPopups)window.__libroCloseAllPopups('%s');`, ProjectDialogID) + r.Show(ProjectDialogID)
+		return `if(window.__libroOpenProjectDialog)window.__libroOpenProjectDialog();`
 	})
 
 	// Close project dialog
@@ -1078,13 +1239,13 @@ func Run(assets embed.FS) {
 			return r.Notify("error", "Folder path is required")
 		}
 
-		path = filepath.Clean(path)
+		path = filepath.Clean(expandUserPath(path))
 		if !filepath.IsAbs(path) {
 			return r.Notify("error", "Path must be absolute")
 		}
 
-		name := filepath.Base(path)
-		if name == "" || name == "." || name == "/" {
+		name, ok := projectNameForPath(sid, path)
+		if !ok {
 			return r.Notify("error", "Invalid folder selected")
 		}
 
@@ -1099,7 +1260,31 @@ func Run(assets embed.FS) {
 			)
 		}
 
-		return finalizeProjectCreate(sid, path, name)
+		return finalizeProjectCreate(sid, path, name, false)
+	})
+
+	// Open a folder as a session-only project. This sets the active working
+	// directory for newly opened apps without persisting it to the project list.
+	app.Action("project.open.folder", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		path, _ := ctx.WsData()["project-path"].(string)
+		path = strings.TrimSpace(path)
+		if path == "" {
+			return r.Notify("error", "Folder path is required")
+		}
+		path = filepath.Clean(expandUserPath(path))
+		if !filepath.IsAbs(path) {
+			return r.Notify("error", "Path must be absolute")
+		}
+		info, err := os.Stat(path)
+		if err != nil || !info.IsDir() {
+			return r.Notify("error", "Folder does not exist")
+		}
+		name, ok := projectNameForPath(sid, path)
+		if !ok {
+			return r.Notify("error", "Invalid folder selected")
+		}
+		return finalizeProjectCreate(sid, path, name, true)
 	})
 
 	// Confirm creating a missing project folder, then create the project.
@@ -1110,18 +1295,18 @@ func Run(assets embed.FS) {
 		if path == "" {
 			return r.Notify("error", "Folder path is required")
 		}
-		path = filepath.Clean(path)
+		path = filepath.Clean(expandUserPath(path))
 		if !filepath.IsAbs(path) {
 			return r.Notify("error", "Path must be absolute")
 		}
 		if err := os.MkdirAll(path, 0o755); err != nil {
 			return r.Notify("error", "Failed to create folder: "+err.Error())
 		}
-		name := filepath.Base(path)
-		if name == "" || name == "." || name == "/" {
+		name, ok := projectNameForPath(sid, path)
+		if !ok {
 			return r.Notify("error", "Invalid folder selected")
 		}
-		return finalizeProjectCreate(sid, path, name)
+		return finalizeProjectCreate(sid, path, name, false)
 	})
 
 	// Toggle zen mode — hides top bar, sidebar, and app toolbars
