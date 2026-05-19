@@ -40,6 +40,7 @@ type Project struct {
 	IsGitRepo     bool   // detected at load time, not persisted
 	Virtual       bool   // true for worktree-derived projects
 	ParentProject string // name of parent project (for virtual projects)
+	Transient     bool   // true for session-only folder projects
 }
 
 // projectSnapshot stores a project's apps while it is not active
@@ -644,6 +645,11 @@ func (sm *StateManager) SaveActiveProjectApps(sessionID string) (string, int) {
 		SelectedIndex: s.SelectedIndex,
 	}
 	s.closedSnapshots[projectName] = snap
+	for _, p := range s.Projects {
+		if p.Name == projectName && p.Transient {
+			return projectName, len(s.Apps)
+		}
+	}
 	persistClosedProjectSnapshot(projectName, snap)
 	return projectName, len(s.Apps)
 }
@@ -660,6 +666,11 @@ func (sm *StateManager) ClearClosedProjectApps(sessionID string) (string, bool) 
 	snap, ok := s.closedSnapshots[projectName]
 	if ok {
 		delete(s.closedSnapshots, projectName)
+	}
+	for _, p := range s.Projects {
+		if p.Name == projectName && p.Transient {
+			return projectName, ok && snap != nil && len(snap.Apps) > 0
+		}
 	}
 	DBClearClosedProjectApps(projectName)
 	return projectName, ok && snap != nil && len(snap.Apps) > 0
@@ -979,8 +990,14 @@ func (sm *StateManager) CloseDialog(sessionID string) {
 	}
 }
 
-// AddProject adds a new project to the session. Returns false if name already exists.
+// AddProject adds a new persisted project to the session. Returns false if name already exists.
 func (sm *StateManager) AddProject(sessionID, name, path string) bool {
+	return sm.AddProjectWithOptions(sessionID, name, path, false)
+}
+
+// AddProjectWithOptions adds a project to the session. Transient projects are
+// session-only and are not saved to the database by callers.
+func (sm *StateManager) AddProjectWithOptions(sessionID, name, path string, transient bool) bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -992,7 +1009,7 @@ func (sm *StateManager) AddProject(sessionID, name, path string) bool {
 			return false
 		}
 	}
-	p := Project{Name: name, Path: path}
+	p := Project{Name: name, Path: path, Transient: transient}
 	if GitAvailable() {
 		p.IsGitRepo = GitIsRepo(path)
 	}

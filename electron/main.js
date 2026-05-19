@@ -304,6 +304,27 @@ function openMoveProjectPopup() {
   `)
 }
 
+function triggerProjectDialogShortcut() {
+  const focusedWindow = BrowserWindow.getFocusedWindow()
+  if (!focusedWindow || focusedWindow !== mainWindow) {
+    console.log('[libro-shortcut] ignored project dialog: main window not focused')
+    return
+  }
+  console.log('[libro-shortcut] firing project dialog')
+  dispatchToMainWindow(`
+    (function(){
+      var dialog = document.getElementById('project-dialog');
+      var input = document.getElementById('project-input');
+      if (dialog && !dialog.classList.contains('hidden')) {
+        if (input) input.focus();
+        return;
+      }
+      if (window.__libroOpenProjectDialog) window.__libroOpenProjectDialog();
+    })();
+  `)
+}
+
+
 function triggerTerminalAppShortcut() {
   const focusedWindow = BrowserWindow.getFocusedWindow()
   if (!focusedWindow || focusedWindow !== mainWindow) {
@@ -376,6 +397,7 @@ function registerWindowShortcuts() {
     ['Super+[', () => moveSelectedApp('left')],
     ['Super+]', () => moveSelectedApp('right')],
     ['Super+Control+Y', () => openMoveProjectPopup()],
+    ['Super+N', () => triggerProjectDialogShortcut()],
     ['Super+Enter', () => triggerTerminalAppShortcut()],
     ['Super+B', () => triggerBrowserAppShortcut()],
     ['Super+E', () => triggerNvimAppShortcut()],
@@ -955,6 +977,12 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
+      if (input.meta && !input.control && code === 'keyn') {
+        if (shouldSkipDuplicateShortcut()) return
+        e.preventDefault()
+        triggerProjectDialogShortcut()
+        return
+      }
       if (input.meta && !input.control && code === 'keyo') {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
@@ -1115,7 +1143,13 @@ app.on('web-contents-created', (event, contents) => {
     }
 
     // Meta (Super/Win) shortcuts: h, l, q, n, t, z, o, f, g, r, x, ;, ,, .
-    if (input.meta && !input.control && (['h', 'l', 'q', 'n', 'b', 'e', 'z', 'o', 'f', 'g', 'r', 'x', ';', ',', '.'].includes(key) || ['keyn', 'keyo', 'keyb', 'keye', 'semicolon', 'comma', 'period'].includes(code))) {
+    if (input.meta && !input.control && code === 'keyn') {
+      if (shouldSkipDuplicateShortcut()) return
+      e.preventDefault()
+      triggerProjectDialogShortcut()
+      return
+    }
+    if (input.meta && !input.control && (['h', 'l', 'q', 'b', 'e', 'z', 'o', 'f', 'g', 'r', 'x', ';', ',', '.'].includes(key) || ['keyo', 'keyb', 'keye', 'semicolon', 'comma', 'period'].includes(code))) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {

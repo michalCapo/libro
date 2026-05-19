@@ -17,7 +17,6 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderSearchDialog(sid),
 		renderShortcutsDialog(),
 		renderCloseDialog(sid),
-		renderProjectPickerPopup(sid),
 		renderURLPopup(sid),
 		renderResizePopup(sid),
 		renderCommandPopup(),
@@ -36,7 +35,6 @@ func renderPage(state *AppState, sid string) *r.Node {
 		shortcutsDialogJS() +
 		closeDialogJS(sid) +
 		components.BrowserJS() +
-		projectPickerPopupJS(sid) +
 		projectDialogJS(sid) +
 		projectsJS(state) +
 		urlPopupJS(sid) +
