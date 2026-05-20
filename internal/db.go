@@ -181,6 +181,16 @@ func createTables() {
 			command TEXT NOT NULL UNIQUE,
 			run_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
+		CREATE TABLE IF NOT EXISTS password_entries (
+			id                INTEGER PRIMARY KEY AUTOINCREMENT,
+			name_cipher       TEXT NOT NULL DEFAULT '',
+			url_cipher        TEXT NOT NULL DEFAULT '',
+			username_cipher   TEXT NOT NULL DEFAULT '',
+			password_cipher   TEXT NOT NULL DEFAULT '',
+			note_cipher       TEXT NOT NULL DEFAULT '',
+			created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
 		CREATE TABLE IF NOT EXISTS settings (
 				key   TEXT PRIMARY KEY,
 				value TEXT NOT NULL DEFAULT ''
@@ -227,6 +237,8 @@ func migrateTables() {
 	_, _ = db.Exec("ALTER TABLE saved_apps ADD COLUMN icon_url TEXT NOT NULL DEFAULT ''")
 	// Add project_specific column (app visible only in its project when true)
 	_, _ = db.Exec("ALTER TABLE saved_apps ADD COLUMN project_specific INTEGER NOT NULL DEFAULT 0")
+	// Add encrypted note column for password entries.
+	_, _ = db.Exec("ALTER TABLE password_entries ADD COLUMN note_cipher TEXT NOT NULL DEFAULT ''")
 }
 
 func ensureHomeProject() {

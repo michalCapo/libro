@@ -9,6 +9,7 @@ Libro is a Go + Electron desktop app for keeping browser panels and terminal ses
 - Opens browser and terminal panels in one desktop window.
 - Keeps per-project strip state in memory while you switch between projects.
 - Saves reusable app definitions in SQLite, either globally or per project.
+- Stores encrypted password vault entries for apps and sites, with username/password copy from the command palette.
 - Integrates Git worktrees into the project picker and shortcut system.
 - Supports browser-oriented shortcuts, including URL popup, vim-style navigation, and per-panel DevTools.
 - Downloads files from webviews into the system Downloads folder with in-app progress toasts.
@@ -84,6 +85,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - `:query` opens a web search.
 - `!command` runs a terminal command.
 - `⌘ + ;` opens the command palette for app and project actions.
+- Run `password` from the command palette to open the encrypted password vault. Search by URL or name, then press `Enter` to copy the password or `U` to copy the username.
 
 ### Projects And Worktrees
 
