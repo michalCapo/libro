@@ -3789,7 +3789,11 @@ func projectDialogJS(sid string) string {
 	function getInp(){return document.getElementById('project-input');}
 	function getResults(){return document.getElementById('project-results');}
 	function query(){return (getInp()&&getInp().value||'').trim();}
-	function inDirectoryMode(){return query()!==''&&filtered.length===0;}
+	function isPathQuery(q){
+		q=q||query();
+		return q==='~'||q.indexOf('~/')===0||q.indexOf('./')===0||q.indexOf('../')===0||q.charAt(0)==='/';
+	}
+	function inDirectoryMode(){return isPathQuery()||(query()!==''&&filtered.length===0);}
 
 	function armHoverAfterPointerMove(){
 		hoverEnabled=false;
@@ -3835,7 +3839,7 @@ func projectDialogJS(sid string) string {
 	}
 
 	function renderProjectItems(res,dk){
-		if(filtered.length===0){return false;}
+		if(isPathQuery()||filtered.length===0){return false;}
 		var html='';
 		filtered.forEach(function(item,i){
 			var sel=i===selectedIdx;
@@ -3938,7 +3942,7 @@ func projectDialogJS(sid string) string {
 	function scheduleLookup(){
 		var q=query();
 		clearTimeout(lookupTimer);
-		if(!q||filtered.length>0){dirMatches=[];lookupLoading=false;render();return;}
+		if(!q||(!isPathQuery(q)&&filtered.length>0)){dirMatches=[];lookupLoading=false;render();return;}
 		lookupLoading=true;
 		render();
 		lookupTimer=setTimeout(function(){
@@ -3950,7 +3954,7 @@ func projectDialogJS(sid string) string {
 	function filter(){
 		var q=query();
 		var all=(window.__libroProjects||[]).slice();
-		if(!q){filtered=all;}else{
+		if(!q){filtered=all;}else if(isPathQuery(q)){filtered=[];}else{
 			filtered=[];
 			all.forEach(function(item){
 				var hay=item.name+' '+(item.displayName||'')+' '+(item.branch||'')+' '+(item.path||'');
@@ -3995,7 +3999,7 @@ func projectDialogJS(sid string) string {
 		if(!q)return '';
 		// If the user typed an explicit directory and ended it with '/', Enter
 		// should open that typed directory, not the highlighted child or '..'.
-		if((q.charAt(0)==='/'||q.indexOf('~/')===0||q==='~')&&/\/$/.test(q)&&q!=='/'){
+		if(isPathQuery(q)&&/\/$/.test(q)&&q!=='/'){ 
 			return q.replace(/\/+$/,'');
 		}
 		return '';
@@ -4016,7 +4020,7 @@ func projectDialogJS(sid string) string {
 		var item=selectedDirectory();
 		var inp=getInp();
 		if(!item||!inp)return;
-		inp.value=item.path.replace(/\/$/,'')+'/';
+		inp.value=simplifyPath(item.path).replace(/\/$/,'')+'/';
 		selectedIdx=0;
 		dirMatches=[];
 		lookupLoading=true;
@@ -4048,17 +4052,7 @@ func projectDialogJS(sid string) string {
 		armHoverAfterPointerMove();
 		setTimeout(function(){inp.focus();},50);
 	}
-	function openBrowse(){
-		openPopup();
-		setTimeout(function(){
-			var dlg=getDlg();
-			var inp=getInp();
-			if(!dlg||!inp)return;
-			inp.value=(dlg.getAttribute('data-project-home')||'')+'/';
-			filter();
-			inp.focus();
-		},0);
-	}
+	function openBrowse(){openPopup();}
 
 	var inp=getInp();
 	if(inp&&!inp.__libroProjectDialogBound){
@@ -4095,11 +4089,11 @@ func projectDialogJS(sid string) string {
 		if(inDirectoryMode()&&selectedIdx>=dirMatches.length)selectedIdx=0;
 		render();
 	};
-	window.__libroOpenProjectDialog=openBrowse;
+	window.__libroOpenProjectDialog=openPopup;
 	window.__libroOpenProjectDialogSearch=openPopup;
 	window.__libroOpenProjectDialogBrowse=openBrowse;
 	// Backward-compatible aliases for command palette / older Electron preload code.
-	window.__libroOpenProjectDialog=openBrowse;
+	window.__libroOpenProjectDialog=openPopup;
 	window.__libroOpenProjectDialogSearch=openPopup;
 	window.__libroOpenProjectDialogBrowse=openBrowse;
 })();
