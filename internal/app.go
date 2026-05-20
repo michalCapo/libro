@@ -105,6 +105,12 @@ func expandUserPath(path string) string {
 	if strings.HasPrefix(path, "~/") && home != "" {
 		return filepath.Join(home, strings.TrimPrefix(path, "~/"))
 	}
+	// In the project picker, ./ is a home-relative shorthand. It lets users
+	// browse ~/code by typing ./code without leaving project-search mode for
+	// ordinary terms like "nisa".
+	if strings.HasPrefix(path, "./") && home != "" {
+		return filepath.Join(home, strings.TrimPrefix(path, "./"))
+	}
 	return path
 }
 
@@ -122,9 +128,6 @@ func projectDirLookup(query string) []projectDirLookupMatch {
 			return nil
 		}
 		var out []projectDirLookupMatch
-		if parent := filepath.Dir(dir); parent != dir {
-			out = append(out, projectDirLookupMatch{Name: "..", Path: parent, Parent: true})
-		}
 		prefix = strings.ToLower(prefix)
 		for _, e := range entries {
 			name := e.Name()
@@ -139,16 +142,22 @@ func projectDirLookup(query string) []projectDirLookupMatch {
 				break
 			}
 		}
+		if prefix == "" {
+			if parent := filepath.Dir(dir); parent != dir {
+				out = append([]projectDirLookupMatch{{Name: "..", Path: parent, Parent: true}}, out...)
+			}
+		}
 		return out
 	}
 
 	expanded := expandUserPath(query)
-	if filepath.IsAbs(expanded) {
+	isExplicitPath := filepath.IsAbs(expanded) || strings.HasPrefix(query, "~/") || query == "~" || strings.HasPrefix(query, "./") || strings.HasPrefix(query, "../")
+	if isExplicitPath {
 		if strings.HasSuffix(query, string(os.PathSeparator)) {
 			return children(expanded, "")
 		}
 		if info, err := os.Stat(expanded); err == nil && info.IsDir() {
-			return append([]projectDirLookupMatch{{Name: filepath.Base(expanded), Path: filepath.Clean(expanded)}}, children(expanded, "")...)
+			return children(expanded, "")
 		}
 		return children(filepath.Dir(expanded), filepath.Base(expanded))
 	}
