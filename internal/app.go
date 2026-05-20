@@ -70,9 +70,7 @@ func finalizeProjectCreate(sid, path, name string, transient bool) string {
 
 	sm.CloseProjectDialog(sid)
 	sm.SwitchProject(sid, name)
-	if !transient {
-		sm.AssignNavSlot(sid, name)
-	}
+	ensureProjectNavSlot(sid, name, !transient)
 	sm.IsProjectRendered(sid, name)
 	state := sm.Get(sid)
 
@@ -331,6 +329,20 @@ func installShutdownSignalHandler() {
 			os.Exit(0)
 		}()
 	})
+}
+
+func ensureProjectNavSlot(sid, name string, persist bool) int {
+	if name == "" || name == "home" {
+		return 0
+	}
+	if slot := sm.GetNavSlotForProject(sid, name); slot >= 2 && slot <= 9 {
+		return slot
+	}
+	slot := sm.AssignNavSlot(sid, name)
+	if persist && slot >= 2 && slot <= 9 {
+		DBSetProjectNavSlot(name, slot)
+	}
+	return slot
 }
 
 // Run initializes and starts the Libro application server.
@@ -922,8 +934,16 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	app.Action("project.apps.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		projectName, apps := sm.CloseActiveProjectApps(sid)
+		if projectName != "" && projectName != "home" {
+			sm.RemoveNavSlot(sid, projectName)
+			DBSetProjectNavSlot(projectName, 0)
+		}
 		if len(apps) == 0 {
-			return r.Notify("error", "No open apps in "+projectName)
+			state := sm.Get(sid)
+			return r.NewResponse().
+				Add(projectsJS(state)).
+				Add(r.Notify("error", "No open apps in "+projectName)).
+				Build()
 		}
 		for _, a := range apps {
 			if a.Type == AppTypeTerminal {
@@ -1469,7 +1489,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		return resp.Build()
 	})
 
-	switchToProjectName := func(sid, name string) string {
+	switchToProjectName := func(sid, name string, assignShortcut bool) string {
 		if name == "" {
 			return "/* noop */"
 		}
@@ -1500,6 +1520,11 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			return "/* noop */"
 		}
 
+		assignedSlot := 0
+		if assignShortcut && sm.GetNavSlotForProject(sid, name) == 0 {
+			assignedSlot = ensureProjectNavSlot(sid, name, true)
+		}
+
 		state := sm.Get(sid)
 
 		var jsSwitch string
@@ -1511,7 +1536,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			jsSwitch = switchProjectJS(name, renderMainArea(state, sid))
 		}
 
-		return r.NewResponse().
+		resp := r.NewResponse().
 			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(closeDevtoolsJS).
@@ -1519,8 +1544,11 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			Add(updateHashJS(name)).
 			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state)).
-			Add(savedAppsJS(state)).
-			Build()
+			Add(savedAppsJS(state))
+		if assignedSlot >= 2 && assignedSlot <= 9 {
+			resp.Add(showToastJS(fmt.Sprintf("Ctrl+%d assigned", assignedSlot), name, 1500))
+		}
+		return resp.Build()
 	}
 
 	// Switch active project
@@ -1528,7 +1556,8 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		name, _ := data["name"].(string)
-		resp := switchToProjectName(sid, name)
+		assignShortcut, _ := data["assignShortcut"].(bool)
+		resp := switchToProjectName(sid, name, assignShortcut)
 		if resp == "/* noop */" {
 			return r.Notify("error", "Project not found")
 		}
@@ -1542,7 +1571,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		if name == "" {
 			return "/* noop */"
 		}
-		return switchToProjectName(sid, name)
+		return switchToProjectName(sid, name, false)
 	})
 
 	// Navigate to previous project
@@ -1552,7 +1581,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		if name == "" {
 			return "/* noop */"
 		}
-		return switchToProjectName(sid, name)
+		return switchToProjectName(sid, name, false)
 	})
 
 	// Select project by nav slot (Ctrl+1 = home, Ctrl+2-9 = assigned slots)
@@ -1572,7 +1601,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			// Ctrl+2-9: look up from nav slots
 			name = sm.NavSlotProject(sid, slot)
 		}
-		return switchToProjectName(sid, name)
+		return switchToProjectName(sid, name, false)
 	})
 
 	// Select previous project (Ctrl+0)
@@ -1582,7 +1611,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		if name == "" {
 			return "/* noop */"
 		}
-		return switchToProjectName(sid, name)
+		return switchToProjectName(sid, name, false)
 	})
 
 	// Add a nav slot shortcut to a project/branch
@@ -1842,6 +1871,11 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			return r.Notify("error", "Failed to switch to worktree")
 		}
 
+		assignedSlot := 0
+		if sm.GetNavSlotForProject(sid, vtName) == 0 {
+			assignedSlot = ensureProjectNavSlot(sid, vtName, false)
+		}
+
 		state := sm.Get(sid)
 
 		var jsSwitch string
@@ -1851,14 +1885,17 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			jsSwitch = switchProjectJS(vtName, renderMainArea(state, sid))
 		}
 
-		return r.NewResponse().
+		resp := r.NewResponse().
 			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(closeDevtoolsJS).
 			Add(jsSwitch).
 			Add(updateHashJS(vtName)).
-			Add(focusSelectedAppJS(state)).
-			Build()
+			Add(focusSelectedAppJS(state))
+		if assignedSlot >= 2 && assignedSlot <= 9 {
+			resp.Add(showToastJS(fmt.Sprintf("Ctrl+%d assigned", assignedSlot), vtName, 1500))
+		}
+		return resp.Build()
 	})
 
 	// Create a new worktree from the active project's current branch and switch to it.
