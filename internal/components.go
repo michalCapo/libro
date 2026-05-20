@@ -2562,6 +2562,15 @@ func urlPopupJS(sid string) string {
 					renderHistory(originalQuery);
 					inp.value=originalQuery;
 				}
+			}else if(e.key==='Tab'){
+				e.preventDefault();
+				if(filteredURLs.length>0&&inp){
+					selectedIdx=0;
+					inp.value=filteredURLs[0];
+					originalQuery=inp.value;
+					renderHistory(inp.value);
+					try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(err){}
+				}
 			}else if(e.key==='Enter'){
 				e.preventDefault();
 				if(selectedIdx>=0&&filteredURLs[selectedIdx]&&inp&&inp.value===originalQuery){
@@ -2572,7 +2581,14 @@ func urlPopupJS(sid string) string {
 				navigate();
 			}else if(e.key==='Escape'){
 				e.preventDefault();
-				closePopup();
+				if(inp&&inp.value){
+					inp.value='';
+					originalQuery='';
+					selectedIdx=0;
+					renderHistory('');
+				}else{
+					closePopup();
+				}
 			}
 		});
 	}
