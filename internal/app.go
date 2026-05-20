@@ -270,6 +270,30 @@ func dbSaveApp(projectName string, editDBID int64, appType, urlOrCmd, width, nam
 	}
 }
 
+func copyPasswordFieldJS(text, label string) string {
+	return fmt.Sprintf(`
+(function(){
+	var text=%s;
+	if(window.libroElectron&&window.libroElectron.copyToClipboard){
+		window.libroElectron.copyToClipboard(text);
+	}else if(navigator.clipboard&&navigator.clipboard.writeText){
+		navigator.clipboard.writeText(text);
+	}else{
+		var ta=document.createElement('textarea');
+		ta.value=text;
+		ta.style.position='fixed';
+		ta.style.opacity='0';
+		document.body.appendChild(ta);
+		ta.focus();
+		ta.select();
+		try{document.execCommand('copy');}catch(e){}
+		document.body.removeChild(ta);
+	}
+	if(window.__libroShowToast)window.__libroShowToast(%s,'',1400);
+})();
+`, components.JSString(text), components.JSString(label))
+}
+
 var (
 	sm                  = NewStateManager()
 	tm                  = components.NewTtydManager()
@@ -386,6 +410,110 @@ func Run(assets embed.FS) {
 		sid := sm.NewSession()
 		state := sm.Get(sid)
 		return renderPage(state, sid)
+	})
+
+	app.Action("password.setup", func(ctx *r.Context) string {
+		data := ctx.WsData()
+		master, _ := data["master"].(string)
+		confirm, _ := data["confirm"].(string)
+		if master != confirm {
+			return r.Notify("error", "Master passwords do not match")
+		}
+		if err := setupPasswordVault(master); err != nil {
+			return r.Notify("error", err.Error())
+		}
+		return passwordVaultStatusJS() + passwordEntriesJS() + `document.getElementById('password-setup-master').value='';document.getElementById('password-setup-confirm').value='';if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();` + showToastJS("Password vault ready", "", 1500)
+	})
+
+	app.Action("password.unlock", func(ctx *r.Context) string {
+		data := ctx.WsData()
+		master, _ := data["master"].(string)
+		if err := unlockPasswordVault(master); err != nil {
+			return r.Notify("error", err.Error())
+		}
+		return passwordVaultStatusJS() + passwordEntriesJS() + `document.getElementById('password-unlock-master').value='';if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();` + showToastJS("Password vault unlocked", "", 1200)
+	})
+
+	app.Action("password.save", func(ctx *r.Context) string {
+		data := ctx.WsData()
+		name, _ := data["name"].(string)
+		urlStr, _ := data["url"].(string)
+		username, _ := data["username"].(string)
+		password, _ := data["password"].(string)
+		note, _ := data["note"].(string)
+		id, _ := numericID(data["id"])
+		name = strings.TrimSpace(name)
+		urlStr = strings.TrimSpace(urlStr)
+		if name == "" && urlStr == "" {
+			return r.Notify("error", "Name or URL is required")
+		}
+		if password == "" {
+			return r.Notify("error", "Password is required")
+		}
+		entry := PasswordEntry{ID: id, Name: name, URL: urlStr, Username: username, Password: password, Note: note}
+		if id > 0 {
+			if err := DBUpdatePasswordEntry(entry); err != nil {
+				return r.Notify("error", err.Error())
+			}
+		} else if err := DBAddPasswordEntry(entry); err != nil {
+			return r.Notify("error", err.Error())
+		}
+		return passwordEntriesJS() + `
+document.getElementById('password-entry-name').value='';
+document.getElementById('password-entry-url').value='';
+document.getElementById('password-entry-username').value='';
+document.getElementById('password-entry-password').value='';
+document.getElementById('password-entry-note').value='';
+if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
+` + showToastJS("Password saved", "", 1300)
+	})
+
+	app.Action("password.entry", func(ctx *r.Context) string {
+		data := ctx.WsData()
+		id, _ := numericID(data["id"])
+		mode, _ := data["mode"].(string)
+		entry, err := DBLoadPasswordEntry(id)
+		if err != nil {
+			return r.Notify("error", err.Error())
+		}
+		payload, _ := jsonMarshal(map[string]any{
+			"id":       entry.ID,
+			"name":     entry.Name,
+			"url":      entry.URL,
+			"username": entry.Username,
+			"password": entry.Password,
+			"note":     entry.Note,
+		})
+		return fmt.Sprintf("if(window.__libroPasswordShowEntry)window.__libroPasswordShowEntry(%s,%s);", string(payload), components.JSString(mode))
+	})
+
+	app.Action("password.copy", func(ctx *r.Context) string {
+		data := ctx.WsData()
+		id, _ := numericID(data["id"])
+		field, _ := data["field"].(string)
+		entry, err := DBLoadPasswordEntry(id)
+		if err != nil {
+			return r.Notify("error", err.Error())
+		}
+		DBTouchPasswordEntry(id)
+		switch field {
+		case "username":
+			return passwordEntriesJS() + copyPasswordFieldJS(entry.Username, "Username copied")
+		default:
+			return passwordEntriesJS() + copyPasswordFieldJS(entry.Password, "Password copied")
+		}
+	})
+
+	app.Action("password.delete", func(ctx *r.Context) string {
+		data := ctx.WsData()
+		id, _ := numericID(data["id"])
+		if id <= 0 {
+			return r.Notify("error", "Invalid password entry")
+		}
+		if err := DBDeletePasswordEntry(id); err != nil {
+			return r.Notify("error", err.Error())
+		}
+		return passwordEntriesJS() + `if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();` + showToastJS("Password deleted", "", 1200)
 	})
 
 	// Open add dialog
@@ -1850,4 +1978,17 @@ func extractSID(ctx *r.Context) string {
 		return sid
 	}
 	return "default"
+}
+
+func numericID(v any) (int64, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int64(n), true
+	case int64:
+		return n, true
+	case int:
+		return int64(n), true
+	default:
+		return 0, false
+	}
 }

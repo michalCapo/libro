@@ -37,6 +37,7 @@ const (
 	CommandPopupID        = components.CommandPopupID
 	MoveProjectPopupID    = components.MoveProjectPopupID
 	WorktreeCreatePopupID = components.WorktreeCreatePopupID
+	PasswordDialogID      = components.PasswordDialogID
 )
 
 // termIconInfo stores the icon details for a known terminal command.
@@ -879,7 +880,7 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 func popupRegistryJS() string {
 	return fmt.Sprintf(`
 (function(){
-	var IDS=[%q,%q,%q,%q,%q,%q,%q,%q,%q,%q];
+	var IDS=[%q,%q,%q,%q,%q,%q,%q,%q,%q,%q,%q];
 	window.__libroCloseAllPopups=function(except){
 		var keep=null;
 		if(except){
@@ -892,7 +893,7 @@ func popupRegistryJS() string {
 		}
 	};
 })();
-`, URLPopupID, ResizePopupID, CommandPopupID, MoveProjectPopupID, WorktreeCreatePopupID, SearchDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID)
+`, URLPopupID, ResizePopupID, CommandPopupID, MoveProjectPopupID, WorktreeCreatePopupID, SearchDialogID, PasswordDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID)
 }
 
 func flashCSS() string {
@@ -1691,6 +1692,10 @@ func renderSearchDialog(sid string) *r.Node {
 	return components.SearchDialog(sid)
 }
 
+func renderPasswordDialog() *r.Node {
+	return components.PasswordDialog()
+}
+
 // searchDialogJS returns the JS that powers the fuzzy search popup behavior.
 func searchDialogJS(sid string) string {
 	return fmt.Sprintf(`
@@ -2075,6 +2080,294 @@ func searchDialogJS(sid string) string {
 `, SearchDialogID, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }
 
+func passwordDialogJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	if(window.__libroPasswordRegistered)return;
+	window.__libroPasswordRegistered=true;
+
+	var dlg=document.getElementById('%s');
+	var setupPane=document.getElementById('password-setup-pane');
+	var unlockPane=document.getElementById('password-unlock-pane');
+	var searchPane=document.getElementById('password-search-pane');
+	var viewPane=document.getElementById('password-view-pane');
+	var addPane=document.getElementById('password-add-pane');
+	var addOpen=document.getElementById('password-add-open');
+	var searchInput=document.getElementById('password-search-input');
+	var results=document.getElementById('password-results');
+	var selIdx=0;
+	var filtered=[];
+	var hoverEnabled=false;
+	var currentEntry=null;
+	var editingID=0;
+
+	function esc(s){
+		return String(s||'').replace(/[&<>"']/g,function(c){
+			return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+		});
+	}
+
+	function hideAll(){
+		setupPane.classList.add('hidden');
+		unlockPane.classList.add('hidden');
+		searchPane.classList.add('hidden');
+		viewPane.classList.add('hidden');
+		addPane.classList.add('hidden');
+		addOpen.classList.add('hidden');
+	}
+
+	function focusLater(el){
+		setTimeout(function(){if(el)el.focus();},50);
+	}
+
+	function armHoverAfterPointerMove(){
+		hoverEnabled=false;
+		if(!dlg)return;
+		var enableHover=function(){
+			hoverEnabled=true;
+			dlg.removeEventListener('mousemove',enableHover,true);
+		};
+		dlg.addEventListener('mousemove',enableHover,true);
+	}
+
+	function fuzzyMatch(text,query){
+		text=(text||'').toLowerCase();query=(query||'').toLowerCase();
+		if(!query)return 1;
+		var ti=0,qi=0,score=0,last=-1;
+		while(ti<text.length&&qi<query.length){
+			if(text[ti]===query[qi]){
+				score+=1;
+				if(last===ti-1)score+=2;
+				if(ti===0||text[ti-1]===' '||text[ti-1]==='/'||text[ti-1]==='.'||text[ti-1]==='-'||text[ti-1]==='_')score+=3;
+				last=ti;qi++;
+			}
+			ti++;
+		}
+		if(qi!==query.length)return 0;
+		var idx=text.indexOf(query);
+		if(idx>=0)score+=12+(idx===0?8:0);
+		return score;
+	}
+
+	function render(){
+		var dk=document.documentElement.classList.contains('dark');
+		results.innerHTML='';
+		if(filtered.length===0){
+			results.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No passwords</div>';
+			return;
+		}
+		filtered.forEach(function(entry,i){
+			var row=document.createElement('div');
+			var sel=i===selIdx;
+			var txtCls=dk?'text-zinc-200':'text-gray-800';
+			var subCls=dk?'text-zinc-500':'text-gray-400';
+			var badgeCls=dk?'bg-zinc-700 text-zinc-400':'bg-gray-200 text-gray-500';
+			row.className='group flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
+				+(sel?(dk?'bg-blue-900/30 ring-1 ring-inset ring-blue-500/40':'bg-blue-50 ring-1 ring-inset ring-blue-200')
+				:(dk?'hover:bg-zinc-800':'hover:bg-gray-50'));
+			row.innerHTML='<i class="material-icons-round text-blue-500 text-lg shrink-0">key</i>'
+				+'<div class="flex-1 min-w-0"><div class="text-sm truncate '+txtCls+'">'+esc(entry.name||entry.url||'Untitled')+'</div>'
+				+(entry.url?'<div class="text-[11px] truncate '+subCls+'">'+esc(entry.url)+'</div>':'')
+				+(entry.note?'<div class="text-[11px] truncate '+subCls+'">'+esc(entry.note)+'</div>':'')
+				+'</div>'
+				+'<button class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center w-7 h-7 rounded-md '+(dk?'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700':'text-gray-400 hover:text-gray-700 hover:bg-gray-200')+'" data-view="'+entry.id+'" title="View"><i class="material-icons-round text-base">visibility</i></button>'
+				+'<button class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center w-7 h-7 rounded-md '+(dk?'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700':'text-gray-400 hover:text-gray-700 hover:bg-gray-200')+'" data-edit="'+entry.id+'" title="Edit"><i class="material-icons-round text-base">edit</i></button>'
+				+'<button class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center w-7 h-7 rounded-md '+(dk?'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700':'text-gray-400 hover:text-gray-700 hover:bg-gray-200')+'" data-copy-user="'+entry.id+'" title="Copy username"><i class="material-icons-round text-base">person</i></button>'
+				+'<button class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center w-7 h-7 rounded-md '+(dk?'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700':'text-gray-400 hover:text-gray-700 hover:bg-gray-200')+'" data-copy-pass="'+entry.id+'" title="Copy password"><i class="material-icons-round text-base">content_copy</i></button>'
+				+'<button class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center w-7 h-7 rounded-md '+(dk?'text-zinc-500 hover:text-red-400 hover:bg-red-400/10':'text-gray-400 hover:text-red-500 hover:bg-red-50')+'" data-delete="'+entry.id+'" title="Delete"><i class="material-icons-round text-base">delete</i></button>'
+				+'<span class="px-1.5 py-0.5 text-[10px] font-mono uppercase rounded shrink-0 '+badgeCls+'">vault</span>';
+			row.onmouseenter=function(){
+				if(!hoverEnabled)return;
+				if(selIdx===i)return;
+				selIdx=i;
+				render();
+			};
+			row.onclick=function(){loadEntry(entry.id,'view');};
+			var viewBtn=row.querySelector('[data-view]');
+			if(viewBtn)viewBtn.onclick=function(e){e.stopPropagation();loadEntry(entry.id,'view');};
+			var editBtn=row.querySelector('[data-edit]');
+			if(editBtn)editBtn.onclick=function(e){e.stopPropagation();loadEntry(entry.id,'edit');};
+			var userBtn=row.querySelector('[data-copy-user]');
+			if(userBtn)userBtn.onclick=function(e){e.stopPropagation();copyEntry(entry.id,'username');};
+			var passBtn=row.querySelector('[data-copy-pass]');
+			if(passBtn)passBtn.onclick=function(e){e.stopPropagation();copyEntry(entry.id,'password');};
+			var delBtn=row.querySelector('[data-delete]');
+			if(delBtn)delBtn.onclick=function(e){
+				e.stopPropagation();
+				if(window.confirm('Delete password "'+(entry.name||entry.url||'entry')+'"?')){
+					__ws.call('password.delete',{sid:'%s',id:entry.id});
+				}
+			};
+			results.appendChild(row);
+		});
+		var sel=results.children[selIdx];
+		if(sel)sel.scrollIntoView({block:'nearest'});
+	}
+
+	function filter(){
+		var q=(searchInput.value||'').trim();
+		var entries=window.__libroPasswordEntries||[];
+		filtered=entries.map(function(e){
+			return {entry:e,score:fuzzyMatch((e.name||'')+' '+(e.url||'')+' '+(e.note||''),q)};
+		}).filter(function(x){return x.score>0;})
+			.sort(function(a,b){return b.score-a.score;})
+			.map(function(x){return x.entry;});
+		selIdx=0;
+		render();
+	}
+
+	function showSearch(){
+		hideAll();
+		editingID=0;
+		searchPane.classList.remove('hidden');
+		addOpen.classList.remove('hidden');
+		filter();
+		armHoverAfterPointerMove();
+		focusLater(searchInput);
+	}
+
+	function setText(id,value){
+		var el=document.getElementById(id);
+		if(el)el.textContent=value||'';
+	}
+
+	function showEntry(entry,mode){
+		currentEntry=entry;
+		if(mode==='edit'){
+			showAdd(entry);
+			return;
+		}
+		hideAll();
+		setText('password-view-name',entry.name||'');
+		setText('password-view-url',entry.url||'');
+		setText('password-view-username',entry.username||'');
+		setText('password-view-password',entry.password||'');
+		setText('password-view-note',entry.note||'');
+		viewPane.classList.remove('hidden');
+	}
+
+	function showAdd(entry){
+		hideAll();
+		entry=entry||{};
+		editingID=entry.id||0;
+		document.getElementById('password-entry-name').value=entry.name||'';
+		document.getElementById('password-entry-url').value=entry.url||'';
+		document.getElementById('password-entry-username').value=entry.username||'';
+		document.getElementById('password-entry-password').value=entry.password||'';
+		document.getElementById('password-entry-note').value=entry.note||'';
+		document.getElementById('password-entry-save').textContent=editingID?'Update':'Save';
+		addPane.classList.remove('hidden');
+		focusLater(document.getElementById('password-entry-name'));
+	}
+
+	function loadEntry(id,mode){
+		__ws.call('password.entry',{sid:'%s',id:id,mode:mode||'view'});
+	}
+
+	function openDialog(){
+		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
+		dlg.classList.remove('hidden');
+		hideAll();
+		if(!window.__libroPasswordConfigured){
+			setupPane.classList.remove('hidden');
+			focusLater(document.getElementById('password-setup-master'));
+		}else if(!window.__libroPasswordUnlocked){
+			unlockPane.classList.remove('hidden');
+			focusLater(document.getElementById('password-unlock-master'));
+		}else{
+			showSearch();
+		}
+	}
+
+	function closeDialog(){
+		dlg.classList.add('hidden');
+		hoverEnabled=false;
+	}
+
+	function setup(){
+		var master=document.getElementById('password-setup-master').value||'';
+		var confirm=document.getElementById('password-setup-confirm').value||'';
+		__ws.call('password.setup',{sid:'%s',master:master,confirm:confirm});
+	}
+
+	function unlock(){
+		var master=document.getElementById('password-unlock-master').value||'';
+		__ws.call('password.unlock',{sid:'%s',master:master});
+	}
+
+	function save(){
+		__ws.call('password.save',{
+			sid:'%s',
+			id:editingID,
+			name:(document.getElementById('password-entry-name').value||''),
+			url:(document.getElementById('password-entry-url').value||''),
+			username:(document.getElementById('password-entry-username').value||''),
+			password:(document.getElementById('password-entry-password').value||''),
+			note:(document.getElementById('password-entry-note').value||'')
+		});
+	}
+
+	function copyEntry(id,field){
+		__ws.call('password.copy',{sid:'%s',id:id,field:field});
+	}
+
+	function copySelected(field){
+		if(filtered.length===0)return;
+		copyEntry(filtered[selIdx].id,field);
+	}
+
+	function copyCurrent(field){
+		if(!currentEntry)return;
+		copyEntry(currentEntry.id,field);
+	}
+
+	function editCurrent(){
+		if(!currentEntry)return;
+		showAdd(currentEntry);
+	}
+
+	searchInput.addEventListener('input',filter);
+	searchInput.addEventListener('keydown',function(e){
+		e.stopImmediatePropagation();
+		if(e.key==='ArrowDown'){
+			e.preventDefault();
+			if(selIdx<filtered.length-1){selIdx++;render();}
+		}else if(e.key==='ArrowUp'){
+			e.preventDefault();
+			if(selIdx>0){selIdx--;render();}
+		}else if(e.key==='Enter'){
+			e.preventDefault();
+			copySelected('password');
+		}else if(e.key==='u'||e.key==='U'){
+			e.preventDefault();
+			copySelected('username');
+		}else if(e.key==='Escape'){
+			e.preventDefault();
+			closeDialog();
+		}
+	});
+
+	document.addEventListener('keydown',function(e){
+		if(e.key==='Escape'&&!dlg.classList.contains('hidden')){
+			e.preventDefault();
+			e.stopImmediatePropagation();
+			closeDialog();
+		}
+	},true);
+
+	window.__libroPasswordShowSearch=showSearch;
+	window.__libroPasswordShowAdd=showAdd;
+	window.__libroPasswordShowEntry=showEntry;
+	window.__libroPasswordCopyCurrent=copyCurrent;
+	window.__libroPasswordEditCurrent=editCurrent;
+	window.__libroPasswordSetup=setup;
+	window.__libroPasswordUnlock=unlock;
+	window.__libroPasswordSave=save;
+	window.__libroOpenPasswordDialog=openDialog;
+})();
+`, PasswordDialogID, sid, sid, sid, sid, sid, sid)
+}
+
 // renderURLPopup renders the URL/search popup opened by bare 'o' (works in both zen and non-zen mode).
 func renderURLPopup(sid string) *r.Node {
 	return components.URLPopup(sid)
@@ -2375,6 +2668,10 @@ func commandPopupJS(sid string) string {
 			{id:'apps',label:'Apps',scope:'app',icon:'apps',keywords:'manage saved applications app list',run:function(){
 				closePalette();
 				__ws.call('app.manage.open',{sid:'%s'});
+			}},
+			{id:'password',label:'Passwords',scope:'app',icon:'password',keywords:'password vault credentials secrets usernames logins copy encrypted',run:function(){
+				closePalette();
+				if(window.__libroOpenPasswordDialog)window.__libroOpenPasswordDialog();
 			}},
 			{id:'downloads',label:'Downloads',scope:'app',icon:'folder_open',keywords:'download downloads downloaded files folder directory open file manager',run:function(){
 				closePalette();

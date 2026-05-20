@@ -13,4 +13,5 @@ const (
 	CommandPopupID        = "command-popup"
 	MoveProjectPopupID    = "move-project-popup"
 	WorktreeCreatePopupID = "worktree-create-popup"
+	PasswordDialogID      = "password-dialog"
 )

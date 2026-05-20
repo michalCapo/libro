@@ -15,6 +15,7 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderManageAppsPage(state, sid),
 		renderProjectDialog(state.ProjectDialogOpen, sid),
 		renderSearchDialog(sid),
+		renderPasswordDialog(),
 		renderShortcutsDialog(),
 		renderCloseDialog(sid),
 		renderURLPopup(sid),
@@ -30,8 +31,11 @@ func renderPage(state *AppState, sid string) *r.Node {
 		projectToastSetupJS() +
 		keyboardShortcutsJS(sid) +
 		savedAppsJS(state) +
+		passwordVaultStatusJS() +
+		passwordEntriesJS() +
 		initHashJS(sid) +
 		searchDialogJS(sid) +
+		passwordDialogJS(sid) +
 		shortcutsDialogJS() +
 		closeDialogJS(sid) +
 		components.BrowserJS() +
