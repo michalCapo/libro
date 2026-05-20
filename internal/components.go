@@ -3848,6 +3848,7 @@ func projectDialogJS(sid string) string {
 			var secondary=item.kind==='worktree'?(item.name+' · '+simplifyPath(item.path)):simplifyPath(item.path);
 			var activeBadge=item.isActive?'<span class="ml-2 inline-flex items-center justify-center px-1.5 h-4 rounded text-[9px] font-bold leading-none '+(dk?'bg-blue-500/30 text-blue-300':'bg-blue-100 text-blue-700')+'">ACTIVE</span>':'';
 			var tempBadge=item.transient?'<span class="ml-2 inline-flex items-center justify-center px-1.5 h-4 rounded text-[9px] font-bold leading-none '+(dk?'bg-zinc-700 text-zinc-300':'bg-gray-100 text-gray-600')+'">TEMP</span>':'';
+			var slotBadge=item.navSlot?'<span class="shrink-0 inline-flex items-center justify-center min-w-12 h-5 px-2 rounded-md text-[10px] font-bold leading-none '+(dk?'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30':'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200')+'">Ctrl+'+item.navSlot+'</span>':'<span class="shrink-0 min-w-12 h-5"></span>';
 			html+='<div class="project-item group flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors duration-75 '
 				+(sel?(dk?'bg-blue-900/30 border-l-2 border-blue-500':'bg-blue-50 border-l-2 border-blue-500')
 				:(dk?'hover:bg-zinc-800 border-l-2 border-transparent':'hover:bg-gray-50 border-l-2 border-transparent'))
@@ -3855,9 +3856,13 @@ func projectDialogJS(sid string) string {
 			html+='<i class="material-icons-round '+(dk?'text-zinc-400':'text-gray-400')+' text-lg">'+icon+'</i>';
 			html+='<div class="flex-1 min-w-0"><div class="text-sm truncate '+(dk?'text-zinc-200':'text-gray-800')+'">'+escapeHtml(primary)+activeBadge+tempBadge+'</div>';
 			html+='<div class="text-[11px] truncate '+(dk?'text-zinc-500':'text-gray-400')+'">'+escapeHtml(secondary)+'</div></div>';
+			html+='<div class="ml-auto shrink-0 flex items-center justify-end gap-2 w-24">';
 			if(item.kind!=='worktree'&&item.name!=='home'){
-				html+='<button data-project-remove="'+i+'" title="Remove project" class="ml-2 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity p-1 rounded '+(dk?'hover:bg-red-900/40 text-zinc-500 hover:text-red-300':'hover:bg-red-50 text-gray-400 hover:text-red-600')+'"><i class="material-icons-round text-base pointer-events-none">delete_outline</i></button>';
+				html+='<button data-project-remove="'+i+'" title="Remove project" class="opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity p-1 rounded '+(dk?'hover:bg-red-900/40 text-zinc-500 hover:text-red-300':'hover:bg-red-50 text-gray-400 hover:text-red-600')+'"><i class="material-icons-round text-base pointer-events-none">delete_outline</i></button>';
+			}else{
+				html+='<span class="w-6 h-6 shrink-0"></span>';
 			}
+			html+=slotBadge+'</div>';
 			html+='</div>';
 		});
 		res.innerHTML=html;
@@ -3951,17 +3956,26 @@ func projectDialogJS(sid string) string {
 		},90);
 	}
 
+	function sortProjects(a,b){
+		var as=a.navSlot||0, bs=b.navSlot||0;
+		if(as&&bs&&as!==bs)return as-bs;
+		if(as&&!bs)return -1;
+		if(!as&&bs)return 1;
+		if((b.score||0)!==(a.score||0))return (b.score||0)-(a.score||0);
+		return String(a.displayName||a.name||'').localeCompare(String(b.displayName||b.name||''));
+	}
+
 	function filter(){
 		var q=query();
 		var all=(window.__libroProjects||[]).slice();
-		if(!q){filtered=all;}else if(isPathQuery(q)){filtered=[];}else{
+		if(!q){filtered=all;filtered.sort(sortProjects);}else if(isPathQuery(q)){filtered=[];}else{
 			filtered=[];
 			all.forEach(function(item){
 				var hay=item.name+' '+(item.displayName||'')+' '+(item.branch||'')+' '+(item.path||'');
 				var score=fuzzyMatch(hay,q);
 				if(score>0){filtered.push(Object.assign({score:score},item));}
 			});
-			filtered.sort(function(a,b){return b.score-a.score;});
+			filtered.sort(sortProjects);
 		}
 		selectedIdx=0;
 		for(var i=0;i<filtered.length;i++){if(filtered[i].isActive){selectedIdx=i;break;}}
@@ -3986,7 +4000,7 @@ func projectDialogJS(sid string) string {
 			__ws.call('worktree.switch',{sid:'%s',project:item.name,path:item.path,branch:item.branch});
 		}else{
 			history.replaceState(null,'','#'+item.name);
-			__ws.call('project.switch',{sid:'%s',name:item.name});
+			__ws.call('project.switch',{sid:'%s',name:item.name,assignShortcut:true});
 		}
 	}
 
@@ -4049,14 +4063,27 @@ func projectDialogJS(sid string) string {
 		dlg.classList.remove('hidden');
 		inp.value='';
 		filter();
+		var scrollTop=function(){var res=getResults();if(res)res.scrollTop=0;};
+		scrollTop();
+		requestAnimationFrame(scrollTop);
+		setTimeout(scrollTop,0);
 		armHoverAfterPointerMove();
-		setTimeout(function(){inp.focus();},50);
+		setTimeout(function(){inp.focus();scrollTop();},50);
 	}
 	function openBrowse(){openPopup();}
 
 	var inp=getInp();
 	if(inp&&!inp.__libroProjectDialogBound){
 		inp.__libroProjectDialogBound=true;
+		document.addEventListener('keydown',function(e){
+			var dlg=getDlg();
+			if(!dlg||dlg.classList.contains('hidden'))return;
+			if(e.key==='Escape'){
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				closePopup();
+			}
+		},true);
 		inp.addEventListener('input',filter);
 		inp.addEventListener('keydown',function(e){
 			var dlg=getDlg();
@@ -4289,6 +4316,7 @@ func projectsJS(state *AppState) string {
 		CurrentBranch string   `json:"currentBranch,omitempty"`
 		WorktreeRefs  []string `json:"worktreeRefs,omitempty"`
 		Transient     bool     `json:"transient,omitempty"`
+		NavSlot       int      `json:"navSlot,omitempty"`
 	}
 	var all []jsProject
 	for _, p := range state.Projects {
@@ -4296,6 +4324,10 @@ func projectsJS(state *AppState) string {
 			continue
 		}
 		isActive := p.Name == state.ActiveProject
+		navSlot := p.NavSlot
+		if p.Name == "home" {
+			navSlot = 1
+		}
 		entry := jsProject{
 			Kind:        "project",
 			Name:        p.Name,
@@ -4304,6 +4336,7 @@ func projectsJS(state *AppState) string {
 			IsGit:       p.IsGitRepo,
 			IsActive:    isActive,
 			Transient:   p.Transient,
+			NavSlot:     navSlot,
 		}
 
 		if p.IsGitRepo && GitAvailable() {
@@ -4352,6 +4385,7 @@ func projectsJS(state *AppState) string {
 				Branch:   wt.Branch,
 				IsGit:    true,
 				IsActive: wtActive,
+				NavSlot:  state.NavProjectSlot[vtName],
 			})
 		}
 	}
