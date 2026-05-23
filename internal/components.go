@@ -3841,9 +3841,13 @@ func projectDialogJS(sid string) string {
 
 	function escapeHtml(s){return (s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 	function itemIcon(item){return item.kind==='worktree'?'alt_route':(item.isGit?'source':'folder');}
+	function homeDir(){
+		var dlg=document.getElementById('project-dialog');
+		return dlg&&dlg.getAttribute?dlg.getAttribute('data-project-home')||'':'';
+	}
 	function simplifyPath(path){
 		path=path||'';
-		var home=(document.getElementById('project-dialog')||{}).getAttribute&&document.getElementById('project-dialog').getAttribute('data-project-home')||'';
+		var home=homeDir();
 		if(home&&path===home)return '~';
 		if(home&&path.indexOf(home+'/')===0)return '~/'+path.substring(home.length+1);
 		return path;
@@ -3919,7 +3923,7 @@ func projectDialogJS(sid string) string {
 			return;
 		}
 		if(dirMatches.length===0){
-			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No project found. Type a folder name like <span class="text-blue-500">github</span>, or a path.</div>';
+			res.innerHTML='<div class="px-4 py-6 text-center text-sm font-mono '+(dk?'text-zinc-500':'text-gray-400')+'">No folder found. Press <span class="text-blue-500">Enter</span> to create it as a new Libro project/folder.</div>';
 			return;
 		}
 		var html='<div class="px-4 py-2 text-[10px] font-mono uppercase tracking-wide '+(dk?'text-zinc-500 bg-zinc-900':'text-gray-400 bg-gray-50')+'">Open folder as new project</div>';
@@ -4029,20 +4033,37 @@ func projectDialogJS(sid string) string {
 		if(!q)return '';
 		// If the user typed an explicit directory and ended it with '/', Enter
 		// should open that typed directory, not the highlighted child or '..'.
-		if(isPathQuery(q)&&/\/$/.test(q)&&q!=='/'){ 
+		if(isPathQuery(q)&&/\/$/.test(q)&&q!=='/'){
 			return q.replace(/\/+$/,'');
 		}
 		return '';
 	}
+	function newProjectPathFromQuery(){
+		var q=query();
+		if(!q)return '';
+		if(q==='~')return homeDir();
+		if(q.indexOf('~/')===0)return homeDir()?homeDir()+'/'+q.substring(2):q;
+		if(q.charAt(0)==='/')return q;
+		if(q.indexOf('./')===0||q.indexOf('../')===0)return q;
+		return homeDir()?homeDir()+'/'+q:q;
+	}
+	function confirmCreateProject(path){
+		if(!path)return;
+		if(!window.confirm('No folder found. Create this folder and open it as a new Libro project?\n\n'+path))return;
+		closePopup();
+		__ws.call('project.create.confirm',{sid:'%s',path:path});
+	}
 	function openSelectedDirectory(){
 		var typed=typedDirectoryPath();
 		if(typed){
-			closePopup();
-			__ws.call('project.create',{sid:'%s','project-path':typed});
+			if(dirMatches.length===0){confirmCreateProject(typed);}else{
+				closePopup();
+				__ws.call('project.create',{sid:'%s','project-path':typed});
+			}
 			return;
 		}
 		var item=selectedDirectory();
-		if(!item)return;
+		if(!item){confirmCreateProject(newProjectPathFromQuery());return;}
 		closePopup();
 		__ws.call('project.create',{sid:'%s','project-path':item.path});
 	}
@@ -4140,7 +4161,7 @@ func projectDialogJS(sid string) string {
 	window.__libroOpenProjectDialogSearch=openPopup;
 	window.__libroOpenProjectDialogBrowse=openBrowse;
 })();
-`, ProjectDialogID, sid, sid, sid, sid, sid, sid, sid)
+`, ProjectDialogID, sid, sid, sid, sid, sid, sid, sid, sid)
 }
 
 func moveProjectPopupJS(sid string) string {
