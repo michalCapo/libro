@@ -20,6 +20,18 @@ import (
 	r "github.com/michalCapo/g-sui/ui"
 )
 
+// ttydTheme returns an xterm.js theme JSON string for ttyd's -t flag,
+// picking light or dark based on GNOME's current color-scheme.
+func ttydTheme() string {
+	light := `theme={"background":"#ffffff","foreground":"#1f2328","cursor":"#1f2328","selectionBackground":"#b5d5ff"}`
+	dark := `theme={"background":"#1e1e1e","foreground":"#d4d4d4","cursor":"#d4d4d4","selectionBackground":"#264f78"}`
+	out, err := exec.Command("gsettings", "get", "org.gnome.desktop.interface", "color-scheme").Output()
+	if err == nil && strings.Contains(string(out), "prefer-dark") {
+		return dark
+	}
+	return light
+}
+
 // userShell returns the user's $SHELL if set and available, otherwise "bash".
 func userShell() string {
 	if sh := os.Getenv("SHELL"); sh != "" {
@@ -146,6 +158,7 @@ func (tm *TtydManager) Start(appID string, port int, command string, writable bo
 	args := []string{
 		"-p", strconv.Itoa(port),
 		"-t", "fontSize=18",
+		"-t", ttydTheme(),
 	}
 	if writable {
 		args = append(args, "--writable")
