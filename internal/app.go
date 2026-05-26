@@ -1982,6 +1982,22 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	components.RegisterTtydProxy(app)
+
+	// Live-switch xterm theme when GNOME's color-scheme flips.
+	// Restarts each ttyd with the new theme (tmux session preserved) and
+	// pokes every connected client to reload its terminal iframes.
+	var themeMu sync.Mutex
+	components.WatchGnomeTheme(func() {
+		themeMu.Lock()
+		defer themeMu.Unlock()
+		sm.IterTerminalApps(func(a Application) {
+			if err := tm.RestartPreservingSession(a.ID, a.Port, a.Command, a.Writable, ""); err != nil {
+				log.Printf("theme restart failed for app %s: %v", a.ID, err)
+			}
+		})
+		app.Broadcast(`(function(){document.querySelectorAll('iframe[data-terminal-iframe]').forEach(function(f){var src=f.getAttribute('src')||'';var base=src.split('#')[0].split('?')[0];if(base)f.setAttribute('src',base+'?themeReload='+Date.now());});})();`)
+	})
+
 	if err := app.Listen(":" + Port()); err != nil {
 		log.Printf("libro: app.Listen on :%s failed: %v", Port(), err)
 	}

@@ -227,6 +227,34 @@ func (sm *StateManager) NewSession() string {
 }
 
 // Get returns the state for a session, creating one if it doesn't exist
+// IterTerminalApps invokes fn for every terminal Application across all
+// sessions and project snapshots. Read lock is held for the duration, so fn
+// must not call back into StateManager mutating methods.
+func (sm *StateManager) IterTerminalApps(fn func(app Application)) {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	for _, s := range sm.states {
+		if s == nil {
+			continue
+		}
+		for _, a := range s.Apps {
+			if a.Type == AppTypeTerminal && a.Port > 0 {
+				fn(a)
+			}
+		}
+		for _, snap := range s.snapshots {
+			if snap == nil {
+				continue
+			}
+			for _, a := range snap.Apps {
+				if a.Type == AppTypeTerminal && a.Port > 0 {
+					fn(a)
+				}
+			}
+		}
+	}
+}
+
 func (sm *StateManager) Get(sessionID string) *AppState {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
