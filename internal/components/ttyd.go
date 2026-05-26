@@ -20,6 +20,37 @@ import (
 	r "github.com/michalCapo/g-sui/ui"
 )
 
+// WatchGnomeTheme starts a background goroutine that calls onChange every
+// time GNOME's color-scheme setting flips between light and dark variants.
+// No-op if gsettings is unavailable (non-GNOME desktops).
+func WatchGnomeTheme(onChange func()) {
+	if _, err := exec.LookPath("gsettings"); err != nil {
+		return
+	}
+	go func() {
+		cmd := exec.Command("gsettings", "monitor", "org.gnome.desktop.interface", "color-scheme")
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			log.Printf("ttyd theme watcher: stdout pipe failed: %v", err)
+			return
+		}
+		if err := cmd.Start(); err != nil {
+			log.Printf("ttyd theme watcher: start failed: %v", err)
+			return
+		}
+		buf := make([]byte, 4096)
+		for {
+			n, err := stdout.Read(buf)
+			if n > 0 {
+				onChange()
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+}
+
 // ttydTheme returns an xterm.js theme JSON string for ttyd's -t flag,
 // picking light or dark based on GNOME's current color-scheme.
 func ttydTheme() string {
@@ -235,6 +266,31 @@ func (tm *TtydManager) Stop(appID string) {
 // Restart kills the ttyd process and tmux session for an app, then starts it again.
 func (tm *TtydManager) Restart(appID string, port int, command string, writable bool, pwd string) error {
 	tm.Stop(appID)
+	if !waitForPortFree(port, 3*time.Second) {
+		return fmt.Errorf("port %d is still in use", port)
+	}
+	return tm.Start(appID, port, command, writable, pwd)
+}
+
+// stopProcessOnly kills the ttyd process for an app but leaves the tmux
+// session intact, so the next Start can re-attach to the existing shell.
+func (tm *TtydManager) stopProcessOnly(appID string) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	if cmd, ok := tm.processes[appID]; ok {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		delete(tm.processes, appID)
+	}
+}
+
+// RestartPreservingSession kills the ttyd process (keeping the tmux session
+// alive) and starts ttyd again on the same port. Used when only ttyd-level
+// options change (e.g. xterm theme) and the shell state must be preserved.
+func (tm *TtydManager) RestartPreservingSession(appID string, port int, command string, writable bool, pwd string) error {
+	tm.stopProcessOnly(appID)
 	if !waitForPortFree(port, 3*time.Second) {
 		return fmt.Errorf("port %d is still in use", port)
 	}
