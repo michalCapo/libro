@@ -3792,6 +3792,11 @@ func updateAppPreviewJS(state *AppState) string {
 func projectDialogJS(sid string) string {
 	return fmt.Sprintf(`
 (function(){
+	if(window.__libroProjectDialogRegistered){
+		if(window.__libroProjectDialogBind)window.__libroProjectDialogBind();
+		return;
+	}
+	window.__libroProjectDialogRegistered=true;
 	var selectedIdx=0;
 	var filtered=[];
 	var dirMatches=[];
@@ -3800,6 +3805,7 @@ func projectDialogJS(sid string) string {
 	var lookupTimer=0;
 	var lookupQuery='';
 	var lookupLoading=false;
+	var documentKeydownBound=false;
 
 	function getDlg(){return document.getElementById('%s');}
 	function getInp(){return document.getElementById('project-input');}
@@ -4090,6 +4096,7 @@ func projectDialogJS(sid string) string {
 
 	function openPopup(){
 		var dlg=getDlg();
+		bindInput();
 		var inp=getInp();
 		if(!dlg||!inp)return;
 		if(!dlg.classList.contains('hidden')){
@@ -4109,18 +4116,22 @@ func projectDialogJS(sid string) string {
 	}
 	function openBrowse(){openPopup();}
 
-	var inp=getInp();
-	if(inp&&!inp.__libroProjectDialogBound){
+	function bindInput(){
+		var inp=getInp();
+		if(!documentKeydownBound){
+			documentKeydownBound=true;
+			document.addEventListener('keydown',function(e){
+				var dlg=getDlg();
+				if(!dlg||dlg.classList.contains('hidden'))return;
+				if(e.key==='Escape'){
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					closePopup();
+				}
+			},true);
+		}
+		if(!inp||inp.__libroProjectDialogBound)return;
 		inp.__libroProjectDialogBound=true;
-		document.addEventListener('keydown',function(e){
-			var dlg=getDlg();
-			if(!dlg||dlg.classList.contains('hidden'))return;
-			if(e.key==='Escape'){
-				e.preventDefault();
-				e.stopImmediatePropagation();
-				closePopup();
-			}
-		},true);
 		inp.addEventListener('input',filter);
 		inp.addEventListener('keydown',function(e){
 			var dlg=getDlg();
@@ -4144,6 +4155,8 @@ func projectDialogJS(sid string) string {
 			}
 		});
 	}
+	bindInput();
+	window.__libroProjectDialogBind=bindInput;
 	window.__libroProjectDialogSetDirMatches=function(payload){
 		payload=payload||{};
 		if(payload.seq&&payload.seq<lookupSeq)return;

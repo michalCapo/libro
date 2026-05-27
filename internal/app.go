@@ -80,6 +80,7 @@ func finalizeProjectCreate(sid, path, name string, transient bool) string {
 		Add(projectsJS(state)).
 		Replace(TopBarID, renderTopBar(state, sid)).
 		Replace(ProjectDialogID, renderProjectDialog(false, sid)).
+		Add(`if(window.__libroProjectDialogBind)window.__libroProjectDialogBind();`).
 		Add(jsSwitch).
 		Add(updateHashJS(name)).
 		Add(focusSelectedAppJS(state))
