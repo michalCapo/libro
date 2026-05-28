@@ -48,7 +48,7 @@ func settleHydratedAppContentJS(appID string) string {
 	var app=document.querySelector('[data-app-id="'+String(appID).replace(/"/g,'\\"')+'"]');
 	function settle(){
 		if(app&&window.__libroScrollToApp)window.__libroScrollToApp(app);
-		var termFrame=document.querySelector('iframe[data-terminal-iframe="'+String(appID).replace(/"/g,'\\"')+'"]');
+		var termFrame=document.querySelector('[data-terminal-app="'+String(appID).replace(/"/g,'\\"')+'"]');
 		if(termFrame&&window.__libroFitTerminalFrame)window.__libroFitTerminalFrame(termFrame);
 		if((window.__libroSelectedApp||'')===appID&&window.__libroFocusAppByID)window.__libroFocusAppByID(appID);
 	}
@@ -304,7 +304,7 @@ func copyPasswordFieldJS(text, label string) string {
 
 var (
 	sm                  = NewStateManager()
-	tm                  = components.NewTtydManager()
+	tm                  = components.NewTerminalManager()
 	shutdownCleanupOnce sync.Once
 	signalHandlerOnce   sync.Once
 )
@@ -313,7 +313,7 @@ var (
 func CleanupRuntime() {
 	shutdownCleanupOnce.Do(func() {
 		tm.StopAll()
-		components.KillLibroTtydSessions()
+		components.KillStaleTerminalSessions()
 	})
 }
 
@@ -348,7 +348,7 @@ func ensureProjectNavSlot(sid, name string, persist bool) int {
 
 // Run initializes and starts the Libro application server.
 func Run(assets embed.FS) {
-	components.KillStaleTtyd()
+	components.KillStaleTerminalSessions()
 	installShutdownSignalHandler()
 	InitDB()
 	defer CloseDB()
@@ -376,12 +376,12 @@ func Run(assets embed.FS) {
 			switch prev.Type {
 			case AppTypeTerminal:
 				appID := sm.NextAppID()
-				port := sm.NextPort()
 				command := strings.ReplaceAll(prev.Command, "__dir__", pwd)
 				if command == "" {
 					command = components.UserShellBase()
 				}
-				if err := tm.Start(appID, port, command, prev.Writable, pwd); err != nil {
+				session, err := tm.Start(appID, command, pwd, prev.Writable)
+				if err != nil {
 					name := strings.TrimSpace(prev.Name)
 					if name == "" {
 						name = strings.TrimSpace(prev.Command)
@@ -398,14 +398,14 @@ func Run(assets embed.FS) {
 				restored = append(restored, Application{
 					ID:            appID,
 					Type:          AppTypeTerminal,
-					URL:           fmt.Sprintf("/ttyd/%d/", port),
 					Command:       command,
 					Width:         prev.Width,
 					PreviousWidth: prev.PreviousWidth,
-					Port:          port,
 					Writable:      prev.Writable,
 					Name:          prev.Name,
 					IconURL:       prev.IconURL,
+					TerminalID:    session.ID,
+					TerminalReady: true,
 				})
 			default:
 				appID := sm.NextAppID()
@@ -809,16 +809,16 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			return "/* noop */"
 		}
 
-		if state.Apps[idx].Type == AppTypeTerminal && state.Apps[idx].Port == 0 {
+		if state.Apps[idx].Type == AppTypeTerminal && !state.Apps[idx].TerminalReady {
 			term := state.Apps[idx]
-			port := sm.NextPort()
 			pwd := sm.GetActiveProjectPath(sid)
-			if err := tm.Start(term.ID, port, term.Command, term.Writable, pwd); err != nil {
+			session, err := tm.Start(term.ID, term.Command, pwd, term.Writable)
+			if err != nil {
 				sm.RemoveAppByID(sid, term.ID)
 				state = sm.Get(sid)
-				return removeAppJS(term.ID) + navigateJS(state, sid) + renderTopBar(state, sid).ToJSReplace(TopBarID) + projectsJS(state) + r.Notify("error", "Failed to start ttyd: "+err.Error())
+				return removeAppJS(term.ID) + navigateJS(state, sid) + renderTopBar(state, sid).ToJSReplace(TopBarID) + projectsJS(state) + r.Notify("error", "Failed to start terminal: "+err.Error())
 			}
-			if !sm.HydrateTerminalByID(sid, term.ID, port) {
+			if !sm.HydrateTerminalByID(sid, term.ID, session.ID) {
 				tm.Stop(term.ID)
 				return r.Notify("error", "Terminal placeholder disappeared")
 			}
@@ -901,7 +901,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + projJS
 	})
 
-	// Emergency restart for a terminal app's ttyd backend and tmux session.
+	// Emergency restart for a terminal app's native PTY and tmux session.
 	app.Action("app.terminal.restart", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
@@ -918,17 +918,16 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 				break
 			}
 		}
-		if term == nil || term.Type != AppTypeTerminal || term.Command == "" || term.Port == 0 {
+		if term == nil || term.Type != AppTypeTerminal || term.Command == "" || !term.TerminalReady {
 			return r.Notify("error", "Selected app is not a running terminal")
 		}
 
 		pwd := sm.GetActiveProjectPath(sid)
-		if err := tm.Restart(term.ID, term.Port, term.Command, term.Writable, pwd); err != nil {
+		if err := tm.Restart(term.ID, term.Command, term.Writable, pwd); err != nil {
 			return r.Notify("error", "Failed to restart terminal: "+err.Error())
 		}
 
-		return fmt.Sprintf(`(function(){var f=document.querySelector('iframe[data-terminal-iframe="%s"]');if(f){var src=f.getAttribute('src')||%s;var base=src.split('#')[0].split('?')[0];f.setAttribute('src',base+'?restart='+Date.now());}})();`,
-			term.ID, components.JSString(term.URL)) + settleAppFrameJS(term.ID) + r.Notify("success", "Terminal restarted")
+		return fmt.Sprintf(`(function(){if(window.__libroRestartTerminal)window.__libroRestartTerminal(%s);})();`, components.JSString(term.ID)) + settleAppFrameJS(term.ID) + r.Notify("success", "Terminal restarted")
 	})
 
 	// Close all running apps in the active project.
@@ -1982,21 +1981,16 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			Build()
 	})
 
-	components.RegisterTtydProxy(app)
+	components.RegisterTerminalRoutes(app, tm, func(sid, terminalID string) bool {
+		return sm.TerminalBelongsToSession(sid, terminalID)
+	})
 
-	// Live-switch xterm theme when GNOME's color-scheme flips.
-	// Restarts each ttyd with the new theme (tmux session preserved) and
-	// pokes every connected client to reload its terminal iframes.
+	// Live-switch native xterm themes when GNOME's color-scheme flips.
 	var themeMu sync.Mutex
 	components.WatchGnomeTheme(func() {
 		themeMu.Lock()
 		defer themeMu.Unlock()
-		sm.IterTerminalApps(func(a Application) {
-			if err := tm.RestartPreservingSession(a.ID, a.Port, a.Command, a.Writable, ""); err != nil {
-				log.Printf("theme restart failed for app %s: %v", a.ID, err)
-			}
-		})
-		app.Broadcast(`(function(){document.querySelectorAll('iframe[data-terminal-iframe]').forEach(function(f){var src=f.getAttribute('src')||'';var base=src.split('#')[0].split('?')[0];if(base)f.setAttribute('src',base+'?themeReload='+Date.now());});})();`)
+		app.Broadcast(`(function(){if(window.__libroRefreshTerminalThemes)window.__libroRefreshTerminalThemes();})();`)
 	})
 
 	if err := app.Listen(":" + Port()); err != nil {

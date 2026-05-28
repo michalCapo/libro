@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Libro Spec: GUI + Headless Server Remote Architecture</title>
+  <style>
+    :root { color-scheme: light dark; --fg:#172033; --muted:#667085; --bg:#ffffff; --card:#f6f8fb; --line:#d7dde8; --accent:#2563eb; --code:#0f172a; }
+    @media (prefers-color-scheme: dark) { :root { --fg:#e5e7eb; --muted:#a1a1aa; --bg:#09090b; --card:#18181b; --line:#30303a; --accent:#60a5fa; --code:#020617; } }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:var(--bg); color:var(--fg); line-height:1.55; }
+    main { max-width: 1080px; margin: 0 auto; padding: 40px 22px 80px; }
+    h1 { font-size: 2.2rem; line-height:1.1; margin:0 0 8px; }
+    h2 { margin-top: 36px; border-top:1px solid var(--line); padding-top:24px; }
+    h3 { margin-top: 24px; }
+    p.lead { color:var(--muted); font-size:1.08rem; margin-top:0; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    pre { background:var(--code); color:#e5e7eb; padding:16px; border-radius:12px; overflow:auto; }
+    code { background: color-mix(in srgb, var(--card), transparent 20%); padding: .12rem .32rem; border-radius: 6px; }
+    pre code { background:transparent; padding:0; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; margin:18px 0; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap:14px; }
+    table { border-collapse: collapse; width:100%; margin: 14px 0; }
+    th, td { border:1px solid var(--line); padding:10px 12px; text-align:left; vertical-align:top; }
+    th { background:var(--card); }
+    .tag { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:2px 8px; color:var(--muted); font-size:.85rem; }
+    .ok { color:#16a34a; } .warn { color:#d97706; } .bad { color:#dc2626; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Libro Spec: GUI + Headless Server Remote Architecture</h1>
+  <p class="lead">Design for making Libro GUI connect to a headless Libro runtime, either locally or through SSH to a remote server.</p>
+
+  <section class="card">
+    <strong>Status:</strong> proposed remote architecture, updated after native PTY migration<br />
+    <strong>Current baseline:</strong> terminals no longer use <code>ttyd</code>; Libro now serves <code>xterm.js</code> panels over <code>/terminal/ws/&lt;id&gt;</code> backed by Go PTYs.<br />
+    <strong>Core decision:</strong> every project runs inside a headless Libro server; the GUI is only the desktop shell and connection manager.<br />
+    <strong>Security decision:</strong> passwords/vault stay on the GUI machine, never on the remote headless server by default.
+  </section>
+
+  <h2>1. Target Model</h2>
+  <pre><code>Local machine
+  Libro GUI / Electron
+    - connection manager
+    - local password vault
+    - SSH tunnel manager
+    - browser/webview shell
+        |
+        | HTTP/WebSocket direct or SSH tunnel
+        v
+Runtime machine
+  Libro Headless
+    - project DB/state
+    - files/projects/worktrees
+    - native PTY terminals
+    - git
+    - nvim/run/debug/agent commands</code></pre>
+
+  <p>The same GUI connects to the same headless API for both local and remote projects. The only difference is how the GUI reaches the server. Because terminals are now native PTY WebSockets, remote servers do not need <code>ttyd</code> or per-terminal TCP ports.</p>
+
+  <div class="grid">
+    <div class="card"><strong>Local project</strong><br />GUI starts <code>libro headless</code> on <code>127.0.0.1</code> and connects directly.</div>
+    <div class="card"><strong>Remote project</strong><br />GUI uploads/starts <code>libro headless</code> through SSH and connects through an SSH local port forward.</div>
+    <div class="card"><strong>Password vault</strong><br />Always owned by GUI process and stored on the local desktop machine.</div>
+  </div>
+
+  <h2>2. Current Code Baseline</h2>
+  <p>The remote architecture should build on the current post-<code>ttyd</code> implementation:</p>
+  <table>
+    <tr><th>Area</th><th>Current state</th></tr>
+    <tr><td>Terminal backend</td><td><code>internal/components/terminal.go</code> owns <code>TerminalManager</code>, PTY startup, tmux persistence, resize/input handling, and <code>/terminal/ws/&lt;id&gt;</code>.</td></tr>
+    <tr><td>Terminal UI</td><td>Terminal apps render normal DOM containers with bundled <code>xterm.js</code> and fit addon assets from <code>assets/xterm/</code>. No iframe is used for terminal apps.</td></tr>
+    <tr><td>State model</td><td><code>Application</code> uses <code>TerminalID</code> and <code>TerminalReady</code> instead of a ttyd URL/port.</td></tr>
+    <tr><td>Session authorization</td><td>The terminal WebSocket validates that the requested terminal belongs to the active Libro session. Full connection-token auth is still part of the headless work.</td></tr>
+    <tr><td>Removed dependency</td><td>No <code>ttyd</code> process, proxy route, or per-terminal TCP port allocation remains.</td></tr>
+  </table>
+
+  <h2>3. Why This Architecture</h2>
+  <ul>
+    <li>Local and remote projects use one consistent runtime model.</li>
+    <li>Headless Libro sees its filesystem as local, so existing <code>os.Stat</code>, <code>git</code>, <code>nvim</code>, and command logic stays simple.</li>
+    <li>Remote support avoids adding <code>if remote { ssh ... }</code> inside every feature.</li>
+    <li>It matches the successful architecture used by VS Code Server, Cursor, and Zed remote server.</li>
+    <li>The GUI can reconnect to already-running headless servers.</li>
+  </ul>
+
+  <h2>4. CLI Shape</h2>
+  <p>Split Libro into explicit modes:</p>
+  <pre><code>libro gui                 # default desktop GUI
+libro headless            # HTTP/WebSocket runtime only
+libro connect &lt;target&gt;    # optional helper for opening a target</code></pre>
+
+  <h3>Headless command</h3>
+  <pre><code>libro headless \
+  --workspace /home/me/code/app \
+  --host 127.0.0.1 \
+  --port 0 \
+  --token &lt;random-token&gt; \
+  --json-ready</code></pre>
+
+  <p>Headless prints exactly one machine-readable ready line to stdout. Logs go to stderr.</p>
+  <pre><code>LIBRO_READY {"host":"127.0.0.1","port":39123,"pid":12345,"version":"0.1.0"}</code></pre>
+
+  <h2>5. Local Project Flow</h2>
+  <p>User opens:</p>
+  <pre><code>libro ~/code/app</code></pre>
+  <p>GUI performs:</p>
+  <ol>
+    <li>Generate a random auth token.</li>
+    <li>Start local headless server bound to <code>127.0.0.1</code>.</li>
+    <li>Read <code>LIBRO_READY</code>.</li>
+    <li>Open Electron BrowserWindow at the headless URL.</li>
+  </ol>
+  <pre><code>libro headless --workspace /home/me/code/app --host 127.0.0.1 --port 0 --token xxx --json-ready
+
+Electron opens:
+http://127.0.0.1:39123/?token=xxx</code></pre>
+
+  <h2>6. Remote Project Flow</h2>
+  <p>User opens:</p>
+  <pre><code>ssh://my-server/home/me/code/app</code></pre>
+  <p>GUI performs:</p>
+  <ol>
+    <li>Resolve SSH target from URL and <code>~/.ssh/config</code>.</li>
+    <li>Open/reuse SSH ControlMaster connection if supported.</li>
+    <li>Probe remote OS/arch with <code>uname -s</code> and <code>uname -m</code>.</li>
+    <li>Ensure matching remote Libro binary exists under <code>~/.libro/server/&lt;version&gt;/libro</code>.</li>
+    <li>Create the workspace directory if requested by the user.</li>
+    <li>Start remote <code>libro headless</code> bound to remote <code>127.0.0.1</code>.</li>
+    <li>Read <code>LIBRO_READY</code> from SSH stdout.</li>
+    <li>Open SSH tunnel from a local port to remote headless port.</li>
+    <li>Open Electron BrowserWindow at local forwarded URL.</li>
+  </ol>
+
+  <pre><code># remote startup
+ssh my-server '~/.libro/server/0.1.0/libro headless \
+  --workspace /home/me/code/app \
+  --host 127.0.0.1 \
+  --port 0 \
+  --token xxx \
+  --json-ready'
+
+# tunnel
+ssh -N -L 127.0.0.1:17645:127.0.0.1:39123 my-server
+
+# GUI opens
+http://127.0.0.1:17645/?token=xxx</code></pre>
+
+  <h2>7. Remote Binary Installation</h2>
+  <p>Install path:</p>
+  <pre><code>~/.libro/server/&lt;version&gt;/libro</code></pre>
+  <p>GUI must support two installation paths:</p>
+  <table>
+    <tr><th>Mode</th><th>Behavior</th></tr>
+    <tr><td>Upload from local</td><td>GUI ships or downloads the correct binary, then uploads via <code>scp</code>/<code>sftp</code>.</td></tr>
+    <tr><td>Download on remote</td><td>Remote uses <code>curl</code> or <code>wget</code> to fetch the release binary.</td></tr>
+  </table>
+  <p>Upload fallback is important for servers without internet access.</p>
+
+  <h2>8. Authentication and Security</h2>
+  <ul>
+    <li>Headless binds to <code>127.0.0.1</code> by default.</li>
+    <li>Headless requires an auth token for all HTTP, WebSocket, terminal, asset, and API endpoints.</li>
+    <li>Terminal WebSocket access must check both the connection token and terminal ownership.</li>
+    <li>Remote headless should never listen on <code>0.0.0.0</code> unless user explicitly opts in.</li>
+    <li>SSH is responsible for transport security in remote mode.</li>
+    <li>Tokens are generated per connection and are not persisted.</li>
+    <li>Logs must not print tokens.</li>
+  </ul>
+
+  <h2>9. Password Vault Rule</h2>
+  <p><strong>Passwords must be stored where the GUI runs, not where headless runs.</strong></p>
+  <p>Therefore:</p>
+  <ul>
+    <li>The encrypted password DB stays on the local GUI machine.</li>
+    <li>Remote headless does not create/read/write password vault entries.</li>
+    <li>Password command palette UI is implemented by the GUI shell or a local-only service, not by remote headless.</li>
+    <li>Copy username/password writes to the local clipboard.</li>
+    <li>If a remote terminal needs a secret, user pastes it intentionally into the terminal.</li>
+  </ul>
+
+  <h3>Implementation options</h3>
+  <table>
+    <tr><th>Option</th><th>Description</th><th>Recommendation</th></tr>
+    <tr><td>GUI-local overlay</td><td>Password dialog is rendered by local GUI on top of remote web UI.</td><td class="ok">Best long-term security boundary.</td></tr>
+    <tr><td>Local password API</td><td>Remote page sends a message to Electron preload/main process to open local password UI.</td><td class="ok">Good practical implementation.</td></tr>
+    <tr><td>Remote vault</td><td>Password DB stored on remote headless server.</td><td class="bad">Do not use by default.</td></tr>
+  </table>
+
+  <h2>10. Data Ownership</h2>
+  <table>
+    <tr><th>Data</th><th>Stored where?</th><th>Reason</th></tr>
+    <tr><td>Project state/apps/worktrees</td><td>Headless runtime machine</td><td>Belongs to that workspace runtime.</td></tr>
+    <tr><td>Run history for a workspace</td><td>Headless runtime machine</td><td>Commands are machine/project-specific.</td></tr>
+    <tr><td>Browser URL history</td><td>GUI machine or profile-level</td><td>Browser is local UI; choose local for privacy.</td></tr>
+    <tr><td>Password vault</td><td>GUI machine only</td><td>Secrets should not be copied to remote servers.</td></tr>
+    <tr><td>SSH connections list</td><td>GUI machine</td><td>Connection manager config.</td></tr>
+    <tr><td>Remote server binary</td><td>Remote machine</td><td>Installed runtime component.</td></tr>
+  </table>
+
+  <h2>11. Headless API Responsibilities</h2>
+  <p>Headless owns:</p>
+  <ul>
+    <li>Project/workspace filesystem access.</li>
+    <li>Project creation for its own machine.</li>
+    <li>Git and worktree operations.</li>
+    <li>Native PTY terminal sessions over <code>/terminal/ws/&lt;id&gt;</code>.</li>
+    <li>Running <code>nvim</code>, agent CLIs, test commands, debug commands.</li>
+    <li>Workspace-specific saved apps.</li>
+  </ul>
+  <p>Headless does not own:</p>
+  <ul>
+    <li>Local desktop window lifecycle.</li>
+    <li>Local encrypted password vault.</li>
+    <li>SSH connection configuration.</li>
+    <li>Local OS clipboard secrets, except ordinary page copy operations.</li>
+  </ul>
+
+  <h2>12. GUI Responsibilities</h2>
+  <ul>
+    <li>Start local headless servers.</li>
+    <li>Install/start remote headless servers through SSH.</li>
+    <li>Maintain SSH tunnels and reconnect logic.</li>
+    <li>Render Electron window/webviews.</li>
+    <li>Own password vault and secret copy UX.</li>
+    <li>Manage remote connection profiles.</li>
+    <li>Forward ports for remote dev servers.</li>
+  </ul>
+
+  <h2>13. Port Forwarding for Remote Dev Servers</h2>
+  <p>If remote terminal starts:</p>
+  <pre><code>npm run dev
+# remote app listens on 127.0.0.1:3000</code></pre>
+  <p>GUI should create:</p>
+  <pre><code>ssh -N -L 127.0.0.1:3000:127.0.0.1:3000 my-server</code></pre>
+  <p>Then browser panel opens local forwarded URL:</p>
+  <pre><code>http://127.0.0.1:3000</code></pre>
+  <p>Command palette actions:</p>
+  <ul>
+    <li><code>remote forward port</code></li>
+    <li><code>remote open localhost port</code></li>
+    <li><code>remote stop forwarded port</code></li>
+    <li><code>remote list forwarded ports</code></li>
+  </ul>
+
+  <h2>14. Remote Doctor</h2>
+  <p>After connecting, GUI/headless should expose a doctor report:</p>
+  <pre><code>libro doctor --json</code></pre>
+  <p>Checks:</p>
+  <ul>
+    <li>shell availability</li>
+    <li>PTY support via <code>github.com/creack/pty</code></li>
+    <li><code>tmux</code> optional but recommended for reconnect/session persistence</li>
+    <li><code>git</code> optional</li>
+    <li><code>nvim</code>/<code>vim</code> optional</li>
+    <li>common runtimes: node, npm, pnpm, go, python, cargo, docker</li>
+    <li>agent CLIs configured by user</li>
+  </ul>
+  <p>Missing project tools should be shown as install hints, not as connection failures.</p>
+
+  <h2>15. Required Code Refactor</h2>
+  <table>
+    <tr><th>Area</th><th>Change</th></tr>
+    <tr><td>Process entrypoint</td><td>Add explicit <code>gui</code> and <code>headless</code> modes. Current <code>--no-desktop</code> becomes headless foundation.</td></tr>
+    <tr><td>Server binding</td><td>Allow <code>--host</code>, <code>--port</code>, <code>--token</code>, <code>--workspace</code>, <code>--json-ready</code>.</td></tr>
+    <tr><td>DB paths</td><td>Headless uses runtime-machine data dir for workspace state; GUI uses local data dir for passwords/connection profiles.</td></tr>
+    <tr><td>Password code</td><td>Move password vault operations out of headless remote path into GUI-local module/API.</td></tr>
+    <tr><td>Desktop launch</td><td>GUI no longer assumes embedded local server only; it connects to a server URL.</td></tr>
+    <tr><td>Remote manager</td><td>New package for SSH connection, binary install, remote start, tunnel, reconnect.</td></tr>
+    <tr><td>Terminal backend</td><td class="ok">Done for local runtime: native PTY + xterm WebSocket. Remote work should reuse this path and add token-aware headless auth.</td></tr>
+  </table>
+
+  <h2>16. Suggested Packages/Modules</h2>
+  <pre><code>internal/headless       // server mode config/startup/auth ready line
+internal/gui            // desktop shell and local services
+internal/remote         // SSH install/start/tunnel manager
+internal/terminal       // future extraction target for current internal/components/terminal.go
+internal/secrets        // GUI-local password vault only
+internal/workspace      // workspace/project runtime logic</code></pre>
+
+  <h2>17. Migration Plan</h2>
+  <ol>
+    <li>Introduce <code>libro headless</code> mode using the current Go server without Electron.</li>
+    <li>Add token auth and <code>LIBRO_READY</code> startup protocol.</li>
+    <li>Change GUI startup to always connect to a headless URL, even for local projects.</li>
+    <li>Move password vault into GUI-local service and remove remote server dependency for secrets.</li>
+    <li class="ok">Native Go PTY terminals are already implemented locally; harden them under headless token auth.</li>
+    <li>Add local headless launcher per workspace.</li>
+    <li>Add remote SSH installer and tunnel manager.</li>
+    <li>Add remote project URL parsing: <code>ssh://host/path</code> and optionally <code>host:/path</code>.</li>
+    <li>Add remote port forwarding UI.</li>
+    <li>Add reconnect/reuse of existing headless sessions.</li>
+  </ol>
+
+  <h2>18. Acceptance Criteria</h2>
+  <ul>
+    <li class="ok">Opening a local folder starts a local headless Libro and connects GUI to it.</li>
+    <li class="ok">Opening <code>ssh://host/path</code> installs/starts remote headless Libro and connects through SSH tunnel.</li>
+    <li class="ok">Terminal, nvim, git, worktree, run, debug, and agent commands execute on the headless runtime machine through native PTYs.</li>
+    <li class="ok">Remote terminal support does not require <code>ttyd</code> or per-terminal TCP ports.</li>
+    <li class="ok">Password vault remains on the GUI machine and is not created on the remote server.</li>
+    <li class="ok">Remote headless binds to remote localhost only and requires token auth.</li>
+    <li class="ok">Remote localhost web apps can be opened through managed SSH port forwarding.</li>
+    <li class="ok">Missing remote tools produce clear doctor/install-hint messages.</li>
+  </ul>
+</main>
+</body>
+</html>
