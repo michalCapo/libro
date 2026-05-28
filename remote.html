@@ -68,7 +68,7 @@ Runtime machine
   <p>The remote architecture should build on the current post-<code>ttyd</code> implementation:</p>
   <table>
     <tr><th>Area</th><th>Current state</th></tr>
-    <tr><td>Terminal backend</td><td><code>internal/components/terminal.go</code> owns <code>TerminalManager</code>, PTY startup, tmux persistence, resize/input handling, and <code>/terminal/ws/&lt;id&gt;</code>.</td></tr>
+    <tr><td>Terminal backend</td><td><code>internal/components/terminal.go</code> owns <code>TerminalManager</code>, PTY startup, resize/input handling, and <code>/terminal/ws/&lt;id&gt;</code>.</td></tr>
     <tr><td>Terminal UI</td><td>Terminal apps render normal DOM containers with bundled <code>xterm.js</code> and fit addon assets from <code>assets/xterm/</code>. No iframe is used for terminal apps.</td></tr>
     <tr><td>State model</td><td><code>Application</code> uses <code>TerminalID</code> and <code>TerminalReady</code> instead of a ttyd URL/port.</td></tr>
     <tr><td>Session authorization</td><td>The terminal WebSocket validates that the requested terminal belongs to the active Libro session. Full connection-token auth is still part of the headless work.</td></tr>
@@ -250,7 +250,6 @@ http://127.0.0.1:17645/?token=xxx</code></pre>
   <ul>
     <li>shell availability</li>
     <li>PTY support via <code>github.com/creack/pty</code></li>
-    <li><code>tmux</code> optional but recommended for reconnect/session persistence</li>
     <li><code>git</code> optional</li>
     <li><code>nvim</code>/<code>vim</code> optional</li>
     <li>common runtimes: node, npm, pnpm, go, python, cargo, docker</li>

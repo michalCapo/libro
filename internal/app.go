@@ -309,11 +309,10 @@ var (
 	signalHandlerOnce   sync.Once
 )
 
-// CleanupRuntime tears down terminal backends and related tmux sessions.
+// CleanupRuntime tears down terminal backends.
 func CleanupRuntime() {
 	shutdownCleanupOnce.Do(func() {
 		tm.StopAll()
-		components.KillStaleTerminalSessions()
 	})
 }
 
@@ -348,7 +347,6 @@ func ensureProjectNavSlot(sid, name string, persist bool) int {
 
 // Run initializes and starts the Libro application server.
 func Run(assets embed.FS) {
-	components.KillStaleTerminalSessions()
 	installShutdownSignalHandler()
 	InitDB()
 	defer CloseDB()
@@ -901,7 +899,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + projJS
 	})
 
-	// Emergency restart for a terminal app's native PTY and tmux session.
+	// Emergency restart for a terminal app's native PTY session.
 	app.Action("app.terminal.restart", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()

@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/creack/pty"
 	r "github.com/michalCapo/g-sui/ui"
@@ -67,36 +66,6 @@ func UserShellBase() string {
 // shellQuote escapes a string for safe use as a single shell argument.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
-}
-
-func terminalSessionName(appID string) string {
-	var b strings.Builder
-	b.WriteString("libro-")
-	for _, r := range appID {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
-			b.WriteRune(r)
-		} else {
-			b.WriteByte('-')
-		}
-	}
-	return b.String()
-}
-
-func killTerminalSession(appID string) {
-	_ = exec.Command("tmux", "kill-session", "-t", terminalSessionName(appID)).Run()
-}
-
-func killStaleTerminalSessions() {
-	out, err := exec.Command("tmux", "list-sessions", "-F", "#{session_name}").Output()
-	if err != nil {
-		return
-	}
-	for _, session := range strings.Split(string(out), "\n") {
-		session = strings.TrimSpace(session)
-		if strings.HasPrefix(session, "libro-app-") {
-			_ = exec.Command("tmux", "kill-session", "-t", session).Run()
-		}
-	}
 }
 
 // TerminalManager manages native PTY-backed terminal sessions.
@@ -165,7 +134,7 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 	tm.mu.Unlock()
 
 	shell := userShell()
-	script := terminalShellScript(appID, command, cwd, shell)
+	script := terminalShellScript(command, shell)
 	cmd := exec.Command(shell, "-lc", script)
 	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
@@ -206,28 +175,12 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 	return s, nil
 }
 
-func terminalShellScript(appID, command, cwd, shell string) string {
-	inner := "exec " + shellQuote(shell)
-	if strings.TrimSpace(command) != "" {
-		inner = command + "; exec " + shellQuote(shell)
+func terminalShellScript(command, shell string) string {
+	openShell := "exec " + shellQuote(shell)
+	if strings.TrimSpace(command) == "" {
+		return openShell
 	}
-	sessionName := terminalSessionName(appID)
-	cwdArg := ""
-	if cwd != "" {
-		cwdArg = " -c " + shellQuote(cwd)
-	}
-	fallback := inner
-	if cwd != "" {
-		fallback = "cd " + shellQuote(cwd) + " && " + fallback
-	}
-	return fmt.Sprintf(`if command -v tmux >/dev/null 2>&1; then
-	if ! tmux has-session -t %s 2>/dev/null; then
-		tmux new-session -d -s %s%s %s -lc %s
-		tmux set-option -t %s status off
-	fi
-	exec tmux attach-session -t %s
-fi
-%s`, shellQuote(sessionName), shellQuote(sessionName), cwdArg, shellQuote(shell), shellQuote(inner), shellQuote(sessionName), shellQuote(sessionName), fallback)
+	return command + "; " + openShell
 }
 
 func (tm *TerminalManager) readLoop(s *TerminalSession) {
@@ -269,7 +222,7 @@ func (tm *TerminalManager) removeSession(id string, s *TerminalSession) {
 	tm.mu.Unlock()
 }
 
-// Stop terminates a terminal session and its tmux persistence session.
+// Stop terminates a terminal session.
 func (tm *TerminalManager) Stop(appID string) {
 	tm.mu.Lock()
 	s := tm.sessions[appID]
@@ -281,10 +234,9 @@ func (tm *TerminalManager) Stop(appID string) {
 		s.close(true)
 		log.Printf("terminal stopped for app %s", appID)
 	}
-	killTerminalSession(appID)
 }
 
-// Restart kills the PTY/tmux session for an app, then starts it again.
+// Restart kills the PTY session for an app, then starts it again.
 func (tm *TerminalManager) Restart(appID, command string, writable bool, cwd string) error {
 	tm.Stop(appID)
 	_, err := tm.Start(appID, command, cwd, writable)
@@ -456,10 +408,4 @@ func terminalIDFromPath(path string) string {
 		id = id[:slash]
 	}
 	return id
-}
-
-// KillStaleTerminalSessions removes old tmux sessions from previous Libro runs.
-func KillStaleTerminalSessions() {
-	killStaleTerminalSessions()
-	time.Sleep(100 * time.Millisecond)
 }
