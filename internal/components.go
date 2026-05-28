@@ -861,7 +861,7 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 				requestAnimationFrame(function(){
 					if(window.__libroScrollToApp)window.__libroScrollToApp(selected);
 				});
-				var selectedTermFrame = selected.querySelector('iframe[data-terminal-iframe]');
+				var selectedTermFrame = selected.querySelector('[data-terminal]');
 				if (selectedTermFrame && window.__libroFitTerminalFrame) {
 					window.__libroFitTerminalFrame(selectedTermFrame);
 					setTimeout(function(){ window.__libroFitTerminalFrame(selectedTermFrame); }, 250);
@@ -1134,7 +1134,7 @@ func renderAppFrame(app Application, index int, selected bool, sid string, zenMo
 }
 
 // renderAppFramePlaceholder renders a width-correct app shell without creating
-// the Electron webview or terminal iframe yet.
+// the Electron webview or terminal instance yet.
 func renderAppFramePlaceholder(app Application, index int, selected bool, sid string, zenMode ...bool) *r.Node {
 	return renderAppFrameBase(app, index, selected, sid, true, zenMode...)
 }
@@ -1510,18 +1510,21 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			),
 		)
 	}
-	// Terminal apps use iframe (for ttyd)
-	sandbox := "allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin"
-	iframe := r.Iframe("w-full h-full border-0").
-		ID(frameID).
-		Attr("data-terminal-iframe", app.ID).
-		Attr("src", iframeSrc).
-		Attr("loading", "eager").
-		Attr("sandbox", sandbox)
-	if app.Type == AppTypeTerminal {
-		iframe.Attr("scrolling", "no")
+	terminalID := app.TerminalID
+	if terminalID == "" {
+		terminalID = app.ID
 	}
-	return iframe
+	return r.Div("relative w-full h-full overflow-hidden bg-zinc-950").
+		ID(frameID).
+		Attr("data-terminal", terminalID).
+		Attr("data-terminal-app", app.ID).
+		Attr("data-sid", sid).
+		Attr("tabindex", "0").
+		Render(
+			r.Div("absolute inset-0 flex items-center justify-center text-zinc-500 font-mono text-xs pointer-events-none").
+				Attr("data-terminal-status", "").
+				Text("Connecting terminal"),
+		)
 }
 
 // insertAppJS returns JS that inserts a new app frame into the existing strip.
@@ -2666,7 +2669,7 @@ func commandPopupJS(sid string) string {
 		return {
 			id: appId,
 			isBrowser: !!el.querySelector('webview[data-webview-app], iframe[data-browser-iframe-app]'),
-			isTerminal: !!el.querySelector('iframe:not([data-browser-iframe-app])') && !el.querySelector('webview[data-webview-app], iframe[data-browser-iframe-app]')
+			isTerminal: !!el.querySelector('[data-terminal]')
 		};
 	}
 
@@ -2809,7 +2812,7 @@ func commandPopupJS(sid string) string {
 				label:'Restart terminal backend',
 				scope:'selected terminal',
 				icon:'restart_alt',
-				keywords:'terminal ttyd tmux kill restart emergency reset backend websocket session',
+				keywords:'terminal pty tmux kill restart emergency reset backend websocket session',
 				run:function(){
 					closePalette();
 					__ws.call('app.terminal.restart',{sid:'%s',id:selected.id});
@@ -4560,120 +4563,217 @@ func terminalFrameSetupJS() string {
 			if (window.__libroTerminalFramesRegistered) return;
 			window.__libroTerminalFramesRegistered = true;
 
+			var assetPromise = null;
 			var observed = new WeakSet();
-			var resizeObserver = null;
-			var intersectionObserver = null;
-			if (window.ResizeObserver) {
-				resizeObserver = new ResizeObserver(function(entries) {
-					entries.forEach(function(entry) {
-						var frame = entry.target.querySelector && entry.target.querySelector('iframe[data-terminal-iframe]');
-						if (frame) window.__libroFitTerminalFrame(frame);
-					});
+			var terminals = new Map();
+			var resizeObserver = window.ResizeObserver ? new ResizeObserver(function(entries) {
+				entries.forEach(function(entry) { fitTerminal(entry.target); });
+			}) : null;
+			var intersectionObserver = window.IntersectionObserver ? new IntersectionObserver(function(entries) {
+				entries.forEach(function(entry) { if (entry.isIntersecting) fitTerminal(entry.target); });
+			}, { threshold: 0.01 }) : null;
+
+			function loadScript(src) {
+				return new Promise(function(resolve, reject) {
+					var existing = document.querySelector('script[data-libro-src="' + src + '"]');
+					if (existing) {
+						if (existing.getAttribute('data-loaded') === '1') resolve();
+						else existing.addEventListener('load', resolve, { once: true });
+						return;
+					}
+					var script = document.createElement('script');
+					script.src = src;
+					script.async = false;
+					script.setAttribute('data-libro-src', src);
+					script.onload = function() { script.setAttribute('data-loaded', '1'); resolve(); };
+					script.onerror = reject;
+					document.head.appendChild(script);
 				});
 			}
-			if (window.IntersectionObserver) {
-				intersectionObserver = new IntersectionObserver(function(entries) {
-					entries.forEach(function(entry) {
-						if (entry.isIntersecting && entry.target) window.__libroFitTerminalFrame(entry.target);
+
+			function ensureAssets() {
+				if (assetPromise) return assetPromise;
+				assetPromise = new Promise(function(resolve, reject) {
+					if (!document.getElementById('libro-xterm-css')) {
+						var link = document.createElement('link');
+						link.id = 'libro-xterm-css';
+						link.rel = 'stylesheet';
+						link.href = '/assets/xterm/xterm.css';
+						document.head.appendChild(link);
+					}
+					loadScript('/assets/xterm/xterm.js')
+						.then(function() { return loadScript('/assets/xterm/addon-fit.js'); })
+						.then(resolve, reject);
+				});
+				return assetPromise;
+			}
+
+			function termTheme() {
+				var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+				return dark ? {
+					background: '#1e1e1e', foreground: '#d4d4d4', cursor: '#d4d4d4', selectionBackground: '#264f78'
+				} : {
+					background: '#fdfdfd', foreground: '#1f2328', cursor: '#1f2328', selectionBackground: '#b5d5ff'
+				};
+			}
+
+			function wsURL(id, sid) {
+				var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+				return proto + '//' + location.host + '/terminal/ws/' + encodeURIComponent(id) + '?sid=' + encodeURIComponent(sid || '');
+			}
+
+			function setStatus(el, text) {
+				var status = el.querySelector('[data-terminal-status]');
+				if (status) status.textContent = text || '';
+			}
+
+			function fitTerminal(el) {
+				var controller = terminals.get(el);
+				if (!controller || !controller.fit) return;
+				try {
+					controller.fit.fit();
+					var size = { type: 'resize', cols: controller.term.cols, rows: controller.term.rows };
+					if (controller.ws && controller.ws.readyState === WebSocket.OPEN) controller.ws.send(JSON.stringify(size));
+				} catch (err) {}
+			}
+
+			function initTerminal(el) {
+				if (!el || observed.has(el)) return;
+				observed.add(el);
+				ensureAssets().then(function() {
+					if (!el.isConnected || terminals.has(el)) return;
+					var terminalID = el.getAttribute('data-terminal') || '';
+					var appID = el.getAttribute('data-terminal-app') || terminalID;
+					var sid = el.getAttribute('data-sid') || '';
+					var Term = window.Terminal;
+					var Fit = window.FitAddon && window.FitAddon.FitAddon;
+					if (!Term || !Fit) {
+						setStatus(el, 'Terminal assets failed to load');
+						return;
+					}
+					el.innerHTML = '';
+					var term = new Term({
+						fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+						fontSize: 18,
+						lineHeight: 1.12,
+						cursorBlink: true,
+						theme: termTheme(),
+						scrollback: 5000
 					});
-				}, { threshold: 0.01 });
+					var fit = new Fit();
+					term.loadAddon(fit);
+					term.open(el);
+					var controller = { term: term, fit: fit, ws: null, closed: false, reconnectTimer: null, attempts: 0 };
+					terminals.set(el, controller);
+
+					function connect() {
+						if (controller.closed || !el.isConnected) return;
+						setStatus(el, controller.attempts ? 'Reconnecting terminal' : 'Connecting terminal');
+						var ws = new WebSocket(wsURL(terminalID, sid));
+						controller.ws = ws;
+						ws.onopen = function() {
+							controller.attempts = 0;
+							setStatus(el, '');
+							requestAnimationFrame(function() { fitTerminal(el); });
+						};
+						ws.onmessage = function(ev) {
+							var msg;
+							try { msg = JSON.parse(ev.data); } catch (err) { return; }
+							if (msg.type === 'output') term.write(msg.data || '');
+							else if (msg.type === 'exit') term.write('\r\n[process exited: ' + (msg.code || 0) + ']\r\n');
+							else if (msg.type === 'error') term.write('\r\n[terminal error: ' + (msg.message || 'unknown') + ']\r\n');
+						};
+						ws.onclose = function() {
+							if (controller.closed || !el.isConnected) return;
+							controller.attempts++;
+							var delay = Math.min(1200, 150 * controller.attempts);
+							setStatus(el, 'Terminal disconnected');
+							controller.reconnectTimer = setTimeout(connect, delay);
+						};
+						ws.onerror = function() { try { ws.close(); } catch (err) {} };
+					}
+
+					term.onData(function(data) {
+						if (controller.ws && controller.ws.readyState === WebSocket.OPEN) {
+							controller.ws.send(JSON.stringify({ type: 'input', data: data }));
+						}
+					});
+					term.onResize(function(size) {
+						if (controller.ws && controller.ws.readyState === WebSocket.OPEN) {
+							controller.ws.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
+						}
+					});
+					controller.restart = function() {
+						if (controller.reconnectTimer) clearTimeout(controller.reconnectTimer);
+						try {
+							if (controller.ws) {
+								controller.ws.onclose = null;
+								controller.ws.close();
+							}
+						} catch (err) {}
+						controller.attempts = 0;
+						setTimeout(connect, 120);
+					};
+					el.addEventListener('focus', function() { term.focus(); });
+					if (resizeObserver) resizeObserver.observe(el);
+					if (intersectionObserver) intersectionObserver.observe(el);
+					requestAnimationFrame(function() { fitTerminal(el); });
+					connect();
+					if ((window.__libroSelectedApp || '') === appID) setTimeout(function() { term.focus(); }, 60);
+				}).catch(function() { setStatus(el, 'Terminal assets failed to load'); });
 			}
 
 			window.__libroFitTerminalFrame = function(frameOrAppID) {
-				var frame = frameOrAppID;
+				var el = frameOrAppID;
 				if (typeof frameOrAppID === 'string') {
-					frame = document.querySelector('iframe[data-terminal-iframe="' + frameOrAppID.replace(/"/g, '\\"') + '"]');
+					el = document.querySelector('[data-terminal-app="' + frameOrAppID.replace(/"/g, '\\"') + '"]');
 				}
-				if (!frame || !frame.contentWindow) return;
-
-				function nudge() {
-					try {
-						frame.style.width = '100%';
-						frame.style.height = '100%';
-						frame.style.minWidth = '0';
-						frame.style.minHeight = '0';
-						frame.style.willChange = 'transform';
-						frame.style.transform = 'translateZ(0)';
-						frame.getBoundingClientRect();
-						var ResizeEvent = frame.contentWindow.Event || Event;
-						window.dispatchEvent(new Event('resize'));
-						frame.contentWindow.dispatchEvent(new ResizeEvent('resize'));
-						var doc = frame.contentDocument || frame.contentWindow.document;
-						if (doc) {
-							if (doc.documentElement) {
-								doc.documentElement.style.width = '100%';
-								doc.documentElement.style.height = '100%';
-								doc.documentElement.style.overflow = 'hidden';
-							}
-							if (doc.body) {
-								doc.body.style.width = '100%';
-								doc.body.style.height = '100%';
-								doc.body.style.margin = '0';
-								doc.body.style.overflow = 'hidden';
-							}
-							doc.dispatchEvent(new ResizeEvent('resize'));
-							if (doc.defaultView) doc.defaultView.dispatchEvent(new ResizeEvent('resize'));
-						}
-					} catch (err) {}
-				}
-
-				requestAnimationFrame(function() {
-					nudge();
-					requestAnimationFrame(nudge);
-				});
-				setTimeout(nudge, 80);
-				setTimeout(nudge, 180);
-				setTimeout(nudge, 420);
-				setTimeout(nudge, 900);
+				if (!el) return;
+				fitTerminal(el);
+				var controller = terminals.get(el);
+				if (controller && (window.__libroSelectedApp || '') === (el.getAttribute('data-terminal-app') || '')) controller.term.focus();
 			};
 
 			window.__libroSettleAppFrame = function(appID) {
 				var app = document.querySelector('[data-app-id="' + String(appID).replace(/"/g, '\\"') + '"]');
 				if (!app) return;
-				var termFrame = app.querySelector('iframe[data-terminal-iframe]');
+				var termEl = app.querySelector('[data-terminal]');
 				function settle() {
 					if (window.__libroScrollToApp) window.__libroScrollToApp(app);
 					app.style.transform = 'translateZ(0)';
 					app.getBoundingClientRect();
-					if (termFrame && window.__libroFitTerminalFrame) window.__libroFitTerminalFrame(termFrame);
-					if ((window.__libroSelectedApp || '') === appID && window.__libroFocusAppByID) {
-						window.__libroFocusAppByID(appID);
-					}
+					if (termEl) fitTerminal(termEl);
+					if ((window.__libroSelectedApp || '') === appID && window.__libroFocusAppByID) window.__libroFocusAppByID(appID);
 				}
-				requestAnimationFrame(function() {
-					settle();
-					requestAnimationFrame(settle);
-				});
+				requestAnimationFrame(function() { settle(); requestAnimationFrame(settle); });
 			};
 
-			function watch(frame) {
-				if (!frame || observed.has(frame)) return;
-				observed.add(frame);
-				frame.addEventListener('load', function() {
-					window.__libroFitTerminalFrame(frame);
-					var app = frame.closest('[data-app-id]');
-					if (app && window.__libroSettleAppFrame) {
-						window.__libroSettleAppFrame(app.getAttribute('data-app-id') || '');
-					}
-				});
-				if (intersectionObserver) intersectionObserver.observe(frame);
-				var app = frame.closest('[data-app-id]');
-				if (app && resizeObserver) resizeObserver.observe(app);
-				window.__libroFitTerminalFrame(frame);
-			}
+			window.__libroRestartTerminal = function(appID) {
+				var el = document.querySelector('[data-terminal-app="' + String(appID).replace(/"/g, '\\"') + '"]');
+				var controller = el && terminals.get(el);
+				if (controller && controller.restart) controller.restart();
+			};
+
+			window.__libroRefreshTerminalThemes = function() {
+				terminals.forEach(function(controller) { try { controller.term.options.theme = termTheme(); } catch (err) {} });
+			};
 
 			function scan(root) {
 				var scope = root && root.querySelectorAll ? root : document;
-				if (scope.matches && scope.matches('iframe[data-terminal-iframe]')) watch(scope);
-				scope.querySelectorAll('iframe[data-terminal-iframe]').forEach(watch);
+				if (scope.matches && scope.matches('[data-terminal]')) initTerminal(scope);
+				scope.querySelectorAll('[data-terminal]').forEach(initTerminal);
 			}
 
 			scan(document);
 			new MutationObserver(function(mutations) {
-				mutations.forEach(function(mutation) {
-					mutation.addedNodes.forEach(scan);
-				});
+				mutations.forEach(function(mutation) { mutation.addedNodes.forEach(scan); });
 			}).observe(document.body, { childList: true, subtree: true });
+			if (window.matchMedia) {
+				var mq = window.matchMedia('(prefers-color-scheme: dark)');
+				var onTheme = function() { window.__libroRefreshTerminalThemes(); };
+				if (mq.addEventListener) mq.addEventListener('change', onTheme);
+				else if (mq.addListener) mq.addListener(onTheme);
+			}
 		})();
 `
 }
@@ -4723,26 +4823,25 @@ func keyboardShortcutsJS(sid string) string {
 						allWebviews[j].blur();
 					}
 
-					// Try to focus a webview first, then fall back to iframe
+					// Try to focus a webview first, then native terminal, then iframe fallback.
 					var webview = container.querySelector('webview');
 					if (webview) {
 						try { webview.focus(); } catch(err) {}
 						return;
 					}
 
+					var terminal = container.querySelector('[data-terminal]');
+					if (terminal) {
+						if (window.__libroFitTerminalFrame) window.__libroFitTerminalFrame(terminal);
+						try { terminal.focus(); } catch(err) {}
+						return;
+					}
+
 					var iframe = container.querySelector('iframe');
 					if (!iframe) return;
-					if (iframe.getAttribute('data-terminal-iframe') && window.__libroFitTerminalFrame) {
-						window.__libroFitTerminalFrame(iframe);
-					}
 					iframe.focus();
 					try {
 						iframe.contentWindow.focus();
-						var doc = iframe.contentDocument || iframe.contentWindow.document;
-						var termEl = doc.querySelector('.xterm-helper-textarea') || doc.querySelector('textarea') || doc.body;
-						if (termEl) {
-							termEl.focus();
-						}
 					} catch(err) {}
 				}
 

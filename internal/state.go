@@ -6,11 +6,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
-
-	"libro/internal/components"
 )
 
-// AppType distinguishes between web URL apps and terminal (ttyd) apps
+// AppType distinguishes between web URL apps and terminal apps
 type AppType string
 
 const (
@@ -26,10 +24,11 @@ type Application struct {
 	Command       string // original command (only for terminal apps)
 	Width         Width
 	PreviousWidth Width  // width before toggling to full (for ⌘+F maximize toggle)
-	Port          int    // ttyd port (only for terminal apps)
-	Writable      bool   // ttyd --writable flag (only for terminal apps)
+	Writable      bool   // whether terminal input is accepted
 	Name          string // optional display name
 	IconURL       string // cached icon URL from DB (only for terminal apps)
+	TerminalID    string // native PTY terminal ID (usually same as ID)
+	TerminalReady bool   // native PTY session is running
 }
 
 // Project represents a named working directory
@@ -156,17 +155,15 @@ type AppState struct {
 
 // StateManager manages per-session app states
 type StateManager struct {
-	mu       sync.RWMutex
-	states   map[string]*AppState
-	nextID   int
-	nextPort int
+	mu     sync.RWMutex
+	states map[string]*AppState
+	nextID int
 }
 
 // NewStateManager creates a new state manager
 func NewStateManager() *StateManager {
 	return &StateManager{
-		states:   make(map[string]*AppState),
-		nextPort: 7680, // start ttyd ports from 7681
+		states: make(map[string]*AppState),
 	}
 }
 
@@ -238,7 +235,7 @@ func (sm *StateManager) IterTerminalApps(fn func(app Application)) {
 			continue
 		}
 		for _, a := range s.Apps {
-			if a.Type == AppTypeTerminal && a.Port > 0 {
+			if a.Type == AppTypeTerminal && a.TerminalReady {
 				fn(a)
 			}
 		}
@@ -247,7 +244,7 @@ func (sm *StateManager) IterTerminalApps(fn func(app Application)) {
 				continue
 			}
 			for _, a := range snap.Apps {
-				if a.Type == AppTypeTerminal && a.Port > 0 {
+				if a.Type == AppTypeTerminal && a.TerminalReady {
 					fn(a)
 				}
 			}
@@ -283,18 +280,6 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 	}
 	sm.states[sessionID] = s
 	return s
-}
-
-// NextPort returns the next available port for ttyd, skipping any ports already in use.
-func (sm *StateManager) NextPort() int {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	for {
-		sm.nextPort++
-		if components.PortFree(sm.nextPort) {
-			return sm.nextPort
-		}
-	}
 }
 
 // NextAppID returns a unique app ID without adding any app to state.
@@ -389,7 +374,7 @@ func (sm *StateManager) InsertApp(sessionID, url string, width Width, name strin
 }
 
 // addTerminalApp is the internal helper that adds a terminal app and sorts by name.
-// appID must be pre-generated via NextAppID to avoid race conditions with TtydManager.
+// appID must be pre-generated via NextAppID to avoid race conditions with terminal startup.
 func (sm *StateManager) addTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -405,15 +390,15 @@ func (sm *StateManager) addTerminalApp(sessionID string, appID string, command s
 		sm.states[sessionID] = s
 	}
 	app := Application{
-		ID:       appID,
-		Type:     AppTypeTerminal,
-		URL:      fmt.Sprintf("/ttyd/%d/", port),
-		Command:  command,
-		Width:    width,
-		Port:     port,
-		Writable: writable,
-		Name:     name,
-		IconURL:  iconURL,
+		ID:            appID,
+		Type:          AppTypeTerminal,
+		Command:       command,
+		Width:         width,
+		Writable:      writable,
+		Name:          name,
+		IconURL:       iconURL,
+		TerminalID:    appID,
+		TerminalReady: port > 0,
 	}
 	s.Apps = append(s.Apps, app)
 	sortAppsByName(s, app.ID)
@@ -442,15 +427,15 @@ func (sm *StateManager) InsertTerminalApp(sessionID string, appID string, comman
 		sm.states[sessionID] = s
 	}
 	app := Application{
-		ID:       appID,
-		Type:     AppTypeTerminal,
-		URL:      fmt.Sprintf("/ttyd/%d/", port),
-		Command:  command,
-		Width:    width,
-		Port:     port,
-		Writable: writable,
-		Name:     name,
-		IconURL:  iconURL,
+		ID:            appID,
+		Type:          AppTypeTerminal,
+		Command:       command,
+		Width:         width,
+		Writable:      writable,
+		Name:          name,
+		IconURL:       iconURL,
+		TerminalID:    appID,
+		TerminalReady: port > 0,
 	}
 	if index < 0 || index > len(s.Apps) {
 		s.Apps = append(s.Apps, app)
@@ -480,13 +465,13 @@ func (sm *StateManager) InsertTerminal(sessionID, appID string, width Width, com
 		sm.states[sessionID] = s
 	}
 	app := Application{
-		ID:       appID,
-		Type:     AppTypeTerminal,
-		Width:    width,
-		Command:  command,
-		Port:     port,
-		URL:      fmt.Sprintf("/ttyd/%d/", port),
-		Writable: true,
+		ID:            appID,
+		Type:          AppTypeTerminal,
+		Width:         width,
+		Command:       command,
+		Writable:      true,
+		TerminalID:    appID,
+		TerminalReady: port > 0,
 	}
 	if index < 0 || index > len(s.Apps) {
 		s.Apps = append(s.Apps, app)
@@ -500,7 +485,7 @@ func (sm *StateManager) InsertTerminal(sessionID, appID string, width Width, com
 	s.LastAppCreatedProject = s.ActiveProject
 }
 
-// InsertPendingTerminal adds a terminal placeholder (no ttyd yet) at the given index.
+// InsertPendingTerminal adds a terminal placeholder at the given index.
 func (sm *StateManager) InsertPendingTerminal(sessionID, appID string, width Width, index int) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -516,9 +501,10 @@ func (sm *StateManager) InsertPendingTerminal(sessionID, appID string, width Wid
 		sm.states[sessionID] = s
 	}
 	app := Application{
-		ID:    appID,
-		Type:  AppTypeTerminal,
-		Width: width,
+		ID:         appID,
+		Type:       AppTypeTerminal,
+		Width:      width,
+		TerminalID: appID,
 	}
 	if index < 0 || index > len(s.Apps) {
 		s.Apps = append(s.Apps, app)
@@ -532,7 +518,7 @@ func (sm *StateManager) InsertPendingTerminal(sessionID, appID string, width Wid
 	s.LastAppCreatedProject = s.ActiveProject
 }
 
-// InsertTerminalPlaceholder adds a terminal shell before ttyd has been started.
+// InsertTerminalPlaceholder adds a terminal shell before its PTY has been started.
 func (sm *StateManager) InsertTerminalPlaceholder(sessionID, appID string, width Width, command string, writable bool, name string, iconURL string, index int) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -548,13 +534,14 @@ func (sm *StateManager) InsertTerminalPlaceholder(sessionID, appID string, width
 		sm.states[sessionID] = s
 	}
 	app := Application{
-		ID:       appID,
-		Type:     AppTypeTerminal,
-		Width:    width,
-		Command:  command,
-		Writable: writable,
-		Name:     name,
-		IconURL:  iconURL,
+		ID:         appID,
+		Type:       AppTypeTerminal,
+		Width:      width,
+		Command:    command,
+		Writable:   writable,
+		Name:       name,
+		IconURL:    iconURL,
+		TerminalID: appID,
 	}
 	if index < 0 || index > len(s.Apps) {
 		s.Apps = append(s.Apps, app)
@@ -568,9 +555,9 @@ func (sm *StateManager) InsertTerminalPlaceholder(sessionID, appID string, width
 	s.LastAppCreatedProject = s.ActiveProject
 }
 
-// HydrateTerminalByID attaches the ttyd runtime details to an existing
+// HydrateTerminalByID attaches native PTY runtime details to an existing
 // terminal placeholder.
-func (sm *StateManager) HydrateTerminalByID(sessionID, appID string, port int) bool {
+func (sm *StateManager) HydrateTerminalByID(sessionID, appID string, terminalID string) bool {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -584,9 +571,40 @@ func (sm *StateManager) HydrateTerminalByID(sessionID, appID string, port int) b
 		if s.Apps[i].Type != AppTypeTerminal || s.Apps[i].Command == "" {
 			return false
 		}
-		s.Apps[i].Port = port
-		s.Apps[i].URL = fmt.Sprintf("/ttyd/%d/", port)
+		s.Apps[i].URL = ""
+		s.Apps[i].TerminalID = terminalID
+		s.Apps[i].TerminalReady = true
 		return true
+	}
+	return false
+}
+
+// TerminalBelongsToSession reports whether a terminal ID belongs to the active session.
+func (sm *StateManager) TerminalBelongsToSession(sessionID, terminalID string) bool {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil || terminalID == "" {
+		return false
+	}
+	matches := func(apps []Application) bool {
+		for _, app := range apps {
+			if app.Type != AppTypeTerminal {
+				continue
+			}
+			if app.ID == terminalID || app.TerminalID == terminalID {
+				return true
+			}
+		}
+		return false
+	}
+	if matches(s.Apps) {
+		return true
+	}
+	for _, snap := range s.snapshots {
+		if snap != nil && matches(snap.Apps) {
+			return true
+		}
 	}
 	return false
 }

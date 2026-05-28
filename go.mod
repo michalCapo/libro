@@ -3,7 +3,9 @@ module libro
 go 1.25.8
 
 require (
+	github.com/creack/pty v1.1.24
 	github.com/michalCapo/g-sui v1.1.18
+	golang.org/x/net v0.48.0
 	modernc.org/sqlite v1.48.0
 )
 
@@ -14,7 +16,6 @@ require (
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/yuin/goldmark v1.7.13 // indirect
-	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	modernc.org/libc v1.70.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

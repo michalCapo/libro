@@ -7,6 +7,8 @@
     "start": "electron ."
   },
   "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "electron": "^36.0.0"
   }
 }
