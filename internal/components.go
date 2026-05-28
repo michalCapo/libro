@@ -234,7 +234,6 @@ var knownTermIcons = map[string]termIconInfo{
 	"httpie":     {MaterialIcon: "http"},
 
 	// Multiplexers / launchers
-	"tmux":   {URL: "https://cdn.simpleicons.org/tmux/1BB91F"},
 	"screen": {MaterialIcon: "splitscreen"},
 	"zellij": {MaterialIcon: "splitscreen"},
 
@@ -2812,7 +2811,7 @@ func commandPopupJS(sid string) string {
 				label:'Restart terminal backend',
 				scope:'selected terminal',
 				icon:'restart_alt',
-				keywords:'terminal pty tmux kill restart emergency reset backend websocket session',
+				keywords:'terminal pty kill restart emergency reset backend websocket session',
 				run:function(){
 					closePalette();
 					__ws.call('app.terminal.restart',{sid:'%s',id:selected.id});
@@ -4627,6 +4626,48 @@ func terminalFrameSetupJS() string {
 				if (status) status.textContent = text || '';
 			}
 
+			function terminalSelection(term) {
+				try {
+					if (term && term.hasSelection && term.hasSelection()) return term.getSelection() || '';
+				} catch (err) {}
+				return '';
+			}
+
+			function fallbackCopyText(text) {
+				var ta = document.createElement('textarea');
+				ta.value = text;
+				ta.style.position = 'fixed';
+				ta.style.opacity = '0';
+				document.body.appendChild(ta);
+				ta.focus();
+				ta.select();
+				try { document.execCommand('copy'); } catch (err) {}
+				document.body.removeChild(ta);
+			}
+
+			function writeClipboardText(text) {
+				if (!text) return;
+				if (window.libroElectron && window.libroElectron.copyToClipboard) {
+					window.libroElectron.copyToClipboard(text);
+				} else if (navigator.clipboard && navigator.clipboard.writeText) {
+					navigator.clipboard.writeText(text).catch(function() { fallbackCopyText(text); });
+				} else {
+					fallbackCopyText(text);
+				}
+			}
+
+			function copyTerminalSelection(term, event) {
+				var text = terminalSelection(term);
+				if (!text) return false;
+				if (event && event.clipboardData) {
+					try { event.clipboardData.setData('text/plain', text); } catch (err) {}
+				}
+				writeClipboardText(text);
+				if (event && event.preventDefault) event.preventDefault();
+				if (window.__libroShowToast) window.__libroShowToast('Copied terminal text', '', 1200);
+				return true;
+			}
+
 			function fitTerminal(el) {
 				var controller = terminals.get(el);
 				if (!controller || !controller.fit) return;
@@ -4663,6 +4704,16 @@ func terminalFrameSetupJS() string {
 					var fit = new Fit();
 					term.loadAddon(fit);
 					term.open(el);
+					if (term.attachCustomKeyEventHandler) {
+						term.attachCustomKeyEventHandler(function(ev) {
+							if (!ev || ev.type !== 'keydown') return true;
+							var key = String(ev.key || '').toLowerCase();
+							var copyCombo = key === 'c' && ((ev.ctrlKey && ev.shiftKey) || ev.metaKey);
+							if (copyCombo && copyTerminalSelection(term, ev)) return false;
+							return true;
+						});
+					}
+					el.addEventListener('copy', function(ev) { copyTerminalSelection(term, ev); });
 					var controller = { term: term, fit: fit, ws: null, closed: false, reconnectTimer: null, attempts: 0 };
 					terminals.set(el, controller);
 

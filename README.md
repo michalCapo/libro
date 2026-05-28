@@ -1,6 +1,6 @@
 # Libro
 
-Libro is a Go + Electron desktop app for keeping browser panels and terminal sessions open side by side in a horizontal strip. Browser apps render in native Electron `<webview>`s, terminal apps run through `ttyd`, and project/worktree context stays attached to the strip you are working in.
+Libro is a Go + Electron desktop app for keeping browser panels and terminal sessions open side by side in a horizontal strip. Browser apps render in native Electron `<webview>`s, terminal apps run through native Go PTYs, and project/worktree context stays attached to the strip you are working in.
 
 ![Demo](demo/demo.gif)
 
@@ -55,7 +55,7 @@ go run . --version
 - Go server: serves the host UI over HTTP/WebSocket using [`g-sui`](https://github.com/michalCapo/g-sui)
 - Electron shell: opens the host page in a frameless `BrowserWindow`
 - Browser apps: render in native Electron `<webview>`s with a persistent `persist:libro` session
-- Terminal apps: render `ttyd` instances inside the strip
+- Terminal apps: render native Go PTY sessions over WebSocket inside the strip
 - Persistence: SQLite database plus a few settings stored in `libro.db`
 - Fallback: if no Electron runtime is available, Libro opens the UI in the default browser
 
