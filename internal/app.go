@@ -934,29 +934,44 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	app.Action("project.apps.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		projectName, apps := sm.CloseActiveProjectApps(sid)
+		targetProject := sm.ProjectToShowAfterClosingActive(sid, projectName)
 		if projectName != "" && projectName != "home" {
 			sm.RemoveNavSlot(sid, projectName)
 			DBSetProjectNavSlot(projectName, 0)
-		}
-		if len(apps) == 0 {
-			state := sm.Get(sid)
-			return r.NewResponse().
-				Add(projectsJS(state)).
-				Add(r.Notify("error", "No open apps in "+projectName)).
-				Build()
 		}
 		for _, a := range apps {
 			if a.Type == AppTypeTerminal {
 				tm.Stop(a.ID)
 			}
 		}
+
+		if targetProject != "" && targetProject != projectName {
+			sm.SwitchProject(sid, targetProject)
+		}
+
 		state := sm.Get(sid)
-		return r.NewResponse().
-			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
+		resp := r.NewResponse().
+			Add(closeDevtoolsForAppsJS(apps)).
+			Replace(projectMainID(projectName), renderMainAreaForProject(state, sid, projectName)).
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(projectsJS(state)).
-			Add(showToastJS("Closed apps", projectName, 1300)).
-			Build()
+			Add(projectsJS(state))
+
+		if state.ActiveProject != projectName {
+			if sm.IsProjectRendered(sid, state.ActiveProject) {
+				resp.Add(switchProjectJS(state.ActiveProject, nil))
+			} else {
+				resp.Add(switchProjectJS(state.ActiveProject, renderMainArea(state, sid)))
+			}
+			resp.Add(updateHashJS(state.ActiveProject)).
+				Add(projectToastJS(state.ActiveProject)).
+				Add(focusSelectedAppJS(state)).
+				Add(savedAppsJS(state))
+		} else {
+			resp.Add(focusSelectedAppJS(state))
+		}
+
+		resp.Add(showToastJS("Closed project", projectName, 1300))
+		return resp.Build()
 	})
 
 	// Save all running apps in the active project for reopen without closing them.

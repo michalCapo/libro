@@ -2815,7 +2815,7 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroShowCloseDialog)window.__libroShowCloseDialog();
 			}},
-			{id:'close',label:'Close all apps in project',scope:'project',icon:'close',keywords:'close project apps clear strip remove opened apps',run:function(){
+			{id:'close',label:'Close project',scope:'project',icon:'close',keywords:'close project apps clear strip remove opened apps shortcut switch',run:function(){
 				closePalette();
 				__ws.call('project.apps.close',{sid:'%s'});
 			}},
