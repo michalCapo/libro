@@ -919,6 +919,12 @@ app.on('web-contents-created', (event, contents) => {
     const code = (input.code || '').toLowerCase()
     const isWebview = contents.getType() === 'webview'
     const isMainWindowContents = !!(mainWindow && !mainWindow.isDestroyed() && contents.id === mainWindow.webContents.id)
+
+    // Native terminals live in the host BrowserWindow. Non-Super input should
+    // go straight to the renderer/xterm instead of synchronously traversing the
+    // main-process shortcut path on every typed character or control sequence.
+    if (isMainWindowContents && !input.meta) return
+
     const shortcutSig = [
       code,
       key,
