@@ -674,6 +674,53 @@ func (sm *StateManager) CloseActiveProjectApps(sessionID string) (string, []Appl
 	return projectName, appsCopy
 }
 
+// ProjectToShowAfterClosingActive returns the project Libro should display
+// after the active project has been closed. Prefer the previously active
+// project if it still has running apps; otherwise pick any open project, then
+// fall back to home.
+func (sm *StateManager) ProjectToShowAfterClosingActive(sessionID, closedProject string) string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return "home"
+	}
+
+	projectExists := func(name string) bool {
+		for _, p := range s.Projects {
+			if p.Name == name {
+				return true
+			}
+		}
+		return false
+	}
+	hasRunningApps := func(name string) bool {
+		if name == "" || name == closedProject || !projectExists(name) {
+			return false
+		}
+		if name == s.ActiveProject {
+			return len(s.Apps) > 0
+		}
+		if snap, ok := s.snapshots[name]; ok && snap != nil {
+			return len(snap.Apps) > 0
+		}
+		return false
+	}
+
+	if hasRunningApps(s.PreviousProject) {
+		return s.PreviousProject
+	}
+	for _, p := range s.Projects {
+		if hasRunningApps(p.Name) {
+			return p.Name
+		}
+	}
+	if projectExists("home") {
+		return "home"
+	}
+	return ""
+}
+
 // SaveActiveProjectApps remembers the active project's running apps without closing them.
 func (sm *StateManager) SaveActiveProjectApps(sessionID string) (string, int) {
 	sm.mu.Lock()
