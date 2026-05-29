@@ -860,11 +860,6 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 				requestAnimationFrame(function(){
 					if(window.__libroScrollToApp)window.__libroScrollToApp(selected);
 				});
-				var selectedTermFrame = selected.querySelector('[data-terminal]');
-				if (selectedTermFrame && window.__libroFitTerminalFrame) {
-					window.__libroFitTerminalFrame(selectedTermFrame);
-					setTimeout(function(){ window.__libroFitTerminalFrame(selectedTermFrame); }, 250);
-				}
 				if (window.__libroFocusApp) {
 					setTimeout(function() { window.__libroFocusApp(selectedIdx); }, 30);
 				}
@@ -896,7 +891,7 @@ func popupRegistryJS() string {
 }
 
 func flashCSS() string {
-	return `(function(){if(!document.getElementById('libro-flash-css')){var s=document.createElement('style');s.id='libro-flash-css';s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.98)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.98)}} @keyframes libro-toast-slide-up{0%{transform:translateY(100%);opacity:0}100%{transform:translateY(0);opacity:1}} @keyframes libro-toast-slide-down{0%{transform:translateY(0);opacity:1}100%{transform:translateY(100%);opacity:0}} @keyframes libro-app-select{0%{outline:2px solid rgba(59,130,246,.5)}100%{outline:2px solid transparent}} @keyframes libro-project-switch{0%{opacity:0}100%{opacity:1}}';document.head.appendChild(s);}window.__libroScrollToApp=function(app){var strip=app.parentElement;if(!strip)return;var sr=strip.getBoundingClientRect();var ar=app.getBoundingClientRect();var appLeft=ar.left-sr.left+strip.scrollLeft;var appRight=appLeft+ar.width;var pad=8;if(ar.width+pad*2>=sr.width){strip.scrollLeft=Math.max(0,appLeft-pad);return;}if(appLeft-pad<strip.scrollLeft){strip.scrollLeft=Math.max(0,appLeft-pad);}else if(appRight+pad>strip.scrollLeft+sr.width){strip.scrollLeft=Math.max(0,appRight+pad-sr.width);}};})();`
+	return `(function(){if(!document.getElementById('libro-flash-css')){var s=document.createElement('style');s.id='libro-flash-css';s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.98)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.98)}} @keyframes libro-toast-slide-up{0%{transform:translateY(100%);opacity:0}100%{transform:translateY(0);opacity:1}} @keyframes libro-toast-slide-down{0%{transform:translateY(0);opacity:1}100%{transform:translateY(100%);opacity:0}} @keyframes libro-app-select{0%{outline:2px solid rgba(59,130,246,.5)}100%{outline:2px solid transparent}} @keyframes libro-project-switch{0%{opacity:0}100%{opacity:1}} .scrollbar-none,[id^="app-strip-"]{scrollbar-width:none;-ms-overflow-style:none} .scrollbar-none::-webkit-scrollbar,[id^="app-strip-"]::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}';document.head.appendChild(s);}window.__libroScrollToApp=function(app){var strip=app.parentElement;if(!strip)return;var sr=strip.getBoundingClientRect();var ar=app.getBoundingClientRect();var appLeft=ar.left-sr.left+strip.scrollLeft;var appRight=appLeft+ar.width;var pad=8;if(ar.width+pad*2>=sr.width){strip.scrollLeft=Math.max(0,appLeft-pad);return;}if(appLeft-pad<strip.scrollLeft){strip.scrollLeft=Math.max(0,appLeft-pad);}else if(appRight+pad>strip.scrollLeft+sr.width){strip.scrollLeft=Math.max(0,appRight+pad-sr.width);}};})();`
 }
 
 // projectToastJS returns JS that shows a brief centered toast with the project and branch.
@@ -1396,7 +1391,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		zenCloseBtn = zenCloseBtn.Attr("style", "display:flex")
 	}
 
-	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-all duration-50").
+	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
 		ID(fmt.Sprintf("frame-%s", app.ID)).
 		Attr("data-app-id", app.ID).
 		Attr("style", appFrameStyle(app, index)).
@@ -1579,6 +1574,9 @@ func showProjectJS(projectName string) string {
 	el.style.inset='';
 	el.style.zIndex='';
 	el.removeAttribute('aria-hidden');
+	if(window.__libroFitTerminalFrame){
+		el.querySelectorAll('[data-terminal]').forEach(function(term){window.__libroFitTerminalFrame(term);});
+	}
 })();`, projectMainID(projectName))
 }
 
@@ -4585,11 +4583,11 @@ func terminalFrameSetupJS() string {
 			var resizeObserver = window.ResizeObserver ? new ResizeObserver(function(entries) {
 				entries.forEach(function(entry) {
 					if (entry && entry.contentRect && (!entry.contentRect.width || !entry.contentRect.height)) return;
-					fitTerminal(entry.target);
+					scheduleFitTerminal(entry.target, false, 80);
 				});
 			}) : null;
 			var intersectionObserver = window.IntersectionObserver ? new IntersectionObserver(function(entries) {
-				entries.forEach(function(entry) { if (entry.isIntersecting) fitTerminal(entry.target); });
+				entries.forEach(function(entry) { if (entry.isIntersecting) scheduleFitTerminal(entry.target, false, 0); });
 			}, { threshold: 0.01 }) : null;
 
 			function loadScript(src) {
@@ -4619,6 +4617,15 @@ func terminalFrameSetupJS() string {
 						link.rel = 'stylesheet';
 						link.href = '/assets/xterm/xterm.css';
 						document.head.appendChild(link);
+					}
+					if (!document.getElementById('libro-xterm-overrides')) {
+						var style = document.createElement('style');
+						style.id = 'libro-xterm-overrides';
+						style.textContent = '[data-terminal] .xterm,[data-terminal] .terminal{width:100%;height:100%;overflow:hidden!important}' +
+							'[data-terminal] .xterm-viewport{scrollbar-width:none!important;-ms-overflow-style:none!important;scrollbar-gutter:stable!important}' +
+							'[data-terminal] .xterm-viewport::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}' +
+							'[data-terminal] .xterm-screen{overflow:hidden!important}';
+						document.head.appendChild(style);
 					}
 					loadScript('/assets/xterm/xterm.js')
 						.then(function() { return loadScript('/assets/xterm/addon-fit.js'); })
@@ -4713,13 +4720,63 @@ func terminalFrameSetupJS() string {
 				}
 			}
 
-			function fitTerminal(el) {
+			function stripTerminalFocusReports(data) {
+				// TUI apps such as nvim and pi agent often redraw on xterm's
+				// DEC focus in/out reports. Libro already tracks selected panels,
+				// so suppress these synthetic reports to avoid repaint flicker when
+				// the window/project/panel focus changes.
+				return data ? String(data).replace(/\x1b\[(?:I|O)/g, '') : '';
+			}
+
+			function terminalRect(el) {
+				try {
+					var rect = el.getBoundingClientRect();
+					if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+					return { width: Math.round(rect.width), height: Math.round(rect.height) };
+				} catch (err) {
+					return null;
+				}
+			}
+
+			function fitTerminal(el, force) {
 				var controller = terminals.get(el);
 				if (!controller || !controller.fit || !isVisibleTerminal(el)) return;
+				var rect = terminalRect(el);
+				if (!rect) return;
+				if (!force && controller.lastFitWidth === rect.width && controller.lastFitHeight === rect.height) return;
+				controller.lastFitWidth = rect.width;
+				controller.lastFitHeight = rect.height;
 				try {
 					controller.fit.fit();
 					sendResize(controller, controller.term.cols, controller.term.rows);
 				} catch (err) {}
+			}
+
+			function scheduleFitTerminal(el, force, delay) {
+				var controller = terminals.get(el);
+				if (!controller) return;
+				if (force) controller.pendingFitForce = true;
+				if (controller.fitTimer) clearTimeout(controller.fitTimer);
+				controller.fitTimer = setTimeout(function() {
+					controller.fitTimer = null;
+					if (controller.fitFrame) cancelAnimationFrame(controller.fitFrame);
+					controller.fitFrame = requestAnimationFrame(function() {
+						controller.fitFrame = null;
+						var runForced = !!controller.pendingFitForce;
+						controller.pendingFitForce = false;
+						fitTerminal(el, runForced);
+					});
+				}, Math.max(0, Number(delay) || 0));
+			}
+
+			function focusTerminal(el) {
+				var controller = terminals.get(el);
+				if (!controller || !controller.term || !isVisibleTerminal(el)) return;
+				if (el.contains(document.activeElement)) return;
+				var now = Date.now();
+				if (controller.lastFocusAt && now - controller.lastFocusAt < 250) return;
+				controller.lastFocusAt = now;
+				try { controller.term.focus(); } catch (err) {}
 			}
 
 			function initTerminal(el) {
@@ -4758,7 +4815,7 @@ func terminalFrameSetupJS() string {
 						});
 					}
 					el.addEventListener('copy', function(ev) { copyTerminalSelection(term, ev); });
-					var controller = { term: term, fit: fit, ws: null, closed: false, reconnectTimer: null, attempts: 0, lastCols: 0, lastRows: 0 };
+					var controller = { term: term, fit: fit, ws: null, closed: false, reconnectTimer: null, attempts: 0, lastCols: 0, lastRows: 0, lastFitWidth: 0, lastFitHeight: 0, fitTimer: null, fitFrame: null, pendingFitForce: false, lastFocusAt: 0 };
 					terminals.set(el, controller);
 
 					function connect() {
@@ -4769,7 +4826,7 @@ func terminalFrameSetupJS() string {
 						ws.onopen = function() {
 							controller.attempts = 0;
 							setStatus(el, '');
-							requestAnimationFrame(function() { fitTerminal(el); });
+							scheduleFitTerminal(el, false, 0);
 						};
 						ws.onmessage = function(ev) {
 							var msg;
@@ -4789,6 +4846,8 @@ func terminalFrameSetupJS() string {
 					}
 
 					term.onData(function(data) {
+						data = stripTerminalFocusReports(data);
+						if (!data) return;
 						if (controller.ws && controller.ws.readyState === WebSocket.OPEN) {
 							controller.ws.send(JSON.stringify({ type: 'input', data: data }));
 						}
@@ -4808,12 +4867,12 @@ func terminalFrameSetupJS() string {
 						controller.attempts = 0;
 						setTimeout(connect, 120);
 					};
-					el.addEventListener('focus', function() { term.focus(); });
+					el.addEventListener('focus', function() { focusTerminal(el); });
 					if (resizeObserver) resizeObserver.observe(el);
 					if (intersectionObserver) intersectionObserver.observe(el);
-					requestAnimationFrame(function() { fitTerminal(el); });
+					scheduleFitTerminal(el, false, 0);
 					connect();
-					if ((window.__libroSelectedApp || '') === appID) setTimeout(function() { term.focus(); }, 60);
+					if ((window.__libroSelectedApp || '') === appID) setTimeout(function() { focusTerminal(el); }, 60);
 				}).catch(function() { setStatus(el, 'Terminal assets failed to load'); });
 			}
 
@@ -4823,9 +4882,16 @@ func terminalFrameSetupJS() string {
 					el = document.querySelector('[data-terminal-app="' + frameOrAppID.replace(/"/g, '\\"') + '"]');
 				}
 				if (!el) return;
-				fitTerminal(el);
-				var controller = terminals.get(el);
-				if (controller && (window.__libroSelectedApp || '') === (el.getAttribute('data-terminal-app') || '')) controller.term.focus();
+				scheduleFitTerminal(el, false, 120);
+			};
+
+			window.__libroFocusTerminalFrame = function(frameOrAppID) {
+				var el = frameOrAppID;
+				if (typeof frameOrAppID === 'string') {
+					el = document.querySelector('[data-terminal-app="' + frameOrAppID.replace(/"/g, '\\"') + '"]');
+				}
+				if (!el) return;
+				focusTerminal(el);
 			};
 
 			window.__libroSettleAppFrame = function(appID) {
@@ -4836,7 +4902,7 @@ func terminalFrameSetupJS() string {
 					if (window.__libroScrollToApp) window.__libroScrollToApp(app);
 					app.style.transform = 'translateZ(0)';
 					app.getBoundingClientRect();
-					if (termEl) fitTerminal(termEl);
+					if (termEl) scheduleFitTerminal(termEl, false, 0);
 					if ((window.__libroSelectedApp || '') === appID && window.__libroFocusAppByID) window.__libroFocusAppByID(appID);
 				}
 				requestAnimationFrame(function() { settle(); requestAnimationFrame(settle); });
@@ -4931,8 +4997,8 @@ func keyboardShortcutsJS(sid string) string {
 
 					var terminal = container.querySelector('[data-terminal]');
 					if (terminal) {
-						if (window.__libroFitTerminalFrame) window.__libroFitTerminalFrame(terminal);
-						try { terminal.focus(); } catch(err) {}
+						if (window.__libroFocusTerminalFrame) window.__libroFocusTerminalFrame(terminal);
+						else try { terminal.focus({ preventScroll: true }); } catch(err) { try { terminal.focus(); } catch(err2) {} }
 						return;
 					}
 
@@ -4944,10 +5010,13 @@ func keyboardShortcutsJS(sid string) string {
 					} catch(err) {}
 				}
 
+				var terminalTarget = container.querySelector('[data-terminal]');
 				focusAttempt();
-				setTimeout(focusAttempt, 40);
-				setTimeout(focusAttempt, 120);
-				setTimeout(focusAttempt, 260);
+				if (!terminalTarget) {
+					setTimeout(focusAttempt, 40);
+					setTimeout(focusAttempt, 120);
+					setTimeout(focusAttempt, 260);
+				}
 			};
 
 			window.__libroFocusAppByID = function(appID) {
