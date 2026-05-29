@@ -1552,7 +1552,17 @@ func hideAllProjectsJS() string {
 (function(){
 	var w=document.getElementById('%s');
 	if(!w)return;
-	for(var i=0;i<w.children.length;i++)w.children[i].style.display='none';
+	var nodes=w.querySelectorAll(':scope > [id^="project-main-"]');
+	for(var i=0;i<nodes.length;i++){
+		var el=nodes[i];
+		el.style.display='flex';
+		el.style.visibility='hidden';
+		el.style.pointerEvents='none';
+		el.style.position='absolute';
+		el.style.inset='0';
+		el.style.zIndex='0';
+		el.setAttribute('aria-hidden','true');
+	}
 })();`, MainAreaID)
 }
 
@@ -1561,7 +1571,14 @@ func showProjectJS(projectName string) string {
 	return fmt.Sprintf(`
 (function(){
 	var el=document.getElementById('%s');
-	if(el){el.style.display='flex';el.style.animation='none';el.offsetHeight;el.style.animation='libro-project-switch .06s ease-out';}
+	if(!el)return;
+	el.style.display='flex';
+	el.style.visibility='visible';
+	el.style.pointerEvents='';
+	el.style.position='';
+	el.style.inset='';
+	el.style.zIndex='';
+	el.removeAttribute('aria-hidden');
 })();`, projectMainID(projectName))
 }
 
@@ -4566,7 +4583,10 @@ func terminalFrameSetupJS() string {
 			var observed = new WeakSet();
 			var terminals = new Map();
 			var resizeObserver = window.ResizeObserver ? new ResizeObserver(function(entries) {
-				entries.forEach(function(entry) { fitTerminal(entry.target); });
+				entries.forEach(function(entry) {
+					if (entry && entry.contentRect && (!entry.contentRect.width || !entry.contentRect.height)) return;
+					fitTerminal(entry.target);
+				});
 			}) : null;
 			var intersectionObserver = window.IntersectionObserver ? new IntersectionObserver(function(entries) {
 				entries.forEach(function(entry) { if (entry.isIntersecting) fitTerminal(entry.target); });
@@ -4668,13 +4688,37 @@ func terminalFrameSetupJS() string {
 				return true;
 			}
 
+			function isVisibleProject(project) {
+				return !project || (project.style.display !== 'none' && project.style.visibility !== 'hidden' && project.getAttribute('aria-hidden') !== 'true');
+			}
+
+			function isVisibleTerminal(el) {
+				if (!el || !el.isConnected) return false;
+				var rect;
+				try { rect = el.getBoundingClientRect(); } catch (err) { return false; }
+				if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+				var project = el.closest('[id^="project-main-"]');
+				return isVisibleProject(project);
+			}
+
+			function sendResize(controller, cols, rows) {
+				cols = Number(cols) || 0;
+				rows = Number(rows) || 0;
+				if (!controller || !cols || !rows) return;
+				if (controller.lastCols === cols && controller.lastRows === rows) return;
+				controller.lastCols = cols;
+				controller.lastRows = rows;
+				if (controller.ws && controller.ws.readyState === WebSocket.OPEN) {
+					controller.ws.send(JSON.stringify({ type: 'resize', cols: cols, rows: rows }));
+				}
+			}
+
 			function fitTerminal(el) {
 				var controller = terminals.get(el);
-				if (!controller || !controller.fit) return;
+				if (!controller || !controller.fit || !isVisibleTerminal(el)) return;
 				try {
 					controller.fit.fit();
-					var size = { type: 'resize', cols: controller.term.cols, rows: controller.term.rows };
-					if (controller.ws && controller.ws.readyState === WebSocket.OPEN) controller.ws.send(JSON.stringify(size));
+					sendResize(controller, controller.term.cols, controller.term.rows);
 				} catch (err) {}
 			}
 
@@ -4714,7 +4758,7 @@ func terminalFrameSetupJS() string {
 						});
 					}
 					el.addEventListener('copy', function(ev) { copyTerminalSelection(term, ev); });
-					var controller = { term: term, fit: fit, ws: null, closed: false, reconnectTimer: null, attempts: 0 };
+					var controller = { term: term, fit: fit, ws: null, closed: false, reconnectTimer: null, attempts: 0, lastCols: 0, lastRows: 0 };
 					terminals.set(el, controller);
 
 					function connect() {
@@ -4750,9 +4794,8 @@ func terminalFrameSetupJS() string {
 						}
 					});
 					term.onResize(function(size) {
-						if (controller.ws && controller.ws.readyState === WebSocket.OPEN) {
-							controller.ws.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
-						}
+						if (!isVisibleTerminal(el)) return;
+						sendResize(controller, size.cols, size.rows);
 					});
 					controller.restart = function() {
 						if (controller.reconnectTimer) clearTimeout(controller.reconnectTimer);
@@ -4844,12 +4887,12 @@ func keyboardShortcutsJS(sid string) string {
 			};
 
 			window.__libroFocusApp = function(idx) {
-				// Find the visible strip (parent project div has display != none)
+				// Find the visible strip (parent project div is not parked off-screen)
 				var strips = document.querySelectorAll('[id^="app-strip-"]');
 				var strip = null;
 				for (var s = 0; s < strips.length; s++) {
 					var parent = strips[s].closest('[id^="project-main-"]');
-					if (parent && parent.style.display !== 'none') {
+					if (parent && parent.style.display !== 'none' && parent.style.visibility !== 'hidden' && parent.getAttribute('aria-hidden') !== 'true') {
 						strip = strips[s];
 						break;
 					}
@@ -4863,14 +4906,19 @@ func keyboardShortcutsJS(sid string) string {
 					if ((window.__libroSelectedApp || '') !== (container.getAttribute('data-app-id') || '')) return;
 					try { window.focus(); } catch(err) {}
 
-					// Blur all other iframes and webviews first
+					// Blur only visible, non-target embedded surfaces. Touching hidden
+					// webviews while switching projects can make Electron repaint them.
 					var allIframes = document.querySelectorAll('iframe');
 					for (var i = 0; i < allIframes.length; i++) {
+						var iframeProject = allIframes[i].closest('[id^="project-main-"]');
+						if (container.contains(allIframes[i]) || !allIframes[i].offsetParent || (iframeProject && iframeProject.getAttribute('aria-hidden') === 'true')) continue;
 						try { allIframes[i].contentWindow.blur(); } catch(err) {}
 						allIframes[i].blur();
 					}
 					var allWebviews = document.querySelectorAll('webview');
 					for (var j = 0; j < allWebviews.length; j++) {
+						var webviewProject = allWebviews[j].closest('[id^="project-main-"]');
+						if (container.contains(allWebviews[j]) || !allWebviews[j].offsetParent || (webviewProject && webviewProject.getAttribute('aria-hidden') === 'true')) continue;
 						allWebviews[j].blur();
 					}
 
@@ -4908,7 +4956,7 @@ func keyboardShortcutsJS(sid string) string {
 				var strip = null;
 				for (var s = 0; s < strips.length; s++) {
 					var parent = strips[s].closest('[id^="project-main-"]');
-					if (parent && parent.style.display !== 'none') {
+					if (parent && parent.style.display !== 'none' && parent.style.visibility !== 'hidden' && parent.getAttribute('aria-hidden') !== 'true') {
 						strip = strips[s];
 						break;
 					}
