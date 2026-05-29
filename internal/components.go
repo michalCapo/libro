@@ -642,6 +642,7 @@ setTimeout(function(){
 	}
 	var nm=document.getElementById('app-name');if(nm)nm.value=%s;
 	var wv=((%s)||'md');
+	if(window.__libroClampAppWidth)wv=window.__libroClampAppWidth(wv);
 	var wr=document.getElementById('width-'+wv);if(wr)wr.checked=true;
 	var wh=document.getElementById('app-width');if(wh)wh.value=wv;
 	var ps=document.getElementById('app-project-specific');if(ps)ps.checked=%v;
@@ -775,7 +776,7 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 					var badges = child.querySelector('[data-size-badges]');
 					if (badges) {
 						var btns = badges.querySelectorAll('button');
-						var sizeLabels = ['SM','MD','LG','XL','2XL','FULL'];
+						var sizeLabels = ['SM','MD','LG','XL','2XL','3XL','FULL'];
 						var activeBase = 'px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase rounded-sm cursor-pointer transition-colors duration-75';
 						btns.forEach(function(b){
 							var txt = b.textContent.trim();
@@ -818,7 +819,7 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 					var badges2 = child.querySelector('[data-size-badges]');
 					if (badges2) {
 						var btns2 = badges2.querySelectorAll('button');
-						var sizeLabels2 = ['SM','MD','LG','XL','2XL','FULL'];
+						var sizeLabels2 = ['SM','MD','LG','XL','2XL','3XL','FULL'];
 						var activeBase2 = 'px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase rounded-sm cursor-pointer transition-colors duration-75';
 						btns2.forEach(function(b){
 							var txt = b.textContent.trim();
@@ -850,6 +851,8 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 				}
 			}
 
+			if(window.__libroEnforceAppWidthPolicy)window.__libroEnforceAppWidthPolicy();
+			else if(window.__libroRefreshWidthAvailability)window.__libroRefreshWidthAvailability(strip);
 			window.__libroSelectedApp = %s;
 
 			var selected = sorted[selectedIdx];
@@ -1123,6 +1126,96 @@ func showToastJS(title, subtitle string, durationMs int) string {
 	return fmt.Sprintf("if(window.__libroShowToast)window.__libroShowToast(%s,%s,%d);", components.JSString(title), components.JSString(subtitle), durationMs)
 }
 
+func appWidthPolicyJS(sid string) string {
+	return fmt.Sprintf(`
+(function(){
+	var SID=%s;
+	var FULL_HD_MAX=1920;
+	var widthPixels={sm:480,md:640,lg:960,xl:1280,'2xl':1920,'3xl':2560,full:0};
+
+	function screenWidth(){
+		var values=[window.innerWidth||0];
+		if(window.screen){
+			values.push(window.screen.width||0);
+			values.push(window.screen.availWidth||0);
+		}
+		return Math.max.apply(null,values);
+	}
+
+	function maxFixedPixels(){
+		return screenWidth()<=FULL_HD_MAX?FULL_HD_MAX:0;
+	}
+
+	function clampWidth(width){
+		var max=maxFixedPixels();
+		var px=widthPixels[width]||0;
+		if(!max||px===0||px<=max)return width;
+		var best='sm';
+		Object.keys(widthPixels).forEach(function(k){
+			var candidate=widthPixels[k];
+			if(candidate>0&&candidate<=max)best=k;
+		});
+		return best;
+	}
+
+	function notifyBlocked(){
+		if(window.__libroShowToast)window.__libroShowToast('3XL unavailable','Screen is Full HD or smaller',1800);
+	}
+
+	window.__libroAppWidthMaxPixel=maxFixedPixels;
+	window.__libroClampAppWidth=clampWidth;
+	window.__libroIsAppWidthAllowed=function(width){return clampWidth(width)===width;};
+	window.__libroRefreshWidthAvailability=function(root){
+		root=root||document;
+		root.querySelectorAll('[data-resize-width]').forEach(function(el){
+			var width=el.getAttribute('data-resize-width')||'';
+			var blocked=clampWidth(width)!==width;
+			el.setAttribute('aria-disabled',blocked?'true':'false');
+			if(blocked){
+				el.setAttribute('title','Requires a screen wider than 1920px');
+				el.classList.add('opacity-40');
+			}else{
+				if(el.getAttribute('title')==='Requires a screen wider than 1920px')el.removeAttribute('title');
+				el.classList.remove('opacity-40');
+			}
+		});
+	};
+	window.__libroResizeApp=function(appId,width,sid,force){
+		var next=clampWidth(width);
+		if(next!==width&&!force){
+			notifyBlocked();
+			return false;
+		}
+		__ws.callSilent('app.resize',{sid:sid||SID,id:appId,width:next,maxPixel:maxFixedPixels()});
+		return true;
+	};
+	window.__libroResizeSelectedAppStep=function(delta,sid){
+		__ws.call('app.resize.step',{sid:sid||SID,delta:delta,maxPixel:maxFixedPixels()});
+	};
+	window.__libroToggleSelectedAppMax=function(sid){
+		__ws.call('app.maximize.toggle',{sid:sid||SID,maxPixel:maxFixedPixels()});
+	};
+
+	function enforceExistingWidths(){
+		window.__libroRefreshWidthAvailability(document);
+		if(!maxFixedPixels())return;
+		document.querySelectorAll('[data-app-id]').forEach(function(el){
+			if((el.className||'').indexOf('w-[2560px]')===-1)return;
+			var appId=el.getAttribute('data-app-id')||'';
+			if(appId)window.__libroResizeApp(appId,'3xl',SID,true);
+		});
+	}
+	window.__libroEnforceAppWidthPolicy=enforceExistingWidths;
+
+	window.addEventListener('resize',function(){
+		clearTimeout(window.__libroWidthPolicyTimer);
+		window.__libroWidthPolicyTimer=setTimeout(enforceExistingWidths,100);
+	});
+	setTimeout(enforceExistingWidths,100);
+})();
+`, components.JSString(sid))
+}
+
 func renderAppFrame(app Application, index int, selected bool, sid string, zenMode ...bool) *r.Node {
 	return renderAppFrameBase(app, index, selected, sid, false, zenMode...)
 }
@@ -1170,11 +1263,14 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			}
 		}
 		badges = append(badges, r.Button(cls).
+			Attr("data-resize-width", string(w)).
 			Text(strings.ToUpper(string(w))).
-			OnClick(&r.Action{
-				Name: "app.resize",
-				Data: sidData(sid, "id", app.ID, "width", string(w)),
-			}))
+			OnClick(r.JS(fmt.Sprintf(
+				"if(window.__libroResizeApp){window.__libroResizeApp(%s,%s,%s)}",
+				components.JSString(app.ID),
+				components.JSString(string(w)),
+				components.JSString(sid),
+			))))
 	}
 	closeBtnCls := badgeBase + " ml-1 flex items-center justify-center"
 	if selected {
@@ -1526,7 +1622,7 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 func insertAppJS(node *r.Node, _ bool, projectName string) string {
 	// CSS order on the app frame (set in renderAppFrame) handles visual positioning,
 	// so we just append to the strip — no DOM repositioning needed.
-	return node.ToJSAppend(stripID(projectName))
+	return node.ToJSAppend(stripID(projectName)) + `(function(){if(window.__libroEnforceAppWidthPolicy)window.__libroEnforceAppWidthPolicy();})();`
 }
 
 func settleAppFrameJS(appID string) string {
@@ -3081,6 +3177,7 @@ func resizePopupJS(sid string) string {
 		if(!el)return'lg';
 		var cls=el.className;
 		if(cls.indexOf('w-full')!==-1)return'full';
+		if(cls.indexOf('w-[2560px]')!==-1)return'3xl';
 		if(cls.indexOf('w-[1920px]')!==-1)return'2xl';
 		if(cls.indexOf('w-[1280px]')!==-1)return'xl';
 		if(cls.indexOf('w-[960px]')!==-1)return'lg';
@@ -3090,9 +3187,22 @@ func resizePopupJS(sid string) string {
 	}
 
 	function getBtns(){var d=getDlg();return d?d.querySelectorAll('.resize-btn'):[];}
+	function widthAllowed(w){return !window.__libroIsAppWidthAllowed||window.__libroIsAppWidthAllowed(w);}
+	function btnAllowed(btn){return btn&&widthAllowed(btn.getAttribute('data-resize-width')||'');}
+	function nextAllowedIndex(from,delta){
+		var btns=getBtns();
+		if(!btns.length)return -1;
+		var idx=from;
+		for(var i=0;i<btns.length;i++){
+			idx=(idx+delta+btns.length)%%btns.length;
+			if(btnAllowed(btns[idx]))return idx;
+		}
+		return -1;
+	}
 
 	function highlightFocused(idx){
 		var btns=getBtns();
+		if(idx<0||idx>=btns.length||!btnAllowed(btns[idx]))return;
 		btns.forEach(function(b,i){
 			var radio=b.querySelector('[data-radio]');
 			var dot=b.querySelector('[data-radio-dot]');
@@ -3107,6 +3217,7 @@ func resizePopupJS(sid string) string {
 			}
 		});
 		focusedIndex=idx;
+		if(window.__libroRefreshWidthAvailability)window.__libroRefreshWidthAvailability(getDlg());
 	}
 
 	function openPopup(){
@@ -3118,11 +3229,14 @@ func resizePopupJS(sid string) string {
 		var contentArea=document.querySelector('[data-app-content="'+appId+'"]');
 		if(contentArea)contentArea.appendChild(dlg);
 		var curWidth=getCurrentWidth(appId);
+		if(window.__libroClampAppWidth)curWidth=window.__libroClampAppWidth(curWidth);
+		if(window.__libroRefreshWidthAvailability)window.__libroRefreshWidthAvailability(dlg);
 		var btns=getBtns();
 		var idx=0;
 		btns.forEach(function(b,i){
 			if(b.getAttribute('data-resize-width')===curWidth)idx=i;
 		});
+		if(!btnAllowed(btns[idx]))idx=nextAllowedIndex(-1,1);
 		if(btns.length>0)highlightFocused(idx);
 		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
 		dlg.classList.remove('hidden');
@@ -3145,6 +3259,10 @@ func resizePopupJS(sid string) string {
 		if(focusedIndex<0||focusedIndex>=btns.length||!currentAppId)return;
 		var w=btns[focusedIndex].getAttribute('data-resize-width');
 		if(!w)return;
+		if(window.__libroResizeApp){
+			if(window.__libroResizeApp(currentAppId,w,'%s'))closePopup();
+			return;
+		}
 		__ws.callSilent('app.resize',{sid:'%s',id:currentAppId,width:w});
 		closePopup();
 	}
@@ -3154,6 +3272,10 @@ func resizePopupJS(sid string) string {
 		var dlg=getDlg();
 		if(!btn||!dlg||!dlg.contains(btn))return;
 		e.stopPropagation();
+		if(!btnAllowed(btn)){
+			if(window.__libroShowToast)window.__libroShowToast('3XL unavailable','Screen is Full HD or smaller',1800);
+			return;
+		}
 		var btns=getBtns();
 		for(var i=0;i<btns.length;i++){
 			if(btns[i]===btn){highlightFocused(i);break;}
@@ -3167,15 +3289,13 @@ func resizePopupJS(sid string) string {
 		var btns=getBtns();
 		if(e.key==='j'||e.key==='ArrowDown'){
 			e.preventDefault();e.stopImmediatePropagation();
-			var next=focusedIndex+1;
-			if(next>=btns.length)next=0;
+			var next=nextAllowedIndex(focusedIndex,1);
 			highlightFocused(next);
 			return;
 		}
 		if(e.key==='k'||e.key==='ArrowUp'){
 			e.preventDefault();e.stopImmediatePropagation();
-			var prev=focusedIndex-1;
-			if(prev<0)prev=btns.length-1;
+			var prev=nextAllowedIndex(focusedIndex,-1);
 			highlightFocused(prev);
 			return;
 		}
@@ -3193,7 +3313,7 @@ func resizePopupJS(sid string) string {
 
 	window.__libroOpenResizePopup=openPopup;
 })();
-`, ResizePopupID, sid)
+`, ResizePopupID, sid, sid)
 }
 
 // renderShortcutsDialog renders the keyboard shortcuts popup (hidden by default).
@@ -3494,7 +3614,7 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 	var topBar = el.querySelector('[data-size-badges]');
 	if (topBar) {
 		var btns = topBar.querySelectorAll('button');
-		var sizeLabels = ['SM','MD','LG','XL','2XL','FULL'];
+		var sizeLabels = ['SM','MD','LG','XL','2XL','3XL','FULL'];
 		var activeBase = 'px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase rounded-sm cursor-pointer transition-colors duration-75';
 		btns.forEach(function(b){
 			var txt = b.textContent.trim();
@@ -3507,6 +3627,7 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 			}
 		});
 	}
+	if(window.__libroRefreshWidthAvailability)window.__libroRefreshWidthAvailability(el);
 
 	requestAnimationFrame(function(){
 		if(window.__libroScrollToApp)window.__libroScrollToApp(el);
@@ -5126,13 +5247,13 @@ func keyboardShortcutsJS(sid string) string {
 				if (e.metaKey && !e.ctrlKey && (e.key === ',' || e.code === 'Comma')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					__ws.call('app.resize.step', {"sid": "%s", "delta": -1});
+					if(window.__libroResizeSelectedAppStep)window.__libroResizeSelectedAppStep(-1,"%s");
 					return;
 				}
 				if (e.metaKey && !e.ctrlKey && (e.key === '.' || e.code === 'Period')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					__ws.call('app.resize.step', {"sid": "%s", "delta": 1});
+					if(window.__libroResizeSelectedAppStep)window.__libroResizeSelectedAppStep(1,"%s");
 					return;
 				}
 				if (e.metaKey && !e.ctrlKey && (e.key === '[' || e.code === 'BracketLeft')) {
@@ -5240,7 +5361,7 @@ func keyboardShortcutsJS(sid string) string {
 					if (!appEl) return;
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					__ws.call('app.maximize.toggle', {"sid": "%s"});
+					if(window.__libroToggleSelectedAppMax)window.__libroToggleSelectedAppMax("%s");
 					return;
 				}
 			}

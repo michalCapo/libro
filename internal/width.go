@@ -9,12 +9,13 @@ const (
 	WidthLG   Width = "lg"
 	WidthXL   Width = "xl"
 	Width2XL  Width = "2xl"
+	Width3XL  Width = "3xl"
 	WidthFull Width = "full"
 )
 
 // AllWidths returns all available width options in order
 func AllWidths() []Width {
-	return []Width{WidthSM, WidthMD, WidthLG, WidthXL, Width2XL, WidthFull}
+	return []Width{WidthSM, WidthMD, WidthLG, WidthXL, Width2XL, Width3XL, WidthFull}
 }
 
 // Step returns the neighboring width tier clamped to the valid range.
@@ -35,7 +36,7 @@ func (w Width) Step(delta int) Width {
 		idx = len(widths) - 1
 	}
 	return widths[idx]
-	}
+}
 
 // Label returns the display label for a width
 func (w Width) Label() string {
@@ -50,6 +51,8 @@ func (w Width) Label() string {
 		return "XL (max 1280px)"
 	case Width2XL:
 		return "2XL (max 1920px)"
+	case Width3XL:
+		return "3XL (max 2560px)"
 	case WidthFull:
 		return "FULL (100%)"
 	default:
@@ -70,6 +73,8 @@ func (w Width) PixelWidth() string {
 		return "1280px"
 	case Width2XL:
 		return "1920px"
+	case Width3XL:
+		return "2560px"
 	case WidthFull:
 		return "100%"
 	default:
@@ -90,11 +95,32 @@ func (w Width) PixelWidthInt() int {
 		return 1280
 	case Width2XL:
 		return 1920
+	case Width3XL:
+		return 2560
 	case WidthFull:
 		return 0 // dynamic, depends on viewport
 	default:
 		return 960
 	}
+}
+
+// ClampFixedPixel returns the largest fixed width at or below maxPixels.
+// WidthFull is treated as dynamic viewport width and is not clamped.
+func (w Width) ClampFixedPixel(maxPixels int) Width {
+	if maxPixels <= 0 {
+		return w
+	}
+	if px := w.PixelWidthInt(); px == 0 || px <= maxPixels {
+		return w
+	}
+	clamped := WidthSM
+	for _, candidate := range AllWidths() {
+		px := candidate.PixelWidthInt()
+		if px > 0 && px <= maxPixels {
+			clamped = candidate
+		}
+	}
+	return clamped
 }
 
 // ContainerClasses returns Tailwind classes for the iframe container
