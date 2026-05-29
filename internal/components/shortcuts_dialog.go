@@ -17,11 +17,10 @@ func ShortcutsDialog() *r.Node {
 	}
 	sections := []section{
 		{"Apps", "", []shortcut{
-			{"⌘ + O", "New app (right of current)"},
+			{"⌘ + O", "Open launcher/search on right"},
 			{"⌘ + Enter", "Open terminal in Libro"},
 			{"⌘ + ;", "Command palette"},
 			{"⌘ + Q", "Close current app"},
-			{"⌘ + R", "Resize app popup"},
 			{"⌘ + ,", "Decrease app width"},
 			{"⌘ + .", "Increase app width"},
 			{"⌘ + F", "Toggle full width"},
@@ -59,7 +58,8 @@ func ShortcutsDialog() *r.Node {
 			{"o", "URL / search popup for browser apps"},
 			{"r", "Reload browser page"},
 			{"/", "Find in page"},
-			{"n / p", "Find next / previous"},
+			{"n / N / p", "Find next / previous"},
+			{"i / Esc", "Enter / exit insert mode"},
 			{"Esc", "Clear search / blur input"},
 			{"b / f", "Page back / forward"},
 			{"y", "Copy selected text or URL"},

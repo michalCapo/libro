@@ -2616,7 +2616,7 @@ func urlPopupJS(sid string) string {
 `, URLPopupID, sid)
 }
 
-// renderResizePopup renders the resize popup for Win+R (works in both zen and non-zen mode).
+// renderResizePopup renders the app resize popup.
 // Uses radio-style buttons navigable with j/k and confirmable with Enter.
 func renderResizePopup(sid string) *r.Node {
 	widths := AllWidths()
@@ -3062,7 +3062,7 @@ func worktreeCreatePopupJS(sid string) string {
 `, WorktreeCreatePopupID, sid)
 }
 
-// resizePopupJS returns JS that powers the Win+R resize popup.
+// resizePopupJS returns JS that powers the app resize popup.
 // Supports j/k keyboard navigation and Enter to confirm.
 func resizePopupJS(sid string) string {
 	return fmt.Sprintf(`
@@ -5241,12 +5241,6 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					__ws.call('app.maximize.toggle', {"sid": "%s"});
-					return;
-				}
-				if (e.metaKey && (e.key === 'r' || e.key === 'R') && !e.ctrlKey) {
-					e.preventDefault();
-					e.stopImmediatePropagation();
-					if (window.__libroOpenResizePopup) window.__libroOpenResizePopup();
 					return;
 				}
 			}
