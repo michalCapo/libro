@@ -4580,6 +4580,7 @@ func terminalFrameSetupJS() string {
 			var assetPromise = null;
 			var observed = new WeakSet();
 			var terminals = new Map();
+			var terminalInputEncoder = window.TextEncoder ? new TextEncoder() : null;
 			var resizeObserver = window.ResizeObserver ? new ResizeObserver(function(entries) {
 				entries.forEach(function(entry) {
 					if (entry && entry.contentRect && (!entry.contentRect.width || !entry.contentRect.height)) return;
@@ -4629,6 +4630,7 @@ func terminalFrameSetupJS() string {
 					}
 					loadScript('/assets/xterm/xterm.js')
 						.then(function() { return loadScript('/assets/xterm/addon-fit.js'); })
+						.then(function() { return loadScript('/assets/xterm/addon-webgl.js').catch(function() {}); })
 						.then(resolve, reject);
 				});
 				return assetPromise;
@@ -4720,6 +4722,40 @@ func terminalFrameSetupJS() string {
 				}
 			}
 
+			function writeTerminalBytes(term, bytes) {
+				if (!bytes || !bytes.length) return;
+				if (bytes[0] === 0) bytes = bytes.subarray ? bytes.subarray(1) : bytes.slice(1);
+				if (!bytes || !bytes.length) return;
+				try {
+					term.write(bytes);
+					return;
+				} catch (err) {}
+				var text = '';
+				try {
+					if (window.TextDecoder) text = new TextDecoder().decode(bytes);
+				} catch (err2) {}
+				if (!text) {
+					var chunk = 8192;
+					for (var i = 0; i < bytes.length; i += chunk) {
+						text += String.fromCharCode.apply(null, Array.prototype.slice.call(bytes, i, i + chunk));
+					}
+				}
+				if (text) term.write(text);
+			}
+
+			function sendTerminalInput(controller, data) {
+				if (!controller || !data || !controller.ws || controller.ws.readyState !== WebSocket.OPEN) return;
+				if (terminalInputEncoder) {
+					var encoded = terminalInputEncoder.encode(data);
+					var payload = new Uint8Array(encoded.length + 1);
+					payload[0] = 0;
+					payload.set(encoded, 1);
+					controller.ws.send(payload);
+				} else {
+					controller.ws.send('\x00' + data);
+				}
+			}
+
 			function stripTerminalFocusReports(data) {
 				// TUI apps such as nvim and pi agent often redraw on xterm's
 				// DEC focus in/out reports. Libro already tracks selected panels,
@@ -4805,6 +4841,19 @@ func terminalFrameSetupJS() string {
 					var fit = new Fit();
 					term.loadAddon(fit);
 					term.open(el);
+					var webgl = null;
+					var Webgl = window.WebglAddon && window.WebglAddon.WebglAddon;
+					var useWebgl = true;
+					try { useWebgl = !window.localStorage || window.localStorage.getItem('libro.terminal.renderer') !== 'dom'; } catch (err) {}
+					if (Webgl && useWebgl) {
+						try {
+							webgl = new Webgl();
+							if (webgl.onContextLoss) webgl.onContextLoss(function() { try { webgl.dispose(); } catch (err) {} webgl = null; });
+							term.loadAddon(webgl);
+						} catch (err) {
+							webgl = null;
+						}
+					}
 					if (term.attachCustomKeyEventHandler) {
 						term.attachCustomKeyEventHandler(function(ev) {
 							if (!ev || ev.type !== 'keydown') return true;
@@ -4815,13 +4864,14 @@ func terminalFrameSetupJS() string {
 						});
 					}
 					el.addEventListener('copy', function(ev) { copyTerminalSelection(term, ev); });
-					var controller = { term: term, fit: fit, ws: null, closed: false, reconnectTimer: null, attempts: 0, lastCols: 0, lastRows: 0, lastFitWidth: 0, lastFitHeight: 0, fitTimer: null, fitFrame: null, pendingFitForce: false, lastFocusAt: 0 };
+					var controller = { term: term, fit: fit, webgl: webgl, ws: null, closed: false, reconnectTimer: null, attempts: 0, lastCols: 0, lastRows: 0, lastFitWidth: 0, lastFitHeight: 0, fitTimer: null, fitFrame: null, pendingFitForce: false, lastFocusAt: 0 };
 					terminals.set(el, controller);
 
 					function connect() {
 						if (controller.closed || !el.isConnected) return;
 						setStatus(el, controller.attempts ? 'Reconnecting terminal' : 'Connecting terminal');
 						var ws = new WebSocket(wsURL(terminalID, sid));
+						ws.binaryType = 'arraybuffer';
 						controller.ws = ws;
 						ws.onopen = function() {
 							controller.attempts = 0;
@@ -4829,8 +4879,21 @@ func terminalFrameSetupJS() string {
 							scheduleFitTerminal(el, false, 0);
 						};
 						ws.onmessage = function(ev) {
+							if (typeof ev.data !== 'string') {
+								if (ev.data instanceof ArrayBuffer) {
+									writeTerminalBytes(term, new Uint8Array(ev.data));
+								} else if (ev.data && ev.data.arrayBuffer) {
+									ev.data.arrayBuffer().then(function(buf) { writeTerminalBytes(term, new Uint8Array(buf)); });
+								}
+								return;
+							}
+							var raw = ev.data || '';
+							if (raw.charCodeAt && raw.charCodeAt(0) === 0) {
+								term.write(raw.slice(1));
+								return;
+							}
 							var msg;
-							try { msg = JSON.parse(ev.data); } catch (err) { return; }
+							try { msg = JSON.parse(raw); } catch (err) { return; }
 							if (msg.type === 'output') term.write(msg.data || '');
 							else if (msg.type === 'exit') term.write('\r\n[process exited: ' + (msg.code || 0) + ']\r\n');
 							else if (msg.type === 'error') term.write('\r\n[terminal error: ' + (msg.message || 'unknown') + ']\r\n');
@@ -4848,9 +4911,7 @@ func terminalFrameSetupJS() string {
 					term.onData(function(data) {
 						data = stripTerminalFocusReports(data);
 						if (!data) return;
-						if (controller.ws && controller.ws.readyState === WebSocket.OPEN) {
-							controller.ws.send(JSON.stringify({ type: 'input', data: data }));
-						}
+						sendTerminalInput(controller, data);
 					});
 					term.onResize(function(size) {
 						if (!isVisibleTerminal(el)) return;

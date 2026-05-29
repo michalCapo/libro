@@ -106,6 +106,11 @@ type terminalWSMessage struct {
 	Message string `json:"message,omitempty"`
 }
 
+// terminalBinaryDataFrame prefixes binary WebSocket payloads that carry raw
+// terminal bytes. Control messages stay JSON text, but PTY input/output use
+// this fast path to avoid JSON marshal/parse on every keystroke and echo.
+const terminalBinaryDataFrame byte = 0
+
 // NewTerminalManager creates a PTY terminal manager.
 func NewTerminalManager() *TerminalManager {
 	return &TerminalManager{sessions: make(map[string]*TerminalSession)}
@@ -188,7 +193,7 @@ func (tm *TerminalManager) readLoop(s *TerminalSession) {
 	for {
 		n, err := s.ptyFile.Read(buf)
 		if n > 0 {
-			s.broadcast(terminalWSMessage{Type: "output", Data: string(buf[:n])})
+			s.broadcastOutput(buf[:n])
 		}
 		if err != nil {
 			if err != io.EOF && !s.isClosed() {
@@ -326,6 +331,27 @@ func (s *TerminalSession) broadcast(msg terminalWSMessage) {
 	}
 }
 
+func (s *TerminalSession) broadcastOutput(data []byte) {
+	if len(data) == 0 {
+		return
+	}
+	s.mu.Lock()
+	clients := make([]*terminalClient, 0, len(s.clients))
+	for c := range s.clients {
+		clients = append(clients, c)
+	}
+	s.mu.Unlock()
+	payload := make([]byte, len(data)+1)
+	payload[0] = terminalBinaryDataFrame
+	copy(payload[1:], data)
+	for _, c := range clients {
+		if err := c.sendBinary(payload); err != nil {
+			s.removeClient(c)
+			_ = c.conn.Close()
+		}
+	}
+}
+
 func (c *terminalClient) send(msg terminalWSMessage) error {
 	b, err := json.Marshal(msg)
 	if err != nil {
@@ -334,6 +360,27 @@ func (c *terminalClient) send(msg terminalWSMessage) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return websocket.Message.Send(c.conn, string(b))
+}
+
+func (c *terminalClient) sendBinary(data []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return websocket.Message.Send(c.conn, data)
+}
+
+func (s *TerminalSession) handleInputBytes(data []byte) {
+	if len(data) == 0 {
+		return
+	}
+	s.mu.Lock()
+	closed := s.closed
+	writable := s.Writable
+	ptyFile := s.ptyFile
+	s.mu.Unlock()
+	if closed || !writable || ptyFile == nil {
+		return
+	}
+	_, _ = ptyFile.Write(data)
 }
 
 func (s *TerminalSession) handleMessage(msg terminalWSMessage) {
@@ -390,12 +437,16 @@ func RegisterTerminalRoutes(app *r.App, tm *TerminalManager, allowed func(sid, t
 			defer s.removeClient(client)
 			_ = client.send(terminalWSMessage{Type: "ready"})
 			for {
-				var raw string
+				var raw []byte
 				if err := websocket.Message.Receive(conn, &raw); err != nil {
 					return
 				}
+				if len(raw) > 0 && raw[0] == terminalBinaryDataFrame {
+					s.handleInputBytes(raw[1:])
+					continue
+				}
 				var msg terminalWSMessage
-				if err := json.Unmarshal([]byte(raw), &msg); err != nil {
+				if err := json.Unmarshal(raw, &msg); err != nil {
 					_ = client.send(terminalWSMessage{Type: "error", Message: "invalid terminal message"})
 					continue
 				}
