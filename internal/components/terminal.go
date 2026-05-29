@@ -353,6 +353,10 @@ func (s *TerminalSession) handleMessage(msg terminalWSMessage) {
 	case "resize":
 		if msg.Cols > 0 && msg.Rows > 0 {
 			s.mu.Lock()
+			if s.cols == msg.Cols && s.rows == msg.Rows {
+				s.mu.Unlock()
+				return
+			}
 			s.cols, s.rows = msg.Cols, msg.Rows
 			s.mu.Unlock()
 			_ = pty.Setsize(ptyFile, &pty.Winsize{Cols: msg.Cols, Rows: msg.Rows})
