@@ -983,6 +983,12 @@ app.on('web-contents-created', (event, contents) => {
         triggerProjectDialogShortcut()
         return
       }
+      if (input.meta && !input.control && (code === 'enter' || key === 'enter')) {
+        if (shouldSkipDuplicateShortcut()) return
+        e.preventDefault()
+        triggerTerminalAppShortcut()
+        return
+      }
       if (input.meta && !input.control && code === 'keyo') {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
@@ -1142,11 +1148,17 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, q, n, t, z, o, f, g, r, x, ;, ,, .
+    // Meta (Super/Win) shortcuts: h, l, q, n, enter, z, o, f, g, r, x, ;, ,, .
     if (input.meta && !input.control && code === 'keyn') {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       triggerProjectDialogShortcut()
+      return
+    }
+    if (input.meta && !input.control && (code === 'enter' || key === 'enter')) {
+      if (shouldSkipDuplicateShortcut()) return
+      e.preventDefault()
+      triggerTerminalAppShortcut()
       return
     }
     if (input.meta && !input.control && (['h', 'l', 'q', 'b', 'e', 'z', 'o', 'f', 'g', 'r', 'x', ';', ',', '.'].includes(key) || ['keyo', 'keyb', 'keye', 'semicolon', 'comma', 'period'].includes(code))) {
