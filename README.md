@@ -76,7 +76,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - Browser apps support editable URLs, history-backed URL popup, reload, copy URL/text, downloads, and DevTools.
 - Terminal apps default to the user's shell when no command is provided.
 - The selected app can be moved, resized, toggled full-width, or closed.
-- Width presets are `SM`, `MD`, `LG`, `XL`, `2XL`, and `FULL`.
+- Width presets are `SM`, `MD`, `LG`, `XL`, `2XL`, `3XL`, and `FULL`. On screens up to Full HD width (`1920px`), fixed sizes above Full HD are disabled, so `3XL` is unavailable.
 
 ### Search And Commands
 

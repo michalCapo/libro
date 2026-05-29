@@ -823,7 +823,7 @@ func (sm *StateManager) SetAppWidthByID(sessionID, appID string, width Width) in
 // If the app is already full width, it restores the previous width (or LG if none saved).
 // If not full width, it saves the current width and switches to full.
 // Returns the new width and app ID, or empty strings if no app is selected.
-func (sm *StateManager) ToggleMaxWidth(sessionID string) (Width, string) {
+func (sm *StateManager) ToggleMaxWidth(sessionID string, maxPixels int) (Width, string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -837,6 +837,7 @@ func (sm *StateManager) ToggleMaxWidth(sessionID string) (Width, string) {
 		if prev == "" || prev == WidthFull {
 			prev = WidthLG
 		}
+		prev = prev.ClampFixedPixel(maxPixels)
 		app.Width = prev
 		app.PreviousWidth = ""
 		return prev, app.ID
@@ -847,7 +848,7 @@ func (sm *StateManager) ToggleMaxWidth(sessionID string) (Width, string) {
 }
 
 // StepSelectedAppWidth moves the selected app width by one tier and returns the new width and app ID.
-func (sm *StateManager) StepSelectedAppWidth(sessionID string, delta int) (Width, string) {
+func (sm *StateManager) StepSelectedAppWidth(sessionID string, delta int, maxPixels int) (Width, string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -859,7 +860,7 @@ func (sm *StateManager) StepSelectedAppWidth(sessionID string, delta int) (Width
 	if current == "" {
 		current = WidthLG
 	}
-	next := current.Step(delta)
+	next := current.Step(delta).ClampFixedPixel(maxPixels)
 	applyAppWidth(app, next)
 	return next, app.ID
 }

@@ -27,16 +27,18 @@ func AddDialog(in AddDialogInput) *r.Node {
 		radio := r.IRadio("accent-blue-500 cursor-pointer").
 			Attr("name", "app-width").
 			Attr("value", w).
-			Attr("onchange", fmt.Sprintf("document.getElementById('app-width').value='%s'", w)).
+			Attr("onchange", fmt.Sprintf("if(window.__libroIsAppWidthAllowed&&!window.__libroIsAppWidthAllowed('%[1]s')){this.checked=false;var fb=document.getElementById('width-2xl')||document.getElementById('width-lg');if(fb){fb.checked=true;document.getElementById('app-width').value=fb.value;}if(window.__libroShowToast)window.__libroShowToast('3XL unavailable','Screen is Full HD or smaller',1800);return;}document.getElementById('app-width').value='%[1]s'", w)).
 			ID(fmt.Sprintf("width-%s", w))
 		if w == in.DefaultWidth {
 			radio.Attr("checked", "checked")
 		}
 		widthOptions = append(widthOptions,
-			r.Label("flex items-center gap-2 px-3 py-1.5 rounded border border-gray-200 dark:border-zinc-700 hover:border-gray-300 dark:hover:border-zinc-500 cursor-pointer transition-colors text-gray-700 dark:text-zinc-300 text-sm font-mono").Render(
-				radio,
-				r.Span("").Text(strings.ToUpper(w)),
-			),
+			r.Label("flex items-center gap-2 px-3 py-1.5 rounded border border-gray-200 dark:border-zinc-700 hover:border-gray-300 dark:hover:border-zinc-500 cursor-pointer transition-colors text-gray-700 dark:text-zinc-300 text-sm font-mono").
+				Attr("data-resize-width", w).
+				Render(
+					radio,
+					r.Span("").Text(strings.ToUpper(w)),
+				),
 		)
 	}
 

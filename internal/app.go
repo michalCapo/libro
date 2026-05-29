@@ -545,7 +545,9 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			side = s
 		}
 		sm.OpenDialog(sid, side)
-		return fmt.Sprintf(`if(window.__libroCloseAllPopups)window.__libroCloseAllPopups('%s');`, DialogID) + r.Show(DialogID)
+		return fmt.Sprintf(`if(window.__libroCloseAllPopups)window.__libroCloseAllPopups('%s');`, DialogID) +
+			r.Show(DialogID) +
+			fmt.Sprintf(`if(window.__libroRefreshWidthAvailability)window.__libroRefreshWidthAvailability(document.getElementById('%s'));`, DialogID)
 	})
 
 	// Close add dialog
@@ -1137,6 +1139,11 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		if v, ok := data["width"].(string); ok && v != "" {
 			width = Width(v)
 		}
+		maxPixels := 0
+		if v, ok := data["maxPixel"].(float64); ok {
+			maxPixels = int(v)
+		}
+		width = width.ClampFixedPixel(maxPixels)
 		if sm.SetAppWidthByID(sid, appID, width) < 0 {
 			return "/* noop */"
 		}
@@ -1147,7 +1154,12 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	// Toggle maximize — switch selected app between full width and previous width
 	app.Action("app.maximize.toggle", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
-		newWidth, appID := sm.ToggleMaxWidth(sid)
+		data := ctx.WsData()
+		maxPixels := 0
+		if v, ok := data["maxPixel"].(float64); ok {
+			maxPixels = int(v)
+		}
+		newWidth, appID := sm.ToggleMaxWidth(sid, maxPixels)
 		if appID == "" {
 			return ""
 		}
@@ -1166,7 +1178,11 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		if delta == 0 {
 			return "/* noop */"
 		}
-		newWidth, appID := sm.StepSelectedAppWidth(sid, delta)
+		maxPixels := 0
+		if v, ok := data["maxPixel"].(float64); ok {
+			maxPixels = int(v)
+		}
+		newWidth, appID := sm.StepSelectedAppWidth(sid, delta, maxPixels)
 		if appID == "" {
 			return "/* noop */"
 		}
