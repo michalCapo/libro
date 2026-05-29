@@ -80,7 +80,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 
 ### Search And Commands
 
-- `⌘ + O` opens the launcher for saved apps, URL history, and command history.
+- `⌘ + O` opens the launcher/search popup on the right for saved apps, URL history, and command history.
 - Plain text searches saved entries.
 - `:query` opens a web search.
 - `!command` runs a terminal command.
@@ -107,21 +107,20 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
   - `j / k` scroll down / up
   - `h / l` scroll left / right
   - `b / f` back / forward
-  - `/`, `n`, `p`, `Esc` for in-page find
+  - `/`, `n`, `N`, `p`, `Esc` for in-page find
   - `y` copy selected text or current URL
   - `c` open the selected webview's DevTools console
-  - `i` enter insert mode
+  - `i` enter insert mode; `Esc` exits insert mode
 
 ## Keyboard Shortcuts
 
 ### Apps
 
-- `⌘ + O` new app on the right
+- `⌘ + O` open launcher/search popup on the right
 - `⌘ + Enter` open terminal in Libro
 - `⌘ + E` open `nvim` in Libro, falling back to `vim`; shows a notice if neither is installed
 - `⌘ + ;` open command palette
 - `⌘ + Q` close current app
-- `⌘ + R` open resize popup
 - `⌘ + ,` decrease selected app width
 - `⌘ + .` increase selected app width
 - `⌘ + F` toggle full width

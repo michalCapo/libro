@@ -1038,17 +1038,6 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
-      // Super+R: resize popup — must preventDefault to block browser Reload
-      if (input.meta && !input.control && code === 'keyr') {
-        if (shouldSkipDuplicateShortcut()) return
-        e.preventDefault()
-        if (mainWindow) {
-          mainWindow.webContents.executeJavaScript(`
-            if (window.__libroOpenResizePopup) window.__libroOpenResizePopup();
-          `)
-        }
-        return
-      }
       if (input.meta && !input.control && (code === 'comma' || code === 'period')) {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
