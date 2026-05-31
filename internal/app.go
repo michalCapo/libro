@@ -654,7 +654,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		}
 
 		// Determine if input looks like a URL or a search query
-		isURL := strings.Contains(query, ".") && !strings.Contains(query, " ")
+		isURL := strings.HasPrefix(strings.ToLower(query), "file://") || (strings.Contains(query, ".") && !strings.Contains(query, " "))
 		var target string
 		if isURL {
 			target = query
@@ -1360,7 +1360,10 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			return ""
 		}
 		DBDeleteBrowsedURL(urlStr)
-		return fmt.Sprintf(`(function(){var u=%s;window.__libroBrowsedURLs=window.__libroBrowsedURLs.filter(function(x){return x!==u;});if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}})();`, components.JSString(urlStr))
+		if strings.HasPrefix(strings.ToLower(urlStr), "file://") {
+			DBDeleteBrowsedURL("https://" + urlStr)
+		}
+		return fmt.Sprintf(`(function(){var u=%s;var bad='https://'+u;window.__libroBrowsedURLs=window.__libroBrowsedURLs.filter(function(x){return x!==u&&x!==bad;});if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}})();`, components.JSString(urlStr))
 	})
 
 	// Clear browsing history
@@ -2029,7 +2032,8 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 
 // ensureScheme adds http:// for local URLs and https:// for everything else.
 func ensureScheme(u string) string {
-	if strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+	lower := strings.ToLower(u)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "file://") {
 		return u
 	}
 	if strings.HasPrefix(u, "localhost") || strings.HasPrefix(u, "127.0.0.1") || strings.HasPrefix(u, "0.0.0.0") ||
