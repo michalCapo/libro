@@ -782,7 +782,7 @@ function initWebview(wv) {
 				// Reused webviews keep their session, but must navigate to the new
 				// target or a newly opened tab can show stale content from the prior tab.
 				if (currentURL !== newSrc) {
-					try { pooled.loadURL(newSrc).catch(function(){}); } catch(err) {}
+					safeWebviewLoadURL(pooled, newSrc);
 				} else {
 					// Remove loading indicator since the webview is already at the target.
 					var lp = pooled.closest('.flex.flex-col') || pooled.parentNode;
@@ -798,6 +798,25 @@ function initWebview(wv) {
 	window.__libroWebviews[appID] = wv;
 	bindWebviewEvents(wv);
 	focusIfSelected(appID, wv);
+}
+
+function safeWebviewLoadURL(wv, url) {
+	if (!wv || !url) return;
+	// Avoid piling up overlapping Electron <webview>.loadURL calls. Those commonly
+	// reject with ERR_ABORTED and can trigger GuestViewManager/MaxListeners noise.
+	if (wv.__libroPendingURL === url) return;
+	wv.__libroPendingURL = url;
+	try {
+		if (typeof wv.stop === 'function') wv.stop();
+	} catch (err) {}
+	try {
+		var p = wv.loadURL(url);
+		if (p && typeof p.catch === 'function') p.catch(function(err) {
+			if (err && err.code && err.code !== 'ERR_ABORTED') console.warn('[libro-browser] loadURL failed:', err.code, url);
+		});
+	} catch (err) {
+		if (err && err.code !== 'ERR_ABORTED') console.warn('[libro-browser] loadURL failed:', err && err.code ? err.code : err, url);
+	}
 }
 
 function bindWebviewEvents(wv) {
@@ -886,7 +905,7 @@ function bindWebviewEvents(wv) {
 				var q = u.hostname + (u.pathname && u.pathname !== '/' ? u.pathname : '');
 				if (q) {
 					var searchUrl = 'https://www.google.com/search?q=' + encodeURIComponent(q);
-					wv.loadURL(searchUrl);
+					safeWebviewLoadURL(wv, searchUrl);
 					var inp = document.getElementById('urlinput-' + appID);
 					if (inp) inp.value = searchUrl;
 					// Update server state
@@ -903,7 +922,7 @@ function bindWebviewEvents(wv) {
 			'<div style="font-size:14px;font-weight:600;margin-bottom:0.5rem">' + errorDesc + '</div>' +
 			'<div style="font-size:12px;color:#888;word-break:break-all">' + failedUrl.replace(/</g,'&lt;') + '</div>' +
 			'</div></body></html>';
-		try { wv.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html)); } catch(err) {}
+		safeWebviewLoadURL(wv, 'data:text/html;charset=utf-8,' + encodeURIComponent(html));
 	});
 
 	// Loading indicator removal (search up to flex-col container)
@@ -1045,7 +1064,7 @@ window.__libroWvNavigate = function(appID, url) {
 	var wv = window.__libroWebviews[appID];
 	if (wv) {
 		if (ready[appID]) {
-			wv.loadURL(url).catch(function(){});
+			safeWebviewLoadURL(wv, url);
 		} else {
 			// Not ready yet — set src attribute to trigger initial load
 			wv.setAttribute('src', url);

@@ -683,7 +683,10 @@ function createWindow() {
   mainWindow.maximize()
   mainWindow.show()
 
-  mainWindow.loadURL(serverURL)
+  mainWindow.loadURL(serverURL).catch((err) => {
+    if (err && err.code === 'ERR_ABORTED') return
+    console.error(`Failed to load Libro UI at ${serverURL}:`, err && err.message ? err.message : err)
+  })
 
   // Native window-close requests are ignored unless quit was requested explicitly.
   mainWindow.on('close', (e) => {
@@ -1279,7 +1282,7 @@ app.on('ready', async () => {
     try {
       await waitForServer()
     } catch (e) {
-      console.error(e.message)
+      console.error(`${e.message}; ${serverURL} is not accepting connections`)
       app.quit()
       return
     }
