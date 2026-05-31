@@ -1336,7 +1336,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			Attr("value", app.URL).
 			Attr("spellcheck", "false").
 			Attr("autocomplete", "off").
-			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value.trim();if(u&&!u.startsWith('http://')&&!u.startsWith('https://')){if(/\s/.test(u)||(!u.includes('.')&&!u.includes(':'))){u='https://www.google.com/search?q='+encodeURIComponent(u);}else{u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;}}event.target.value=u;window.__libroWvNavigate('%s',u);__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});event.target.blur();var target=document.querySelector('[data-webview-app="%s"], iframe[data-browser-iframe-app="%s"]');if(target)target.focus();}`, app.ID, sid, app.ID, app.ID, app.ID)))
+			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value.trim();if(u&&!/^(https?|file):\/\//i.test(u)){if(/\s/.test(u)||(!u.includes('.')&&!u.includes(':'))){u='https://www.google.com/search?q='+encodeURIComponent(u);}else{u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;}}event.target.value=u;window.__libroWvNavigate('%s',u);__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});event.target.blur();var target=document.querySelector('[data-webview-app="%s"], iframe[data-browser-iframe-app="%s"]');if(target)target.focus();}`, app.ID, sid, app.ID, app.ID, app.ID)))
 
 		// Globe icon in badge
 		globeBadgeCls := "inline-flex items-center justify-center w-6 h-6 rounded shrink-0"
@@ -2010,7 +2010,7 @@ func searchDialogJS(sid string) string {
 	}
 
 	function isURL(q){
-		if(/^https?:\/\//i.test(q))return true;
+		if(/^(https?|file):\/\//i.test(q))return true;
 		if(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:\d+)?(\/|$)/i.test(q))return true;
 		// domain-like: contains dot, no spaces (e.g. google.com, foo.bar/path)
 		if(/^[^\s]+\.[^\s]+$/.test(q)&&!q.includes(' '))return true;
@@ -2040,7 +2040,7 @@ func searchDialogJS(sid string) string {
 		}else if(isURL(q)){
 			// URL typed — show "Browse <url>" at top, then matching saved apps + history
 			var browseURL=q;
-			if(!/^https?:\/\//i.test(browseURL))browseURL=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(browseURL)?'http://':'https://')+browseURL;
+			if(!/^(https?|file):\/\//i.test(browseURL))browseURL=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(browseURL)?'http://':'https://')+browseURL;
 			filtered=[{app:{type:'url',url:browseURL,name:'Browse: '+q,width:'lg'},score:99999,isBrowse:true}];
 			apps.forEach(function(a){
 				var text=(a.name||'')+' '+(a.command||'')+' '+(a.url||'')+' '+a.type;
@@ -2498,6 +2498,9 @@ func urlPopupJS(sid string) string {
 	function getDlg(){return document.getElementById('%s');}
 	function getInp(){return document.getElementById('url-popup-input');}
 	function getHistory(){return document.getElementById('url-popup-history');}
+	function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+	function isMalformedFileHistory(u){return /^https?:\/\/file:\/\//i.test(String(u||''));}
+	function isDirectFileQuery(q){return /^\s*file:\/\//i.test(String(q||''));}
 
 	function findSelectedBrowserApp(){
 		var appId=window.__libroSelectedApp||'';
@@ -2511,9 +2514,11 @@ func urlPopupJS(sid string) string {
 		var historyContainer=getHistory();
 		var inp=getInp();
 		if(!historyContainer)return;
-		var urls=window.__libroBrowsedURLs||[];
+		var urls=(window.__libroBrowsedURLs||[]).filter(function(u){return !isMalformedFileHistory(u);});
 		var q=(query||'').trim().toLowerCase();
-		if(q){
+		if(isDirectFileQuery(query)){
+			filteredURLs=[];
+		}else if(q){
 			filteredURLs=urls.filter(function(u){return u.toLowerCase().indexOf(q)!==-1;});
 		}else{
 			filteredURLs=urls.slice(0,20);
@@ -2534,14 +2539,31 @@ func urlPopupJS(sid string) string {
 			var sel=i===selectedIdx;
 			var bg=sel?(dk?'background:#2563eb22':'background:#2563eb15'):'';
 			var border=sel?'border-left:2px solid #3b82f6':'border-left:2px solid transparent';
-			html+='<div class="px-4 py-1.5 flex items-center gap-2 cursor-pointer text-sm hover:bg-gray-50 dark:hover:bg-zinc-800/50" style="'+bg+';'+border+'" data-url-idx="'+i+'">';
+			html+='<div class="group px-4 py-1.5 flex items-center gap-2 cursor-pointer text-sm hover:bg-gray-50 dark:hover:bg-zinc-800/50" style="'+bg+';'+border+'" data-url-idx="'+i+'">';
 			html+='<span class="material-icons-round text-gray-400 dark:text-zinc-500" style="font-size:14px">history</span>';
-			html+='<span class="text-gray-500 dark:text-zinc-400 truncate flex-1 font-mono text-xs">'+u.replace(/</g,'&lt;')+'</span>';
-			html+='<span class="text-gray-400 dark:text-zinc-600 text-[10px] shrink-0">'+host.replace(/</g,'&lt;')+'</span>';
+			html+='<span class="text-gray-500 dark:text-zinc-400 truncate flex-1 font-mono text-xs">'+escapeHtml(u)+'</span>';
+			html+='<span class="text-gray-400 dark:text-zinc-600 text-[10px] shrink-0">'+escapeHtml(host)+'</span>';
+			html+='<button type="button" title="Remove from history" class="shrink-0 flex items-center justify-center w-5 h-5 rounded text-gray-400 dark:text-zinc-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40" data-url-delete="'+escapeHtml(u)+'"><span class="material-icons-round pointer-events-none" style="font-size:14px">close</span></button>';
 			html+='</div>';
 		}
 		html+='</div>';
 		historyContainer.innerHTML=html;
+		historyContainer.querySelectorAll('[data-url-delete]').forEach(function(btn){
+			btn.addEventListener('mousedown',function(e){
+				e.preventDefault();
+				e.stopPropagation();
+			});
+			btn.addEventListener('click',function(e){
+				e.preventDefault();
+				e.stopPropagation();
+				var url=btn.getAttribute('data-url-delete')||'';
+				if(!url)return;
+				window.__libroBrowsedURLs=(window.__libroBrowsedURLs||[]).filter(function(x){return x!==url;});
+				__ws.call('history.delete',{sid:'%s',url:url});
+				selectedIdx=0;
+				renderHistory(inp?inp.value:'');
+			});
+		});
 		historyContainer.querySelectorAll('[data-url-idx]').forEach(function(el){
 			el.addEventListener('mousedown',function(e){
 				e.preventDefault();
@@ -2626,7 +2648,7 @@ func urlPopupJS(sid string) string {
 		var inp=getInp();
 		var u=inp?inp.value.trim():'';
 		if(!u||!currentAppId)return;
-		if(!u.startsWith('http://')&&!u.startsWith('https://')){
+		if(!/^(https?|file):\/\//i.test(u)){
 			if(/\s/.test(u)||(!u.includes('.')&&!u.includes(':'))){
 				u='https://www.google.com/search?q='+encodeURIComponent(u);
 			}else{
@@ -2662,14 +2684,12 @@ func urlPopupJS(sid string) string {
 				if(filteredURLs.length>0){
 					selectedIdx=Math.min(selectedIdx+1,filteredURLs.length-1);
 					renderHistory(originalQuery);
-					inp.value=filteredURLs[selectedIdx];
 				}
 			}else if(e.key==='ArrowUp'){
 				e.preventDefault();
 				if(filteredURLs.length>0&&selectedIdx>0){
 					selectedIdx--;
 					renderHistory(originalQuery);
-					inp.value=filteredURLs[selectedIdx];
 				}else if(selectedIdx===0){
 					selectedIdx=-1;
 					renderHistory(originalQuery);
@@ -2686,11 +2706,6 @@ func urlPopupJS(sid string) string {
 				}
 			}else if(e.key==='Enter'){
 				e.preventDefault();
-				if(selectedIdx>=0&&filteredURLs[selectedIdx]&&inp&&inp.value===originalQuery){
-					var raw=(originalQuery||'').trim();
-					var looksLikeDirect=/^https?:\/\//i.test(raw)||/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(\:\d+)?(\/|$)/i.test(raw)||(/^[^\s]+\.[^\s]+$/.test(raw)&&!raw.includes(' '));
-					if(raw&&!looksLikeDirect&&!/\s/.test(raw))inp.value=filteredURLs[selectedIdx];
-				}
 				navigate();
 			}else if(e.key==='Escape'){
 				e.preventDefault();
@@ -2709,7 +2724,7 @@ func urlPopupJS(sid string) string {
 	window.__libroOpenURLPopup=function(){openPopup();};
 	window.__libroOpenURLPopupFor=function(appId,initialValue){openPopup(appId,initialValue);};
 })();
-`, URLPopupID, sid)
+`, URLPopupID, sid, sid)
 }
 
 // renderResizePopup renders the app resize popup.
@@ -4614,6 +4629,14 @@ func savedAppsJS(state *AppState) string {
 	b, _ := json.Marshal(jsApps)
 
 	browsedURLs := DBLoadBrowsedURLs()
+	filteredURLs := browsedURLs[:0]
+	for _, u := range browsedURLs {
+		if strings.HasPrefix(strings.ToLower(u), "https://file://") || strings.HasPrefix(strings.ToLower(u), "http://file://") {
+			continue
+		}
+		filteredURLs = append(filteredURLs, u)
+	}
+	browsedURLs = filteredURLs
 	bu, _ := json.Marshal(browsedURLs)
 
 	runCmds := DBLoadRunCommands()
