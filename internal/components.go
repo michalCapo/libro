@@ -876,6 +876,25 @@ func popupRegistryJS() string {
 	return fmt.Sprintf(`
 (function(){
 	var IDS=[%q,%q,%q,%q,%q,%q,%q,%q,%q,%q,%q];
+	var FLOATING={};
+	[%q,%q].forEach(function(id){FLOATING[id]=true;});
+	function keepRoot(){return document.body||document.documentElement;}
+	function parkFloating(el){
+		if(!el)return;
+		try{var active=document.activeElement;if(active&&el.contains&&el.contains(active)&&typeof active.blur==='function')active.blur();}catch(e){}
+		var root=keepRoot();
+		if(root&&el.parentNode!==root)root.appendChild(el);
+	}
+	window.__libroParkFloatingPopups=function(except){
+		var keep=null;
+		if(except)keep=(typeof except==='string')?document.getElementById(except):except;
+		Object.keys(FLOATING).forEach(function(id){
+			var el=document.getElementById(id);
+			if(!el||el===keep)return;
+			if(!el.classList.contains('hidden'))el.classList.add('hidden');
+			parkFloating(el);
+		});
+	};
 	window.__libroCloseAllPopups=function(except){
 		var keep=null;
 		if(except){
@@ -885,10 +904,27 @@ func popupRegistryJS() string {
 			var el=document.getElementById(IDS[i]);
 			if(!el||el===keep)continue;
 			if(!el.classList.contains('hidden'))el.classList.add('hidden');
+			if(FLOATING[IDS[i]])parkFloating(el);
 		}
 	};
 })();
-`, URLPopupID, ResizePopupID, CommandPopupID, MoveProjectPopupID, WorktreeCreatePopupID, SearchDialogID, PasswordDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID)
+`, URLPopupID, ResizePopupID, CommandPopupID, MoveProjectPopupID, WorktreeCreatePopupID, SearchDialogID, PasswordDialogID, ShortcutsDialogID, CloseDialogID, DialogID, ProjectDialogID, URLPopupID, ResizePopupID)
+}
+
+func parkFloatingPopupsJS() string {
+	return fmt.Sprintf(`
+(function(){
+	if(window.__libroParkFloatingPopups){window.__libroParkFloatingPopups();return;}
+	var root=document.body||document.documentElement;
+	[%q,%q].forEach(function(id){
+		var el=document.getElementById(id);
+		if(!el)return;
+		try{var active=document.activeElement;if(active&&el.contains&&el.contains(active)&&typeof active.blur==='function')active.blur();}catch(e){}
+		if(!el.classList.contains('hidden'))el.classList.add('hidden');
+		if(root&&el.parentNode!==root)root.appendChild(el);
+	});
+})();
+`, URLPopupID, ResizePopupID)
 }
 
 func flashCSS() string {
@@ -1737,7 +1773,7 @@ func removeAppJS(appID string) string {
 (function(){
 	var el=document.querySelector('[data-app-id="%s"]');
 	if(!el)return;
-	['resize-popup','url-popup'].forEach(function(pid){var p=document.getElementById(pid);if(p&&el.contains(p)){p.classList.add('hidden');document.body.appendChild(p);}});
+	if(window.__libroParkFloatingPopups)window.__libroParkFloatingPopups();else ['resize-popup','url-popup'].forEach(function(pid){var p=document.getElementById(pid);if(p&&el.contains(p)){p.classList.add('hidden');document.body.appendChild(p);}});
 	var wv=el.querySelector('webview[data-webview-app]');
 	var pool=document.getElementById('webview-pool');
 	if(wv&&pool){
@@ -1760,7 +1796,7 @@ func poolWebviewJS(appID string) string {
 (function(){
 	var el=document.querySelector('[data-app-id="%s"]');
 	if(!el)return;
-	['resize-popup','url-popup'].forEach(function(pid){var p=document.getElementById(pid);if(p&&el.contains(p)){p.classList.add('hidden');document.body.appendChild(p);}});
+	if(window.__libroParkFloatingPopups)window.__libroParkFloatingPopups();else ['resize-popup','url-popup'].forEach(function(pid){var p=document.getElementById(pid);if(p&&el.contains(p)){p.classList.add('hidden');document.body.appendChild(p);}});
 	var wv=el.querySelector('webview[data-webview-app]');
 	var pool=document.getElementById('webview-pool');
 	if(wv&&pool){
@@ -2618,6 +2654,7 @@ func urlPopupJS(sid string) string {
 		var appId=currentAppId;
 		if(dlg)dlg.classList.add('hidden');
 		if(inp){try{inp.blur();}catch(e){}inp.value='';}
+		if(window.__libroParkFloatingPopups)window.__libroParkFloatingPopups();
 		currentAppId='';
 		selectedIdx=-1;
 		originalQuery='';
@@ -3254,6 +3291,7 @@ func resizePopupJS(sid string) string {
 		var appId=currentAppId;
 		var dlg=getDlg();
 		if(dlg)dlg.classList.add('hidden');
+		if(window.__libroParkFloatingPopups)window.__libroParkFloatingPopups();
 		currentAppId='';
 		focusedIndex=-1;
 		if(appId&&window.__libroFocusAppByID){
