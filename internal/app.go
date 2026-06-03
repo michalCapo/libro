@@ -850,9 +850,19 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		contentJS := renderAppContent(state.Apps[idx], sid, false, nil).ToJSReplace(appContentID(appID))
 		return fmt.Sprintf(`
 (function(){
+	var appID=%s;
+	var content=document.getElementById(%s);
+	var urlPopup=document.getElementById(%s);
+	var urlPopupInput=document.getElementById('url-popup-input');
+	var reopenURLPopup=!!(content&&urlPopup&&content.contains(urlPopup)&&!urlPopup.classList.contains('hidden'));
+	var reopenURLPopupValue=urlPopupInput?urlPopupInput.value:'';
+	if(window.__libroParkFloatingPopups)window.__libroParkFloatingPopups();
 	%s
+	if(reopenURLPopup&&window.__libroOpenURLPopupFor){
+		setTimeout(function(){window.__libroOpenURLPopupFor(appID,reopenURLPopupValue);},30);
+	}
 })();
-`, contentJS) + settleHydratedAppContentJS(appID)
+`, components.JSString(appID), components.JSString(appContentID(appID)), components.JSString(URLPopupID), contentJS) + settleHydratedAppContentJS(appID)
 	})
 
 	// Close/remove application
@@ -967,6 +977,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 
 		state := sm.Get(sid)
 		resp := r.NewResponse().
+			Add(parkFloatingPopupsJS()).
 			Add(closeDevtoolsForAppsJS(apps)).
 			Replace(projectMainID(projectName), renderMainAreaForProject(state, sid, projectName)).
 			Replace(TopBarID, renderTopBar(state, sid)).
@@ -1767,9 +1778,10 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		DBRemoveProject(name)
 
 		resp := r.NewResponse().
+			Add(parkFloatingPopupsJS()).
 			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(fmt.Sprintf(`(function(){var el=document.getElementById('project-main-%s');if(el)el.remove();})();`, name))
+			Add(fmt.Sprintf(`(function(){var el=document.getElementById(%s);if(el)el.remove();})();`, components.JSString(projectMainID(name))))
 
 		if wasActive {
 			resp.Replace(projectMainID("home"), renderMainArea(state, sid)).
