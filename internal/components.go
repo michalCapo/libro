@@ -587,7 +587,7 @@ func renderSavedAppButton(app SavedApp, sid string) *r.Node {
 			// Try to extract hostname for favicon
 			if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
 				iconNode = r.Img("w-5 h-5 shrink-0 rounded-sm").
-					Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=32")
+					Attr("src", "https://t3.gstatic.com/faviconV2?url="+u.Hostname()+"&size=32")
 				if label == app.URL {
 					h := strings.TrimPrefix(u.Hostname(), "www.")
 					label = h
@@ -1908,7 +1908,7 @@ func searchDialogJS(sid string) string {
 			}else if(item.isHistory){
 				try{
 					var u=new URL(app.url);
-					iconHtml='<img class="w-6 h-6 rounded-sm shrink-0" src="https://www.google.com/s2/favicons?domain='+encodeURIComponent(u.hostname)+'&sz=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 text-lg\\\'>history</i>\'">';
+					iconHtml='<img class="w-6 h-6 rounded-sm shrink-0" src="https://t3.gstatic.com/faviconV2?url='+encodeURIComponent(u.hostname)+'&size=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 text-lg\\\'>history</i>\'">';
 					label=u.hostname.replace(/^www\./,'');
 					sub=app.url;
 				}catch(e){
@@ -1923,7 +1923,7 @@ func searchDialogJS(sid string) string {
 			}else{
 				try{
 					var u=new URL(app.url);
-					iconHtml='<img class="w-6 h-6 rounded-sm shrink-0" src="https://www.google.com/s2/favicons?domain='+encodeURIComponent(u.hostname)+'&sz=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 text-lg\\\'>language</i>\'">';
+					iconHtml='<img class="w-6 h-6 rounded-sm shrink-0" src="https://t3.gstatic.com/faviconV2?url='+encodeURIComponent(u.hostname)+'&size=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 text-lg\\\'>language</i>\'">';
 					label=app.name||u.hostname.replace(/^www\./,'');
 					sub=app.url;
 				}catch(e){
@@ -3530,7 +3530,7 @@ func renderManageAppRow(app SavedApp, sid string) *r.Node {
 		if app.URL != "" {
 			if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
 				iconNode = r.Img("w-5 h-5 shrink-0 rounded-sm").
-					Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=32")
+					Attr("src", "https://t3.gstatic.com/faviconV2?url="+u.Hostname()+"&size=32")
 				if label == app.URL {
 					h := strings.TrimPrefix(u.Hostname(), "www.")
 					label = h
@@ -3772,7 +3772,7 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			if app.URL != "" {
 				if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
 					iconNode = r.Img("w-6 h-6 rounded-sm").
-						Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=32")
+						Attr("src", "https://t3.gstatic.com/faviconV2?url="+u.Hostname()+"&size=32")
 					if label == app.URL {
 						h := strings.TrimPrefix(u.Hostname(), "www.")
 						label = h
@@ -3866,7 +3866,7 @@ func renderAppPreview(state *AppState, sid string) *r.Node {
 			if app.URL != "" {
 				if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
 					iconNode = r.Img("w-3.5 h-3.5 rounded-sm shrink-0").
-						Attr("src", "https://www.google.com/s2/favicons?domain="+u.Hostname()+"&sz=16")
+						Attr("src", "https://t3.gstatic.com/faviconV2?url="+u.Hostname()+"&size=16")
 				}
 			}
 			if iconNode == nil {
@@ -4976,7 +4976,7 @@ func terminalFrameSetupJS() string {
 					el.innerHTML = '';
 					var term = new Term({
 						fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-						fontSize: 18,
+						fontSize: 15,
 						lineHeight: 1.12,
 						cursorBlink: true,
 						theme: termTheme(),
@@ -5045,6 +5045,12 @@ func terminalFrameSetupJS() string {
 						ws.onclose = function() {
 							if (controller.closed || !el.isConnected) return;
 							controller.attempts++;
+							// Stop hammering the server if the connection keeps
+							// failing (e.g. the terminal id is no longer valid).
+							if (controller.attempts >= 4) {
+								setStatus(el, 'Terminal session lost (reopen the app)');
+								return;
+							}
 							var delay = Math.min(1200, 150 * controller.attempts);
 							setStatus(el, 'Terminal disconnected');
 							controller.reconnectTimer = setTimeout(connect, delay);

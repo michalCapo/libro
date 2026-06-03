@@ -422,38 +422,46 @@ func RegisterTerminalRoutes(app *r.App, tm *TerminalManager, allowed func(sid, t
 			http.Error(w, "missing terminal id", http.StatusBadRequest)
 			return
 		}
+		// Check the live pty first. If a terminal session is actually running,
+		// allow the connection regardless of session-membership bookkeeping
+		// state. The 403/404 split then reflects the truth: 404 = the pty is
+		// not running, 403 = the client asked for an id we have never seen.
+		if s := tm.session(terminalID); s != nil && !s.isClosed() {
+			serveTerminalWS(w, req, s)
+			return
+		}
 		if allowed != nil && !allowed(sid, terminalID) {
 			http.Error(w, "terminal not found", http.StatusForbidden)
 			return
 		}
-		s := tm.session(terminalID)
-		if s == nil || s.isClosed() {
-			http.Error(w, "terminal is not running", http.StatusNotFound)
-			return
-		}
-		websocket.Handler(func(conn *websocket.Conn) {
-			client := &terminalClient{conn: conn}
-			s.addClient(client)
-			defer s.removeClient(client)
-			_ = client.send(terminalWSMessage{Type: "ready"})
-			for {
-				var raw []byte
-				if err := websocket.Message.Receive(conn, &raw); err != nil {
-					return
-				}
-				if len(raw) > 0 && raw[0] == terminalBinaryDataFrame {
-					s.handleInputBytes(raw[1:])
-					continue
-				}
-				var msg terminalWSMessage
-				if err := json.Unmarshal(raw, &msg); err != nil {
-					_ = client.send(terminalWSMessage{Type: "error", Message: "invalid terminal message"})
-					continue
-				}
-				s.handleMessage(msg)
-			}
-		}).ServeHTTP(w, req)
+		http.Error(w, "terminal is not running", http.StatusNotFound)
+		return
 	})
+}
+
+func serveTerminalWS(w http.ResponseWriter, req *http.Request, s *TerminalSession) {
+	websocket.Handler(func(conn *websocket.Conn) {
+		client := &terminalClient{conn: conn}
+		s.addClient(client)
+		defer s.removeClient(client)
+		_ = client.send(terminalWSMessage{Type: "ready"})
+		for {
+			var raw []byte
+			if err := websocket.Message.Receive(conn, &raw); err != nil {
+				return
+			}
+			if len(raw) > 0 && raw[0] == terminalBinaryDataFrame {
+				s.handleInputBytes(raw[1:])
+				continue
+			}
+			var msg terminalWSMessage
+			if err := json.Unmarshal(raw, &msg); err != nil {
+				_ = client.send(terminalWSMessage{Type: "error", Message: "invalid terminal message"})
+				continue
+			}
+			s.handleMessage(msg)
+		}
+	}).ServeHTTP(w, req)
 }
 
 func terminalIDFromPath(path string) string {
