@@ -700,7 +700,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		if cmd == "" {
 			return showToastJS("Editor not installed", "Install nvim or vim to use ⌘/Win+E", 2600)
 		}
-		return fmt.Sprintf(`__ws.call('app.start',{sid:%s,type:'terminal',url:'',command:%s,width:'lg',writable:true,name:%s,iconUrl:'',side:'right'});`, components.JSString(sid), components.JSString(cmd), components.JSString(name))
+		return fmt.Sprintf(`__ws.callSilent('app.start',{sid:%s,type:'terminal',url:'',command:%s,width:'lg',writable:true,name:%s,iconUrl:'',side:'right'});`, components.JSString(sid), components.JSString(cmd), components.JSString(name))
 	})
 
 	// Start a saved/predefined application
