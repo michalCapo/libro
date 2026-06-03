@@ -579,6 +579,46 @@ func (sm *StateManager) HydrateTerminalByID(sessionID, appID string, terminalID 
 	return false
 }
 
+// HydrateTerminalAnywhere attaches native PTY runtime details to a terminal
+// placeholder that may live in the active project or in any non-active
+// project's snapshot. Returns true on success. The terminalID is set to the
+// app's own ID, matching how tm.Start keys its sessions.
+func (sm *StateManager) HydrateTerminalAnywhere(sessionID, appID string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return false
+	}
+	hydrate := func(apps []Application) bool {
+		for i := range apps {
+			if apps[i].ID != appID {
+				continue
+			}
+			if apps[i].Type != AppTypeTerminal || apps[i].Command == "" {
+				return false
+			}
+			apps[i].URL = ""
+			apps[i].TerminalID = appID
+			apps[i].TerminalReady = true
+			return true
+		}
+		return false
+	}
+	if hydrate(s.Apps) {
+		return true
+	}
+	for _, snap := range s.snapshots {
+		if snap == nil {
+			continue
+		}
+		if hydrate(snap.Apps) {
+			return true
+		}
+	}
+	return false
+}
+
 // TerminalBelongsToSession reports whether a terminal ID belongs to the active session.
 func (sm *StateManager) TerminalBelongsToSession(sessionID, terminalID string) bool {
 	sm.mu.RLock()

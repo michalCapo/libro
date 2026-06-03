@@ -805,6 +805,22 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 				break
 			}
 		}
+		// The app may live in a non-active project's snapshot (its DOM div is
+		// hidden but still in the page). Use the broader lookup so we can
+		// start the pty regardless of which project the user currently has open.
+		if idx < 0 {
+			if sm.HydrateTerminalAnywhere(sid, appID) {
+				// HydrateTerminalAnywhere marks the app TerminalReady; the
+				// subsequent render below needs state.Apps, so re-scan.
+				state = sm.Get(sid)
+				for i := range state.Apps {
+					if state.Apps[i].ID == appID {
+						idx = i
+						break
+					}
+				}
+			}
+		}
 		if idx < 0 {
 			return "/* noop */"
 		}
