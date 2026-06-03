@@ -617,12 +617,10 @@ func renderSavedAppButton(app SavedApp, sid string) *r.Node {
 			)
 			return nodes
 		}()...).
-		OnClick(&r.Action{Name: "app.start", Data: map[string]any{
-			"sid": sid, "type": app.Type, "url": app.URL,
-			"command": app.Command, "width": app.Width,
-			"writable": writable, "name": app.Name,
-			"iconUrl": app.IconURL,
-		}})
+		OnClick(r.JS(fmt.Sprintf("__ws.callSilent('app.start',{sid:%s,type:%s,url:%s,command:%s,width:%s,writable:%t,name:%s,iconUrl:%s})",
+			components.JSString(sid), components.JSString(app.Type), components.JSString(app.URL),
+			components.JSString(app.Command), components.JSString(app.Width), writable,
+			components.JSString(app.Name), components.JSString(app.IconURL))))
 
 	return r.Div("w-full flex items-center bg-white dark:bg-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-zinc-700/40 hover:border-gray-300 dark:hover:border-zinc-600 rounded-lg transition-colors duration-75 shadow-sm dark:shadow-none").
 		Render(launchBtn)
@@ -1280,10 +1278,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 	}
 	badges = append(badges, r.Button(closeBtnCls).
 		Render(r.I("material-icons-round text-[10px] leading-none block").Text("close")).
-		OnClick(&r.Action{
-			Name: "app.close",
-			Data: sidData(sid, "id", app.ID),
-		}))
+		OnClick(r.JS(fmt.Sprintf("__ws.callSilent('app.close',{sid:%s,id:%s})", components.JSString(sid), components.JSString(app.ID)))))
 	rightButtons := r.Div("flex gap-0.5 items-center shrink-0").
 		Attr("data-size-badges", "").
 		Render(badges...)
@@ -1478,10 +1473,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 	zenCloseBtn := r.Button("hidden absolute top-2 right-2 z-50 w-7 h-7 items-center justify-center rounded-full cursor-pointer bg-black/45 text-white/80 backdrop-blur-sm transition-colors duration-75 hover:bg-red-500/85 hover:text-white").
 		Attr("data-zen-close", "").
 		Attr("title", "Close app").
-		OnClick(&r.Action{
-			Name: "app.close",
-			Data: sidData(sid, "id", app.ID),
-		}).
+		OnClick(r.JS(fmt.Sprintf("__ws.callSilent('app.close',{sid:%s,id:%s})", components.JSString(sid), components.JSString(app.ID)))).
 		Render(r.I("material-icons-round text-[16px] leading-none block").Text("close"))
 	if zen {
 		zenCloseBtn = zenCloseBtn.Attr("style", "display:flex")
@@ -2133,7 +2125,7 @@ func searchDialogJS(sid string) string {
 		inp.value='';
 		// Internet search — open browser with search URL
 		if(item.isSearch){
-			__ws.call('app.start',{sid:'%s',type:'url',url:app.url,command:'',width:app.width||'lg',writable:true,name:'',iconUrl:'',side:side});
+			__ws.callSilent('app.start',{sid:'%s',type:'url',url:app.url,command:'',width:app.width||'lg',writable:true,name:'',iconUrl:'',side:side});
 			return;
 		}
 		// Run command — execute terminal directly
@@ -2148,10 +2140,10 @@ func searchDialogJS(sid string) string {
 		}
 		// History items — open directly (URL is already complete)
 		if(item.isHistory){
-			__ws.call('app.start',{sid:'%s',type:'url',url:app.url,command:'',width:app.width||'lg',writable:true,name:'',iconUrl:'',side:side});
+			__ws.callSilent('app.start',{sid:'%s',type:'url',url:app.url,command:'',width:app.width||'lg',writable:true,name:'',iconUrl:'',side:side});
 			return;
 		}
-		__ws.call('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false,name:app.name||'',iconUrl:app.iconUrl||'',side:side});
+		__ws.callSilent('app.start',{sid:'%s',type:app.type,url:app.url||'',command:app.command||'',width:app.width||'lg',writable:app.writable!==false,name:app.name||'',iconUrl:app.iconUrl||'',side:side});
 	}
 
 	function openSearch(side){
@@ -3785,12 +3777,10 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			Attr("data-libro-no-drag", "true").
 			Attr("style", noDragStyle).
 			Render(iconNode, r.Span(tipCls).Text(label)).
-			OnClick(&r.Action{Name: "app.start", Data: map[string]any{
-				"sid": sid, "type": app.Type, "url": app.URL,
-				"command": app.Command, "width": app.Width,
-				"writable": app.Writable, "name": app.Name,
-				"iconUrl": app.IconURL,
-			}})
+			OnClick(r.JS(fmt.Sprintf("__ws.callSilent('app.start',{sid:%s,type:%s,url:%s,command:%s,width:%s,writable:%t,name:%s,iconUrl:%s})",
+				components.JSString(sid), components.JSString(app.Type), components.JSString(app.URL),
+				components.JSString(app.Command), components.JSString(app.Width), app.Writable,
+				components.JSString(app.Name), components.JSString(app.IconURL))))
 		appIcons = append(appIcons, btn)
 	}
 
@@ -4179,7 +4169,7 @@ func projectDialogJS(sid string) string {
 			__ws.call('worktree.switch',{sid:'%s',project:item.name,path:item.path,branch:item.branch});
 		}else{
 			history.replaceState(null,'','#'+item.name);
-			__ws.call('project.switch',{sid:'%s',name:item.name,assignShortcut:true});
+			__ws.callSilent('project.switch',{sid:'%s',name:item.name,assignShortcut:true});
 		}
 	}
 
@@ -4659,7 +4649,7 @@ func initHashJS(sid string) string {
 	if(typeof __ws==='undefined'||!__ws.call){setTimeout(_initHash,50);return;}
 	var hash=location.hash.replace('#','');
 	if(hash&&hash!=='home'){
-		setTimeout(function(){__ws.call('project.switch',{sid:'%s',name:hash});},100);
+		setTimeout(function(){__ws.callSilent('project.switch',{sid:'%s',name:hash});},100);
 	}
 	if(!location.hash){history.replaceState(null,'','#home');}
 	var proj=location.hash.replace('#','')||'home';
@@ -5311,12 +5301,12 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					var idx = parseInt(e.key) - 1;
-					__ws.call('project.select', {"sid": "%s", "index": idx});
+					__ws.callSilent('project.select', {"sid": "%s", "index": idx});
 				}
 				if (e.ctrlKey && e.key === '0') {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					__ws.call('project.select.last', {"sid": "%s"});
+					__ws.callSilent('project.select.last', {"sid": "%s"});
 				}
 				if (e.metaKey && e.key === 'Enter' && !e.ctrlKey) {
 					e.preventDefault();
@@ -5375,7 +5365,7 @@ func keyboardShortcutsJS(sid string) string {
 				if (e.metaKey && (e.key === 'q' || e.key === 'Q') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					__ws.call('app.close.current', {"sid": "%s"});
+					__ws.callSilent('app.close.current', {"sid": "%s"});
 					return;
 				}
 				if (e.metaKey && (e.key === 'z' || e.key === 'Z') && !e.ctrlKey) {
@@ -5396,7 +5386,7 @@ func keyboardShortcutsJS(sid string) string {
 			}
 
 			window.__libroOpenTerminalApp = function() {
-				__ws.call('app.start',{sid:'%s',type:'terminal',url:'',command:'',width:'lg',writable:true,name:'',iconUrl:'',side:'right'});
+				__ws.callSilent('app.start',{sid:'%s',type:'terminal',url:'',command:'',width:'lg',writable:true,name:'',iconUrl:'',side:'right'});
 			};
 
 			window.__libroOpenBrowserApp = function() {
@@ -5408,7 +5398,7 @@ func keyboardShortcutsJS(sid string) string {
 			};
 
 			window.__libroCloseCurrentApp = function() {
-				__ws.call('app.close.current', {"sid": "%s"});
+				__ws.callSilent('app.close.current', {"sid": "%s"});
 			};
 
 			document.addEventListener('keydown', libroKeyHandler, true);
