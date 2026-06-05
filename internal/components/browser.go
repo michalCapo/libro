@@ -143,6 +143,7 @@ var browserShortcutsScript = '(' + function(){
 				break;
 			case 'o': console.log('__libro:urlpopup'); break;
 			case 'r': console.log('__libro:reload'); break;
+			case 'm': console.log('__libro:mobile'); break;
 			case '/': console.log('__libro:search'); break;
 			case 'n': console.log('__libro:findnext'); break;
 			case 'N': console.log('__libro:findprev'); break;
@@ -221,6 +222,12 @@ var searchState = {}; // appID -> {query, barEl, inputEl, countEl}
 var devtoolsPanelObservers = {};
 var devtoolsPanelSyncers = {};
 var browserModeState = {}; // appID -> 'normal' | 'insert'
+var mobileViewState = {}; // appID -> {mode, previousFrameStyle, previousContentStyle}
+var mobileSizes = {
+	xs: {label: 'XS', width: 375, height: 667},
+	sm: {label: 'SM', width: 414, height: 896},
+	md: {label: 'MD', width: 430, height: 932}
+};
 
 function applyBrowserMode(appID, mode) {
 	if (!appID) return;
@@ -281,6 +288,59 @@ window.__libroGetBrowserMode = function(appID) {
 };
 
 window.__libroApplyBrowserMode = applyBrowserMode;
+
+function applyMobileView(appID, mode) {
+	var frame = document.querySelector('[data-app-id="' + appID + '"]');
+	var content = document.querySelector('[data-app-content="' + appID + '"]');
+	if (!frame || !content) return false;
+	var state = mobileViewState[appID];
+	if (!state) {
+		state = mobileViewState[appID] = {
+			mode: 'normal',
+			previousFrameStyle: frame.getAttribute('style') || '',
+			previousContentStyle: content.getAttribute('style') || ''
+		};
+	}
+	if (mode === 'normal') {
+		frame.setAttribute('style', state.previousFrameStyle || '');
+		content.setAttribute('style', state.previousContentStyle || '');
+		delete mobileViewState[appID];
+		if (window.__libroSettleAppFrame) window.__libroSettleAppFrame(appID);
+		return true;
+	}
+	var size = mobileSizes[mode];
+	if (!size) return false;
+	state.mode = mode;
+	frame.style.width = size.width + 'px';
+	frame.style.flex = '0 0 ' + size.width + 'px';
+	frame.style.maxWidth = size.width + 'px';
+	content.style.height = size.height + 'px';
+	content.style.flex = '0 0 ' + size.height + 'px';
+	content.style.maxHeight = size.height + 'px';
+	content.style.minHeight = '0';
+	if (window.__libroScrollToApp) window.__libroScrollToApp(frame);
+	if (window.__libroSettleAppFrame) window.__libroSettleAppFrame(appID);
+	return true;
+}
+
+window.__libroToggleSelectedBrowserMobile = function(appID) {
+	appID = appID || window.__libroSelectedApp || '';
+	if (!appID) return;
+	var target = document.querySelector('webview[data-webview-app="' + appID + '"], iframe[data-browser-iframe-app="' + appID + '"]');
+	if (!target) return;
+	var current = (mobileViewState[appID] && mobileViewState[appID].mode) || 'normal';
+	var next = current === 'normal' ? 'xs' : (current === 'xs' ? 'sm' : (current === 'sm' ? 'md' : 'normal'));
+	if (!applyMobileView(appID, next)) return;
+	if (window.__libroShowToast) {
+		if (next === 'normal') window.__libroShowToast('Mobile view off', 'Restored previous browser size', 1200);
+		else {
+			var size = mobileSizes[next];
+			window.__libroShowToast('Mobile view ' + size.label, size.width + ' × ' + size.height, 1200);
+		}
+	}
+	var wv = window.__libroWebviews[appID];
+	if (wv) refocusWebview(appID, wv);
+};
 
 function injectBrowserShortcuts(wv, appID) {
 	try { wv.executeJavaScript(browserShortcutsScript); } catch(err) {}
@@ -870,6 +930,7 @@ function bindWebviewEvents(wv) {
 		else if (msg === '__libro:console') window.__libroToggleConsole(appID);
 		else if (msg === '__libro:urlpopup') { if (window.__libroOpenURLPopup) window.__libroOpenURLPopup(); }
 		else if (msg === '__libro:reload') { if (window.__libroWvReload) window.__libroWvReload(appID); }
+		else if (msg === '__libro:mobile') { if (window.__libroToggleSelectedBrowserMobile) window.__libroToggleSelectedBrowserMobile(appID); }
 		else if (msg === '__libro:copyurl') {
 			var inp = document.getElementById('urlinput-' + appID);
 			if (inp && navigator.clipboard) navigator.clipboard.writeText(inp.value);

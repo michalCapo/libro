@@ -1258,14 +1258,15 @@ app.on('web-contents-created', (event, contents) => {
         contents.executeJavaScript(browserKeyActions[key]).catch(() => {})
         return
       }
-      // Bare 'o' opens URL popup, bare 'r' reloads — host-window actions.
-      if (!input.shift && (key === 'o' || key === 'r')) {
+      // Bare 'o' opens URL popup, bare 'r' reloads, bare 'm' cycles mobile view.
+      if (!input.shift && (key === 'o' || key === 'r' || key === 'm')) {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
-          const js = key === 'o'
-            ? `if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();`
-            : `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroWvReload) window.__libroWvReload(a);})();`
+          let js = ''
+          if (key === 'o') js = `if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();`
+          else if (key === 'r') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroWvReload) window.__libroWvReload(a);})();`
+          else js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroToggleSelectedBrowserMobile) window.__libroToggleSelectedBrowserMobile(a);})();`
           mainWindow.webContents.executeJavaScript(js).catch(() => {})
         }
         return
