@@ -103,6 +103,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - Plain-key browser navigation is supported in normal mode (outside input fields, not in insert mode):
   - `o` open URL/search popup
   - `r` reload page
+  - `m` cycle selected browser through mobile `xs`, `sm`, `md`, and its previous size
   - `g / G` top / bottom
   - `j / k` scroll down / up
   - `h / l` scroll left / right

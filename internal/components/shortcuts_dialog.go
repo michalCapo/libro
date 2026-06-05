@@ -57,6 +57,7 @@ func ShortcutsDialog() *r.Node {
 			{"h / l", "Scroll left / right"},
 			{"o", "URL / search popup for browser apps"},
 			{"r", "Reload browser page"},
+			{"m", "Cycle mobile view (XS / SM / MD / previous size)"},
 			{"/", "Find in page"},
 			{"n / N / p", "Find next / previous"},
 			{"i / Esc", "Enter / exit insert mode"},
