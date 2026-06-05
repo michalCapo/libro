@@ -5370,6 +5370,12 @@ func keyboardShortcutsJS(sid string) string {
 					if (window.__libroOpenNvimApp) window.__libroOpenNvimApp();
 					return;
 				}
+				if (e.metaKey && (e.key === 'y' || e.key === 'Y' || e.code === 'KeyY') && !e.ctrlKey) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					if (window.__libroOpenPiAgentApp) window.__libroOpenPiAgentApp();
+					return;
+				}
 				if (e.metaKey && (e.key === 'n' || e.key === 'N' || e.code === 'KeyN') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
@@ -5435,6 +5441,10 @@ func keyboardShortcutsJS(sid string) string {
 				__ws.call('app.nvim.open',{sid:'%s'});
 			};
 
+			window.__libroOpenPiAgentApp = function() {
+				__ws.call('app.pi.open',{sid:'%s'});
+			};
+
 			window.__libroCloseCurrentApp = function() {
 				__ws.callSilent('app.close.current', {"sid": "%s"});
 			};
@@ -5486,5 +5496,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-		`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
+		`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }

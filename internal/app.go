@@ -703,6 +703,15 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		return fmt.Sprintf(`__ws.callSilent('app.start',{sid:%s,type:'terminal',url:'',command:%s,width:'lg',writable:true,name:%s,iconUrl:'',side:'right'});`, components.JSString(sid), components.JSString(cmd), components.JSString(name))
 	})
 
+	// Open the Pi coding agent if available.
+	app.Action("app.pi.open", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		if _, err := exec.LookPath("pi"); err != nil {
+			return showToastJS("Pi agent not installed", "Install pi to use ⌘/Win+Y", 2600)
+		}
+		return fmt.Sprintf(`__ws.callSilent('app.start',{sid:%s,type:'terminal',url:'',command:'pi',width:'md',writable:true,name:'pi',iconUrl:'',side:'right'});`, components.JSString(sid))
+	})
+
 	// Start a saved/predefined application
 	app.Action("app.start", func(ctx *r.Context) string {
 		sid := extractSID(ctx)

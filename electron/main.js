@@ -367,6 +367,20 @@ function triggerNvimAppShortcut() {
   `)
 }
 
+function triggerPiAgentShortcut() {
+  const focusedWindow = BrowserWindow.getFocusedWindow()
+  if (!focusedWindow || focusedWindow !== mainWindow) {
+    console.log('[libro-shortcut] ignored pi agent: main window not focused')
+    return
+  }
+  console.log('[libro-shortcut] firing pi agent')
+  dispatchToMainWindow(`
+    if (window.__libroOpenPiAgentApp) {
+      window.__libroOpenPiAgentApp();
+    }
+  `)
+}
+
 function adjustMainWindowZoom(action) {
   const focusedWindow = BrowserWindow.getFocusedWindow()
   if (!focusedWindow || focusedWindow !== mainWindow || !mainWindow || mainWindow.isDestroyed()) {
@@ -401,6 +415,7 @@ function registerWindowShortcuts() {
     ['Super+Enter', () => triggerTerminalAppShortcut()],
     ['Super+B', () => triggerBrowserAppShortcut()],
     ['Super+E', () => triggerNvimAppShortcut()],
+    ['Super+Y', () => triggerPiAgentShortcut()],
     ['Super+=', () => adjustMainWindowZoom('in')],
     ['Super+Plus', () => adjustMainWindowZoom('in')],
     ['Super+-', () => adjustMainWindowZoom('out')],
@@ -1041,6 +1056,17 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
+      // Super+Y: open Pi agent if available
+      if (input.meta && !input.control && code === 'keyy') {
+        if (shouldSkipDuplicateShortcut()) return
+        e.preventDefault()
+        if (mainWindow) {
+          mainWindow.webContents.executeJavaScript(`
+            if (window.__libroOpenPiAgentApp) window.__libroOpenPiAgentApp();
+          `)
+        }
+        return
+      }
       if (input.meta && !input.control && (code === 'comma' || code === 'period')) {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
@@ -1146,7 +1172,7 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, q, n, enter, z, o, f, g, r, x, ;, ,, .
+    // Meta (Super/Win) shortcuts: h, l, q, n, enter, z, o, f, g, r, x, y, ;, ,, .
     if (input.meta && !input.control && code === 'keyn') {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
@@ -1159,7 +1185,7 @@ app.on('web-contents-created', (event, contents) => {
       triggerTerminalAppShortcut()
       return
     }
-    if (input.meta && !input.control && (['h', 'l', 'q', 'b', 'e', 'z', 'o', 'f', 'g', 'r', 'x', ';', ',', '.'].includes(key) || ['keyo', 'keyb', 'keye', 'semicolon', 'comma', 'period'].includes(code))) {
+    if (input.meta && !input.control && (['h', 'l', 'q', 'b', 'e', 'z', 'o', 'f', 'g', 'r', 'x', 'y', ';', ',', '.'].includes(key) || ['keyo', 'keyb', 'keye', 'keyy', 'semicolon', 'comma', 'period'].includes(code))) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
