@@ -120,6 +120,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - `⌘ + O` open launcher/search popup on the right
 - `⌘ + Enter` open terminal in Libro
 - `⌘ + E` open `nvim` in Libro, falling back to `vim`; shows a notice if neither is installed
+- `⌘/Win + Y` open Pi agent in Libro if available, using `MD` width
 - `⌘ + ;` open command palette
 - `⌘ + Q` close current app
 - `⌘ + ,` decrease selected app width
