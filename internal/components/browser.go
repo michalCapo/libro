@@ -224,10 +224,11 @@ var devtoolsPanelObservers = {};
 var devtoolsPanelSyncers = {};
 var browserModeState = {}; // appID -> 'normal' | 'insert'
 var mobileViewState = {}; // appID -> {mode, orientation, previousFrameStyle, previousContentStyle, previousWidth}
+var mobileViewportOrientation = {}; // appID -> last sm/md/xl orientation until browser instance closes
 var mobileSizes = {
 	sm: {label: 'SM', width: 480, height: 896},
 	md: {label: 'MD', width: 640, height: 932},
-	xl: {label: 'XL', width: 1280, height: 720}
+	xl: {label: 'XL', width: 720, height: 1280}
 };
 
 function applyBrowserMode(appID, mode) {
@@ -318,25 +319,25 @@ function applyMobileView(appID, mode, orientation) {
 	if (!state) {
 		state = mobileViewState[appID] = {
 			mode: 'normal',
-			orientation: 'portrait',
+			orientation: mobileViewportOrientation[appID] || 'portrait',
 			previousFrameStyle: frame.getAttribute('style') || '',
 			previousContentStyle: content.getAttribute('style') || '',
 			previousWidth: currentAppWidth(appID)
 		};
 	}
 	if (mode === 'normal') {
-		var restoreWidth = state.previousWidth || '';
+		mobileViewportOrientation[appID] = state.orientation || mobileViewportOrientation[appID] || 'portrait';
 		frame.setAttribute('style', state.previousFrameStyle || '');
 		content.setAttribute('style', state.previousContentStyle || '');
 		delete mobileViewState[appID];
-		if (restoreWidth) resizeAppForViewport(appID, restoreWidth);
 		if (window.__libroSettleAppFrame) window.__libroSettleAppFrame(appID);
 		return true;
 	}
 	var size = mobileSizes[mode];
 	if (!size) return false;
 	state.mode = mode;
-	state.orientation = orientation || state.orientation || 'portrait';
+	state.orientation = orientation || state.orientation || mobileViewportOrientation[appID] || 'portrait';
+	mobileViewportOrientation[appID] = state.orientation;
 	var width = state.orientation === 'landscape' ? size.height : size.width;
 	var height = state.orientation === 'landscape' ? size.width : size.height;
 	frame.style.width = width + 'px';
@@ -360,21 +361,26 @@ window.__libroToggleSelectedBrowserMobile = function(appID) {
 	var target = document.querySelector('webview[data-webview-app="' + appID + '"], iframe[data-browser-iframe-app="' + appID + '"]');
 	if (!target) return;
 	var current = (mobileViewState[appID] && mobileViewState[appID].mode) || 'normal';
+	var orientation = (mobileViewState[appID] && mobileViewState[appID].orientation) || mobileViewportOrientation[appID] || 'portrait';
 	var next = current === 'normal' ? 'sm' : (current === 'sm' ? 'md' : (current === 'md' ? 'xl' : 'normal'));
-	if (next !== 'normal') resizeAppForViewport(appID, next);
+	// Viewport preview sizes are applied locally with inline styles. Avoid also
+	// resizing the app through the server, which causes a second layout jump when
+	// the server patch arrives.
 	setTimeout(function(){
-		if (!applyMobileView(appID, next, 'portrait')) return;
+		if (!applyMobileView(appID, next, orientation)) return;
 		if (next !== 'normal') {
 			setTimeout(function(){
 				var state = mobileViewState[appID];
-				if (state && state.mode === next) applyMobileView(appID, next, state.orientation || 'portrait');
+				if (state && state.mode === next) applyMobileView(appID, next, state.orientation || orientation);
 			}, 80);
 		}
 		if (window.__libroShowToast) {
 			if (next === 'normal') window.__libroShowToast('Viewport off', 'Restored previous browser size', 1200);
 			else {
 				var size = mobileSizes[next];
-				window.__libroShowToast('Viewport ' + size.label, size.width + ' × ' + size.height, 1200);
+				var width = orientation === 'landscape' ? size.height : size.width;
+				var height = orientation === 'landscape' ? size.width : size.height;
+				window.__libroShowToast('Viewport ' + size.label, width + ' × ' + height, 1200);
 			}
 		}
 		var wv = window.__libroWebviews[appID];
@@ -387,6 +393,7 @@ window.__libroRotateSelectedBrowserViewport = function(appID) {
 	var state = appID ? mobileViewState[appID] : null;
 	if (!state || (state.mode !== 'sm' && state.mode !== 'md' && state.mode !== 'xl')) return;
 	var nextOrientation = state.orientation === 'landscape' ? 'portrait' : 'landscape';
+	mobileViewportOrientation[appID] = nextOrientation;
 	if (!applyMobileView(appID, state.mode, nextOrientation)) return;
 	if (window.__libroShowToast) {
 		var size = mobileSizes[state.mode];
@@ -885,6 +892,8 @@ function initWebview(wv) {
 					delete queued[oldAppID];
 					delete searchState[oldAppID];
 					delete browserModeState[oldAppID];
+					if (mobileViewportOrientation[oldAppID]) mobileViewportOrientation[appID] = mobileViewportOrientation[oldAppID];
+					delete mobileViewportOrientation[oldAppID];
 					delete mobileViewState[oldAppID];
 				}
 				window.__libroWebviews[appID] = pooled;
@@ -1100,6 +1109,7 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 						delete searchState[id];
 						delete browserModeState[id];
 						delete mobileViewState[id];
+						delete mobileViewportOrientation[id];
 					}
 				});
 				if (node.tagName === 'WEBVIEW' && node.getAttribute('data-webview-app')) {
@@ -1118,6 +1128,7 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 					delete searchState[id];
 					delete browserModeState[id];
 					delete mobileViewState[id];
+					delete mobileViewportOrientation[id];
 				}
 			});
 		});
