@@ -143,7 +143,8 @@ var browserShortcutsScript = '(' + function(){
 				break;
 			case 'o': console.log('__libro:urlpopup'); break;
 			case 'r': console.log('__libro:reload'); break;
-			case 'm': console.log('__libro:mobile'); break;
+			case 'm': console.log('__libro:viewport'); break;
+			case 'M': console.log('__libro:viewportrotate'); break;
 			case '/': console.log('__libro:search'); break;
 			case 'n': console.log('__libro:findnext'); break;
 			case 'N': console.log('__libro:findprev'); break;
@@ -222,11 +223,11 @@ var searchState = {}; // appID -> {query, barEl, inputEl, countEl}
 var devtoolsPanelObservers = {};
 var devtoolsPanelSyncers = {};
 var browserModeState = {}; // appID -> 'normal' | 'insert'
-var mobileViewState = {}; // appID -> {mode, previousFrameStyle, previousContentStyle}
+var mobileViewState = {}; // appID -> {mode, orientation, previousFrameStyle, previousContentStyle, previousWidth}
 var mobileSizes = {
-	xs: {label: 'XS', width: 375, height: 667},
-	sm: {label: 'SM', width: 414, height: 896},
-	md: {label: 'MD', width: 430, height: 932}
+	sm: {label: 'SM', width: 480, height: 896},
+	md: {label: 'MD', width: 640, height: 932},
+	xl: {label: 'XL', width: 1280, height: 720}
 };
 
 function applyBrowserMode(appID, mode) {
@@ -289,7 +290,27 @@ window.__libroGetBrowserMode = function(appID) {
 
 window.__libroApplyBrowserMode = applyBrowserMode;
 
-function applyMobileView(appID, mode) {
+function currentAppWidth(appID) {
+	var frame = document.querySelector('[data-app-id="' + appID + '"]');
+	if (!frame) return '';
+	var active = frame.querySelector('[data-size-badges] button.bg-white\\/25, [data-size-badges] button.bg-blue-600');
+	if (active) return (active.getAttribute('data-resize-width') || active.textContent || '').trim().toLowerCase();
+	var widths = ['sm','md','lg','xl','2xl','3xl','full'];
+	for (var i = 0; i < widths.length; i++) {
+		var btn = frame.querySelector('[data-resize-width="' + widths[i] + '"]');
+		if (btn && (btn.className || '').indexOf('text-white') !== -1) return widths[i];
+	}
+	return '';
+}
+
+function resizeAppForViewport(appID, width) {
+	if (!width || !window.__libroResizeApp) return;
+	var host = document.querySelector('[data-webview-app="' + appID + '"], iframe[data-browser-iframe-app="' + appID + '"]');
+	var sid = host ? (host.getAttribute('data-sid') || '') : '';
+	window.__libroResizeApp(appID, width, sid || undefined);
+}
+
+function applyMobileView(appID, mode, orientation) {
 	var frame = document.querySelector('[data-app-id="' + appID + '"]');
 	var content = document.querySelector('[data-app-content="' + appID + '"]');
 	if (!frame || !content) return false;
@@ -297,26 +318,36 @@ function applyMobileView(appID, mode) {
 	if (!state) {
 		state = mobileViewState[appID] = {
 			mode: 'normal',
+			orientation: 'portrait',
 			previousFrameStyle: frame.getAttribute('style') || '',
-			previousContentStyle: content.getAttribute('style') || ''
+			previousContentStyle: content.getAttribute('style') || '',
+			previousWidth: currentAppWidth(appID)
 		};
 	}
 	if (mode === 'normal') {
+		var restoreWidth = state.previousWidth || '';
 		frame.setAttribute('style', state.previousFrameStyle || '');
 		content.setAttribute('style', state.previousContentStyle || '');
 		delete mobileViewState[appID];
+		if (restoreWidth) resizeAppForViewport(appID, restoreWidth);
 		if (window.__libroSettleAppFrame) window.__libroSettleAppFrame(appID);
 		return true;
 	}
 	var size = mobileSizes[mode];
 	if (!size) return false;
 	state.mode = mode;
-	frame.style.width = size.width + 'px';
-	frame.style.flex = '0 0 ' + size.width + 'px';
-	frame.style.maxWidth = size.width + 'px';
-	content.style.height = size.height + 'px';
-	content.style.flex = '0 0 ' + size.height + 'px';
-	content.style.maxHeight = size.height + 'px';
+	state.orientation = orientation || state.orientation || 'portrait';
+	var width = state.orientation === 'landscape' ? size.height : size.width;
+	var height = state.orientation === 'landscape' ? size.width : size.height;
+	frame.style.width = width + 'px';
+	frame.style.flex = '0 0 ' + width + 'px';
+	frame.style.maxWidth = width + 'px';
+	frame.style.height = 'auto';
+	frame.style.maxHeight = 'calc(100% - 8px)';
+	frame.style.alignSelf = 'center';
+	content.style.height = height + 'px';
+	content.style.flex = '0 0 ' + height + 'px';
+	content.style.maxHeight = height + 'px';
 	content.style.minHeight = '0';
 	if (window.__libroScrollToApp) window.__libroScrollToApp(frame);
 	if (window.__libroSettleAppFrame) window.__libroSettleAppFrame(appID);
@@ -329,14 +360,39 @@ window.__libroToggleSelectedBrowserMobile = function(appID) {
 	var target = document.querySelector('webview[data-webview-app="' + appID + '"], iframe[data-browser-iframe-app="' + appID + '"]');
 	if (!target) return;
 	var current = (mobileViewState[appID] && mobileViewState[appID].mode) || 'normal';
-	var next = current === 'normal' ? 'xs' : (current === 'xs' ? 'sm' : (current === 'sm' ? 'md' : 'normal'));
-	if (!applyMobileView(appID, next)) return;
-	if (window.__libroShowToast) {
-		if (next === 'normal') window.__libroShowToast('Mobile view off', 'Restored previous browser size', 1200);
-		else {
-			var size = mobileSizes[next];
-			window.__libroShowToast('Mobile view ' + size.label, size.width + ' × ' + size.height, 1200);
+	var next = current === 'normal' ? 'sm' : (current === 'sm' ? 'md' : (current === 'md' ? 'xl' : 'normal'));
+	if (next !== 'normal') resizeAppForViewport(appID, next);
+	setTimeout(function(){
+		if (!applyMobileView(appID, next, 'portrait')) return;
+		if (next !== 'normal') {
+			setTimeout(function(){
+				var state = mobileViewState[appID];
+				if (state && state.mode === next) applyMobileView(appID, next, state.orientation || 'portrait');
+			}, 80);
 		}
+		if (window.__libroShowToast) {
+			if (next === 'normal') window.__libroShowToast('Viewport off', 'Restored previous browser size', 1200);
+			else {
+				var size = mobileSizes[next];
+				window.__libroShowToast('Viewport ' + size.label, size.width + ' × ' + size.height, 1200);
+			}
+		}
+		var wv = window.__libroWebviews[appID];
+		if (wv) refocusWebview(appID, wv);
+	}, 0);
+};
+
+window.__libroRotateSelectedBrowserViewport = function(appID) {
+	appID = appID || window.__libroSelectedApp || '';
+	var state = appID ? mobileViewState[appID] : null;
+	if (!state || (state.mode !== 'sm' && state.mode !== 'md' && state.mode !== 'xl')) return;
+	var nextOrientation = state.orientation === 'landscape' ? 'portrait' : 'landscape';
+	if (!applyMobileView(appID, state.mode, nextOrientation)) return;
+	if (window.__libroShowToast) {
+		var size = mobileSizes[state.mode];
+		var width = nextOrientation === 'landscape' ? size.height : size.width;
+		var height = nextOrientation === 'landscape' ? size.width : size.height;
+		window.__libroShowToast('Viewport ' + nextOrientation, width + ' × ' + height, 1200);
 	}
 	var wv = window.__libroWebviews[appID];
 	if (wv) refocusWebview(appID, wv);
@@ -829,6 +885,7 @@ function initWebview(wv) {
 					delete queued[oldAppID];
 					delete searchState[oldAppID];
 					delete browserModeState[oldAppID];
+					delete mobileViewState[oldAppID];
 				}
 				window.__libroWebviews[appID] = pooled;
 				initialized[appID] = true;
@@ -930,7 +987,8 @@ function bindWebviewEvents(wv) {
 		else if (msg === '__libro:console') window.__libroToggleConsole(appID);
 		else if (msg === '__libro:urlpopup') { if (window.__libroOpenURLPopup) window.__libroOpenURLPopup(); }
 		else if (msg === '__libro:reload') { if (window.__libroWvReload) window.__libroWvReload(appID); }
-		else if (msg === '__libro:mobile') { if (window.__libroToggleSelectedBrowserMobile) window.__libroToggleSelectedBrowserMobile(appID); }
+		else if (msg === '__libro:mobile' || msg === '__libro:viewport') { if (window.__libroToggleSelectedBrowserMobile) window.__libroToggleSelectedBrowserMobile(appID); }
+		else if (msg === '__libro:viewportrotate') { if (window.__libroRotateSelectedBrowserViewport) window.__libroRotateSelectedBrowserViewport(appID); }
 		else if (msg === '__libro:copyurl') {
 			var inp = document.getElementById('urlinput-' + appID);
 			if (inp && navigator.clipboard) navigator.clipboard.writeText(inp.value);
@@ -1041,6 +1099,7 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 						delete queued[id];
 						delete searchState[id];
 						delete browserModeState[id];
+						delete mobileViewState[id];
 					}
 				});
 				if (node.tagName === 'WEBVIEW' && node.getAttribute('data-webview-app')) {
@@ -1058,6 +1117,7 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 					delete queued[id];
 					delete searchState[id];
 					delete browserModeState[id];
+					delete mobileViewState[id];
 				}
 			});
 		});

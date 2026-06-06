@@ -1284,14 +1284,16 @@ app.on('web-contents-created', (event, contents) => {
         contents.executeJavaScript(browserKeyActions[key]).catch(() => {})
         return
       }
-      // Bare 'o' opens URL popup, bare 'r' reloads, bare 'm' cycles mobile view.
-      if (!input.shift && (key === 'o' || key === 'r' || key === 'm')) {
+      // Bare 'o' opens URL popup, bare 'r' reloads, bare 'm' cycles viewport size.
+      // Shift+M rotates the sm/md/xl viewport between portrait and landscape.
+      if ((!input.shift && (key === 'o' || key === 'r' || key === 'm')) || (input.shift && key === 'm')) {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
           let js = ''
-          if (key === 'o') js = `if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();`
-          else if (key === 'r') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroWvReload) window.__libroWvReload(a);})();`
+          if (!input.shift && key === 'o') js = `if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();`
+          else if (!input.shift && key === 'r') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroWvReload) window.__libroWvReload(a);})();`
+          else if (input.shift && key === 'm') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroRotateSelectedBrowserViewport) window.__libroRotateSelectedBrowserViewport(a);})();`
           else js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroToggleSelectedBrowserMobile) window.__libroToggleSelectedBrowserMobile(a);})();`
           mainWindow.webContents.executeJavaScript(js).catch(() => {})
         }
