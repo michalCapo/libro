@@ -1508,17 +1508,17 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 
 	zenCloseCls := "hidden"
 	if zen {
-		zenCloseCls = "absolute top-0 right-0 z-50 h-7 w-7 flex items-start justify-end opacity-0 transition-opacity duration-150 ease-out hover:opacity-100 focus-within:opacity-100"
+		zenCloseCls = "absolute top-1 right-1 z-50 h-5 w-5 flex items-center justify-center pointer-events-none"
 	}
 	zenCloseBtn := r.Div(zenCloseCls).
 		Attr("data-zen-close", "").
 		Render(
-			r.Button("flex h-7 w-7 items-center justify-center pl-0.5 pb-0.5 border-l border-b cursor-pointer shadow-[0_8px_18px_rgba(62,18,18,0.16)] transition-[background-color,border-color,color,box-shadow] duration-150 ease-out hover:shadow-[0_10px_22px_rgba(62,18,18,0.22)] active:shadow-[0_5px_12px_rgba(62,18,18,0.16)] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/45").
+			r.Button("flex h-5 w-5 items-center justify-center cursor-pointer pointer-events-auto opacity-0 rounded-sm border shadow-sm transition-[opacity,background-color,border-color,color] duration-150 ease-out hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/45").
 				Attr("title", "Close app").
 				Attr("aria-label", "Close app").
-				Attr("style", "border-top-right-radius:0;border-top-left-radius:0;border-bottom-right-radius:0;border-bottom-left-radius:9999px;background:oklch(98% 0.012 24);border-color:oklch(88% 0.045 24);color:oklch(43% 0.16 24);").
+				Attr("style", "background:oklch(98% 0.012 24);border-color:oklch(88% 0.045 24);color:oklch(43% 0.16 24);").
 				OnClick(r.JS(fmt.Sprintf("__ws.callSilent('app.close',{sid:%s,id:%s})", components.JSString(sid), components.JSString(app.ID)))).
-				Render(r.I("material-icons-round text-[15px] leading-none block").Text("close")),
+				Render(r.I("material-icons-round text-[14px] leading-none block").Text("close")),
 		)
 
 	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
