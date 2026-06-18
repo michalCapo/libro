@@ -794,7 +794,7 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 					var overlay = child.querySelector('[data-click-overlay]');
 					if (overlay) overlay.remove();
 					var zenClose = child.querySelector('[data-zen-close]');
-					if (zenClose) zenClose.className = zenMode ? 'absolute top-0 right-0 z-50 h-12 w-12 flex items-start justify-end opacity-0 transition-opacity duration-150 ease-out hover:opacity-100 focus-within:opacity-100' : 'hidden';
+					if (zenClose) zenClose.className = zenMode ? 'absolute top-1 right-1 z-50 h-5 w-5 flex items-center justify-center pointer-events-none' : 'hidden';
 				} else {
 					// Zen mode: gray border for unselected app, normal border otherwise
 					var cleanCls2 = child.className.replace(/border-\[\dpx\]/g, '').replace(/border-t-\[\dpx\]/g, '').replace(/border-blue-500/g, '').replace(/border-gray-300 dark:border-zinc-600/g, '').replace(/border-transparent/g, '');
@@ -845,7 +845,7 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 						if (iframeWrap) { iframeWrap.appendChild(ov); } else { child.appendChild(ov); }
 					}
 					var zenClose2 = child.querySelector('[data-zen-close]');
-					if (zenClose2) zenClose2.className = zenMode ? 'absolute top-0 right-0 z-50 h-12 w-12 flex items-start justify-end opacity-0 transition-opacity duration-150 ease-out hover:opacity-100 focus-within:opacity-100' : 'hidden';
+					if (zenClose2) zenClose2.className = zenMode ? 'absolute top-1 right-1 z-50 h-5 w-5 flex items-center justify-center pointer-events-none' : 'hidden';
 				}
 			}
 
