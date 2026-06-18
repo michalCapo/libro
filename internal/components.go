@@ -794,7 +794,7 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 					var overlay = child.querySelector('[data-click-overlay]');
 					if (overlay) overlay.remove();
 					var zenClose = child.querySelector('[data-zen-close]');
-					if (zenClose) zenClose.style.display = zenMode ? 'flex' : 'none';
+					if (zenClose) zenClose.className = zenMode ? 'absolute top-0 right-0 z-50 h-12 w-12 flex items-start justify-end opacity-0 transition-opacity duration-150 ease-out hover:opacity-100 focus-within:opacity-100' : 'hidden';
 				} else {
 					// Zen mode: gray border for unselected app, normal border otherwise
 					var cleanCls2 = child.className.replace(/border-\[\dpx\]/g, '').replace(/border-t-\[\dpx\]/g, '').replace(/border-blue-500/g, '').replace(/border-gray-300 dark:border-zinc-600/g, '').replace(/border-transparent/g, '');
@@ -845,7 +845,7 @@ func navigateProjectJS(projectName string, apps []Application, selectedIndex int
 						if (iframeWrap) { iframeWrap.appendChild(ov); } else { child.appendChild(ov); }
 					}
 					var zenClose2 = child.querySelector('[data-zen-close]');
-					if (zenClose2) zenClose2.style.display = zenMode ? 'flex' : 'none';
+					if (zenClose2) zenClose2.className = zenMode ? 'absolute top-0 right-0 z-50 h-12 w-12 flex items-start justify-end opacity-0 transition-opacity duration-150 ease-out hover:opacity-100 focus-within:opacity-100' : 'hidden';
 				}
 			}
 
@@ -1506,14 +1506,20 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		toolbar = toolbar.Attr("style", "display:none")
 	}
 
-	zenCloseBtn := r.Button("hidden absolute top-2 right-2 z-50 w-7 h-7 items-center justify-center rounded-full cursor-pointer bg-black/45 text-white/80 backdrop-blur-sm transition-colors duration-75 hover:bg-red-500/85 hover:text-white").
-		Attr("data-zen-close", "").
-		Attr("title", "Close app").
-		OnClick(r.JS(fmt.Sprintf("__ws.callSilent('app.close',{sid:%s,id:%s})", components.JSString(sid), components.JSString(app.ID)))).
-		Render(r.I("material-icons-round text-[16px] leading-none block").Text("close"))
+	zenCloseCls := "hidden"
 	if zen {
-		zenCloseBtn = zenCloseBtn.Attr("style", "display:flex")
+		zenCloseCls = "absolute top-0 right-0 z-50 h-12 w-12 flex items-start justify-end opacity-0 transition-opacity duration-150 ease-out hover:opacity-100 focus-within:opacity-100"
 	}
+	zenCloseBtn := r.Div(zenCloseCls).
+		Attr("data-zen-close", "").
+		Render(
+			r.Button("flex h-9 w-9 items-center justify-center pl-1 pb-1 border-l border-b cursor-pointer shadow-[0_12px_28px_rgba(62,18,18,0.22)] transition-[background-color,border-color,color,box-shadow] duration-150 ease-out hover:shadow-[0_14px_34px_rgba(62,18,18,0.28)] active:shadow-[0_8px_18px_rgba(62,18,18,0.20)] focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/45").
+				Attr("title", "Close app").
+				Attr("aria-label", "Close app").
+				Attr("style", "border-top-right-radius:0;border-top-left-radius:0;border-bottom-right-radius:0;border-bottom-left-radius:9999px;background:oklch(98% 0.012 24);border-color:oklch(88% 0.045 24);color:oklch(43% 0.16 24);").
+				OnClick(r.JS(fmt.Sprintf("__ws.callSilent('app.close',{sid:%s,id:%s})", components.JSString(sid), components.JSString(app.ID)))).
+				Render(r.I("material-icons-round text-[18px] leading-none block").Text("close")),
+		)
 
 	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
 		ID(fmt.Sprintf("frame-%s", app.ID)).
