@@ -24,7 +24,8 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderMoveProjectPopup(),
 		renderWorktreeCreatePopup(),
 	)
-	page.JS(popupRegistryJS() +
+	page.JS(libroSessionCookieJS(sid) +
+		popupRegistryJS() +
 		flashCSS() +
 		termIconSetupJS() +
 		terminalFrameSetupJS() +

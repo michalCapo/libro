@@ -198,7 +198,11 @@ func (sm *StateManager) NewSession() string {
 	defer sm.mu.Unlock()
 	sm.nextID++
 	sid := fmt.Sprintf("session-%d", sm.nextID)
+	sm.states[sid] = newAppStateFromDB()
+	return sid
+}
 
+func newAppStateFromDB() *AppState {
 	projects := DBLoadProjects()
 	detectGitRepos(projects)
 	rendered := make(map[string]bool)
@@ -209,7 +213,7 @@ func (sm *StateManager) NewSession() string {
 	closedSnapshots := loadClosedSnapshots(projects)
 
 	zenMode := DBGetSetting("zen_mode", "0") == "1"
-	sm.states[sid] = &AppState{
+	return &AppState{
 		Projects:         projects,
 		ActiveProject:    projects[0].Name,
 		snapshots:        make(map[string]*projectSnapshot),
@@ -220,6 +224,23 @@ func (sm *StateManager) NewSession() string {
 		NavProjectSlot:   navProjectSlots,
 		ZenMode:          zenMode,
 	}
+}
+
+// EnsureSession returns an existing session when possible, or creates one with
+// the requested ID. This lets a renderer reload keep the same in-memory strip.
+func (sm *StateManager) EnsureSession(sessionID string) string {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	if sessionID != "" {
+		if _, ok := sm.states[sessionID]; ok {
+			return sessionID
+		}
+		sm.states[sessionID] = newAppStateFromDB()
+		return sessionID
+	}
+	sm.nextID++
+	sid := fmt.Sprintf("session-%d", sm.nextID)
+	sm.states[sid] = newAppStateFromDB()
 	return sid
 }
 
@@ -258,26 +279,7 @@ func (sm *StateManager) Get(sessionID string) *AppState {
 	if s, ok := sm.states[sessionID]; ok {
 		return s
 	}
-	projects := DBLoadProjects()
-	detectGitRepos(projects)
-	rendered := make(map[string]bool)
-	if len(projects) > 0 {
-		rendered[projects[0].Name] = true
-	}
-	navSlots, navProjectSlots := navSlotsFromProjects(projects)
-	closedSnapshots := loadClosedSnapshots(projects)
-	zenMode := DBGetSetting("zen_mode", "0") == "1"
-	s := &AppState{
-		Projects:         projects,
-		ActiveProject:    projects[0].Name,
-		snapshots:        make(map[string]*projectSnapshot),
-		closedSnapshots:  closedSnapshots,
-		renderedProjects: rendered,
-		EditIndex:        -1,
-		NavSlots:         navSlots,
-		NavProjectSlot:   navProjectSlots,
-		ZenMode:          zenMode,
-	}
+	s := newAppStateFromDB()
 	sm.states[sessionID] = s
 	return s
 }
