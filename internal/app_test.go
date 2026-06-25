@@ -25,3 +25,19 @@ func TestEnsureSchemePreservesFileURLCaseInsensitive(t *testing.T) {
 		t.Fatalf("ensureScheme(%q) = %q, want %q", localFile, got, localFile)
 	}
 }
+
+func TestValidLibroSessionID(t *testing.T) {
+	valid := []string{"session-1", "session-123456"}
+	for _, sid := range valid {
+		if !validLibroSessionID(sid) {
+			t.Fatalf("validLibroSessionID(%q) = false, want true", sid)
+		}
+	}
+
+	invalid := []string{"", "session-", "session-abc", "other-1", "session-1/path"}
+	for _, sid := range invalid {
+		if validLibroSessionID(sid) {
+			t.Fatalf("validLibroSessionID(%q) = true, want false", sid)
+		}
+	}
+}

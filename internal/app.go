@@ -278,6 +278,53 @@ func dbSaveApp(projectName string, editDBID int64, appType, urlOrCmd, width, nam
 	}
 }
 
+const libroSessionCookieName = "libro_sid"
+
+func validLibroSessionID(sid string) bool {
+	if sid == "" || len(sid) > 64 || !strings.HasPrefix(sid, "session-") {
+		return false
+	}
+	rest := strings.TrimPrefix(sid, "session-")
+	if rest == "" {
+		return false
+	}
+	for _, ch := range rest {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func requestLibroSessionID(ctx *r.Context) string {
+	if ctx == nil || ctx.Request == nil {
+		return ""
+	}
+	cookie, err := ctx.Request.Cookie(libroSessionCookieName)
+	if err != nil || cookie == nil {
+		return ""
+	}
+	sid := strings.TrimSpace(cookie.Value)
+	if !validLibroSessionID(sid) {
+		return ""
+	}
+	return sid
+}
+
+func libroSessionCookieJS(sid string) string {
+	if sid == "" {
+		return ""
+	}
+	return fmt.Sprintf(`
+(function(){
+	window.__libroSessionID=%s;
+	try {
+		document.cookie=%s+'='+encodeURIComponent(%s)+'; Path=/; SameSite=Lax; Max-Age=31536000';
+	} catch (err) {}
+})();
+`, components.JSString(sid), components.JSString(libroSessionCookieName), components.JSString(sid))
+}
+
 func copyPasswordFieldJS(text, label string) string {
 	return fmt.Sprintf(`
 (function(){
@@ -425,9 +472,9 @@ func Run(assets embed.FS) {
 		return len(restored), skipped
 	}
 
-	// Main page - generates a unique session ID per page load
+	// Main page - reuses the renderer's Libro session across reloads.
 	app.Page("/", func(ctx *r.Context) *r.Node {
-		sid := sm.NewSession()
+		sid := sm.EnsureSession(requestLibroSessionID(ctx))
 		state := sm.Get(sid)
 		return renderPage(state, sid)
 	})
