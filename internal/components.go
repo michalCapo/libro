@@ -2861,6 +2861,10 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroOpenTerminalApp)window.__libroOpenTerminalApp();
 			}},
+			{id:'lazygit',label:'Open lazygit',scope:'project',icon:'account_tree',keywords:'git lazygit status diff commit tui terminal',run:function(){
+				closePalette();
+				__ws.call('app.lazygit.open',{sid:'%s'});
+			}},
 			{id:'quit',label:'Quit Libro',scope:'app',icon:'close',keywords:'quit close exit app window desktop',run:function(){
 				closePalette();
 				if(window.__libroShowCloseDialog)window.__libroShowCloseDialog();
@@ -3072,7 +3076,7 @@ func commandPopupJS(sid string) string {
 
 window.__libroOpenCommandPalette=openPalette;
 })();
-`, CommandPopupID, sid, sid, sid, sid, sid, sid, sid, sid, sid)
+`, CommandPopupID, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }
 
 // renderWorktreeCreatePopup renders the popup used to create a new worktree
@@ -5403,7 +5407,7 @@ func keyboardShortcutsJS(sid string) string {
 				if (e.metaKey && (e.key === 'g' || e.key === 'G' || e.code === 'KeyG') && !e.ctrlKey) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					if (window.__libroOpenWorktreeCreate) window.__libroOpenWorktreeCreate();
+					__ws.call('app.lazygit.open', {sid: "%s"});
 					return;
 				}
 				if (e.metaKey && (e.key === 'x' || e.key === 'X' || e.code === 'KeyX') && !e.ctrlKey) {
@@ -5502,5 +5506,5 @@ func keyboardShortcutsJS(sid string) string {
 				}
 			});
 		})();
-		`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
+		`, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }

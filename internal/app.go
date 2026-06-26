@@ -759,6 +759,15 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		return fmt.Sprintf(`__ws.callSilent('app.start',{sid:%s,type:'terminal',url:'',command:'pi',width:'md',writable:true,name:'pi',iconUrl:'',side:'right'});`, components.JSString(sid))
 	})
 
+	// Open lazygit if available.
+	app.Action("app.lazygit.open", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		if _, err := exec.LookPath("lazygit"); err != nil {
+			return showToastJS("Lazygit not installed", "Install lazygit to use ⌘/Win+G", 2600)
+		}
+		return fmt.Sprintf(`__ws.callSilent('app.start',{sid:%s,type:'terminal',url:'',command:'lazygit',width:'lg',writable:true,name:'lazygit',iconUrl:'',side:'right'});`, components.JSString(sid))
+	})
+
 	// Start a saved/predefined application
 	app.Action("app.start", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
