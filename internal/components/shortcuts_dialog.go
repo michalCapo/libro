@@ -36,7 +36,7 @@ func ShortcutsDialog() *r.Node {
 			{"⌘ + ]", "Move app right"},
 			{"⌘ + Ctrl + Y", "Move app to project"},
 			{"⌘ + N", "Open projects"},
-			{"⌘ + G", "Create worktree from current branch"},
+			{"⌘ + G", "Open lazygit if installed"},
 			{"⌘ + X", "Assign or remove current project shortcut"},
 			{"Ctrl + 1", "Switch to home project"},
 			{"Ctrl + 2–9", "Switch to assigned project or worktree"},
