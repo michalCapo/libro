@@ -928,7 +928,57 @@ func parkFloatingPopupsJS() string {
 }
 
 func flashCSS() string {
-	return `(function(){if(!document.getElementById('libro-flash-css')){var s=document.createElement('style');s.id='libro-flash-css';s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.98)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.98)}} @keyframes libro-toast-slide-up{0%{transform:translateY(100%);opacity:0}100%{transform:translateY(0);opacity:1}} @keyframes libro-toast-slide-down{0%{transform:translateY(0);opacity:1}100%{transform:translateY(100%);opacity:0}} @keyframes libro-app-select{0%{outline:2px solid rgba(59,130,246,.5)}100%{outline:2px solid transparent}} @keyframes libro-project-switch{0%{opacity:0}100%{opacity:1}} .scrollbar-none,[id^="app-strip-"]{scrollbar-width:none;-ms-overflow-style:none} .scrollbar-none::-webkit-scrollbar,[id^="app-strip-"]::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}';document.head.appendChild(s);}window.__libroScrollToApp=function(app){var strip=app.parentElement;if(!strip)return;var sr=strip.getBoundingClientRect();var ar=app.getBoundingClientRect();var appLeft=ar.left-sr.left+strip.scrollLeft;var appRight=appLeft+ar.width;var pad=8;if(ar.width+pad*2>=sr.width){strip.scrollLeft=Math.max(0,appLeft-pad);return;}if(appLeft-pad<strip.scrollLeft){strip.scrollLeft=Math.max(0,appLeft-pad);}else if(appRight+pad>strip.scrollLeft+sr.width){strip.scrollLeft=Math.max(0,appRight+pad-sr.width);}};})();`
+	return `(function(){
+	if(!document.getElementById('libro-flash-css')){
+		var s=document.createElement('style');
+		s.id='libro-flash-css';
+		s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.98)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.98)}} @keyframes libro-toast-slide-up{0%{transform:translateY(100%);opacity:0}100%{transform:translateY(0);opacity:1}} @keyframes libro-toast-slide-down{0%{transform:translateY(0);opacity:1}100%{transform:translateY(100%);opacity:0}} @keyframes libro-app-select{0%{outline:2px solid rgba(59,130,246,.5)}100%{outline:2px solid transparent}} @keyframes libro-project-switch{0%{opacity:0}100%{opacity:1}} .scrollbar-none,[id^="app-strip-"]{scrollbar-width:none;-ms-overflow-style:none} .scrollbar-none::-webkit-scrollbar,[id^="app-strip-"]::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}';
+		document.head.appendChild(s);
+	}
+
+	window.__libroScrollToApp=function(app){
+		var strip=app&&app.parentElement;
+		if(!strip)return;
+		var sr=strip.getBoundingClientRect();
+		var ar=app.getBoundingClientRect();
+		var viewport=strip.clientWidth||sr.width;
+		var spacer=Math.max(0,(viewport-ar.width)/2);
+		var first=strip.firstElementChild;
+		var last=strip.lastElementChild;
+		if(first&&!first.hasAttribute('data-app-id')){
+			first.style.flex='0 0 '+spacer+'px';
+			first.style.minWidth=spacer+'px';
+		}
+		if(last&&!last.hasAttribute('data-app-id')){
+			last.style.flex='0 0 '+spacer+'px';
+			last.style.minWidth=spacer+'px';
+		}
+		sr=strip.getBoundingClientRect();
+		ar=app.getBoundingClientRect();
+		var appLeft=ar.left-sr.left+strip.scrollLeft;
+		var max=Math.max(0,strip.scrollWidth-strip.clientWidth);
+		var target=appLeft+(ar.width/2)-(viewport/2);
+		strip.scrollLeft=Math.max(0,Math.min(max,target));
+	};
+
+	window.__libroCenterSelectedApp=function(){
+		var id=window.__libroSelectedApp||'';
+		if(!id)return;
+		var app=document.querySelector('[data-app-id="'+String(id).replace(/"/g,'\\"')+'"]');
+		if(app&&window.__libroScrollToApp)window.__libroScrollToApp(app);
+	};
+
+	if(!window.__libroCenterResizeRegistered){
+		window.__libroCenterResizeRegistered=true;
+		var scheduleCenter=function(){
+			clearTimeout(window.__libroCenterResizeTimer);
+			window.__libroCenterResizeTimer=setTimeout(function(){
+				if(window.__libroCenterSelectedApp)window.__libroCenterSelectedApp();
+			},50);
+		};
+		window.addEventListener('resize',scheduleCenter);
+	}
+})();`
 }
 
 // projectToastJS returns JS that shows a brief centered toast with the project and branch.
@@ -1766,7 +1816,9 @@ func focusSelectedAppJS(state *AppState) string {
 	}
 	return fmt.Sprintf(`
 window.__libroSelectedApp=%s;
+if(window.__libroCenterSelectedApp) window.__libroCenterSelectedApp();
 setTimeout(function(){
+	if(window.__libroCenterSelectedApp) window.__libroCenterSelectedApp();
 	if(window.__libroFocusApp) window.__libroFocusApp(%d);
 }, 30);`, components.JSString(appID), state.SelectedIndex)
 }
@@ -5216,6 +5268,7 @@ func keyboardShortcutsJS(sid string) string {
 				var sorted = window.__libroSortedApps(strip);
 				var container = sorted[idx];
 				if (!container) return;
+				if (window.__libroScrollToApp) window.__libroScrollToApp(container);
 
 				function focusAttempt() {
 					if ((window.__libroSelectedApp || '') !== (container.getAttribute('data-app-id') || '')) return;
