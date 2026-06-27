@@ -41,3 +41,25 @@ func TestValidLibroSessionID(t *testing.T) {
 		}
 	}
 }
+
+func TestFaviconURLUsesWorkingGoogleEndpoint(t *testing.T) {
+	got := faviconURL("https://discord.com/channels", 32)
+	want := "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https%3A%2F%2Fdiscord.com&size=32"
+	if got != want {
+		t.Fatalf("faviconURL() = %q, want %q", got, want)
+	}
+}
+
+func TestFaviconURLAddsSchemeForBareDomains(t *testing.T) {
+	got := faviconURL("discord.com", 16)
+	want := "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https%3A%2F%2Fdiscord.com&size=16"
+	if got != want {
+		t.Fatalf("faviconURL() = %q, want %q", got, want)
+	}
+}
+
+func TestFaviconURLSkipsFileURLs(t *testing.T) {
+	if got := faviconURL("file:///home/capo/site.html", 32); got != "" {
+		t.Fatalf("faviconURL(file URL) = %q, want empty", got)
+	}
+}

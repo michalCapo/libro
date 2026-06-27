@@ -23,6 +23,33 @@ func urlParse(rawURL string) (*url.URL, error) {
 	return url.Parse(rawURL)
 }
 
+func faviconURL(rawURL string, size int) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return ""
+	}
+	if size <= 0 {
+		size = 32
+	}
+
+	u, err := urlParse(rawURL)
+	if err == nil && strings.EqualFold(u.Scheme, "file") {
+		return ""
+	}
+	if err != nil || u.Hostname() == "" {
+		u, err = urlParse("https://" + rawURL)
+	}
+	if err != nil || u.Hostname() == "" || strings.EqualFold(u.Scheme, "file") {
+		return ""
+	}
+
+	target := u.Hostname()
+	if u.Scheme != "" && u.Host != "" {
+		target = u.Scheme + "://" + u.Host
+	}
+	return fmt.Sprintf("https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=%s&size=%d", url.QueryEscape(target), size)
+}
+
 const (
 	MainAreaID            = "main-area"
 	TopBarID              = "top-bar"
@@ -587,7 +614,7 @@ func renderSavedAppButton(app SavedApp, sid string) *r.Node {
 			// Try to extract hostname for favicon
 			if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
 				iconNode = r.Img("w-5 h-5 shrink-0 rounded-sm").
-					Attr("src", "https://t3.gstatic.com/faviconV2?url="+u.Hostname()+"&size=32")
+					Attr("src", faviconURL(app.URL, 32))
 				if label == app.URL {
 					h := strings.TrimPrefix(u.Hostname(), "www.")
 					label = h
@@ -1419,7 +1446,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			Attr("autocomplete", "off").
 			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();var u=event.target.value.trim();if(u&&!/^(https?|file):\/\//i.test(u)){if(/\s/.test(u)||(!u.includes('.')&&!u.includes(':'))){u='https://www.google.com/search?q='+encodeURIComponent(u);}else{u=(/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]|\[::0?\])(:|$)/i.test(u)?'http://':'https://')+u;}}event.target.value=u;window.__libroWvNavigate('%s',u);__ws.call('app.url.set',{"sid":"%s","id":"%s","url":u});event.target.blur();var target=document.querySelector('[data-webview-app="%s"], iframe[data-browser-iframe-app="%s"]');if(target)target.focus();}`, app.ID, sid, app.ID, app.ID, app.ID)))
 
-		// Globe icon in badge
+		// Site icon in badge
 		globeBadgeCls := "inline-flex items-center justify-center w-6 h-6 rounded shrink-0"
 		globeIconCls := "material-icons-round text-sm leading-none"
 		if selected {
@@ -1429,7 +1456,11 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			globeBadgeCls += " bg-gray-800 dark:bg-zinc-900"
 			globeIconCls += " text-white"
 		}
-		globe := r.Div(globeBadgeCls).Render(r.I(globeIconCls).Text("language"))
+		globeIcon := r.I(globeIconCls).Text("language")
+		if fav := faviconURL(app.URL, 16); fav != "" {
+			globeIcon = r.Img("w-4 h-4 rounded-sm").Attr("src", fav)
+		}
+		globe := r.Div(globeBadgeCls).Render(globeIcon)
 
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
 			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn)
@@ -1994,7 +2025,7 @@ func searchDialogJS(sid string) string {
 			}else if(item.isHistory){
 				try{
 					var u=new URL(app.url);
-					iconHtml='<img class="w-6 h-6 rounded-sm shrink-0" src="https://t3.gstatic.com/faviconV2?url='+encodeURIComponent(u.hostname)+'&size=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 text-lg\\\'>history</i>\'">';
+					iconHtml='<img class="w-6 h-6 rounded-sm shrink-0" src="'+window.__libroFaviconURL(app.url,32)+'" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 text-lg\\\'>history</i>\'">';
 					label=u.hostname.replace(/^www\./,'');
 					sub=app.url;
 				}catch(e){
@@ -2009,7 +2040,7 @@ func searchDialogJS(sid string) string {
 			}else{
 				try{
 					var u=new URL(app.url);
-					iconHtml='<img class="w-6 h-6 rounded-sm shrink-0" src="https://t3.gstatic.com/faviconV2?url='+encodeURIComponent(u.hostname)+'&size=32" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 text-lg\\\'>language</i>\'">';
+					iconHtml='<img class="w-6 h-6 rounded-sm shrink-0" src="'+window.__libroFaviconURL(app.url,32)+'" onerror="this.outerHTML=\'<i class=\\\'material-icons-round text-gray-400 text-lg\\\'>language</i>\'">';
 					label=app.name||u.hostname.replace(/^www\./,'');
 					sub=app.url;
 				}catch(e){
@@ -3622,7 +3653,7 @@ func renderManageAppRow(app SavedApp, sid string) *r.Node {
 		if app.URL != "" {
 			if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
 				iconNode = r.Img("w-5 h-5 shrink-0 rounded-sm").
-					Attr("src", "https://t3.gstatic.com/faviconV2?url="+u.Hostname()+"&size=32")
+					Attr("src", faviconURL(app.URL, 32))
 				if label == app.URL {
 					h := strings.TrimPrefix(u.Hostname(), "www.")
 					label = h
@@ -3864,7 +3895,7 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			if app.URL != "" {
 				if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
 					iconNode = r.Img("w-6 h-6 rounded-sm").
-						Attr("src", "https://t3.gstatic.com/faviconV2?url="+u.Hostname()+"&size=32")
+						Attr("src", faviconURL(app.URL, 32))
 					if label == app.URL {
 						h := strings.TrimPrefix(u.Hostname(), "www.")
 						label = h
@@ -3956,7 +3987,7 @@ func renderAppPreview(state *AppState, sid string) *r.Node {
 			if app.URL != "" {
 				if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
 					iconNode = r.Img("w-3.5 h-3.5 rounded-sm shrink-0").
-						Attr("src", "https://t3.gstatic.com/faviconV2?url="+u.Hostname()+"&size=16")
+						Attr("src", faviconURL(app.URL, 16))
 				}
 			}
 			if iconNode == nil {
@@ -4763,6 +4794,18 @@ func initHashJS(sid string) string {
 func termIconSetupJS() string {
 	return fmt.Sprintf(`
 (function(){
+	if(!window.__libroFaviconURL){
+		window.__libroFaviconURL=function(raw,size){
+			raw=(raw||'').trim();
+			if(!raw)return '';
+			size=size||32;
+			var u;
+			try{u=new URL(raw);}catch(e){try{u=new URL('https://'+raw);}catch(e2){return '';}}
+			if(!u.hostname||u.protocol==='file:')return '';
+			var target=(u.protocol&&u.host)?(u.protocol+'//'+u.host):u.hostname;
+			return 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url='+encodeURIComponent(target)+'&size='+size;
+		};
+	}
 	if(window.__libroTermIcon)return;
 	var icons=%s;
 
