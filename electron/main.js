@@ -13,6 +13,21 @@ process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true'
 // This is primarily required for screen sharing on modern Wayland desktops.
 app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer')
 
+// Keep native xterm panels responsive when Electron thinks the window or a
+// project pane is backgrounded. This reduces timer/render throttling that makes
+// terminal apps feel less like a native GPU terminal.
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+
+// Prefer Alacritty-like terminal responsiveness by default: force Chromium's
+// GPU/WebGL path even if the driver is on Chromium's blocklist. Set
+// LIBRO_FORCE_GPU=0 to fall back to Electron's conservative defaults.
+if (process.env.LIBRO_FORCE_GPU !== '0') {
+  app.commandLine.appendSwitch('ignore-gpu-blocklist')
+  app.commandLine.appendSwitch('enable-gpu-rasterization')
+  app.commandLine.appendSwitch('enable-zero-copy')
+}
+
 // Pin Electron's profile directory so persistent webview partitions survive relaunches.
 app.setPath('userData', path.join(app.getPath('appData'), 'libro'))
 app.setName('Libro')
@@ -691,6 +706,7 @@ function createWindow() {
       webviewTag: true,
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false,
       preload: path.join(__dirname, 'preload.js'),
     },
   })

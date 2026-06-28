@@ -5454,13 +5454,22 @@ func terminalFrameSetupJS() string {
 						return;
 					}
 					el.innerHTML = '';
+					var scrollback = 2000;
+					var cursorBlink = false;
+					try {
+						var configuredScrollback = parseInt(window.localStorage && window.localStorage.getItem('libro.terminal.scrollback') || '', 10);
+						if (configuredScrollback >= 100 && configuredScrollback <= 50000) scrollback = configuredScrollback;
+						cursorBlink = !!(window.localStorage && window.localStorage.getItem('libro.terminal.cursorBlink') === '1');
+					} catch (err) {}
 					var term = new Term({
+						allowProposedApi: true,
 						fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
 						fontSize: 15,
 						lineHeight: 1.12,
-						cursorBlink: true,
+						cursorBlink: cursorBlink,
 						theme: termTheme(),
-						scrollback: 5000
+						scrollback: scrollback,
+						smoothScrollDuration: 0
 					});
 					var fit = new Fit();
 					term.loadAddon(fit);

@@ -155,6 +155,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 
 ## Development Notes
 
+- Terminal panels default to xterm.js WebGL rendering, forced Chromium GPU acceleration, and a performance-oriented scrollback. Useful knobs: set `LIBRO_FORCE_GPU=0` before launch to disable forced GPU mode, `localStorage.setItem('libro.terminal.scrollback', '1000')` to reduce terminal history, or `localStorage.setItem('libro.terminal.cursorBlink', '1')` to restore cursor blinking.
 - Electron shortcuts are intercepted in the main process and forwarded to the host page so they still work while a webview has focus.
 - Browser guest pages intentionally run with broad web compatibility; this is a desktop shell for arbitrary external sites, not a locked-down Electron app.
 - Release builds embed both the Electron app files and a platform-specific Electron runtime zip.

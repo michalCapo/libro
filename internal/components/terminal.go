@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/creack/pty"
 	r "github.com/michalCapo/g-sui/ui"
@@ -82,8 +83,9 @@ type TerminalSession struct {
 	Cwd      string
 	Writable bool
 
-	cmd     *exec.Cmd
-	ptyFile *os.File
+	cmd        *exec.Cmd
+	ptyFile    *os.File
+	outputDone chan struct{}
 
 	mu      sync.Mutex
 	clients map[*terminalClient]bool
@@ -110,6 +112,16 @@ type terminalWSMessage struct {
 // terminal bytes. Control messages stay JSON text, but PTY input/output use
 // this fast path to avoid JSON marshal/parse on every keystroke and echo.
 const terminalBinaryDataFrame byte = 0
+
+const (
+	// Coalesce PTY bursts into fewer WebSocket frames. A tiny delay keeps
+	// keystroke echo responsive while avoiding thousands of sends during
+	// full-screen TUI redraws, grep output, or large pastes.
+	terminalOutputFlushDelay       = time.Millisecond
+	terminalOutputExitFlushTimeout = 75 * time.Millisecond
+	terminalOutputMaxBatch         = 64 * 1024
+	terminalOutputQueueSize        = 128
+)
 
 // NewTerminalManager creates a PTY terminal manager.
 func NewTerminalManager() *TerminalManager {
@@ -139,8 +151,7 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 	tm.mu.Unlock()
 
 	shell := userShell()
-	script := terminalShellScript(command, shell)
-	cmd := exec.Command(shell, "-lc", script)
+	cmd := terminalCommand(command, shell)
 	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
 
@@ -150,16 +161,17 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 	}
 
 	s := &TerminalSession{
-		ID:       appID,
-		AppID:    appID,
-		Command:  command,
-		Cwd:      cwd,
-		Writable: writable,
-		cmd:      cmd,
-		ptyFile:  ptyFile,
-		clients:  make(map[*terminalClient]bool),
-		cols:     100,
-		rows:     30,
+		ID:         appID,
+		AppID:      appID,
+		Command:    command,
+		Cwd:        cwd,
+		Writable:   writable,
+		cmd:        cmd,
+		ptyFile:    ptyFile,
+		outputDone: make(chan struct{}),
+		clients:    make(map[*terminalClient]bool),
+		cols:       100,
+		rows:       30,
 	}
 
 	tm.mu.Lock()
@@ -180,20 +192,32 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 	return s, nil
 }
 
-func terminalShellScript(command, shell string) string {
-	openShell := "exec " + shellQuote(shell)
+func terminalCommand(command, shell string) *exec.Cmd {
 	if strings.TrimSpace(command) == "" {
-		return openShell
+		return exec.Command(shell)
 	}
-	return command + "; " + openShell
+	return exec.Command(shell, "-lc", terminalShellScript(command, shell))
+}
+
+func terminalShellScript(command, shell string) string {
+	return command + "; exec " + shellQuote(shell)
 }
 
 func (tm *TerminalManager) readLoop(s *TerminalSession) {
+	chunks := make(chan []byte, terminalOutputQueueSize)
+	go func() {
+		s.outputLoop(chunks)
+		close(s.outputDone)
+	}()
+	defer close(chunks)
+
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := s.ptyFile.Read(buf)
 		if n > 0 {
-			s.broadcastOutput(buf[:n])
+			chunk := make([]byte, n)
+			copy(chunk, buf[:n])
+			chunks <- chunk
 		}
 		if err != nil {
 			if err != io.EOF && !s.isClosed() {
@@ -201,6 +225,76 @@ func (tm *TerminalManager) readLoop(s *TerminalSession) {
 			}
 			return
 		}
+	}
+}
+
+func (s *TerminalSession) outputLoop(chunks <-chan []byte) {
+	var batch []byte
+	var timer *time.Timer
+	var timerC <-chan time.Time
+
+	stopTimer := func() {
+		if timer == nil {
+			return
+		}
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timer = nil
+		timerC = nil
+	}
+	startTimer := func() {
+		if timer != nil {
+			return
+		}
+		timer = time.NewTimer(terminalOutputFlushDelay)
+		timerC = timer.C
+	}
+	flush := func() {
+		if len(batch) == 0 {
+			return
+		}
+		s.broadcastOutput(batch)
+		batch = batch[:0]
+	}
+	defer stopTimer()
+
+	for {
+		select {
+		case chunk, ok := <-chunks:
+			if !ok {
+				flush()
+				return
+			}
+			if len(chunk) == 0 {
+				continue
+			}
+			if len(batch) == 0 {
+				startTimer()
+			}
+			batch = append(batch, chunk...)
+			if len(batch) >= terminalOutputMaxBatch {
+				stopTimer()
+				flush()
+			}
+		case <-timerC:
+			timer = nil
+			timerC = nil
+			flush()
+		}
+	}
+}
+
+func (s *TerminalSession) waitForOutputFlush(timeout time.Duration) {
+	if s.outputDone == nil {
+		return
+	}
+	select {
+	case <-s.outputDone:
+	case <-time.After(timeout):
 	}
 }
 
@@ -213,6 +307,7 @@ func (tm *TerminalManager) waitLoop(s *TerminalSession) {
 	if s.cmd.ProcessState != nil {
 		code = s.cmd.ProcessState.ExitCode()
 	}
+	s.waitForOutputFlush(terminalOutputExitFlushTimeout)
 	s.broadcast(terminalWSMessage{Type: "exit", Code: code})
 	tm.removeSession(s.ID, s)
 	s.close(false)
