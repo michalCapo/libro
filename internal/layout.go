@@ -26,6 +26,7 @@ func renderPage(state *AppState, sid string) *r.Node {
 	)
 	page.JS(libroSessionCookieJS(sid) +
 		popupRegistryJS() +
+		uxHardenJS() +
 		flashCSS() +
 		termIconSetupJS() +
 		terminalFrameSetupJS() +

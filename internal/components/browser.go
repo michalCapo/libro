@@ -1018,38 +1018,32 @@ function bindWebviewEvents(wv) {
 		}
 	});
 
-	// Show error page on load failure — for DNS errors, redirect to Google search
+	// Show an actionable error page on load failure. Keep the original URL in
+	// Libro instead of silently redirecting so the user can retry or choose search.
 	wv.addEventListener('did-fail-load', function(e) {
 		var appID = currentAppID(wv);
 		if (!appID) return;
 		// Ignore aborted loads (e.g. navigation interrupted by another navigation)
 		if (e.errorCode === -3) return;
-		var failedUrl = e.validatedURL || '';
-		// DNS resolution failure (-105 ERR_NAME_NOT_RESOLVED, -106 ERR_INTERNET_DISCONNECTED)
-		// Redirect to Google search using the hostname/path as query
-		if (e.errorCode === -105 && failedUrl) {
-			try {
-				var u = new URL(failedUrl);
-				var q = u.hostname + (u.pathname && u.pathname !== '/' ? u.pathname : '');
-				if (q) {
-					var searchUrl = 'https://www.google.com/search?q=' + encodeURIComponent(q);
-					safeWebviewLoadURL(wv, searchUrl);
-					var inp = document.getElementById('urlinput-' + appID);
-					if (inp) inp.value = searchUrl;
-					// Update server state
-					var sidAttr = wv.getAttribute('data-sid');
-					if (sidAttr) __ws.call('app.url.set', {sid: sidAttr, id: appID, url: searchUrl});
-					return;
-				}
-			} catch(err) {}
-		}
+		var failedUrl = e.validatedURL || wv.getAttribute('src') || '';
 		var errorDesc = e.errorDescription || 'Unknown error';
-		var html = '<html><body style="display:flex;align-items:center;justify-content:center;height:100%;margin:0;font-family:system-ui,sans-serif;background:#fafafa;color:#333">' +
-			'<div style="text-align:center;max-width:400px;padding:2rem">' +
-			'<div style="font-size:2rem;margin-bottom:1rem">&#9888;</div>' +
-			'<div style="font-size:14px;font-weight:600;margin-bottom:0.5rem">' + errorDesc + '</div>' +
-			'<div style="font-size:12px;color:#888;word-break:break-all">' + failedUrl.replace(/</g,'&lt;') + '</div>' +
-			'</div></body></html>';
+		var query = failedUrl;
+		try {
+			var u = new URL(failedUrl);
+			query = u.hostname + (u.pathname && u.pathname !== '/' ? u.pathname : '');
+		} catch(err) {}
+		var searchUrl = 'https://www.google.com/search?q=' + encodeURIComponent(query || failedUrl || errorDesc);
+		function esc(s) { return String(s || '').replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+		var html = '<!doctype html><html><body style="display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:oklch(97% 0.006 250);color:oklch(24% 0.02 250)">' +
+			'<main style="width:min(440px,calc(100vw - 40px));text-align:center;padding:28px;border:1px solid oklch(88% 0.012 250);border-radius:14px;background:oklch(99% 0.004 250);box-shadow:0 18px 45px rgba(15,23,42,.08)">' +
+			'<div style="font-size:28px;margin-bottom:12px">&#9888;</div>' +
+			'<h1 style="font-size:16px;line-height:1.3;margin:0 0 8px;font-weight:650">Could not load this page</h1>' +
+			'<p style="font-size:13px;line-height:1.5;margin:0 0 14px;color:oklch(48% 0.025 250)">' + esc(errorDesc) + '</p>' +
+			'<p style="font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:oklch(56% 0.02 250);word-break:break-all;margin:0 0 18px">' + esc(failedUrl) + '</p>' +
+			'<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">' +
+			'<button onclick="location.href=' + JSON.stringify(failedUrl).replace(/"/g,'&quot;') + '" style="border:0;border-radius:7px;padding:8px 12px;background:oklch(54% 0.18 260);color:white;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer">Retry</button>' +
+			'<button onclick="location.href=' + JSON.stringify(searchUrl).replace(/"/g,'&quot;') + '" style="border:1px solid oklch(84% 0.015 250);border-radius:7px;padding:8px 12px;background:transparent;color:oklch(36% 0.04 250);font:12px ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer">Search web</button>' +
+			'</div></main></body></html>';
 		safeWebviewLoadURL(wv, 'data:text/html;charset=utf-8,' + encodeURIComponent(html));
 	});
 
