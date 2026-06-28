@@ -31,6 +31,7 @@ func URLPopup(_ string) *r.Node {
 					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
 						r.Span("").Text("↑↓ navigate"),
 						r.Span("").Text("Enter open"),
+						r.Span("").Text("d delete"),
 						r.Span("").Text("Esc close"),
 					),
 				),

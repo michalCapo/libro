@@ -2329,6 +2329,25 @@ func searchDialogJS(sid string) string {
 		else if(delta<0&&selIdx>0){selIdx--;render();}
 	}
 
+	function deleteSelected(){
+		if(filtered.length===0||selIdx<0||selIdx>=filtered.length)return;
+		var item=filtered[selIdx];
+		var app=item&&item.app;
+		if(!app)return;
+		if(item.isHistory&&app.url){
+			window.__libroBrowsedURLs=(window.__libroBrowsedURLs||[]).filter(function(u){return u!==app.url;});
+			__ws.call('history.delete',{sid:'%s',url:app.url});
+			filter();
+			return;
+		}
+		if(item.isRunHistory&&app.command){
+			window.__libroRunCommands=(window.__libroRunCommands||[]).filter(function(c){return c!==app.command;});
+			__ws.call('run.history.delete',{sid:'%s',command:app.command});
+			filter();
+			return;
+		}
+	}
+
 	function searchNormalKey(e){
 		if(dlg.classList.contains('hidden'))return;
 		if(document.activeElement===inp)return;
@@ -2340,6 +2359,9 @@ func searchDialogJS(sid string) string {
 		}
 		if(e.key==='k'||e.key==='ArrowUp'){
 			e.preventDefault();e.stopImmediatePropagation();navigateSelection(-1);return;
+		}
+		if(e.key==='d'||e.key==='D'){
+			e.preventDefault();e.stopImmediatePropagation();deleteSelected();return;
 		}
 		if(e.key==='Enter'){
 			e.preventDefault();e.stopImmediatePropagation();launch();return;
@@ -2422,7 +2444,7 @@ func searchDialogJS(sid string) string {
 
 	window.__libroOpenSearch=openSearch;
 })();
-`, SearchDialogID, sid, sid, sid, sid, sid, sid, sid, sid, sid)
+`, SearchDialogID, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }
 
 func passwordDialogJS(sid string) string {
@@ -2656,6 +2678,15 @@ func passwordDialogJS(sid string) string {
 		__ws.call('password.copy',{sid:'%s',id:id,field:field});
 	}
 
+	function deleteSelected(){
+		if(filtered.length===0||selIdx<0||selIdx>=filtered.length)return;
+		var entry=filtered[selIdx];
+		if(!entry)return;
+		var label=entry.name||entry.url||'entry';
+		var run=function(){__ws.call('password.delete',{sid:'%s',id:entry.id});};
+		if(window.__libroConfirmAction){window.__libroConfirmAction('Delete password?', 'Delete password "'+label+'"?', run);}else{run();}
+	}
+
 	function navigateSelection(delta){
 		if(delta>0&&selIdx<filtered.length-1){selIdx++;render();}
 		else if(delta<0&&selIdx>0){selIdx--;render();}
@@ -2678,6 +2709,9 @@ func passwordDialogJS(sid string) string {
 		}
 		if(e.key==='u'||e.key==='U'){
 			e.preventDefault();e.stopImmediatePropagation();copySelected('username');return;
+		}
+		if(e.key==='d'||e.key==='D'){
+			e.preventDefault();e.stopImmediatePropagation();deleteSelected();return;
 		}
 		if(e.key==='Escape'){
 			e.preventDefault();e.stopImmediatePropagation();closeDialog();return;
@@ -2740,7 +2774,7 @@ func passwordDialogJS(sid string) string {
 	window.__libroPasswordSave=save;
 	window.__libroOpenPasswordDialog=openDialog;
 })();
-`, PasswordDialogID, sid, sid, sid, sid, sid, sid)
+`, PasswordDialogID, sid, sid, sid, sid, sid, sid, sid)
 }
 
 // renderURLPopup renders the URL/search popup opened by bare 'o' (works in both zen and non-zen mode).
@@ -2914,6 +2948,16 @@ func urlPopupJS(sid string) string {
 		renderHistory(originalQuery);
 	}
 
+	function deleteSelectedHistory(){
+		if(filteredURLs.length<=0)return;
+		var url=filteredURLs[selectedIdx];
+		if(!url)return;
+		window.__libroBrowsedURLs=(window.__libroBrowsedURLs||[]).filter(function(x){return x!==url;});
+		__ws.call('history.delete',{sid:'%s',url:url});
+		if(selectedIdx>=filteredURLs.length-1)selectedIdx=Math.max(0,filteredURLs.length-2);
+		renderHistory(originalQuery);
+	}
+
 	function normalKey(e){
 		var dlg=getDlg();
 		var inp=getInp();
@@ -2927,6 +2971,9 @@ func urlPopupJS(sid string) string {
 		}
 		if(e.key==='k'||e.key==='ArrowUp'){
 			e.preventDefault();e.stopImmediatePropagation();navigateSelection(-1);return;
+		}
+		if(e.key==='d'||e.key==='D'){
+			e.preventDefault();e.stopImmediatePropagation();deleteSelectedHistory();return;
 		}
 		if(e.key==='Enter'){
 			e.preventDefault();e.stopImmediatePropagation();navigate();return;
@@ -3000,7 +3047,7 @@ func urlPopupJS(sid string) string {
 	window.__libroOpenURLPopup=function(){openPopup();};
 	window.__libroOpenURLPopupFor=function(appId,initialValue){openPopup(appId,initialValue);};
 })();
-`, URLPopupID, sid, sid)
+`, URLPopupID, sid, sid, sid)
 }
 
 // renderResizePopup renders the app resize popup.
@@ -4609,6 +4656,9 @@ func projectDialogJS(sid string) string {
 		}
 		if(e.key==='k'||e.key==='ArrowUp'){
 			e.preventDefault();e.stopImmediatePropagation();navigateSelection(-1);return;
+		}
+		if(e.key==='d'||e.key==='D'){
+			e.preventDefault();e.stopImmediatePropagation();if(!inDirectoryMode())removeAt(selectedIdx);return;
 		}
 		if(e.key==='Enter'){
 			e.preventDefault();e.stopImmediatePropagation();if(inDirectoryMode())openSelectedDirectory();else launchProject();return;

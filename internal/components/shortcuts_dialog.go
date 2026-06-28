@@ -46,6 +46,7 @@ func ShortcutsDialog() *r.Node {
 		{"Search", "⌘ + O to open", []shortcut{
 			{": query", "Search the internet"},
 			{"! command", "Run terminal command"},
+			{"d", "Delete selected history item when available"},
 		}},
 		{"Browser", "", []shortcut{
 			{"⌘ + B", "New browser with URL popup"},
