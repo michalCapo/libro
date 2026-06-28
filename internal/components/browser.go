@@ -1034,15 +1034,21 @@ function bindWebviewEvents(wv) {
 		} catch(err) {}
 		var searchUrl = 'https://www.google.com/search?q=' + encodeURIComponent(query || failedUrl || errorDesc);
 		function esc(s) { return String(s || '').replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
-		var html = '<!doctype html><html><body style="display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:oklch(97% 0.006 250);color:oklch(24% 0.02 250)">' +
-			'<main style="width:min(440px,calc(100vw - 40px));text-align:center;padding:28px;border:1px solid oklch(88% 0.012 250);border-radius:14px;background:oklch(99% 0.004 250);box-shadow:0 18px 45px rgba(15,23,42,.08)">' +
-			'<div style="font-size:28px;margin-bottom:12px">&#9888;</div>' +
-			'<h1 style="font-size:16px;line-height:1.3;margin:0 0 8px;font-weight:650">Could not load this page</h1>' +
-			'<p style="font-size:13px;line-height:1.5;margin:0 0 14px;color:oklch(48% 0.025 250)">' + esc(errorDesc) + '</p>' +
-			'<p style="font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:oklch(56% 0.02 250);word-break:break-all;margin:0 0 18px">' + esc(failedUrl) + '</p>' +
-			'<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">' +
-			'<button onclick="location.href=' + JSON.stringify(failedUrl).replace(/"/g,'&quot;') + '" style="border:0;border-radius:7px;padding:8px 12px;background:oklch(54% 0.18 260);color:white;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer">Retry</button>' +
-			'<button onclick="location.href=' + JSON.stringify(searchUrl).replace(/"/g,'&quot;') + '" style="border:1px solid oklch(84% 0.015 250);border-radius:7px;padding:8px 12px;background:transparent;color:oklch(36% 0.04 250);font:12px ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer">Search web</button>' +
+		var html = '<!doctype html><html><head><meta name="color-scheme" content="light dark"><style>' +
+			':root{color-scheme:light;--page:oklch(97% 0.006 250);--card:oklch(99% 0.004 250);--fg:oklch(24% 0.02 250);--muted:oklch(48% 0.025 250);--subtle:oklch(56% 0.02 250);--border:oklch(88% 0.012 250);--search-fg:oklch(36% 0.04 250);--shadow:rgba(15,23,42,.08)}' +
+			'@media (prefers-color-scheme:dark){:root{color-scheme:dark;--page:oklch(14% 0.012 250);--card:oklch(18% 0.012 250);--fg:oklch(88% 0.012 250);--muted:oklch(70% 0.018 250);--subtle:oklch(60% 0.018 250);--border:oklch(32% 0.012 250);--search-fg:oklch(82% 0.018 250);--shadow:rgba(0,0,0,.28)}}' +
+			'body{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:var(--page);color:var(--fg)}' +
+			'main{width:min(440px,calc(100vw - 40px));text-align:center;padding:28px;border:1px solid var(--border);border-radius:14px;background:var(--card);box-shadow:0 18px 45px var(--shadow)}' +
+			'.icon{font-size:28px;margin-bottom:12px}.title{font-size:16px;line-height:1.3;margin:0 0 8px;font-weight:650}.desc{font-size:13px;line-height:1.5;margin:0 0 14px;color:var(--muted)}.url{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--subtle);word-break:break-all;margin:0 0 18px}.actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}button{border-radius:7px;padding:8px 12px;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer}.retry{border:0;background:oklch(54% 0.18 260);color:white}.search{border:1px solid var(--border);background:transparent;color:var(--search-fg)}' +
+			'</style></head><body>' +
+			'<main>' +
+			'<div class="icon">&#9888;</div>' +
+			'<h1 class="title">Could not load this page</h1>' +
+			'<p class="desc">' + esc(errorDesc) + '</p>' +
+			'<p class="url">' + esc(failedUrl) + '</p>' +
+			'<div class="actions">' +
+			'<button class="retry" onclick="location.href=' + JSON.stringify(failedUrl).replace(/"/g,'&quot;') + '">Retry</button>' +
+			'<button class="search" onclick="location.href=' + JSON.stringify(searchUrl).replace(/"/g,'&quot;') + '">Search web</button>' +
 			'</div></main></body></html>';
 		safeWebviewLoadURL(wv, 'data:text/html;charset=utf-8,' + encodeURIComponent(html));
 	});
