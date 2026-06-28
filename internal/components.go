@@ -954,12 +954,93 @@ func parkFloatingPopupsJS() string {
 `, URLPopupID, ResizePopupID)
 }
 
+func uxHardenJS() string {
+	return fmt.Sprintf(`
+(function(){
+	if(window.__libroUXHardened)return;
+	window.__libroUXHardened=true;
+	var dialogIDs=[%q,%q,%q,%q,%q,%q,%q,%q,%q,%q];
+	var lastFocus={};
+	function visible(el){if(!el||el.classList.contains('hidden'))return false;var st=getComputedStyle(el);return st.display!=='none'&&st.visibility!=='hidden'&&st.opacity!=='0';}
+	function panelFor(el){return el&&el.firstElementChild?el.firstElementChild:el;}
+	function focusables(root){
+		if(!root)return [];
+		return Array.prototype.slice.call(root.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')).filter(function(n){return !n.disabled&&n.getAttribute('aria-hidden')!=='true'&&n.offsetParent!==null;});
+	}
+	function enhance(el){
+		if(!el||el.__libroA11yEnhanced)return;
+		el.__libroA11yEnhanced=true;
+		var panel=panelFor(el);
+		if(panel){
+			panel.setAttribute('role','dialog');
+			panel.setAttribute('aria-modal','true');
+			if(!panel.getAttribute('aria-label')){
+				var title=panel.querySelector('span, h1, h2, h3');
+				if(title&&title.textContent)panel.setAttribute('aria-label',title.textContent.trim());
+			}
+			if(!panel.hasAttribute('tabindex'))panel.setAttribute('tabindex','-1');
+		}
+		el.addEventListener('keydown',function(e){
+			if(!visible(el))return;
+			if(e.key==='Tab'){
+				var nodes=focusables(panel);
+				if(!nodes.length){e.preventDefault();if(panel)panel.focus();return;}
+				var first=nodes[0], last=nodes[nodes.length-1];
+				if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+				else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+			}
+		},true);
+	}
+	function watch(el){
+		if(!el)return;
+		enhance(el);
+		var wasVisible=visible(el);
+		var obs=new MutationObserver(function(){
+			var isVisible=visible(el);
+			if(isVisible&&!wasVisible){
+				lastFocus[el.id]=document.activeElement;
+				setTimeout(function(){var p=panelFor(el);var nodes=focusables(p);(nodes[0]||p||el).focus();},30);
+			}else if(!isVisible&&wasVisible){
+				var prev=lastFocus[el.id];
+				if(prev&&prev.focus)try{prev.focus({preventScroll:true});}catch(e){try{prev.focus();}catch(e2){}}
+			}
+			wasVisible=isVisible;
+		});
+		obs.observe(el,{attributes:true,attributeFilter:['class','style']});
+	}
+	dialogIDs.forEach(function(id){watch(document.getElementById(id));});
+
+	window.__libroConfirmAction=function(title,body,onConfirm){
+		var old=document.getElementById('libro-confirm-popover');
+		if(old)old.remove();
+		var wrap=document.createElement('div');
+		wrap.id='libro-confirm-popover';
+		wrap.className='fixed inset-0 z-[10000] flex items-start justify-center pt-[22vh] bg-black/35 dark:bg-black/55';
+		var dk=document.documentElement.classList.contains('dark');
+		wrap.innerHTML='<div role="alertdialog" aria-modal="true" aria-label="Confirm action" class="w-full max-w-md mx-4 rounded-lg border shadow-2xl '+(dk?'bg-zinc-900 border-zinc-700 text-zinc-100':'bg-white border-gray-200 text-gray-900')+'">'
+			+'<div class="px-4 py-3 border-b '+(dk?'border-zinc-700/50':'border-gray-200')+' flex items-center gap-2"><span class="material-icons-round text-red-500 text-lg">warning</span><div class="text-sm font-medium">'+String(title||'Confirm action').replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];})+'</div></div>'
+			+'<div class="px-4 py-3 text-sm '+(dk?'text-zinc-400':'text-gray-600')+'">'+String(body||'').replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}).replace(/\n/g,'<br>')+'</div>'
+			+'<div class="px-4 py-3 flex justify-end gap-2"><button data-cancel class="px-3 py-1.5 rounded text-xs font-mono '+(dk?'text-zinc-300 hover:bg-zinc-800':'text-gray-600 hover:bg-gray-100')+'">Cancel</button><button data-confirm class="px-3 py-1.5 rounded bg-red-600 hover:bg-red-500 text-white text-xs font-mono font-medium">Confirm</button></div></div>';
+		document.body.appendChild(wrap);
+		var cancel=wrap.querySelector('[data-cancel]');
+		var confirm=wrap.querySelector('[data-confirm]');
+		function close(){wrap.remove();}
+		wrap.addEventListener('mousedown',function(e){if(e.target===wrap)close();});
+		wrap.addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDefault();close();}});
+		cancel.onclick=close;
+		confirm.onclick=function(){close();if(typeof onConfirm==='function')onConfirm();};
+		setTimeout(function(){cancel.focus();},0);
+	};
+})();
+`, DialogID, ManageDialogID, ProjectDialogID, SearchDialogID, PasswordDialogID, ShortcutsDialogID, CloseDialogID, CommandPopupID, MoveProjectPopupID, WorktreeCreatePopupID)
+}
+
 func flashCSS() string {
 	return `(function(){
 	if(!document.getElementById('libro-flash-css')){
 		var s=document.createElement('style');
 		s.id='libro-flash-css';
-		s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.98)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.98)}} @keyframes libro-toast-slide-up{0%{transform:translateY(100%);opacity:0}100%{transform:translateY(0);opacity:1}} @keyframes libro-toast-slide-down{0%{transform:translateY(0);opacity:1}100%{transform:translateY(100%);opacity:0}} @keyframes libro-app-select{0%{outline:2px solid rgba(59,130,246,.5)}100%{outline:2px solid transparent}} @keyframes libro-project-switch{0%{opacity:0}100%{opacity:1}} .scrollbar-none,[id^="app-strip-"]{scrollbar-width:none;-ms-overflow-style:none} .scrollbar-none::-webkit-scrollbar,[id^="app-strip-"]::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}';
+		s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.98)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.98)}} @keyframes libro-toast-slide-up{0%{transform:translateY(100%);opacity:0}100%{transform:translateY(0);opacity:1}} @keyframes libro-toast-slide-down{0%{transform:translateY(0);opacity:1}100%{transform:translateY(100%);opacity:0}} @keyframes libro-app-select{0%{outline:2px solid rgba(59,130,246,.5)}100%{outline:2px solid transparent}} @keyframes libro-project-switch{0%{opacity:0}100%{opacity:1}} button:focus-visible,input:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid rgba(59,130,246,.65)!important;outline-offset:2px!important} .scrollbar-none,[id^="app-strip-"]{scrollbar-width:none;-ms-overflow-style:none} .scrollbar-none::-webkit-scrollbar,[id^="app-strip-"]::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}';
 		document.head.appendChild(s);
 	}
 
@@ -1629,15 +1710,20 @@ func renderAppContent(app Application, sid string, placeholder bool, clickOverla
 
 func renderAppPlaceholder(app Application) *r.Node {
 	icon := "language"
+	label := "Loading browser"
+	hint := "If this takes a while, check the URL or close the app."
 	if app.Type == AppTypeTerminal {
 		icon = "terminal"
+		label = "Starting terminal"
+		hint = "If it stalls, close this panel and start the command again."
 	}
 	return r.Div("w-full h-full flex items-center justify-center bg-gray-50 dark:bg-zinc-950").
 		Attr("data-app-placeholder", app.ID).
 		Render(
-			r.Div("flex flex-col items-center gap-2 text-gray-400 dark:text-zinc-600").Render(
+			r.Div("flex flex-col items-center gap-2 text-gray-400 dark:text-zinc-600 text-center px-6").Render(
 				r.I("material-icons-round text-3xl").Text(icon),
-				r.Span("font-mono text-xs").Text("Loading"),
+				r.Span("font-mono text-xs text-gray-500 dark:text-zinc-500").Text(label),
+				r.Span("font-mono text-[11px] leading-relaxed max-w-xs text-gray-400 dark:text-zinc-700").Text(hint),
 			),
 		)
 }
@@ -1726,9 +1812,11 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 		Attr("data-sid", sid).
 		Attr("tabindex", "0").
 		Render(
-			r.Div("absolute inset-0 flex items-center justify-center text-zinc-500 font-mono text-xs pointer-events-none").
-				Attr("data-terminal-status", "").
-				Text("Connecting terminal"),
+			r.Div("absolute inset-0 flex flex-col items-center justify-center gap-1 text-zinc-500 font-mono text-xs pointer-events-none text-center px-6").
+				Render(
+					r.Span("").Attr("data-terminal-status", "").Text("Connecting terminal"),
+					r.Span("text-[11px] text-zinc-700").Text("If it stalls, close this panel and start the command again."),
+				),
 		)
 }
 
@@ -2424,9 +2512,9 @@ func passwordDialogJS(sid string) string {
 			var delBtn=row.querySelector('[data-delete]');
 			if(delBtn)delBtn.onclick=function(e){
 				e.stopPropagation();
-				if(window.confirm('Delete password "'+(entry.name||entry.url||'entry')+'"?')){
-					__ws.call('password.delete',{sid:'%s',id:entry.id});
-				}
+				var label=entry.name||entry.url||'entry';
+				var run=function(){__ws.call('password.delete',{sid:'%s',id:entry.id});};
+				if(window.__libroConfirmAction){window.__libroConfirmAction('Delete password?', 'Delete password "'+label+'"?', run);}else{run();}
 			};
 			results.appendChild(row);
 		});
@@ -3008,8 +3096,8 @@ func commandPopupJS(sid string) string {
 				if(!active){if(window.__libroShowToast)window.__libroShowToast('No active project','',2000);return;}
 				if(active.kind==='worktree'){if(window.__libroShowToast)window.__libroShowToast('Cannot remove a worktree from here','Use git worktree remove instead',2500);return;}
 				if(active.name==='home'){if(window.__libroShowToast)window.__libroShowToast('Cannot remove home project','',2000);return;}
-				if(!window.confirm('Remove project "'+active.name+'" from Libro?\n\nThis only removes it from the project list — files on disk are kept.'))return;
-				__ws.call('project.remove',{sid:'%s',name:active.name});
+				var run=function(){__ws.call('project.remove',{sid:'%s',name:active.name});};
+				if(window.__libroConfirmAction){window.__libroConfirmAction('Remove project?', 'Remove project "'+active.name+'" from Libro?\n\nThis only removes it from the project list. Files on disk are kept.', run);}else{run();}
 			}},
 			{id:'zen',label:'Zen',scope:'app',icon:'fullscreen',keywords:'focus chrome toggle minimal',run:function(){
 				closePalette();
@@ -3682,7 +3770,10 @@ func renderManageAppRow(app SavedApp, sid string) *r.Node {
 
 	deleteBtn := r.Button("flex items-center justify-center w-7 h-7 rounded-md cursor-pointer text-gray-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition-colors").
 		Render(r.I("material-icons-round text-base").Text("delete")).
-		OnClick(&r.Action{Name: "app.saved.delete", Data: sidData(sid, "dbid", float64(app.DBID))})
+		Attr("aria-label", "Delete "+label).
+		Attr("title", "Delete "+label).
+		Attr("onclick", fmt.Sprintf(`var label=%s;var run=function(){__ws.call('app.saved.delete',{sid:%s,dbid:%d});};if(window.__libroConfirmAction){window.__libroConfirmAction('Delete saved app?','Delete '+label+' from saved apps?',run);}else{run();}`,
+			components.JSString(label), components.JSString(sid), app.DBID))
 
 	return r.Div("group relative w-full flex items-center bg-white dark:bg-zinc-800/80 hover:bg-gray-50 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-zinc-700/40 hover:border-gray-300 dark:hover:border-zinc-600 rounded-lg transition-colors duration-75 shadow-sm dark:shadow-none px-4 py-3 min-h-[46px]").Render(
 		iconNode,
@@ -3800,6 +3891,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		r.Button(btnCls).
 			Attr("data-libro-no-drag", "true").
 			Attr("style", noDragStyle).
+			Attr("aria-label", "Quick launch").
+			Attr("title", "Quick launch").
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("search"),
 				r.Span(tipCls).Text("Quick launch"),
@@ -3809,6 +3902,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		r.Button(btnCls).
 			Attr("data-libro-no-drag", "true").
 			Attr("style", noDragStyle).
+			Attr("aria-label", "Add app").
+			Attr("title", "Add app").
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 text-[18px]").Text("add"),
 				r.Span(tipCls).Text("Add app"),
@@ -3818,6 +3913,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		r.Button(btnCls).
 			Attr("data-libro-no-drag", "true").
 			Attr("style", noDragStyle).
+			Attr("aria-label", "Manage apps").
+			Attr("title", "Manage apps").
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("apps"),
 				r.Span(tipCls).Text("Manage apps"),
@@ -3827,6 +3924,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		r.Button(btnCls).
 			Attr("data-libro-no-drag", "true").
 			Attr("style", noDragStyle).
+			Attr("aria-label", "Commands").
+			Attr("title", "Commands").
 			Attr("onclick", "if(window.__libroOpenCommandPalette)window.__libroOpenCommandPalette();").
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 text-xl").Text("menu_open"),
@@ -3836,6 +3935,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		r.Button(btnCls).
 			Attr("data-libro-no-drag", "true").
 			Attr("style", noDragStyle).
+			Attr("aria-label", "Shortcuts").
+			Attr("title", "Shortcuts").
 			Attr("onclick", fmt.Sprintf("document.getElementById('%s').classList.toggle('hidden');", ShortcutsDialogID)).
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("keyboard"),
@@ -3845,6 +3946,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		r.Button(btnCls).
 			Attr("data-libro-no-drag", "true").
 			Attr("style", noDragStyle).
+			Attr("aria-label", "Console").
+			Attr("title", "Console").
 			Attr("onclick", "if(window.libroElectron&&window.libroElectron.toggleDevTools)window.libroElectron.toggleDevTools();").
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 text-xl").Text("code"),
@@ -3854,6 +3957,8 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		r.Button(btnCls).
 			Attr("data-libro-no-drag", "true").
 			Attr("style", noDragStyle).
+			Attr("aria-label", "Zen mode").
+			Attr("title", "Zen mode").
 			OnClick(&r.Action{Name: "zen.toggle", Data: sidData(sid, "source", "click")}).
 			Render(
 				r.I("material-icons-round text-gray-400 dark:text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400 text-xl libro-zen-icon").Text(func() string {
@@ -3866,9 +3971,15 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			),
 	}
 
-	// Saved app launchers
-	appIcons := make([]*r.Node, 0, len(savedApps))
-	for _, app := range savedApps {
+	// Saved app launchers. Keep the top bar readable; the full list remains in Quick Launch.
+	visibleSavedApps := savedApps
+	overflowCount := 0
+	if len(savedApps) > 8 {
+		visibleSavedApps = savedApps[:7]
+		overflowCount = len(savedApps) - len(visibleSavedApps)
+	}
+	appIcons := make([]*r.Node, 0, len(visibleSavedApps)+1)
+	for _, app := range visibleSavedApps {
 		var iconNode *r.Node
 		label := app.Name
 
@@ -3907,12 +4018,26 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 		btn := r.Button(btnCls).
 			Attr("data-libro-no-drag", "true").
 			Attr("style", noDragStyle).
+			Attr("aria-label", "Open "+label).
+			Attr("title", "Open "+label).
 			Render(iconNode, r.Span(tipCls).Text(label)).
 			OnClick(r.JS(fmt.Sprintf("__ws.callSilent('app.start',{sid:%s,type:%s,url:%s,command:%s,width:%s,writable:%t,name:%s,iconUrl:%s})",
 				components.JSString(sid), components.JSString(app.Type), components.JSString(app.URL),
 				components.JSString(app.Command), components.JSString(app.Width), app.Writable,
 				components.JSString(app.Name), components.JSString(app.IconURL))))
 		appIcons = append(appIcons, btn)
+	}
+	if overflowCount > 0 {
+		appIcons = append(appIcons, r.Button(btnCls).
+			Attr("data-libro-no-drag", "true").
+			Attr("style", noDragStyle).
+			Attr("aria-label", fmt.Sprintf("Show %d more saved apps", overflowCount)).
+			Attr("title", fmt.Sprintf("%d more saved apps", overflowCount)).
+			Render(
+				r.Span("text-[11px] font-mono text-gray-500 dark:text-zinc-400").Text(fmt.Sprintf("+%d", overflowCount)),
+				r.Span(tipCls).Text("More apps"),
+			).
+			OnClick(&r.Action{Name: "app.run.open", Data: sidData(sid)}))
 	}
 
 	// Running apps preview strip
@@ -3931,6 +4056,7 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			r.Button("shrink-0 cursor-pointer hover:opacity-70 transition-opacity duration-75 flex items-center").
 				Attr("data-libro-no-drag", "true").
 				Attr("style", noDragStyle).
+				Attr("aria-label", "Open projects").
 				Attr("title", "Open projects (⌘N)").
 				Attr("onclick", "if(window.__libroOpenProjectDialog)window.__libroOpenProjectDialog();").
 				Render(
@@ -3944,6 +4070,7 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 			r.Button(btnCls).
 				Attr("data-libro-no-drag", "true").
 				Attr("style", noDragStyle).
+				Attr("aria-label", "Use quit command").
 				Attr("title", "Use quit command").
 				Attr("onclick", "if(window.__libroNotifyQuitCommandOnly)window.__libroNotifyQuitCommandOnly();").
 				Render(
@@ -4022,6 +4149,7 @@ func renderAppPreview(state *AppState, sid string) *r.Node {
 		card := r.Button(cardCls).
 			Attr("data-libro-no-drag", "true").
 			Attr("style", "-webkit-app-region:no-drag").
+			Attr("aria-label", "Select "+label).
 			Attr("title", label).
 			OnClick(&r.Action{Name: "app.select", Data: sidData(sid, "index", i)}).
 			Render(
@@ -4247,6 +4375,7 @@ func projectDialogJS(sid string) string {
 	function scheduleLookup(){
 		var q=query();
 		clearTimeout(lookupTimer);
+		hideCreateConfirm();
 		if(!q||(!isPathQuery(q)&&filtered.length>0)){dirMatches=[];lookupLoading=false;render();return;}
 		lookupLoading=true;
 		render();
@@ -4283,11 +4412,17 @@ func projectDialogJS(sid string) string {
 		render();
 	}
 
+	function hideCreateConfirm(){
+		var bar=document.getElementById('project-path-confirm');
+		if(bar){bar.classList.add('hidden');bar.dataset.path='';}
+	}
+
 	function closePopup(){
 		var dlg=getDlg();
 		var inp=getInp();
 		if(dlg)dlg.classList.add('hidden');
 		if(inp)inp.value='';
+		hideCreateConfirm();
 		dirMatches=[];
 		hoverEnabled=false;
 	}
@@ -4329,9 +4464,8 @@ func projectDialogJS(sid string) string {
 	}
 	function confirmCreateProject(path){
 		if(!path)return;
-		if(!window.confirm('No folder found. Create this folder and open it as a new Libro project?\n\n'+path))return;
-		closePopup();
-		__ws.call('project.create.confirm',{sid:'%s',path:path});
+		var run=function(){closePopup();__ws.call('project.create.confirm',{sid:'%s',path:path});};
+		if(window.__libroConfirmAction){window.__libroConfirmAction('Create folder?', 'Create this folder and open it as a new Libro project?\n\n'+path, run);}else{run();}
 	}
 	function openSelectedDirectory(){
 		var typed=typedDirectoryPath();
@@ -4363,9 +4497,8 @@ func projectDialogJS(sid string) string {
 		if(idx<0||idx>=filtered.length)return;
 		var item=filtered[idx];
 		if(!item||item.kind==='worktree'||item.name==='home')return;
-		if(!window.confirm('Remove project "'+item.name+'" from Libro?\n\nThis only removes it from the project list. Files on disk are kept.'))return;
-		closePopup();
-		__ws.call('project.remove',{sid:'%s',name:item.name});
+		var remove=function(){closePopup();__ws.call('project.remove',{sid:'%s',name:item.name});};
+		if(window.__libroConfirmAction){window.__libroConfirmAction('Remove project?', 'Remove project "'+item.name+'" from Libro?\n\nThis only removes it from the project list. Files on disk are kept.', remove);}else{remove();}
 	}
 
 	function openPopup(){
@@ -4390,7 +4523,26 @@ func projectDialogJS(sid string) string {
 	}
 	function openBrowse(){openPopup();}
 
+	function bindCreateConfirm(){
+		var cancel=document.getElementById('project-path-confirm-cancel');
+		var create=document.getElementById('project-path-confirm-create');
+		if(cancel&&!cancel.__libroBound){
+			cancel.__libroBound=true;
+			cancel.addEventListener('click',function(e){e.preventDefault();hideCreateConfirm();});
+		}
+		if(create&&!create.__libroBound){
+			create.__libroBound=true;
+			create.addEventListener('click',function(e){
+				e.preventDefault();
+				var bar=document.getElementById('project-path-confirm');
+				var path=bar&&bar.dataset?bar.dataset.path:'';
+				if(path){hideCreateConfirm();closePopup();__ws.call('project.create.confirm',{sid:'%s',path:path});}
+			});
+		}
+	}
+
 	function bindInput(){
+		bindCreateConfirm();
 		var inp=getInp();
 		if(!documentKeydownBound){
 			documentKeydownBound=true;
@@ -4448,7 +4600,7 @@ func projectDialogJS(sid string) string {
 	window.__libroOpenProjectDialogSearch=openPopup;
 	window.__libroOpenProjectDialogBrowse=openBrowse;
 })();
-`, ProjectDialogID, sid, sid, sid, sid, sid, sid, sid, sid)
+`, ProjectDialogID, sid, sid, sid, sid, sid, sid, sid, sid, sid)
 }
 
 func moveProjectPopupJS(sid string) string {

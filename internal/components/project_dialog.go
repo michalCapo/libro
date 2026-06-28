@@ -39,6 +39,19 @@ func ProjectDialog(sid string) *r.Node {
 							Attr("spellcheck", "false"),
 					),
 					r.Div("max-h-80 overflow-y-auto").ID("project-results"),
+					r.Div("hidden px-4 py-3 border-t border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20").
+						ID("project-path-confirm").
+						Render(
+							r.Div("flex items-start gap-3").Render(
+								r.I("material-icons-round text-amber-600 dark:text-amber-400 text-lg mt-0.5").Text("create_new_folder"),
+								r.Div("flex-1 min-w-0").Render(
+									r.Div("text-sm font-mono text-amber-900 dark:text-amber-100").ID("project-path-confirm-msg"),
+									r.Div("text-[11px] font-mono text-amber-700/80 dark:text-amber-300/80 mt-1").Text("Files will be created on disk. Existing files are left untouched."),
+								),
+								r.Button("px-3 py-1.5 rounded text-xs font-mono text-amber-800 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/40").ID("project-path-confirm-cancel").Text("Cancel"),
+								r.Button("px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-mono font-medium").ID("project-path-confirm-create").Text("Create"),
+							),
+						),
 					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
 						r.Span("").Text("↑↓ navigate"),
 						r.Span("").Text("Tab complete / enter folder"),
