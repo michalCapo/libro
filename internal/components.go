@@ -1849,7 +1849,11 @@ func hideAllProjectsJS() string {
 	var nodes=w.querySelectorAll(':scope > [id^="project-main-"]');
 	for(var i=0;i<nodes.length;i++){
 		var el=nodes[i];
-		el.style.display='flex';
+		try{var active=document.activeElement;if(active&&el.contains(active)&&typeof active.blur==='function')active.blur();}catch(e){}
+		// Keep inactive project DOM mounted so apps keep running, but remove it
+		// from layout/paint. visibility:hidden leaves Electron webview and
+		// xterm/WebGL compositor overlays behind on some systems.
+		el.style.display='none';
 		el.style.visibility='hidden';
 		el.style.pointerEvents='none';
 		el.style.position='absolute';
@@ -1874,7 +1878,7 @@ func showProjectJS(projectName string) string {
 	el.style.zIndex='';
 	el.removeAttribute('aria-hidden');
 	if(window.__libroFitTerminalFrame){
-		el.querySelectorAll('[data-terminal]').forEach(function(term){window.__libroFitTerminalFrame(term);});
+		el.querySelectorAll('[data-terminal]').forEach(function(term){window.__libroFitTerminalFrame(term,true);});
 	}
 })();`, projectMainID(projectName))
 }
@@ -5576,13 +5580,13 @@ func terminalFrameSetupJS() string {
 				}).catch(function() { setStatus(el, 'Terminal assets failed to load'); });
 			}
 
-			window.__libroFitTerminalFrame = function(frameOrAppID) {
+			window.__libroFitTerminalFrame = function(frameOrAppID, force) {
 				var el = frameOrAppID;
 				if (typeof frameOrAppID === 'string') {
 					el = document.querySelector('[data-terminal-app="' + frameOrAppID.replace(/"/g, '\\"') + '"]');
 				}
 				if (!el) return;
-				scheduleFitTerminal(el, false, 120);
+				scheduleFitTerminal(el, !!force, 120);
 			};
 
 			window.__libroFocusTerminalFrame = function(frameOrAppID) {
