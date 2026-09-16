@@ -900,6 +900,20 @@ func (sm *StateManager) RemoveProject(sessionID, projectName string) ([]Applicat
 	return apps, true
 }
 
+// CloseProject clears the active project's panels, returning them for cleanup.
+func (sm *StateManager) CloseProject(sessionID string) []Application {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return nil
+	}
+	apps := s.Apps
+	s.Apps = nil
+	s.SelectedIndex = 0
+	return apps
+}
+
 // SwitchProject switches the active project, saving and restoring app state
 func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 	sm.mu.Lock()

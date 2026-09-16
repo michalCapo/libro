@@ -1543,6 +1543,10 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroOpenWorktreeCreate)window.__libroOpenWorktreeCreate();
 			}},
+			{id:'close-project',label:'Close project',scope:'project',icon:'close',keywords:'close stop all panels terminals processes current project',run:function(){
+				closePalette();
+				__ws.call('project.close',{sid:window.__libroWorkspaceSID});
+			}},
 			{id:'project-remove',label:'Remove current project',scope:'project',icon:'delete_outline',keywords:'remove delete current active project unregister forget drop',run:function(){
 				closePalette();
 				var list=window.__libroProjects||[];

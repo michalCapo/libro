@@ -429,6 +429,11 @@
       }
       return;
     }
+    if (binding && binding === toolKeys['close-project']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) call('project.close');
+      return;
+    }
     if (binding && binding === toolKeys['close-panel']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (event.repeat) return;

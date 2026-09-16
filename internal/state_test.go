@@ -49,3 +49,33 @@ func TestRemoveAppSelection(t *testing.T) {
 		}
 	}
 }
+
+func TestCloseProjectOnlyClearsActiveProject(t *testing.T) {
+	sm := NewStateManager()
+	s := &AppState{
+		ActiveProject: "work",
+		Projects:      []Project{{Name: "home"}, {Name: "work"}},
+		Apps:          []Application{{ID: "terminal", Type: AppTypeTerminal}, {ID: "browser", Type: AppTypeURL}},
+		SelectedIndex: 1,
+		snapshots: map[string]*projectSnapshot{
+			"home": {Apps: []Application{{ID: "other"}}},
+		},
+	}
+	sm.states["test"] = s
+	apps := sm.CloseProject("test")
+	if len(apps) != 2 || len(s.Apps) != 0 || s.SelectedIndex != 0 {
+		t.Fatalf("close did not return and clear all panels: %+v", s)
+	}
+	if s.ActiveProject != "work" || len(s.Projects) != 2 {
+		t.Fatal("close changed the project list or active project")
+	}
+	if !sm.SwitchProject("test", "home") || len(s.Apps) != 1 || s.Apps[0].ID != "other" {
+		t.Fatal("close affected another project")
+	}
+	if !sm.SwitchProject("test", "work") || len(s.Apps) != 0 {
+		t.Fatal("closed panels restored on switching back")
+	}
+	if len(sm.CloseProject("missing")) != 0 {
+		t.Fatal("missing session returned panels")
+	}
+}

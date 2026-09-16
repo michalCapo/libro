@@ -405,11 +405,11 @@ func (s *TerminalSession) close(killProcess bool) {
 	for _, c := range clients {
 		_ = c.conn.Close()
 	}
+	if killProcess && cmd != nil && cmd.Process != nil {
+		killTerminalProcess(cmd.Process)
+	}
 	if ptyFile != nil {
 		_ = ptyFile.Close()
-	}
-	if killProcess && cmd != nil && cmd.Process != nil {
-		_ = cmd.Process.Kill()
 	}
 	s.activity.cleanup()
 }

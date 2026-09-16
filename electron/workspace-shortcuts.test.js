@@ -8,11 +8,11 @@ const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8')
 const forwarding = main.slice(main.indexOf('    // Keep workspace navigation'), main.indexOf('    // Forward Ctrl+;'))
 
 test('browser forwards workspace shortcuts, including repeat state', () => {
-  for (const key of ['a', 'b', 'h', 'l', 'p', ',', '.']) {
+  for (const key of ['a', 'b', 'h', 'l', 'p', 'q', ',', '.']) {
     for (const repeat of [false, true]) {
       let prevented = false
       let forwarded
-      const input = { key, code: 'Key' + key.toUpperCase(), control: true, shift: key === 'p', isAutoRepeat: repeat }
+      const input = { key, code: 'Key' + key.toUpperCase(), control: true, shift: ['p', 'q'].includes(key), isAutoRepeat: repeat }
       vm.runInNewContext('(function () {' + forwarding + '})()', {
         key, input, shouldSkipDuplicateShortcut: () => false,
         e: { preventDefault() { prevented = true } },
@@ -103,4 +103,20 @@ test('panel navigation includes the side-by-side tool in visual order and wraps'
   assert.equal(result.selected, 'agent-2')
   assert.equal(result.state.hidden.has('tool'), true)
   assert.equal(navigate([agent], 'agent', 'Ctrl+L').selected, undefined)
+})
+
+test('close project uses saved binding and ignores repeat', () => {
+  const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = workspace.slice(workspace.indexOf("    if (binding && binding === toolKeys['close-project'])"), workspace.indexOf("    if (binding && binding === toolKeys['close-panel'])"))
+  for (const binding of ['Ctrl+Shift+Q', 'Alt+Q']) {
+    for (const repeat of [false, true]) {
+      const calls = []
+      vm.runInNewContext('(function () {' + handler + '})()', {
+        binding, toolKeys: { 'close-project': binding },
+        event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
+        call: action => calls.push(action),
+      })
+      assert.deepEqual(calls, repeat ? [] : ['project.close'])
+    }
+  }
 })

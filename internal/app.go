@@ -705,6 +705,25 @@ func Run(assets embed.FS) {
 		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + projJS
 	})
 
+	// Close every panel and terminal in the active project.
+	registerAction(app, "project.close", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		apps := sm.CloseProject(sid)
+		for _, a := range apps {
+			if a.Type == AppTypeTerminal {
+				tm.Stop(a.ID)
+			}
+		}
+		state := sm.Get(sid)
+		return newResponse().
+			Add(parkFloatingPopupsJS()).
+			Add(closeDevtoolsForAppsJS(apps)).
+			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
+			Replace(TopBarID, renderTopBar(state, sid)).
+			Add(projectsJS(state)).
+			Build()
+	})
+
 	// Close current (selected) app — no app ID needed from client
 	registerAction(app, "app.close.current", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
