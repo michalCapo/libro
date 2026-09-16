@@ -6,7 +6,7 @@ Open **New agent session** to launch an agent, or **Apps & plugins** to open a t
 
 Tools and agents use a small local plugin manifest. See [Creating plugins](docs/plugins.md) for the API and examples.
 
-![Libro with the app launcher open](demo/screenshot.png)
+![Libro empty state with agent launcher](demo/screenshot.png)
 
 ## What It Does
 
