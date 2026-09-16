@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, session, ipcMain, clipboard, globalShortcut, webContents, WebContentsView, nativeImage, powerMonitor, nativeTheme } = require('electron')
+const { app, BrowserWindow, Menu, session, ipcMain, clipboard, webContents, WebContentsView, nativeImage, powerMonitor, nativeTheme } = require('electron')
 const { spawn } = require('child_process')
 const fs = require('fs')
 const path = require('path')
@@ -420,33 +420,6 @@ function adjustMainWindowZoom(action) {
     wc.setZoomLevel(current + MAIN_WINDOW_ZOOM_STEP)
   }
   console.log(`[libro-shortcut] zoom ${action}: ${wc.getZoomLevel()}`)
-}
-
-function registerWindowShortcuts() {
-  const shortcuts = [
-    ['Super+[', () => moveSelectedApp('left')],
-    ['Super+]', () => moveSelectedApp('right')],
-    ['Super+Control+Y', () => openMoveProjectPopup()],
-    ['Super+N', () => triggerProjectDialogShortcut()],
-    ['Super+Enter', () => triggerTerminalAppShortcut()],
-    ['Super+B', () => triggerBrowserAppShortcut()],
-    ['Super+E', () => triggerNvimAppShortcut()],
-    ['Super+Y', () => triggerPiAgentShortcut()],
-    ['Super+=', () => adjustMainWindowZoom('in')],
-    ['Super+Plus', () => adjustMainWindowZoom('in')],
-    ['Super+-', () => adjustMainWindowZoom('out')],
-    ['Super+_', () => adjustMainWindowZoom('out')],
-    ['Super+0', () => adjustMainWindowZoom('reset')],
-  ]
-
-  for (const [accelerator, handler] of shortcuts) {
-    try {
-      const ok = globalShortcut.register(accelerator, handler)
-      console.log(`[libro-shortcut] register ${accelerator}: ${ok ? 'ok' : 'failed'}`)
-    } catch (err) {
-      console.error(`Failed to register shortcut ${accelerator}:`, err.message)
-    }
-  }
 }
 
 // Track input focus state per webview webContents for browser shortcut key handling.
@@ -1227,7 +1200,6 @@ app.on('ready', async () => {
       return
     }
   }
-  registerWindowShortcuts()
   createWindow()
   powerMonitor.on('resume', refreshTerminalFramesAfterResume)
 })
@@ -1245,6 +1217,5 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
-  globalShortcut.unregisterAll()
   stopGoServer()
 })
