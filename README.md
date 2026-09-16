@@ -127,7 +127,7 @@ Tool shortcuts are remappable in **Settings → Keyboard shortcuts**. Use Ctrl, 
 - `Ctrl + ,` / `Ctrl + .` decrease / increase selected panel size
 - `Ctrl + P` open the project/worktree picker
 - `Ctrl + N` open the agent launcher
-- `Ctrl + H` / `Ctrl + L` select the previous / next agent in the active project (wraps at either end)
+- `Ctrl + H` / `Ctrl + L` select the previous / next panel in the active project, including the visible tool when it fits beside the agents (wraps at either end)
 - `Ctrl + Shift + P` toggle the project sidebar
 - `Ctrl + =` / `Ctrl + -` / `Ctrl + 0` zoom in / out / reset
 

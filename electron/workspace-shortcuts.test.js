@@ -67,3 +67,40 @@ test('panel size shortcuts use saved bindings and ignore key repeat', () => {
     }
   }
 })
+
+test('panel navigation includes the side-by-side tool in visual order and wraps', () => {
+  const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = workspace.slice(workspace.indexOf("    if (binding && (binding === toolKeys['previous-agent']"), workspace.indexOf("    if (binding && binding === toolKeys['new-agent'])"))
+  const panel = (appId, dock, visible = true, overlay = false) => ({ dataset: {
+    appId, dock, dockVisible: String(visible), toolOverlay: String(overlay),
+  } })
+  const agent = panel('agent', 'center')
+  const tool = panel('tool', 'right')
+  const panels = [tool, panel('hidden', 'right', false), agent, panel('bottom', 'bottom')]
+  function navigate(panels, from, binding, repeat = false) {
+    const state = { agent: 'agent', hidden: new Set() }
+    let selected
+    vm.runInNewContext('(function () {' + handler + '})()', {
+      binding, toolKeys: { 'previous-agent': 'Ctrl+H', 'next-agent': 'Ctrl+L' },
+      activeGrid: () => ({ querySelector: () => panels.some(p => p.dataset.toolOverlay === 'true') }),
+      frames: () => panels, dockState: () => state,
+      window: { __libroSelectedApp: from }, select: id => { selected = id },
+      event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
+    })
+    return { selected, state }
+  }
+  for (const key of ['Ctrl+H', 'Ctrl+L']) {
+    assert.equal(navigate(panels, 'agent', key).selected, 'tool')
+    assert.equal(navigate(panels, 'tool', key).selected, 'agent')
+    assert.equal(navigate(panels, 'agent', key, true).selected, undefined)
+  }
+  const twoAgents = [...panels, panel('agent-2', 'center')]
+  assert.equal(navigate(twoAgents, 'agent', 'Ctrl+L').selected, 'agent-2')
+  assert.equal(navigate(twoAgents, 'agent-2', 'Ctrl+L').selected, 'tool')
+  assert.equal(navigate(twoAgents, 'tool', 'Ctrl+H').selected, 'agent-2')
+  const overlay = [agent, panel('agent-2', 'center'), panel('tool', 'right', true, true)]
+  const result = navigate(overlay, 'tool', 'Ctrl+L')
+  assert.equal(result.selected, 'agent-2')
+  assert.equal(result.state.hidden.has('tool'), true)
+  assert.equal(navigate([agent], 'agent', 'Ctrl+L').selected, undefined)
+})

@@ -398,18 +398,22 @@
     }
     if (binding && (binding === toolKeys['previous-agent'] || binding === toolKeys['next-agent'])) {
       const grid = activeGrid();
-      const agents = grid ? frames(grid).filter(frame => frame.dataset.dock === 'center') : [];
-      if (agents.length < 2) return;
+      const all = grid ? frames(grid) : [];
+      const panels = [
+        ...all.filter(frame => frame.dataset.dock === 'center'),
+        ...all.filter(frame => frame.dataset.dock === 'right' && frame.dataset.dockVisible === 'true' && frame.dataset.toolOverlay !== 'true')
+      ];
+      if (panels.length < 2) return;
       event.preventDefault(); event.stopImmediatePropagation();
       if (event.repeat) return;
       const state = dockState(grid);
-      const selected = agents.findIndex(frame => frame.dataset.appId === window.__libroSelectedApp);
-      const current = selected >= 0 ? selected : Math.max(0, agents.findIndex(frame => frame.dataset.appId === state.agent));
+      const selected = panels.findIndex(frame => frame.dataset.appId === window.__libroSelectedApp);
+      const current = selected >= 0 ? selected : Math.max(0, panels.findIndex(frame => frame.dataset.appId === state.agent));
       if (grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
         frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => state.hidden.add(frame.dataset.appId));
       }
       const step = binding === toolKeys['previous-agent'] ? -1 : 1;
-      select(agents[(current + step + agents.length) % agents.length].dataset.appId);
+      select(panels[(current + step + panels.length) % panels.length].dataset.appId);
       return;
     }
     if (binding && binding === toolKeys['new-agent']) {
