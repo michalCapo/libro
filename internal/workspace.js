@@ -386,9 +386,7 @@
       if (event.repeat) return;
       if (!agents.length) { launcher('center'); return; }
       const state = dockState(grid);
-      if (grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
-        frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => state.hidden.add(frame.dataset.appId));
-      }
+      frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => state.hidden.add(frame.dataset.appId));
       const agent = agents.find(frame => frame.dataset.appId === state.agent) || agents[0];
       select(agent.dataset.appId);
       return;

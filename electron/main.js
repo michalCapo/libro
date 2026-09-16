@@ -1,9 +1,10 @@
-const { app, BrowserWindow, Menu, session, ipcMain, clipboard, globalShortcut, webContents, WebContentsView, nativeImage, powerMonitor } = require('electron')
+const { app, BrowserWindow, Menu, session, ipcMain, clipboard, globalShortcut, webContents, WebContentsView, nativeImage, powerMonitor, nativeTheme } = require('electron')
 const { spawn } = require('child_process')
 const fs = require('fs')
 const path = require('path')
 const http = require('http')
 const os = require('os')
+const { followLinuxTheme } = require('./linux-theme')
 
 // Libro intentionally hosts arbitrary external pages in Electron webviews.
 // Electron's CSP warning is not actionable for those guest pages in development.
@@ -1052,13 +1053,13 @@ app.on('web-contents-created', (event, contents) => {
 
     // Keep workspace navigation available while a browser tool has focus.
     if (input.control && !input.meta && !input.alt &&
-        ((!input.shift && ['h', 'l'].includes(key)) || (input.shift && key === 'p'))) {
+        ((!input.shift && ['a', 'b', 'h', 'l'].includes(key)) || (input.shift && key === 'p'))) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       mainWindow?.webContents.executeJavaScript(`
         window.dispatchEvent(new KeyboardEvent('keydown', {
           key: ${JSON.stringify(input.key)}, code: ${JSON.stringify(input.code || '')},
-          ctrlKey: true, shiftKey: ${!!input.shift}, bubbles: true, cancelable: true
+          ctrlKey: true, shiftKey: ${!!input.shift}, repeat: ${!!input.isAutoRepeat}, bubbles: true, cancelable: true
         }));
       `).catch(() => {})
       return
@@ -1214,6 +1215,7 @@ app.on('web-contents-created', (event, contents) => {
 
 app.on('ready', async () => {
   Menu.setApplicationMenu(null)
+  await followLinuxTheme(app, nativeTheme)
   const alreadyRunning = await isServerRunning()
   if (!alreadyRunning) {
     startGoServer()
