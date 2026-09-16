@@ -1,0 +1,137 @@
+package components
+
+import (
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestCodexActivityAcrossPTYChunks(t *testing.T) {
+	a := &agentActivity{kind: "codex"}
+	var got []string
+	for _, chunk := range []string{"Ready in ordinary output", "\x1b", "]0;Work", "ing\x07", "\x1b]2;Thinking\x1b", "\\", "\x1b]0;Ready\x07", "\x1b]777;libro;exited\x07"} {
+		a.output([]byte(chunk), func(status string) { got = append(got, status) })
+	}
+	if want := []string{"working", "working", "done", "exited"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("statuses = %v, want %v", got, want)
+	}
+}
+
+func TestAgentActivityStartupAndExit(t *testing.T) {
+	s := &TerminalSession{activity: &agentActivity{kind: "codex"}}
+	for _, step := range []struct{ input, want string }{
+		{"idle", "idle"}, {"done", "idle"}, {"working", "working"},
+		{"done", "done"}, {"working", "working"}, {"exited", "idle"},
+		{"working", "idle"}, // A stale file read must not revive an exited agent.
+	} {
+		s.setAgentStatus(step.input)
+		if s.agentStatus != step.want {
+			t.Fatalf("after %s: got %s, want %s", step.input, s.agentStatus, step.want)
+		}
+	}
+}
+
+func TestAgentLaunchIntegration(t *testing.T) {
+	for _, kind := range []string{"codex", "claude", "pi", "opencode"} {
+		t.Run(kind, func(t *testing.T) {
+			t.Setenv("OPENCODE_CONFIG_CONTENT", `{"theme":"existing","plugin":["existing-plugin"]}`)
+			command, activity, err := prepareAgentActivity(kind + " --help")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer activity.cleanup()
+			if !strings.Contains(command, " --help") || activity.kind != kind {
+				t.Fatalf("launch lost arguments or identity: %s", command)
+			}
+			if kind == "opencode" {
+				var config map[string]any
+				if err := json.Unmarshal([]byte(strings.TrimPrefix(activity.env[0], "OPENCODE_CONFIG_CONTENT=")), &config); err != nil {
+					t.Fatal(err)
+				}
+				if config["theme"] != "existing" || len(config["plugin"].([]any)) != 2 {
+					t.Fatal("existing config lost")
+				}
+			}
+		})
+	}
+	command := "bash -l"
+	if got, activity, err := prepareAgentActivity(command); got != command || activity != nil || err != nil {
+		t.Fatal("ordinary terminal changed")
+	}
+}
+
+func TestClaudeActivityHooks(t *testing.T) {
+	_, activity, err := prepareAgentActivity("claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer activity.cleanup()
+	data, err := os.ReadFile(filepath.Join(activity.dir, "claude.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Hooks map[string][]struct{ Hooks []struct{ Command string } }
+	}
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []struct{ event, want string }{{"UserPromptSubmit", "working"}, {"Stop", "done"}, {"StopFailure", "error"}, {"SessionEnd", "idle"}} {
+		if output, err := exec.Command("sh", "-c", config.Hooks[step.event][0].Hooks[0].Command).CombinedOutput(); err != nil {
+			t.Fatalf("hook failed: %v: %s", err, output)
+		}
+		got, _ := os.ReadFile(activity.path)
+		if string(got) != step.want {
+			t.Fatalf("%s: %s, want %s", step.event, got, step.want)
+		}
+	}
+}
+
+func TestPiAndOpenCodeLifecycle(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node unavailable")
+	}
+	for _, kind := range []string{"pi", "opencode"} {
+		t.Run(kind, func(t *testing.T) {
+			t.Setenv("OPENCODE_CONFIG_CONTENT", "")
+			_, activity, err := prepareAgentActivity(kind)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer activity.cleanup()
+			script := `import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import assert from 'node:assert/strict';
+const plugin = (await import(pathToFileURL(process.argv[1]))).default;
+const check = expected => assert.equal(readFileSync(process.argv[2], 'utf8'), expected);
+`
+			if kind == "pi" {
+				script += `const hooks = {}; plugin({on:(event, handler) => hooks[event] = handler});
+hooks.agent_start({}); check('working');
+hooks.agent_end({willRetry:true}); check('working');
+hooks.agent_end({willRetry:false}); check('done');
+hooks.agent_start({}); check('working');
+hooks.session_shutdown({}); check('idle');`
+			} else {
+				script += `const hooks = await plugin();
+const send = (sessionID, type) => hooks.event({event:{type:'session.status',properties:{sessionID,status:{type}}}});
+await send('a','busy'); check('working');
+await send('b','busy'); check('working');
+await send('a','idle'); check('working');
+await send('b','retry'); check('working');
+await send('b','idle'); check('done');
+await send('a','busy'); check('working');
+await hooks.event({event:{type:'session.error',properties:{sessionID:'a'}}}); check('error');
+await send('a','idle'); check('error');`
+			}
+			cmd := exec.Command("node", "--input-type=module", "-e", script, filepath.Join(activity.dir, kind+".mjs"), activity.path)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("lifecycle failed: %v: %s", err, output)
+			}
+		})
+	}
+}

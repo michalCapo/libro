@@ -177,6 +177,7 @@
     projects.forEach(project => {
       const item = node('div', 'ws-project-item'); item.dataset.kind = project.kind;
       const row = node('button', 'ws-project-row'); row.type = 'button'; row.dataset.kind = project.kind;
+      row.dataset.projectKey = project.kind === 'worktree' ? project.name + '/' + project.branch : project.name;
       row.setAttribute('aria-current', String(!!project.isActive));
       const projectName = project.displayName || project.name;
       row.setAttribute('aria-label', projectName);
@@ -198,6 +199,25 @@
       list.append(item);
     });
   }
+  function renderProjectActivity() {
+    const statuses = window.__libroAgentStatuses || {};
+    const projects = new Map();
+    document.querySelectorAll('[data-workspace-project]').forEach(grid => {
+      const agents = frames(grid).filter(frame => frame.dataset.dock === 'center');
+      const states = agents.map(frame => statuses[frame.dataset.appId]);
+      projects.set(grid.dataset.workspaceProject, states.includes('working') ? 'working' :
+        states.includes('done') && states.every(state => state === 'done' || state === 'idle') ? 'done' : '');
+    });
+    document.querySelectorAll('.ws-project-row').forEach(row => {
+      const state = projects.get(row.dataset.projectKey) || '';
+      if (row.dataset.agentStatus === state) return;
+      row.dataset.agentStatus = state;
+      row.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle' : row.dataset.kind === 'worktree' ? 'account_tree' : 'folder_open';
+      const label = row.querySelector('span').textContent;
+      row.setAttribute('aria-label', label + (state === 'working' ? ': agents working' : state === 'done' ? ': all agents done' : ''));
+    });
+  }
+  window.addEventListener('libro-agent-status', renderProjectActivity);
   let queued = false;
   const observer = new MutationObserver(records => {
     if (records.some(record => (record.type === 'attributes' && record.target.matches('[data-app-id]')) || [...record.addedNodes, ...record.removedNodes].some(n => n.nodeType === 1 && (n.matches('[data-app-id], [data-workspace-project], .ws-project, #top-bar') || n.querySelector('[data-app-id], [data-workspace-project]'))))) schedule();
@@ -212,6 +232,7 @@
     });
     renderToolRail();
     renderProjects();
+    renderProjectActivity();
     window.libroFiles?.init();
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
       // Replacing a project's DOM can reset its hidden styles. Always reconcile
@@ -282,6 +303,7 @@
       const name = button.getAttribute('aria-label');
       const plugin = window.__libroPlugins.find(plugin => plugin.id === button.dataset.toolId);
       if (plugin) button.title = name + (toolKeys[plugin.id] ? ' (' + toolKeys[plugin.id] + ')' : '');
+      else if (name === 'Toggle projects') button.title = name + (toolKeys['toggle-projects'] ? ' (' + toolKeys['toggle-projects'] + ')' : '');
     });
   }
   function saveToolKeys() {
@@ -314,6 +336,27 @@
       return;
     }
     if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open]')) return;
+    if (binding && binding === toolKeys['toggle-projects']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) { prefs.projects = !prefs.projects; save(); refresh(); }
+      return;
+    }
+    if (binding && (binding === toolKeys['previous-agent'] || binding === toolKeys['next-agent'])) {
+      const grid = activeGrid();
+      const agents = grid ? frames(grid).filter(frame => frame.dataset.dock === 'center') : [];
+      if (agents.length < 2) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (event.repeat) return;
+      const state = dockState(grid);
+      const selected = agents.findIndex(frame => frame.dataset.appId === window.__libroSelectedApp);
+      const current = selected >= 0 ? selected : Math.max(0, agents.findIndex(frame => frame.dataset.appId === state.agent));
+      if (grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
+        frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => state.hidden.add(frame.dataset.appId));
+      }
+      const step = binding === toolKeys['previous-agent'] ? -1 : 1;
+      select(agents[(current + step + agents.length) % agents.length].dataset.appId);
+      return;
+    }
     if (binding && binding === toolKeys['new-agent']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) launcher('center');

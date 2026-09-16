@@ -1,0 +1,213 @@
+package components
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+)
+
+// Launch-local integrations never modify the user's agent settings. Only a
+// fixed status word is written; prompts and hook payloads are not collected.
+var agentCommandPattern = regexp.MustCompile(`^([a-zA-Z0-9_./-]+)(\s.*)?$`)
+
+type agentActivity struct {
+	kind, dir, path string
+	env             []string
+	osc             []byte
+	escape, inOSC   bool
+}
+
+func prepareAgentActivity(command string) (string, *agentActivity, error) {
+	parts := agentCommandPattern.FindStringSubmatch(strings.TrimSpace(command))
+	if parts == nil {
+		return command, nil, nil
+	}
+	kind := filepath.Base(parts[1])
+	if kind != "codex" && kind != "claude" && kind != "pi" && kind != "opencode" {
+		return command, nil, nil
+	}
+	a := &agentActivity{kind: kind}
+	if kind == "codex" {
+		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state"]'` + parts[2]), a, nil
+	}
+	dir, err := os.MkdirTemp("", "libro-agent-")
+	if err != nil {
+		return command, nil, err
+	}
+	a.dir, a.path = dir, filepath.Join(dir, "status")
+	pathJSON, _ := json.Marshal(a.path)
+	var filename, content, args string
+	switch kind {
+	case "claude":
+		hooks := map[string]any{}
+		for event, state := range map[string]string{"UserPromptSubmit": "working", "PreToolUse": "working", "Stop": "done", "StopFailure": "error", "SessionEnd": "idle"} {
+			hooks[event] = []any{map[string]any{"hooks": []any{map[string]any{
+				"type": "command", "command": "printf '%s' " + shellQuote(state) + " > " + shellQuote(a.path), "timeout": 2,
+			}}}}
+		}
+		data, _ := json.Marshal(map[string]any{"hooks": hooks})
+		filename, content = "claude.json", string(data)
+		args = " --settings " + shellQuote(filepath.Join(dir, filename))
+	case "pi":
+		filename = "pi.mjs"
+		content = `import { writeFileSync } from 'node:fs';
+export default function (pi) {
+  const status = value => { try { writeFileSync(` + string(pathJSON) + `, value); } catch {} };
+  pi.on('agent_start', () => status('working'));
+  pi.on('agent_end', event => { if (!event.willRetry) status('done'); });
+  pi.on('session_shutdown', () => status('idle'));
+}`
+		args = " --extension " + shellQuote(filepath.Join(dir, filename))
+	case "opencode":
+		filename = "opencode.mjs"
+		content = `import { writeFileSync } from 'node:fs';
+export default async function () {
+  const sessions = new Map();
+  const status = () => {
+    const states = [...sessions.values()];
+    const value = states.includes('working') ? 'working' : states.includes('error') ? 'error' : states.length ? 'done' : 'idle';
+    try { writeFileSync(` + string(pathJSON) + `, value); } catch {}
+  };
+  return { event: async ({ event }) => {
+    const p = event.properties;
+    if (event.type === 'session.status') {
+      if (p.status.type !== 'idle') sessions.set(p.sessionID, 'working');
+      else if (sessions.get(p.sessionID) !== 'error') sessions.set(p.sessionID, 'done');
+    }
+    else if (event.type === 'session.error') sessions.set(p.sessionID, 'error');
+    else if (event.type === 'session.deleted') sessions.delete(p.info.id);
+    else return;
+    status();
+  }};
+}`
+		// Inline configuration is merged with OpenCode's normal config. Preserve
+		// existing inline settings and plugins, too.
+		config := map[string]any{}
+		if raw := os.Getenv("OPENCODE_CONFIG_CONTENT"); raw != "" {
+			if err = json.Unmarshal([]byte(raw), &config); err != nil {
+				break
+			}
+		}
+		if config == nil {
+			config = map[string]any{}
+		}
+		plugins, _ := config["plugin"].([]any)
+		config["plugin"] = append(plugins, "file://"+filepath.Join(dir, filename))
+		encoded, _ := json.Marshal(config)
+		a.env = []string{"OPENCODE_CONFIG_CONTENT=" + string(encoded)}
+	}
+	if err == nil {
+		err = os.WriteFile(filepath.Join(dir, filename), []byte(content), 0600)
+	}
+	if err != nil {
+		a.cleanup()
+		return command, nil, err
+	}
+	prepared := parts[1] + args + parts[2]
+	return agentExitCommand(prepared), a, nil
+}
+
+func agentExitCommand(command string) string {
+	return command + `; printf '\033]777;libro;exited\007'`
+}
+
+func (a *agentActivity) cleanup() {
+	if a != nil && a.dir != "" {
+		_ = os.RemoveAll(a.dir)
+	}
+}
+
+func (s *TerminalSession) watchAgentActivity() {
+	if s.activity == nil || s.activity.path == "" {
+		return
+	}
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for range ticker.C {
+		s.mu.Lock()
+		stopped := s.closed || s.agentEnded
+		s.mu.Unlock()
+		if stopped {
+			return
+		}
+		if data, err := os.ReadFile(s.activity.path); err == nil {
+			s.setAgentStatus(string(data))
+		}
+	}
+}
+
+func (s *TerminalSession) setAgentStatus(status string) {
+	switch status {
+	case "idle", "working", "done", "error", "exited":
+	default:
+		return
+	}
+	// The PTY exit marker and lifecycle file watcher can report concurrently.
+	// Keep state changes and their websocket messages in the same order.
+	s.agentMu.Lock()
+	defer s.agentMu.Unlock()
+	s.mu.Lock()
+	if s.closed || s.agentEnded {
+		s.mu.Unlock()
+		return
+	}
+	if status == "exited" {
+		s.agentEnded = true
+		status = "idle"
+	}
+	// A freshly opened prompt is idle, not a completed task.
+	if status == "done" && s.activity != nil && s.activity.kind == "codex" && !s.agentWorked {
+		status = "idle"
+	}
+	if status == "working" {
+		s.agentWorked = true
+	}
+	if status == s.agentStatus {
+		s.mu.Unlock()
+		return
+	}
+	s.agentStatus = status
+	s.mu.Unlock()
+	s.broadcast(terminalWSMessage{Type: "agent-status", Data: status})
+}
+
+// Parse only OSC title reports, including sequences split across PTY reads.
+// Arbitrary terminal text and periods without output are never completion signals.
+func (a *agentActivity) output(data []byte, report func(string)) {
+	if a == nil {
+		return
+	}
+	for _, b := range data {
+		if a.inOSC {
+			if b == 7 || (a.escape && b == '\\') {
+				title := strings.TrimSuffix(string(a.osc), "\x1b")
+				if title == "777;libro;exited" {
+					report("exited")
+				}
+				if a.kind == "codex" && (strings.HasPrefix(title, "0;") || strings.HasPrefix(title, "2;")) {
+					switch title[2:] {
+					case "Working", "Thinking", "Waiting":
+						report("working")
+					case "Ready":
+						report("done")
+					case "Starting", "":
+						report("idle")
+					}
+				}
+				a.inOSC, a.escape, a.osc = false, false, nil
+				continue
+			}
+			if len(a.osc) >= 1024 {
+				a.inOSC, a.osc = false, nil
+			} else {
+				a.osc = append(a.osc, b)
+			}
+		} else if a.escape && b == ']' {
+			a.inOSC, a.osc = true, nil
+		}
+		a.escape = b == 27
+	}
+}

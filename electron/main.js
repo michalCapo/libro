@@ -1050,6 +1050,20 @@ app.on('web-contents-created', (event, contents) => {
     // the main host page. These child contents are not always reported as "webview",
     // so do not special-case them as host content.
 
+    // Keep workspace navigation available while a browser tool has focus.
+    if (input.control && !input.meta && !input.alt &&
+        ((!input.shift && ['h', 'l'].includes(key)) || (input.shift && key === 'p'))) {
+      if (shouldSkipDuplicateShortcut()) return
+      e.preventDefault()
+      mainWindow?.webContents.executeJavaScript(`
+        window.dispatchEvent(new KeyboardEvent('keydown', {
+          key: ${JSON.stringify(input.key)}, code: ${JSON.stringify(input.code || '')},
+          ctrlKey: true, shiftKey: ${!!input.shift}, bubbles: true, cancelable: true
+        }));
+      `).catch(() => {})
+      return
+    }
+
     // Meta+Ctrl shortcuts: u, i, y (move app / open move-project popup)
     if (input.meta && input.control && ['keyu', 'keyi', 'keyy'].includes(code)) {
       if (shouldSkipDuplicateShortcut()) return

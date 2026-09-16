@@ -11,6 +11,7 @@ colors:
   muted: "#70707b"
   hover: "#efeff2"
   accent: "#2452df"
+  success: "#15803d"
   popup: "#f7f7f8"
   popup-row: "#fff"
   popup-muted: "#70707b"
@@ -23,6 +24,7 @@ colors:
   dark-muted: "#aaaab5"
   dark-hover: "#303036"
   dark-accent: "#8aa7ff"
+  dark-success: "#4ade80"
   dark-popup: "#252529"
   dark-popup-row: "#34343b"
   dark-popup-muted: "#aaaab5"
@@ -126,7 +128,7 @@ Use the system sans-serif stack in `body`; there is no separate display font. Bo
 
 ## Layout
 
-The shell has a 56px titlebar, a 26px statusbar, and left project navigation. The sidebar is 280px wide, reduced to 240px at viewport widths of 1050px or less. At 760px or less it overlays the content between the titlebar and statusbar, with width `min(280px, calc(100vw - 48px))`. It defaults closed on small screens when no preference exists; selecting a project closes it. The brand and trailing status text hide, and empty-state headings become 24px.
+The shell has a 56px titlebar, a 26px statusbar, and left project navigation. The sidebar is 252px wide, reduced to 216px at viewport widths of 1050px or less. At 760px or less it overlays the content between the titlebar and statusbar, with width `min(252px, calc(100vw - 48px))`. It defaults closed on small screens when no preference exists; selecting a project closes it. The brand and trailing status text hide, and empty-state headings become 24px.
 
 The main area is one horizontal row of full-height, non-shrinking app panels with no gap or outer card padding. Width presets are XS 320px, SM 480px, MD 640px, LG 960px, XL 1280px, and 2XL 1920px. These are panel widths, not viewport breakpoints. Legacy 3XL 2560px and FULL remain available; the existing screen-width policy disables 3XL on Full HD or smaller screens. FULL uses available strip width. Maximizing temporarily fills the strip and hides other panels. Selecting an offscreen panel scrolls it into view.
 

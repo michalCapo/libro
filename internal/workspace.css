@@ -1,6 +1,6 @@
 /* T3-inspired desktop chrome around a horizontal row of fixed-width panels.
    Shared surface, control, and typography tokens also style every popup. */
-:root{--ws-bg:#fcfcfd;--ws-chrome:#f7f7f8;--ws-raised:#fff;--ws-line:#e9e9ec;--ws-control-line:#d4d4db;--ws-fg:#29292e;--ws-muted:#70707b;--ws-hover:#efeff2;--ws-accent:#2452df;--ws-popup:#f7f7f8;--ws-popup-row:#fff;--ws-popup-muted:#70707b;--ws-projects:280px}
+:root{--ws-bg:#fcfcfd;--ws-chrome:#f7f7f8;--ws-raised:#fff;--ws-line:#e9e9ec;--ws-control-line:#d4d4db;--ws-fg:#29292e;--ws-muted:#70707b;--ws-hover:#efeff2;--ws-accent:#2452df;--ws-popup:#f7f7f8;--ws-popup-row:#fff;--ws-popup-muted:#70707b;--ws-projects:252px}
 html.dark{--ws-bg:#1c1c1f;--ws-chrome:#222225;--ws-raised:#2b2b30;--ws-line:#333339;--ws-control-line:#484850;--ws-fg:#e6e6eb;--ws-muted:#aaaab5;--ws-hover:#303036;--ws-accent:#8aa7ff;--ws-popup:#252529;--ws-popup-row:#34343b;--ws-popup-muted:#aaaab5}
 #libro-workspace{background:var(--ws-bg);color:var(--ws-fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 #libro-workspace ::selection{background:#4873ef33}
@@ -34,6 +34,11 @@ html.dark{--ws-bg:#1c1c1f;--ws-chrome:#222225;--ws-raised:#2b2b30;--ws-line:#333
 .ws-project-item:has(.ws-project-remove) .ws-project-row{padding-right:36px}
 .ws-project-row span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ws-project-row .material-icons-round{font-size:18px;flex-shrink:0;color:var(--ws-muted)}
+.ws-project-row[data-agent-status=working] .material-icons-round{color:var(--ws-accent);animation:ws-agent-working 1s linear infinite}
+.ws-project-row[data-agent-status=done] .material-icons-round{color:#15803d}
+html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4ade80}
+@keyframes ws-agent-working{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.ws-project-row[data-agent-status=working] .material-icons-round{animation:none}}
 .ws-project-item:hover{background:var(--ws-hover)}
 .ws-project-item:has(.ws-project-row[aria-current=true]){background:var(--ws-raised)}
 .ws-project-row[aria-current=true]{color:var(--ws-fg)}
@@ -164,8 +169,8 @@ html.dark{--ws-bg:#1c1c1f;--ws-chrome:#222225;--ws-raised:#2b2b30;--ws-line:#333
 #libro-workspace[data-projects=false] .ws-project-item{margin-bottom:8px}
 #libro-workspace[data-projects=false] .ws-sidebar-footer{display:flex;flex-direction:column;gap:8px}
 #libro-workspace[data-projects=false] .ws-project-list{scrollbar-width:none}
-@media(max-width:1050px){:root{--ws-projects:240px}}
-@media(max-width:760px){.ws-sidebar{position:absolute;left:0;top:0;bottom:26px;width:min(280px,calc(100vw - 48px));z-index:60;box-shadow:8px 0 24px #0002}.ws-titlebar{gap:6px;padding-right:8px}.ws-titlebar-home{width:auto;border-right:0;background:transparent;padding:0 8px;gap:6px}.ws-brand{display:none}.ws-project-symbol{margin-left:0}.ws-project-title{max-width:35vw}.ws-statusbar>span:last-child{display:none}.ws-shortcut-row{gap:8px;font-size:12px}.ws-empty h1{font-size:24px}}
+@media(max-width:1050px){:root{--ws-projects:216px}}
+@media(max-width:760px){.ws-sidebar{position:absolute;left:0;top:0;bottom:26px;width:min(252px,calc(100vw - 48px));z-index:60;box-shadow:8px 0 24px #0002}.ws-titlebar{gap:6px;padding-right:8px}.ws-titlebar-home{width:auto;border-right:0;background:transparent;padding:0 8px;gap:6px}.ws-brand{display:none}.ws-project-symbol{margin-left:0}.ws-project-title{max-width:35vw}.ws-statusbar>span:last-child{display:none}.ws-shortcut-row{gap:8px;font-size:12px}.ws-empty h1{font-size:24px}}
 @media(prefers-reduced-motion:reduce){#libro-workspace *,#libro-workspace *::before{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .ws-popup .font-mono{font-family:inherit}
@@ -281,12 +286,12 @@ html.dark{--ws-bg:#1c1c1f;--ws-chrome:#222225;--ws-raised:#2b2b30;--ws-line:#333
 .ws-tool-sizes .ws-size-picker button{padding:4px 6px;font-size:10px;border-radius:6px;color:var(--ws-fg)}
 .ws-tool-sizes .ws-size-picker button:hover,.ws-tool-sizes .ws-size-picker button[aria-pressed=true]{background:var(--ws-hover)}
 
-.ws-grid>[data-dock=right]>[data-app-toolbar]>.ws-panel-close{display:none}
-
 /* One shared tab row: agents at the start, tools at the end. */
 .ws-tool-tabs{justify-content:flex-start}
 .ws-tool-tabs>[data-tab-dock=right]:not([data-tab-dock=right] + [data-tab-dock=right]){margin-left:auto}
-.ws-grid>[data-dock=center]>[data-app-toolbar]{display:none}
+.ws-grid>[data-app-id]>[data-app-toolbar]{display:none}
+.ws-grid>[data-app-type=url]:not([data-plugin=files])>[data-app-toolbar]{display:flex}
+.ws-grid>[data-app-type=url]>[data-app-toolbar]>[data-size-badges],.ws-grid>[data-app-type=url]>[data-app-toolbar]>.ws-panel-close{display:none}
 
 :root{--ws-rail-width:53px}
 .ws-tool-rail{width:var(--ws-rail-width);box-sizing:border-box}

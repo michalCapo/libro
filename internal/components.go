@@ -3383,8 +3383,16 @@ func terminalFrameSetupJS() string {
 							}
 							var msg;
 							try { msg = JSON.parse(raw); } catch (err) { return; }
+							if (msg.type === 'agent-status') {
+								window.__libroAgentStatuses = window.__libroAgentStatuses || {};
+								window.__libroAgentStatuses[appID] = msg.data;
+								window.dispatchEvent(new Event('libro-agent-status'));
+								return;
+							}
 							if (msg.type === 'output') term.write(msg.data || '');
 							else if (msg.type === 'exit') {
+                                if (window.__libroAgentStatuses) delete window.__libroAgentStatuses[appID];
+                                window.dispatchEvent(new Event('libro-agent-status'));
                                 term.write('\r\n[process exited: ' + (msg.code || 0) + ']\r\n');
                                 if (el.closest('[data-dock="bottom"]') && window.libroWorkspace) {
                                     controller.closed = true;
@@ -3394,6 +3402,8 @@ func terminalFrameSetupJS() string {
 							else if (msg.type === 'error') term.write('\r\n[terminal error: ' + (msg.message || 'unknown') + ']\r\n');
 						};
 						ws.onclose = function() {
+							if (window.__libroAgentStatuses) delete window.__libroAgentStatuses[appID];
+							window.dispatchEvent(new Event('libro-agent-status'));
 							if (controller.closed || !el.isConnected) return;
 							controller.attempts++;
 							// Stop hammering the server if the connection keeps

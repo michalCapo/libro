@@ -126,6 +126,8 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 
 ### Navigation
 
+- `Ctrl + H` / `Ctrl + L` select the previous / next agent in the active project (wraps at either end)
+- `Ctrl + Shift + P` toggle the project sidebar
 - `⌘ + H` select app to the left
 - `⌘ + L` select app to the right
 - `⌘ + [` move app left
@@ -134,6 +136,14 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - `⌘ + Ctrl + Y` move app to another project
 - `⌘ + N` open project and worktree picker
 - `⌘ + G` create worktree from current branch
+
+Project and worktree icons turn blue and spin while any agent is working, then
+show a green check when all active agents finish. Codex, Pi, Claude, and OpenCode
+use lifecycle signals, not terminal inactivity. Open a new agent session after
+updating Libro to enable tracking. Launch commands must start with the agent
+executable; shell aliases and wrapper scripts are not automatically instrumented.
+Codex requires terminal-title `run-state` support. Pi and OpenCode must allow
+the launch-local extension/plugin, and Claude must allow session hooks.
 
 ### Browser
 

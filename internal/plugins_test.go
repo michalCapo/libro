@@ -69,7 +69,7 @@ func TestMainAreaRejectsTools(t *testing.T) {
 			t.Errorf("tool allowed in main area: %+v", app)
 		}
 	}
-	for _, command := range []string{"codex", "claude", "pi"} {
+	for _, command := range []string{"codex", "claude", "pi", "opencode"} {
 		app := Application{Type: AppTypeTerminal, Command: command, Dock: "center"}
 		if !isAgentApp(app) || appDock(app) != "center" {
 			t.Errorf("agent rejected: %s", command)

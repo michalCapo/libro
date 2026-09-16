@@ -36,6 +36,7 @@ var builtinPlugins = []Plugin{
 	{ID: "lazyrepo", Name: "Git", Type: AppTypeTerminal, Command: "lazyrepo", Dock: "right", Description: "Repository tools"},
 	{ID: "lazydata", Name: "Database", Type: AppTypeTerminal, Command: "lazydata", Dock: "right", Description: "Explore your data"},
 	{ID: "files", Name: "Files", Type: AppTypeURL, Dock: "right", Description: "Browse project files with Vim navigation"},
+	{ID: "opencode", Name: "OpenCode", Type: AppTypeTerminal, Command: "opencode", Dock: "center", Description: "OpenCode coding agent"},
 }
 
 var pluginOnce sync.Once

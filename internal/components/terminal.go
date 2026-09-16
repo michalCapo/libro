@@ -87,11 +87,16 @@ type TerminalSession struct {
 	ptyFile    *os.File
 	outputDone chan struct{}
 
-	mu      sync.Mutex
-	clients map[*terminalClient]bool
-	closed  bool
-	cols    uint16
-	rows    uint16
+	mu          sync.Mutex
+	clients     map[*terminalClient]bool
+	closed      bool
+	cols        uint16
+	rows        uint16
+	activity    *agentActivity
+	agentStatus string
+	agentWorked bool
+	agentEnded  bool
+	agentMu     sync.Mutex
 }
 
 type terminalClient struct {
@@ -151,27 +156,37 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 	tm.mu.Unlock()
 
 	shell := userShell()
-	cmd := terminalCommand(command, shell)
+	launchCommand, activity, err := prepareAgentActivity(command)
+	if err != nil {
+		return nil, fmt.Errorf("prepare agent activity: %w", err)
+	}
+	cmd := terminalCommand(launchCommand, shell)
 	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	if activity != nil {
+		cmd.Env = append(cmd.Env, activity.env...)
+	}
 
 	ptyFile, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: 100, Rows: 30})
 	if err != nil {
+		activity.cleanup()
 		return nil, fmt.Errorf("failed to start PTY: %w", err)
 	}
 
 	s := &TerminalSession{
-		ID:         appID,
-		AppID:      appID,
-		Command:    command,
-		Cwd:        cwd,
-		Writable:   writable,
-		cmd:        cmd,
-		ptyFile:    ptyFile,
-		outputDone: make(chan struct{}),
-		clients:    make(map[*terminalClient]bool),
-		cols:       100,
-		rows:       30,
+		ID:          appID,
+		AppID:       appID,
+		Command:     command,
+		Cwd:         cwd,
+		Writable:    writable,
+		cmd:         cmd,
+		ptyFile:     ptyFile,
+		outputDone:  make(chan struct{}),
+		clients:     make(map[*terminalClient]bool),
+		cols:        100,
+		rows:        30,
+		activity:    activity,
+		agentStatus: "idle",
 	}
 
 	tm.mu.Lock()
@@ -181,6 +196,7 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
 		}
+		activity.cleanup()
 		return existing, nil
 	}
 	tm.sessions[appID] = s
@@ -189,6 +205,7 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 	log.Printf("terminal started for app %s (writable=%v): %s", appID, writable, command)
 	go tm.readLoop(s)
 	go tm.waitLoop(s)
+	go s.watchAgentActivity()
 	return s, nil
 }
 
@@ -215,6 +232,7 @@ func (tm *TerminalManager) readLoop(s *TerminalSession) {
 	for {
 		n, err := s.ptyFile.Read(buf)
 		if n > 0 {
+			s.activity.output(buf[:n], s.setAgentStatus)
 			chunk := make([]byte, n)
 			copy(chunk, buf[:n])
 			chunks <- chunk
@@ -393,12 +411,17 @@ func (s *TerminalSession) close(killProcess bool) {
 	if killProcess && cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Kill()
 	}
+	s.activity.cleanup()
 }
 
 func (s *TerminalSession) addClient(c *terminalClient) {
 	s.mu.Lock()
 	s.clients[c] = true
 	cols, rows := s.cols, s.rows
+	status := s.agentStatus
+	if status != "" {
+		_ = c.send(terminalWSMessage{Type: "agent-status", Data: status})
+	}
 	s.mu.Unlock()
 	if cols > 0 && rows > 0 && s.ptyFile != nil {
 		_ = pty.Setsize(s.ptyFile, &pty.Winsize{Cols: cols, Rows: rows})

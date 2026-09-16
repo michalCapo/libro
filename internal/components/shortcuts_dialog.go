@@ -29,6 +29,8 @@ func ShortcutsDialog() *r.Node {
 			{"⌘ + 0", "Reset zoom (whole app)"},
 		}},
 		{"Navigation", "", []shortcut{
+			{"Ctrl + H / L", "Previous / next agent"},
+			{"Ctrl + Shift + P", "Toggle project sidebar"},
 			{"⌘ + H", "Navigate left"},
 			{"⌘ + L", "Navigate right"},
 			{"⌘ + [", "Move app left"},
