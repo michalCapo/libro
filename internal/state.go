@@ -545,17 +545,7 @@ func (sm *StateManager) RemoveApp(sessionID string, index int) *Application {
 	if s == nil || index < 0 || index >= len(s.Apps) {
 		return nil
 	}
-	removed := s.Apps[index]
-	s.Apps = append(s.Apps[:index], s.Apps[index+1:]...)
-	// Adjust selected index
-	if len(s.Apps) == 0 {
-		s.SelectedIndex = 0
-	} else if s.SelectedIndex >= len(s.Apps) {
-		s.SelectedIndex = len(s.Apps) - 1
-	} else if index < s.SelectedIndex {
-		s.SelectedIndex--
-	}
-	return &removed
+	return removeApp(s, index)
 }
 
 // RemoveAppByID removes an application by its ID and returns it (for cleanup)
@@ -568,19 +558,39 @@ func (sm *StateManager) RemoveAppByID(sessionID, appID string) *Application {
 	}
 	for i, app := range s.Apps {
 		if app.ID == appID {
-			removed := s.Apps[i]
-			s.Apps = append(s.Apps[:i], s.Apps[i+1:]...)
-			if len(s.Apps) == 0 {
-				s.SelectedIndex = 0
-			} else if s.SelectedIndex >= len(s.Apps) {
-				s.SelectedIndex = len(s.Apps) - 1
-			} else if i < s.SelectedIndex {
-				s.SelectedIndex--
-			}
-			return &removed
+			return removeApp(s, i)
 		}
 	}
 	return nil
+}
+
+// removeApp updates selection while the state manager lock is held.
+func removeApp(s *AppState, index int) *Application {
+	removed := s.Apps[index]
+	preferAgent := index == s.SelectedIndex && isAgentApp(removed)
+	s.Apps = append(s.Apps[:index], s.Apps[index+1:]...)
+	if preferAgent {
+		for i := index - 1; i >= 0; i-- {
+			if isAgentApp(s.Apps[i]) {
+				s.SelectedIndex = i
+				return &removed
+			}
+		}
+		for i := index; i < len(s.Apps); i++ {
+			if isAgentApp(s.Apps[i]) {
+				s.SelectedIndex = i
+				return &removed
+			}
+		}
+	}
+	if len(s.Apps) == 0 {
+		s.SelectedIndex = 0
+	} else if index < s.SelectedIndex {
+		s.SelectedIndex--
+	} else if s.SelectedIndex >= len(s.Apps) {
+		s.SelectedIndex = len(s.Apps) - 1
+	}
+	return &removed
 }
 
 func applyAppWidth(app *Application, width Width) {

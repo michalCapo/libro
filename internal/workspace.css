@@ -35,10 +35,11 @@ html.dark .ws-grid [data-terminal],html.dark .ws-grid .xterm,html.dark .ws-grid 
 .ws-project-row span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ws-project-row .material-icons-round{font-size:18px;flex-shrink:0;color:var(--ws-muted)}
 .ws-project-row[data-agent-status=working] .material-icons-round{color:var(--ws-accent);animation:ws-agent-working 1s linear infinite}
-.ws-project-row[data-agent-status=done] .material-icons-round{color:#15803d}
+.ws-project-row[data-agent-status=done] .material-icons-round{color:#15803d;animation:ws-agent-done .45s cubic-bezier(.2,1.4,.3,1)}
 html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4ade80}
 @keyframes ws-agent-working{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){.ws-project-row[data-agent-status=working] .material-icons-round{animation:none}}
+@keyframes ws-agent-done{from{transform:scale(.4);opacity:0}60%{transform:scale(1.15)}to{transform:scale(1);opacity:1}}
+@media(prefers-reduced-motion:reduce){.ws-project-row[data-agent-status=working] .material-icons-round,.ws-project-row[data-agent-status=done] .material-icons-round{animation:none}}
 .ws-project-item:hover{background:var(--ws-hover)}
 .ws-project-item:has(.ws-project-row[aria-current=true]){background:var(--ws-raised)}
 .ws-project-row[aria-current=true]{color:var(--ws-fg)}

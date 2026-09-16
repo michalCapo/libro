@@ -199,6 +199,56 @@
       list.append(item);
     });
   }
+  let notificationAudio;
+  function enableNotificationAudio() {
+    if (prefs.notificationSound === false) return;
+    try {
+      notificationAudio ||= new AudioContext();
+      if (notificationAudio.state === 'suspended') notificationAudio.resume().catch(() => {});
+    } catch (_) {}
+  }
+  // Unlock audio during interaction so background completions can play immediately.
+  document.addEventListener('pointerdown', enableNotificationAudio, true);
+  document.addEventListener('keydown', enableNotificationAudio, true);
+  function playDoneSound() {
+    if (prefs.notificationSound === false || notificationAudio?.state !== 'running') return;
+    const start = notificationAudio.currentTime;
+    [660, 880].forEach((frequency, index) => {
+      const tone = notificationAudio.createOscillator();
+      const volume = notificationAudio.createGain();
+      const at = start + index * 0.14;
+      tone.frequency.value = frequency;
+      volume.gain.setValueAtTime(0, at);
+      volume.gain.linearRampToValueAtTime(0.12, at + 0.015);
+      volume.gain.exponentialRampToValueAtTime(0.001, at + 0.3);
+      tone.connect(volume); volume.connect(notificationAudio.destination);
+      tone.onended = () => { tone.disconnect(); volume.disconnect(); };
+      tone.start(at); tone.stop(at + 0.32);
+    });
+  }
+  let previousAgentStatuses = {...window.__libroAgentStatuses};
+  function notifyAgentDone() {
+    const statuses = window.__libroAgentStatuses || {};
+    for (const [id, status] of Object.entries(statuses)) {
+      if (status === 'done' && previousAgentStatuses[id] === 'working') playDoneSound();
+    }
+    previousAgentStatuses = {...statuses};
+  }
+  window.addEventListener('libro-agent-status', notifyAgentDone);
+  function saveNotificationSound(value) {
+    const enabled = value === 'on';
+    const status = document.getElementById('notification-sound-status');
+    try {
+      const updated = {...prefs, notificationSound:enabled};
+      localStorage.setItem('libro.workspace', JSON.stringify(updated));
+      prefs = updated;
+      enableNotificationAudio();
+      status.textContent = enabled ? 'Notification sound on.' : 'Notification sound off.';
+    } catch (_) {
+      document.getElementById('notification-sound').value = prefs.notificationSound === false ? 'off' : 'on';
+      status.textContent = 'Could not save. Please try again.';
+    }
+  }
   function renderProjectActivity() {
     const statuses = window.__libroAgentStatuses || {};
     const projects = new Map();
@@ -212,7 +262,7 @@
       const state = projects.get(row.dataset.projectKey) || '';
       if (row.dataset.agentStatus === state) return;
       row.dataset.agentStatus = state;
-      row.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle' : row.dataset.kind === 'worktree' ? 'account_tree' : 'folder_open';
+      row.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle_outline' : row.dataset.kind === 'worktree' ? 'account_tree' : 'folder_open';
       const label = row.querySelector('span').textContent;
       row.setAttribute('aria-label', label + (state === 'working' ? ': agents working' : state === 'done' ? ': all agents done' : ''));
     });
@@ -539,6 +589,8 @@
     }
   }
   function showSettings(width, commands = {}, bindings = toolKeys) {
+    document.getElementById('notification-sound').value = prefs.notificationSound === false ? 'off' : 'on';
+    document.getElementById('notification-sound-status').textContent = '';
     document.getElementById('workspace-theme').value = themePreference();
     document.getElementById('workspace-theme-status').textContent = '';
     toolKeys = bindings; fillToolKeys(bindings); updateToolHints();
@@ -636,7 +688,7 @@
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New panels will use this width.' : 'Could not save. Please try again.';
   }
-  window.libroWorkspace = {saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;

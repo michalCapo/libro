@@ -280,6 +280,20 @@ func renderWorkspaceSettings() *r.Node {
 				),
 			),
 			r.P("ws-settings-status").ID("workspace-theme-status").Attr("role", "status"),
+			r.El("h2", "ws-shortcut-heading").Text("Notifications"),
+			r.Div("ws-settings-group").Render(
+				r.Div("ws-settings-row").Render(
+					r.Div("ws-settings-copy").Render(
+						r.El("label", "").Attr("for", "notification-sound").Text("Agent done sound"),
+						r.P("").ID("notification-sound-help").Text("Play a short sound whenever an agent finishes a task, in any project."),
+					),
+					r.El("select", "ws-settings-select").ID("notification-sound").Attr("aria-describedby", "notification-sound-help").On("change", r.JS("libroWorkspace.saveNotificationSound(event.target.value)")).Render(
+						r.El("option", "").Attr("value", "on").Text("On"),
+						r.El("option", "").Attr("value", "off").Text("Off"),
+					),
+				),
+			),
+			r.P("ws-settings-status").ID("notification-sound-status").Attr("role", "status"),
 			r.El("h2", "ws-shortcut-heading").Text("Panels"),
 			r.Div("ws-settings-group").Render(
 				r.Div("ws-settings-row").Render(
