@@ -98,12 +98,7 @@ func renderWorkspaceStrip(state *AppState, sid, placeholderID string) *r.Node {
 func renderWorkspaceTools() *r.Node {
 	return r.El("aside", "ws-tool-rail").Attr("aria-label", "Workspace tools").Render(
 		workspaceButton("Toggle projects", "view_sidebar", "libroWorkspace.toggle('projects')"),
-		workspaceButton("Terminal", "terminal", "libroWorkspace.tool('terminal')"),
-		workspaceButton("Browser", "language", "libroWorkspace.tool('browser')"),
-		workspaceButton("Files", "folder_open", "libroWorkspace.tool('files')"),
-		workspaceButton("Nvim", "edit", "libroWorkspace.tool('nvim')"),
-		workspaceButton("Git", "account_tree", "libroWorkspace.tool('lazyrepo')"),
-		workspaceButton("Database", "storage", "libroWorkspace.tool('lazydata')"),
+		r.Div("ws-tool-buttons").ID("workspace-tool-buttons"),
 		workspaceButton("More tools", "add", "libroWorkspace.launcher('right')"),
 		workspaceButton("Toggle bottom terminal (Ctrl+`)", "vertical_align_bottom", "libroWorkspace.bottom()"),
 	)

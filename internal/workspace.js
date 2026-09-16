@@ -210,6 +210,7 @@
       const label = button.getAttribute('aria-label') || button.textContent.trim().replace(/^(settings|apps|tune)\s*/, '');
       button.setAttribute('aria-label', label); button.title = label;
     });
+    renderToolRail();
     renderProjects();
     window.libroFiles?.init();
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
@@ -240,6 +241,16 @@
     });
     observer.observe(document.getElementById('main-area'), {childList:true, subtree:true, attributes:true, attributeFilter:['style', 'data-dock']});
   }
+  function renderToolRail() {
+    const rail = document.getElementById('workspace-tool-buttons'); if (!rail) return;
+    const list = window.__libroPlugins.filter(p => p.dock === 'right' && !p.disabled && !p.removed);
+    const signature = JSON.stringify(list);
+    if (rail.dataset.signature === signature) return;
+    rail.dataset.signature = signature; rail.replaceChildren();
+    const icons = {terminal:'terminal',browser:'language',files:'folder_open',nvim:'edit',lazyrepo:'account_tree',lazydata:'storage'};
+    list.forEach(p => { const entry = button(p.name, icons[p.id] || 'terminal', () => tool(p.id)); entry.dataset.toolId = p.id; rail.append(entry); });
+    updateToolHints();
+  }
   function tool(id) {
     const grid = activeGrid(); if (!grid) return;
     const state = dockState(grid);
@@ -269,7 +280,7 @@
   function updateToolHints() {
     document.querySelectorAll('.ws-tool-rail button').forEach(button => {
       const name = button.getAttribute('aria-label');
-      const plugin = window.__libroPlugins.find(plugin => plugin.name === name);
+      const plugin = window.__libroPlugins.find(plugin => plugin.id === button.dataset.toolId);
       if (plugin) button.title = name + (toolKeys[plugin.id] ? ' (' + toolKeys[plugin.id] + ')' : '');
     });
   }
@@ -471,6 +482,8 @@
     toolKeys = bindings; fillToolKeys(bindings); updateToolHints();
     document.getElementById('tool-key-status').textContent = '';
     document.getElementById('agent-command-rows').replaceChildren();
+    document.getElementById('tool-command-rows').replaceChildren();
+    window.__libroPlugins.filter(p => p.dock === 'right' && p.type === 'terminal' && p.id !== 'terminal' && !p.removed).forEach(p => addAgentRow(p, p.command, true));
     removedAgents = Object.fromEntries(window.__libroPlugins.filter(p => p.removed).map(p => [p.id, true]));
     window.__libroPlugins.filter(p => !p.removed && p.dock === 'center' && p.type === 'terminal').forEach(p => addAgentRow(p, commands[p.id] || p.command));
     document.querySelector('#agent-commands-form [role=status]').textContent = '';
@@ -492,26 +505,42 @@
     call('settings.width', {width});
   }
   let removedAgents = {};
-  function addAgentRow(plugin, command) {
+  function addAgentRow(plugin, command, toolRow = false) {
     const row = node('div', 'ws-settings-row ws-agent-command-row ws-agent-config-row');
     row.dataset.agentId = plugin.id; row.dataset.custom = String(!!plugin.custom);
     const name = node('input', 'ws-agent-command');
-    name.value = plugin.name; name.placeholder = 'Agent name'; name.required = true; name.setAttribute('aria-label', 'Agent name'); name.dataset.agentName = '';
+    name.value = plugin.name; name.placeholder = 'Agent name'; name.required = true; name.setAttribute('aria-label', toolRow ? 'Tool name' : 'Agent name'); name.dataset.agentName = '';
     const input = node('input', 'ws-agent-command'); input.id = 'agent-command-' + plugin.id; input.dataset.agentCommand = plugin.id;
     input.value = command || ''; input.placeholder = 'CLI command'; input.required = true; input.spellcheck = false; input.setAttribute('aria-label', plugin.name ? plugin.name + ' command' : 'Custom agent command');
     const toggle = node('label', 'ws-agent-enabled');
     const checkbox = node('input', ''); checkbox.type = 'checkbox'; checkbox.checked = !plugin.disabled; checkbox.dataset.agentEnabled = '';
     checkbox.setAttribute('aria-label', 'Enable ' + (plugin.name || 'custom agent'));
     toggle.append(checkbox);
-    const remove = button('Remove agent', 'delete_outline', () => {
+    const remove = button(toolRow ? 'Remove tool' : 'Remove agent', 'delete_outline', () => {
       if (checkbox.checked) return;
+      if (toolRow) { if (!window.__libroPlugins.some(p => p.id === plugin.id)) { row.remove(); return; } row.dataset.removed = 'true'; row.hidden = true; row.querySelectorAll('input').forEach(input => input.required = false); return; }
       if (window.__libroPlugins.some(p => p.id === plugin.id)) removedAgents[plugin.id] = true;
       row.remove();
     });
     remove.hidden = checkbox.checked;
     checkbox.onchange = () => remove.hidden = checkbox.checked;
-    row.append(toggle, name, input, remove); document.getElementById('agent-command-rows').append(row);
+    row.append(toggle, name, input, remove); document.getElementById(toolRow ? 'tool-command-rows' : 'agent-command-rows').append(row);
     return row;
+  }
+  function addCustomTool() {
+    addAgentRow({id:'custom-tool-' + crypto.randomUUID(), name:'', custom:true}, '', true).querySelector('[data-agent-name]').focus();
+  }
+  function saveTools(form) {
+    const tools = window.__libroPlugins.filter(p => p.dock === 'right' && p.removed);
+    form.querySelectorAll('[data-agent-id]').forEach(row => tools.push({id:row.dataset.agentId, name:row.querySelector('[data-agent-name]').value.trim(), command:row.querySelector('[data-agent-command]').value, type:'terminal', dock:'right', custom:row.dataset.custom === 'true', disabled:!row.querySelector('[data-agent-enabled]').checked, removed:row.dataset.removed === 'true'}));
+    form.querySelector('[type=submit]').disabled = true;
+    form.querySelector('[role=status]').textContent = 'Saving…';
+    call('settings.tools', {tools});
+  }
+  function toolsSaved(plugins, message) {
+    const form = document.getElementById('tool-commands-form');
+    form.querySelector('[type=submit]').disabled = false; form.querySelector('[role=status]').textContent = message;
+    if (plugins) { window.__libroPlugins = plugins; refresh(); }
   }
   function addCustomAgent() {
     addAgentRow({id:'custom-' + crypto.randomUUID(), name:'', custom:true}, '').querySelector('input').focus();
@@ -545,7 +574,7 @@
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New panels will use this width.' : 'Could not save. Please try again.';
   }
-  window.libroWorkspace = {zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;

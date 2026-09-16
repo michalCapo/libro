@@ -102,4 +102,29 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 		t.Fatal("agent removals did not persist")
 	}
 
+	tools := []Plugin{{ID: "nvim", Name: "Editor", Command: "nvim -u NONE", Dock: "right", Type: AppTypeTerminal}, {ID: "custom-tool-monitor", Name: "Monitor", Command: "top", Dock: "right", Type: AppTypeTerminal, Custom: true, Disabled: true}}
+	if err := saveTools(tools); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveTools([]Plugin{{ID: "codex", Name: "Bad", Command: "bad", Dock: "right", Type: AppTypeTerminal}}); err == nil {
+		t.Fatal("allowed tool to replace agent")
+	}
+	db.Close()
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundEditor, foundCustom := false, false
+	for _, p := range plugins() {
+		if p.ID == "nvim" {
+			foundEditor = p.Name == "Editor" && p.Command == "nvim -u NONE"
+		}
+		if p.ID == "custom-tool-monitor" {
+			foundCustom = p.Disabled && p.Custom && p.Command == "top"
+		}
+	}
+	if !foundEditor || !foundCustom {
+		t.Fatal("tool settings did not persist")
+	}
+
 }

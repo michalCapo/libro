@@ -291,3 +291,7 @@ html.dark{--ws-bg:#1c1c1f;--ws-chrome:#222225;--ws-raised:#2b2b30;--ws-line:#333
 :root{--ws-rail-width:53px}
 .ws-tool-rail{width:var(--ws-rail-width);box-sizing:border-box}
 #libro-workspace[data-projects=false] .ws-sidebar{box-sizing:border-box}
+.ws-tool-settings{margin-top:44px}
+.ws-tool-buttons{display:flex;flex-direction:column;gap:8px}
+.ws-tool-rail{overflow-y:auto;scrollbar-width:thin}
+.ws-agent-config-row[hidden]{display:none}

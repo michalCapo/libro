@@ -134,6 +134,22 @@ func plugins() []Plugin {
 				result[i].Disabled = disabled[result[i].ID]
 			}
 		}
+		var tools []Plugin
+		if db.QueryRow(`SELECT value FROM settings WHERE key = 'tool_configs'`).Scan(&raw) == nil && json.Unmarshal([]byte(raw), &tools) == nil {
+			for _, tool := range tools {
+				found := false
+				for i := range result {
+					if result[i].ID == tool.ID {
+						result[i] = tool
+						found = true
+						break
+					}
+				}
+				if !found {
+					result = append(result, tool)
+				}
+			}
+		}
 	}
 	return result
 }

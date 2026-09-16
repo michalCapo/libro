@@ -198,6 +198,7 @@ func renderAgentCommands() *r.Node {
 
 func registerSettingsActions(app *r.App) {
 	registerKeybindingActions(app)
+	registerToolSettings(app)
 	registerAction(app, "settings.agent-command", func(ctx *r.Context) string {
 		raw, _ := json.Marshal(ctx.WsData()["commands"])
 		var commands map[string]string
@@ -278,6 +279,7 @@ func renderWorkspaceSettings() *r.Node {
 			r.El("h2", "ws-shortcut-heading").Text("Agent commands"),
 			r.P("ws-settings-status").Text("CLI commands used to start agents in every project. Include any flags you need. Running sessions are unchanged."),
 			renderAgentCommands(),
+			renderToolSettings(),
 			renderToolKeybindings(),
 		),
 	)

@@ -499,7 +499,7 @@ func Run(assets embed.FS) {
 				return r.Notify("error", "This agent is disabled in Settings")
 			}
 			plugin.Command = agentCommand(*plugin)
-			if plugin.Dock == "center" {
+			if plugin.Type == AppTypeTerminal {
 				data["command"] = plugin.Command
 			}
 			if plugin.Command != "" {
