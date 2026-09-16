@@ -85,8 +85,8 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 
 ### Search And Commands
 
-- `⌘ + O` opens the app launcher.
-- `⌘ + ;` opens the command palette for workspace, project, and panel commands.
+- `Ctrl + N` opens the agent launcher.
+- `Ctrl + ;` opens the command palette for workspace, project, and panel commands.
 - `` Ctrl + ` `` toggles the bottom terminal.
 - `Ctrl + A` focuses the current agent, or opens the agent launcher when none is open.
 
@@ -96,7 +96,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - Projects are tied to directories.
 - Each project keeps its own in-memory running strip while inactive projects stay hidden.
 - Git repositories expose worktrees in the project picker.
-- `⌘ + N` opens the project/worktree picker.
+- `Ctrl + N` opens the project/worktree picker.
 - **Commands → New worktree from current branch** creates a worktree.
 - Project and worktree icons turn blue and spin while any agent is working, then show a green check when all active agents finish. Codex, Pi, Claude, and OpenCode use lifecycle signals, not terminal inactivity. Launch commands must start with the agent executable; shell aliases and wrapper scripts are not automatically instrumented. Codex requires terminal-title `run-state` support. Pi and OpenCode must allow the launch-local extension/plugin, and Claude must allow session hooks.
 
@@ -113,7 +113,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 
 ## Keyboard Shortcuts
 
-Tool shortcuts are remappable in **Settings → Keyboard shortcuts**. Use Ctrl, Alt, or Meta with a letter, number, `=`, or `-`.
+Tool shortcuts are remappable in **Settings → Keyboard shortcuts**. Use Ctrl, Alt, or Meta with a letter, number, `,`, `.`, `=`, or `-`.
 
 ### Tools
 
@@ -124,26 +124,18 @@ Tool shortcuts are remappable in **Settings → Keyboard shortcuts**. Use Ctrl, 
 - `Ctrl + G` toggle Git
 - `Ctrl + D` toggle Database
 - `Ctrl + Q` close the selected panel
+- `Ctrl + ,` / `Ctrl + .` decrease / increase selected panel size
 - `Ctrl + P` open the project/worktree picker
 - `Ctrl + N` open the agent launcher
 - `Ctrl + H` / `Ctrl + L` select the previous / next agent in the active project (wraps at either end)
 - `Ctrl + Shift + P` toggle the project sidebar
 - `Ctrl + =` / `Ctrl + -` / `Ctrl + 0` zoom in / out / reset
 
-### Workspace (desktop mode)
+### Workspace
 
-- `⌘/Win + O` open app launcher
-- `⌘/Win + ;` open command palette
-- `⌘/Win + N` open project and worktree picker
-- `⌘/Win + Enter` open a terminal tool panel
-- `⌘/Win + B` new browser with URL popup
-- `⌘/Win + Y` open Pi agent if available
-- `⌘/Win + Q` close current panel
-- `⌘/Win + ,` / `⌘/Win + .` decrease / increase selected panel width
-- `⌘/Win + F` maximize the selected panel
-- `⌘/Win + [` / `⌘/Win + ]` move panel left / right
-- `⌘/Win + Ctrl + Y` move panel to another project
-- `⌘/Win + +` / `⌘/Win + -` / `⌘/Win + 0` zoom in / out / reset
+- `` Ctrl + ` `` toggle the bottom terminal
+- `Ctrl + A` focus the current agent, or open the agent launcher when none is open
+- `Ctrl + ;` open command palette
 - **Commands → Quit Libro** quits cleanly
 
 ## Development Notes
