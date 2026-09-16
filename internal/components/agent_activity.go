@@ -12,6 +12,7 @@ import (
 // Launch-local integrations never modify the user's agent settings. Only a
 // fixed status word is written; prompts and hook payloads are not collected.
 var agentCommandPattern = regexp.MustCompile(`^([a-zA-Z0-9_./-]+)(\s.*)?$`)
+var ollamaClaudePattern = regexp.MustCompile(`^(\s+launch\s+claude(?:\s+(?:--model(?:=|\s+)(?:"[^"]*"|'[^']*'|[^\s;&|]+)|--yes|-y))*)(?:\s+--(\s.*)?)?\s*$`)
 
 type agentActivity struct {
 	kind, dir, path string
@@ -26,6 +27,16 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 		return command, nil, nil
 	}
 	kind := filepath.Base(parts[1])
+	if kind == "ollama" {
+		launch := ollamaClaudePattern.FindStringSubmatch(parts[2])
+		if launch == nil {
+			return command, nil, nil
+		}
+		// Ollama consumes its own flags; only arguments after -- reach Claude.
+		parts[1] += launch[1] + " --"
+		parts[2] = launch[2]
+		kind = "claude"
+	}
 	if kind != "codex" && kind != "claude" && kind != "pi" && kind != "opencode" {
 		return command, nil, nil
 	}

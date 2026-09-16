@@ -91,6 +91,37 @@ func TestClaudeActivityHooks(t *testing.T) {
 	}
 }
 
+func TestOllamaClaudeActivity(t *testing.T) {
+	for _, test := range []struct{ command, prefix, suffix string }{
+		{"ollama launch claude", "ollama launch claude --", ""},
+		{"ollama launch claude --model kimi-k3:cloud", "ollama launch claude --model kimi-k3:cloud --", ""},
+		{"/usr/bin/ollama launch claude --model 'some model' --yes -- --resume", "/usr/bin/ollama launch claude --model 'some model' --yes --", " --resume"},
+		{"ollama launch claude -y --model=kimi-k3:cloud --", "ollama launch claude -y --model=kimi-k3:cloud --", ""},
+	} {
+		t.Run(test.command, func(t *testing.T) {
+			command, activity, err := prepareAgentActivity(test.command)
+			if err != nil || activity == nil {
+				t.Fatalf("missing integration: %v", err)
+			}
+			defer activity.cleanup()
+			want := agentExitCommand(test.prefix + " --settings " + shellQuote(filepath.Join(activity.dir, "claude.json")) + test.suffix)
+			if command != want || activity.kind != "claude" {
+				t.Fatalf("launch = %q, want %q", command, want)
+			}
+			if _, err := os.Stat(filepath.Join(activity.dir, "claude.json")); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	for _, command := range []string{"ollama launch", "ollama launch claude --config", "ollama launch claude --restore", "ollama launch opencode", "ollama run claude"} {
+		got, activity, err := prepareAgentActivity(command)
+		if got != command || activity != nil || err != nil {
+			activity.cleanup()
+			t.Fatalf("unrelated launch changed: %s", command)
+		}
+	}
+}
+
 func TestPiAndOpenCodeLifecycle(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node unavailable")
