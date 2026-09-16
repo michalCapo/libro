@@ -18,6 +18,8 @@ const (
 
 // Application represents a single web application displayed in an iframe
 type Application struct {
+	PluginID      string
+	Dock          string
 	ID            string
 	Type          AppType
 	URL           string // iframe source URL (for terminal apps, this is http://localhost:<port>)
@@ -35,7 +37,6 @@ type Application struct {
 type Project struct {
 	Name          string
 	Path          string
-	NavSlot       int
 	IsGitRepo     bool   // detected at load time, not persisted
 	Virtual       bool   // true for worktree-derived projects
 	ParentProject string // name of parent project (for virtual projects)
@@ -55,102 +56,24 @@ func cloneApplications(apps []Application) []Application {
 	return append([]Application(nil), apps...)
 }
 
-func persistClosedProjectSnapshot(projectName string, snap *projectSnapshot) {
-	if projectName == "" {
-		return
-	}
-	if snap == nil || len(snap.Apps) == 0 {
-		DBClearClosedProjectApps(projectName)
-		return
-	}
-	closedApps := make([]ClosedProjectApp, 0, len(snap.Apps))
-	for i, app := range snap.Apps {
-		closedApps = append(closedApps, ClosedProjectApp{
-			ProjectName:   projectName,
-			Type:          string(app.Type),
-			URL:           app.URL,
-			Command:       app.Command,
-			Width:         string(app.Width),
-			PreviousWidth: string(app.PreviousWidth),
-			Writable:      app.Writable,
-			Name:          app.Name,
-			IconURL:       app.IconURL,
-			Position:      i,
-			SelectedIndex: snap.SelectedIndex,
-		})
-	}
-	DBSaveClosedProjectApps(projectName, closedApps)
-}
-
-func loadClosedSnapshots(projects []Project) map[string]*projectSnapshot {
-	closed := make(map[string]*projectSnapshot)
-	for _, p := range projects {
-		rows := DBLoadClosedProjectApps(p.Name)
-		if len(rows) == 0 {
-			continue
-		}
-		apps := make([]Application, 0, len(rows))
-		selectedIndex := 0
-		for _, row := range rows {
-			selectedIndex = row.SelectedIndex
-			apps = append(apps, Application{
-				Type:          AppType(row.Type),
-				URL:           row.URL,
-				Command:       row.Command,
-				Width:         Width(row.Width),
-				PreviousWidth: Width(row.PreviousWidth),
-				Writable:      row.Writable,
-				Name:          row.Name,
-				IconURL:       row.IconURL,
-			})
-		}
-		closed[p.Name] = &projectSnapshot{
-			Apps:          apps,
-			SelectedIndex: selectedIndex,
-		}
-	}
-	return closed
-}
-
 // AppState holds the per-session state
 type AppState struct {
 	Apps          []Application
 	SelectedIndex int
-	DialogOpen    bool
-	DialogSide    string // "left" or "right" — which side the dialog was opened from
 
 	// Project state
 	Projects          []Project
 	ActiveProject     string
 	ProjectDialogOpen bool
 	snapshots         map[string]*projectSnapshot
-	closedSnapshots   map[string]*projectSnapshot
-	renderedProjects  map[string]bool // tracks which projects have DOM divs
+
+	renderedProjects map[string]bool // tracks which projects have DOM divs
 
 	// LastAppCreatedProject tracks the project where the last app was created
 	LastAppCreatedProject string
 
-	// PreviousProject tracks the previously active project (for Ctrl+0)
-	PreviousProject string
-
-	// EditIndex tracks which saved app is being edited (-1 = new app)
-	EditIndex int
-	// EditDBID tracks the database row ID of the saved app being edited (-1 = new app)
-	EditDBID int64
-
-	// ManageOpen tracks whether the manage apps page is shown
-	ManageOpen bool
-
 	// WorktreeDialogOpen tracks whether the worktree popup is shown
 	WorktreeDialogOpen bool
-
-	// ZenMode hides everything except running applications (top bar, sidebar, toolbars)
-	ZenMode bool
-
-	// NavSlots maps keyboard slot (2-9) → project name to switch to
-	NavSlots map[int]string
-	// NavProjectSlot maps root project name → assigned slot number
-	NavProjectSlot map[string]int
 }
 
 // StateManager manages per-session app states
@@ -165,22 +88,6 @@ func NewStateManager() *StateManager {
 	return &StateManager{
 		states: make(map[string]*AppState),
 	}
-}
-
-func navSlotsFromProjects(projects []Project) (map[int]string, map[string]int) {
-	slots := make(map[int]string)
-	projectSlots := make(map[string]int)
-	for _, p := range projects {
-		if p.NavSlot < 2 || p.NavSlot > 9 {
-			continue
-		}
-		if _, taken := slots[p.NavSlot]; taken {
-			continue
-		}
-		slots[p.NavSlot] = p.Name
-		projectSlots[p.Name] = p.NavSlot
-	}
-	return slots, projectSlots
 }
 
 func defaultHomeDir() string {
@@ -209,20 +116,13 @@ func newAppStateFromDB() *AppState {
 	if len(projects) > 0 {
 		rendered[projects[0].Name] = true
 	}
-	navSlots, navProjectSlots := navSlotsFromProjects(projects)
-	closedSnapshots := loadClosedSnapshots(projects)
 
-	zenMode := DBGetSetting("zen_mode", "0") == "1"
 	return &AppState{
-		Projects:         projects,
-		ActiveProject:    projects[0].Name,
-		snapshots:        make(map[string]*projectSnapshot),
-		closedSnapshots:  closedSnapshots,
+		Projects:      projects,
+		ActiveProject: projects[0].Name,
+		snapshots:     make(map[string]*projectSnapshot),
+
 		renderedProjects: rendered,
-		EditIndex:        -1,
-		NavSlots:         navSlots,
-		NavProjectSlot:   navProjectSlots,
-		ZenMode:          zenMode,
 	}
 }
 
@@ -313,11 +213,9 @@ func (sm *StateManager) addApp(sessionID, url string, width Width, name string) 
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:        []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject:   "home",
-			snapshots:       make(map[string]*projectSnapshot),
-			closedSnapshots: make(map[string]*projectSnapshot),
-			EditIndex:       -1,
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -347,11 +245,9 @@ func (sm *StateManager) InsertApp(sessionID, url string, width Width, name strin
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:        []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject:   "home",
-			snapshots:       make(map[string]*projectSnapshot),
-			closedSnapshots: make(map[string]*projectSnapshot),
-			EditIndex:       -1,
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -383,11 +279,9 @@ func (sm *StateManager) addTerminalApp(sessionID string, appID string, command s
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:        []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject:   "home",
-			snapshots:       make(map[string]*projectSnapshot),
-			closedSnapshots: make(map[string]*projectSnapshot),
-			EditIndex:       -1,
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -420,11 +314,9 @@ func (sm *StateManager) InsertTerminalApp(sessionID string, appID string, comman
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:        []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject:   "home",
-			snapshots:       make(map[string]*projectSnapshot),
-			closedSnapshots: make(map[string]*projectSnapshot),
-			EditIndex:       -1,
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -458,11 +350,9 @@ func (sm *StateManager) InsertTerminal(sessionID, appID string, width Width, com
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:        []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject:   "home",
-			snapshots:       make(map[string]*projectSnapshot),
-			closedSnapshots: make(map[string]*projectSnapshot),
-			EditIndex:       -1,
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -494,11 +384,9 @@ func (sm *StateManager) InsertPendingTerminal(sessionID, appID string, width Wid
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:        []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject:   "home",
-			snapshots:       make(map[string]*projectSnapshot),
-			closedSnapshots: make(map[string]*projectSnapshot),
-			EditIndex:       -1,
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -527,11 +415,9 @@ func (sm *StateManager) InsertTerminalPlaceholder(sessionID, appID string, width
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:        []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject:   "home",
-			snapshots:       make(map[string]*projectSnapshot),
-			closedSnapshots: make(map[string]*projectSnapshot),
-			EditIndex:       -1,
+			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
+			ActiveProject: "home",
+			snapshots:     make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -697,179 +583,6 @@ func (sm *StateManager) RemoveAppByID(sessionID, appID string) *Application {
 	return nil
 }
 
-// CloseActiveProjectApps clears the active project's running apps.
-// It returns the project name and the removed apps for external cleanup.
-func (sm *StateManager) CloseActiveProjectApps(sessionID string) (string, []Application) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return "", nil
-	}
-	projectName := s.ActiveProject
-	if len(s.Apps) == 0 {
-		return projectName, nil
-	}
-	appsCopy := cloneApplications(s.Apps)
-	s.Apps = nil
-	s.SelectedIndex = 0
-	return projectName, appsCopy
-}
-
-// ProjectToShowAfterClosingActive returns the project Libro should display
-// after the active project has been closed. Prefer the previously active
-// project if it still has running apps; otherwise pick any open project, then
-// fall back to home.
-func (sm *StateManager) ProjectToShowAfterClosingActive(sessionID, closedProject string) string {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return "home"
-	}
-
-	projectExists := func(name string) bool {
-		for _, p := range s.Projects {
-			if p.Name == name {
-				return true
-			}
-		}
-		return false
-	}
-	hasRunningApps := func(name string) bool {
-		if name == "" || name == closedProject || !projectExists(name) {
-			return false
-		}
-		if name == s.ActiveProject {
-			return len(s.Apps) > 0
-		}
-		if snap, ok := s.snapshots[name]; ok && snap != nil {
-			return len(snap.Apps) > 0
-		}
-		return false
-	}
-
-	if hasRunningApps(s.PreviousProject) {
-		return s.PreviousProject
-	}
-	for _, p := range s.Projects {
-		if hasRunningApps(p.Name) {
-			return p.Name
-		}
-	}
-	if projectExists("home") {
-		return "home"
-	}
-	return ""
-}
-
-// SaveActiveProjectApps remembers the active project's running apps without closing them.
-func (sm *StateManager) SaveActiveProjectApps(sessionID string) (string, int) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return "", 0
-	}
-	projectName := s.ActiveProject
-	if len(s.Apps) == 0 {
-		return projectName, 0
-	}
-	snap := &projectSnapshot{
-		Apps:          cloneApplications(s.Apps),
-		SelectedIndex: s.SelectedIndex,
-	}
-	s.closedSnapshots[projectName] = snap
-	for _, p := range s.Projects {
-		if p.Name == projectName && p.Transient {
-			return projectName, len(s.Apps)
-		}
-	}
-	persistClosedProjectSnapshot(projectName, snap)
-	return projectName, len(s.Apps)
-}
-
-// ClearClosedProjectApps removes the remembered reopen snapshot for the active project.
-func (sm *StateManager) ClearClosedProjectApps(sessionID string) (string, bool) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return "", false
-	}
-	projectName := s.ActiveProject
-	snap, ok := s.closedSnapshots[projectName]
-	if ok {
-		delete(s.closedSnapshots, projectName)
-	}
-	for _, p := range s.Projects {
-		if p.Name == projectName && p.Transient {
-			return projectName, ok && snap != nil && len(snap.Apps) > 0
-		}
-	}
-	DBClearClosedProjectApps(projectName)
-	return projectName, ok && snap != nil && len(snap.Apps) > 0
-}
-
-// TakeClosedProjectApps returns the last remembered closed apps for the active
-// project without clearing the persisted snapshot. The reopen action should stay
-// available across restarts until the user explicitly saves a new snapshot or
-// clears it.
-func (sm *StateManager) TakeClosedProjectApps(sessionID string) (string, *projectSnapshot) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return "", nil
-	}
-	projectName := s.ActiveProject
-	snap, ok := s.closedSnapshots[projectName]
-	if !ok || snap == nil || len(snap.Apps) == 0 {
-		return projectName, nil
-	}
-	return projectName, &projectSnapshot{
-		Apps:          cloneApplications(snap.Apps),
-		SelectedIndex: snap.SelectedIndex,
-	}
-}
-
-// RememberClosedProjectApps overwrites the remembered closed apps for a project.
-func (sm *StateManager) RememberClosedProjectApps(sessionID, projectName string, snap *projectSnapshot) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil || projectName == "" || snap == nil || len(snap.Apps) == 0 {
-		return
-	}
-	s.closedSnapshots[projectName] = &projectSnapshot{
-		Apps:          cloneApplications(snap.Apps),
-		SelectedIndex: snap.SelectedIndex,
-	}
-	persistClosedProjectSnapshot(projectName, snap)
-}
-
-// RestoreActiveProjectApps replaces the active project's running apps.
-func (sm *StateManager) RestoreActiveProjectApps(sessionID string, apps []Application, selectedIndex int) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return
-	}
-	s.Apps = append([]Application(nil), apps...)
-	if len(s.Apps) == 0 {
-		s.SelectedIndex = 0
-		return
-	}
-	if selectedIndex < 0 {
-		selectedIndex = 0
-	}
-	if selectedIndex >= len(s.Apps) {
-		selectedIndex = len(s.Apps) - 1
-	}
-	s.SelectedIndex = selectedIndex
-}
-
 func applyAppWidth(app *Application, width Width) {
 	if app == nil {
 		return
@@ -966,6 +679,14 @@ func (sm *StateManager) SetAppURLByID(sessionID, appID, newURL string) int {
 		if app.ID == appID {
 			s.Apps[i].URL = newURL
 			return i
+		}
+	}
+	for _, snapshot := range s.snapshots {
+		for i := range snapshot.Apps {
+			if snapshot.Apps[i].ID == appID {
+				snapshot.Apps[i].URL = newURL
+				return i
+			}
 		}
 	}
 	return -1
@@ -1066,7 +787,6 @@ func (sm *StateManager) MoveSelectedAppToProject(sessionID, projectName string) 
 		sourceSelected = len(sourceApps) - 1
 	}
 
-	s.PreviousProject = sourceProject
 	s.snapshots[sourceProject] = &projectSnapshot{
 		Apps:          sourceApps,
 		SelectedIndex: sourceSelected,
@@ -1103,27 +823,6 @@ func (sm *StateManager) SetAppWidth(sessionID string, index int, width Width) {
 		return
 	}
 	applyAppWidth(&s.Apps[index], width)
-}
-
-// OpenDialog sets the dialog open flag and records which side it was opened from
-func (sm *StateManager) OpenDialog(sessionID, side string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s != nil {
-		s.DialogOpen = true
-		s.DialogSide = side
-	}
-}
-
-// CloseDialog clears the dialog open flag
-func (sm *StateManager) CloseDialog(sessionID string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s != nil {
-		s.DialogOpen = false
-	}
 }
 
 // AddProject adds a new persisted project to the session. Returns false if name already exists.
@@ -1181,9 +880,8 @@ func (sm *StateManager) RemoveProject(sessionID, projectName string) ([]Applicat
 		apps = snap.Apps
 		delete(s.snapshots, projectName)
 	}
-	delete(s.closedSnapshots, projectName)
+
 	delete(s.renderedProjects, projectName)
-	sm.clearNavSlot(s, projectName)
 
 	if s.ActiveProject == projectName {
 		s.ActiveProject = "home"
@@ -1217,9 +915,6 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 		return true
 	}
 
-	// Track previous project for Ctrl+0
-	s.PreviousProject = s.ActiveProject
-
 	// Save current project's apps
 	s.snapshots[s.ActiveProject] = &projectSnapshot{
 		Apps:          s.Apps,
@@ -1238,44 +933,6 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 
 	s.ActiveProject = projectName
 	return true
-}
-
-// NextProject returns the name of the next project (clamped, no wrap-around)
-func (sm *StateManager) NextProject(sessionID string) string {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	s := sm.states[sessionID]
-	if s == nil || len(s.Projects) <= 1 {
-		return ""
-	}
-	for i, p := range s.Projects {
-		if p.Name == s.ActiveProject {
-			if i+1 >= len(s.Projects) {
-				return ""
-			}
-			return s.Projects[i+1].Name
-		}
-	}
-	return ""
-}
-
-// PrevProject returns the name of the previous project (clamped, no wrap-around)
-func (sm *StateManager) PrevProject(sessionID string) string {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	s := sm.states[sessionID]
-	if s == nil || len(s.Projects) <= 1 {
-		return ""
-	}
-	for i, p := range s.Projects {
-		if p.Name == s.ActiveProject {
-			if i == 0 {
-				return ""
-			}
-			return s.Projects[i-1].Name
-		}
-	}
-	return ""
 }
 
 // ProjectByIndex returns the project name at the given index (0-based), or "" if out of range
@@ -1298,17 +955,6 @@ func (sm *StateManager) LastAppProject(sessionID string) string {
 		return ""
 	}
 	return s.LastAppCreatedProject
-}
-
-// PreviousProject returns the previously active project, or ""
-func (sm *StateManager) PreviousProject(sessionID string) string {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return ""
-	}
-	return s.PreviousProject
 }
 
 // IsProjectRendered checks if a project's DOM div has been created.
@@ -1457,9 +1103,8 @@ func (sm *StateManager) RemoveVirtualProject(sessionID, name string) ([]Applicat
 		apps = snap.Apps
 		delete(s.snapshots, name)
 	}
-	delete(s.closedSnapshots, name)
+
 	delete(s.renderedProjects, name)
-	sm.clearNavSlot(s, name)
 
 	if s.ActiveProject == name {
 		s.ActiveProject = "home"
@@ -1488,22 +1133,6 @@ func (sm *StateManager) CloseWorktreeDialog(sessionID string) {
 	}
 }
 
-// ToggleZenMode flips the zen mode state and persists it to the database.
-func (sm *StateManager) ToggleZenMode(sessionID string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s != nil {
-		s.ZenMode = !s.ZenMode
-		// Persist zen mode preference
-		val := "0"
-		if s.ZenMode {
-			val = "1"
-		}
-		go DBSetSetting("zen_mode", val)
-	}
-}
-
 // GetProjectPath returns the path for a named project
 func (sm *StateManager) GetProjectPath(sessionID, projectName string) string {
 	sm.mu.RLock()
@@ -1518,87 +1147,4 @@ func (sm *StateManager) GetProjectPath(sessionID, projectName string) string {
 		}
 	}
 	return ""
-}
-
-// AssignNavSlot assigns a keyboard nav slot (2-9) to a project or branch.
-// Each branch gets its own independent slot. Returns the assigned slot, or 0.
-func (sm *StateManager) AssignNavSlot(sessionID, projectName string) int {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return 0
-	}
-
-	// If this project/branch already has a slot, keep it
-	if slot, ok := s.NavProjectSlot[projectName]; ok {
-		return slot
-	}
-
-	// Find next available slot (2-9)
-	for i := 2; i <= 9; i++ {
-		if _, taken := s.NavSlots[i]; !taken {
-			s.NavSlots[i] = projectName
-			s.NavProjectSlot[projectName] = i
-			for idx := range s.Projects {
-				if s.Projects[idx].Name == projectName {
-					s.Projects[idx].NavSlot = i
-					break
-				}
-			}
-			return i
-		}
-	}
-	// All slots taken — no assignment
-	return 0
-}
-
-// NavSlotProject returns the project name for a given slot (2-9), or "".
-func (sm *StateManager) NavSlotProject(sessionID string, slot int) string {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return ""
-	}
-	return s.NavSlots[slot]
-}
-
-// GetNavSlotForProject returns the slot number for a project or branch, or 0 if unassigned.
-func (sm *StateManager) GetNavSlotForProject(sessionID, projectName string) int {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return 0
-	}
-	return s.NavProjectSlot[projectName]
-}
-
-// RemoveNavSlot removes a project's nav slot assignment and returns the removed slot, or 0.
-func (sm *StateManager) RemoveNavSlot(sessionID, projectName string) int {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return 0
-	}
-	return sm.clearNavSlot(s, projectName)
-}
-
-// clearNavSlot removes a project's nav slot assignment (must hold lock).
-func (sm *StateManager) clearNavSlot(s *AppState, projectName string) int {
-	slot := 0
-	if assigned, ok := s.NavProjectSlot[projectName]; ok {
-		slot = assigned
-		delete(s.NavSlots, assigned)
-		delete(s.NavProjectSlot, projectName)
-	}
-	for idx := range s.Projects {
-		if s.Projects[idx].Name == projectName {
-			s.Projects[idx].NavSlot = 0
-			break
-		}
-	}
-	return slot
 }

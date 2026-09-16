@@ -1,18 +1,20 @@
 # Libro
 
-Libro is a Go + Electron desktop app for keeping browser panels and terminal sessions open side by side in a horizontal strip. Browser apps render in native Electron `<webview>`s, terminal apps run through native Go PTYs, and project/worktree context stays attached to the strip you are working in.
+Libro is a Go + Electron desktop workspace for CLI coding agents. Run Codex, Pi, Claude, or another agent alongside browser tools and terminals in a horizontal row of fixed-width panels. Switch projects on the left.
+
+The right sidebar opens Terminal, Git, and Browser tools. The sidebar shows one tool at a time at its selected width. Switching tool tabs keeps their sessions running. The bottom panel runs one shell terminal per project. Hide it to keep its session running, then reopen it from the titlebar. Use panel width controls to resize panels. Open **Commands** to launch a tool, or **New agent session** to run an agent or custom command.
+
+Tools use a small local plugin manifest. See [Creating plugins](docs/plugins.md) for the API and examples.
 
 ![Demo](demo/demo.gif)
 
 ## What It Does
 
-- Opens browser and terminal panels in one desktop window.
+- Opens agent, tool, and terminal tab groups in one desktop window.
 - Keeps per-project strip state in memory while you switch between projects.
 - Saves reusable app definitions in SQLite, either globally or per project.
-- Stores encrypted password vault entries for apps and sites, with username/password copy from the command palette.
 - Integrates Git worktrees into the project picker and shortcut system.
 - Supports browser-oriented shortcuts, including URL popup, vim-style navigation, and per-panel DevTools.
-- Downloads files from webviews into the system Downloads folder with in-app progress toasts.
 
 ## Install
 
@@ -28,8 +30,8 @@ Release downloads are single self-contained binaries. On first launch, Libro ext
 
 Prerequisites:
 
-- Go `1.25.x`
-- Node.js + `npm`
+- Go `1.26.x`
+- Node.js `22.12+` + `npm`
 - `git` if you want worktree integration
 
 Run from the repo:
@@ -73,44 +75,35 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 
 ### Apps
 
-- Browser apps support editable URLs, history-backed URL popup, reload, copy URL/text, downloads, and DevTools.
+- Browser apps support editable URLs, address popup, reload, and DevTools.
 - Terminal apps default to the user's shell when no command is provided.
-- The selected app can be moved, resized, toggled full-width, or closed.
-- Width presets are `SM`, `MD`, `LG`, `XL`, `2XL`, `3XL`, and `FULL`. On screens up to Full HD width (`1920px`), fixed sizes above Full HD are disabled, so `3XL` is unavailable.
+- Panels sit side by side at fixed widths. New panels default to MD (640px) without resizing existing panels. Change this in **Settings → Default panel width**; the preference is saved for all projects.
+- Choose XS (320px), SM (480px), MD (640px), LG (960px), XL (1280px), or 2XL (1920px) from the panel toolbar. Existing 3XL and full-width options remain available.
+- Scroll horizontally or use the previous/next panel buttons to reach panels outside the viewport. Browser viewport shortcuts remain available.
 
 ### Search And Commands
 
-- `⌘ + O` opens the launcher/search popup on the right for saved apps, URL history, and command history.
-- Plain text searches saved entries.
-- `:query` opens a web search.
-- `!command` runs a terminal command.
+- `⌘ + O` opens the plugin launcher.
 - `⌘ + ;` opens the command palette for app and project actions.
-- Run `password` from the command palette to open the encrypted password vault. Search by URL or name, then press `Enter` to copy the password or `U` to copy the username.
 
 ### Projects And Worktrees
 
 - `home` is the default project.
 - Projects are tied to directories.
 - Each project keeps its own in-memory running strip while inactive projects stay hidden.
-- Open strips can be saved and later restored per project.
 - Git repositories expose worktrees in the project picker.
 - `⌘ + N` opens the project/worktree picker.
 - `⌘ + G` creates a new worktree from the current branch.
-- `Ctrl + 2-9` can switch to assigned project or worktree slots.
 
 ### Browser Workflow
 
 - Plain-key browser navigation is supported in normal mode (outside input fields, not in insert mode):
-  - `o` open URL/search popup
+  - `o` open browser address popup
   - `r` reload page
   - `m` cycle selected browser through mobile `xs`, `sm`, `md`, and its previous size
   - `g / G` top / bottom
   - `j / k` scroll down / up
   - `h / l` scroll left / right
-  - `b / f` back / forward
-  - `/`, `n`, `N`, `p`, `Esc` for in-page find
-  - `y` copy selected text or current URL
-  - `c` open the selected webview's DevTools console
   - `i` enter insert mode; `Esc` exits insert mode
 
 ## Keyboard Shortcuts
@@ -141,11 +134,6 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - `⌘ + Ctrl + Y` move app to another project
 - `⌘ + N` open project and worktree picker
 - `⌘ + G` create worktree from current branch
-- `⌘ + X` assign or remove current project shortcut
-- `Ctrl + 1` switch to `home`
-- `Ctrl + 2-9` switch to assigned project or worktree
-- `Ctrl + 0` switch to previous project
-- `⌘ + Z` toggle zen mode
 
 ### Browser
 

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"libro/internal/components"
 	"log"
-	"net/url"
+
 	"os"
 	"os/exec"
 	"os/signal"
@@ -15,7 +15,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	r "github.com/michalCapo/g-sui/ui"
 )
@@ -57,6 +56,43 @@ func settleHydratedAppContentJS(appID string) string {
 `, components.JSString(appID))
 }
 
+// actionResult keeps Libro's client-side view orchestration behind g-sui's
+// typed Result API. The temporary node is removed after its trusted script has
+// run so repeated actions do not grow the DOM.
+func actionResult(js string) r.Result {
+	if strings.TrimSpace(js) == "" {
+		return r.Result{}
+	}
+	script := "var effect=this;try{(function(){\n" + js + "\n}).call(effect);}finally{effect.remove();}"
+	return r.Result{}.Append(ActionEffectsID, r.Span("hidden").Attr("aria-hidden", "true").JS(script))
+}
+
+func registerAction(app *r.App, name string, handler func(*r.Context) string) {
+	r.RegisterAction[map[string]any](app, name, func(ctx *r.Context, _ map[string]any) (r.Result, error) {
+		return actionResult(handler(ctx)), nil
+	})
+}
+
+// responseBuilder preserves the compact composition used by Libro while the
+// action boundary itself returns a typed g-sui Result.
+type responseBuilder struct {
+	parts []string
+}
+
+func newResponse() *responseBuilder { return &responseBuilder{} }
+
+func (b *responseBuilder) Add(js string) *responseBuilder {
+	b.parts = append(b.parts, js)
+	return b
+}
+
+func (b *responseBuilder) Replace(id string, node *r.Node) *responseBuilder {
+	b.parts = append(b.parts, node.ToJSReplace(id))
+	return b
+}
+
+func (b *responseBuilder) Build() string { return strings.Join(b.parts, "") }
+
 // finalizeProjectCreate registers the project, optionally persists it, and
 // returns the JS that switches to it and dismisses the dialog.
 func finalizeProjectCreate(sid, path, name string, transient bool) string {
@@ -70,13 +106,12 @@ func finalizeProjectCreate(sid, path, name string, transient bool) string {
 
 	sm.CloseProjectDialog(sid)
 	sm.SwitchProject(sid, name)
-	ensureProjectNavSlot(sid, name, !transient)
 	sm.IsProjectRendered(sid, name)
 	state := sm.Get(sid)
 
 	jsSwitch := switchProjectJS(name, renderMainArea(state, sid))
 
-	resp := r.NewResponse().
+	resp := newResponse().
 		Add(projectsJS(state)).
 		Replace(TopBarID, renderTopBar(state, sid)).
 		Replace(ProjectDialogID, renderProjectDialog(false, sid)).
@@ -252,32 +287,6 @@ func projectNameForPath(sid, path string) (string, bool) {
 	return "", false
 }
 
-// dbSaveApp persists an app definition to the database for the given project.
-// If editDBID > 0, it updates the app with that DB ID; otherwise it appends.
-func dbSaveApp(projectName string, editDBID int64, appType, urlOrCmd, width, name string, writable, projectSpecific bool) {
-	app := SavedApp{
-		Type:            appType,
-		Width:           width,
-		Writable:        writable,
-		Name:            name,
-		ProjectSpecific: projectSpecific,
-	}
-	if appType == "terminal" {
-		app.Command = urlOrCmd
-		// Discover icon for commands not in the hardcoded map
-		if info := lookupTermIcon(urlOrCmd); info == nil {
-			app.IconURL = discoverTermIconURL(urlOrCmd)
-		}
-	} else {
-		app.URL = urlOrCmd
-	}
-	if editDBID > 0 {
-		DBUpdateSavedAppByID(editDBID, app)
-	} else {
-		DBAddSavedApp(projectName, app)
-	}
-}
-
 const libroSessionCookieName = "libro_sid"
 
 func validLibroSessionID(sid string) bool {
@@ -325,30 +334,6 @@ func libroSessionCookieJS(sid string) string {
 `, components.JSString(sid), components.JSString(libroSessionCookieName), components.JSString(sid))
 }
 
-func copyPasswordFieldJS(text, label string) string {
-	return fmt.Sprintf(`
-(function(){
-	var text=%s;
-	if(window.libroElectron&&window.libroElectron.copyToClipboard){
-		window.libroElectron.copyToClipboard(text);
-	}else if(navigator.clipboard&&navigator.clipboard.writeText){
-		navigator.clipboard.writeText(text);
-	}else{
-		var ta=document.createElement('textarea');
-		ta.value=text;
-		ta.style.position='fixed';
-		ta.style.opacity='0';
-		document.body.appendChild(ta);
-		ta.focus();
-		ta.select();
-		try{document.execCommand('copy');}catch(e){}
-		document.body.removeChild(ta);
-	}
-	if(window.__libroShowToast)window.__libroShowToast(%s,'',1400);
-})();
-`, components.JSString(text), components.JSString(label))
-}
-
 var (
 	sm                  = NewStateManager()
 	tm                  = components.NewTerminalManager()
@@ -378,20 +363,6 @@ func installShutdownSignalHandler() {
 	})
 }
 
-func ensureProjectNavSlot(sid, name string, persist bool) int {
-	if name == "" || name == "home" {
-		return 0
-	}
-	if slot := sm.GetNavSlotForProject(sid, name); slot >= 2 && slot <= 9 {
-		return slot
-	}
-	slot := sm.AssignNavSlot(sid, name)
-	if persist && slot >= 2 && slot <= 9 {
-		DBSetProjectNavSlot(name, slot)
-	}
-	return slot
-}
-
 // Run initializes and starts the Libro application server.
 func Run(assets embed.FS) {
 	installShutdownSignalHandler()
@@ -404,336 +375,26 @@ func Run(assets embed.FS) {
 	app.Assets(assets, "assets", "/assets/")
 	app.Favicon = "/assets/logo.svg"
 
-	restoreClosedApps := func(sid string, snap *projectSnapshot) (int, []string) {
-		if snap == nil || len(snap.Apps) == 0 {
-			sm.RestoreActiveProjectApps(sid, nil, 0)
-			return 0, nil
-		}
-		pwd := sm.GetActiveProjectPath(sid)
-		restored := make([]Application, 0, len(snap.Apps))
-		skipped := make([]string, 0)
-		restoredSelectedIndex := snap.SelectedIndex
-		originalSelectedIndex := max(snap.SelectedIndex, 0)
-		if originalSelectedIndex >= len(snap.Apps) {
-			originalSelectedIndex = len(snap.Apps) - 1
-		}
-		for originalIndex, prev := range snap.Apps {
-			switch prev.Type {
-			case AppTypeTerminal:
-				appID := sm.NextAppID()
-				command := strings.ReplaceAll(prev.Command, "__dir__", pwd)
-				if command == "" {
-					command = components.UserShellBase()
-				}
-				session, err := tm.Start(appID, command, pwd, prev.Writable)
-				if err != nil {
-					name := strings.TrimSpace(prev.Name)
-					if name == "" {
-						name = strings.TrimSpace(prev.Command)
-					}
-					if name == "" {
-						name = "terminal"
-					}
-					skipped = append(skipped, name)
-					if originalIndex < originalSelectedIndex && restoredSelectedIndex > 0 {
-						restoredSelectedIndex--
-					}
-					continue
-				}
-				restored = append(restored, Application{
-					ID:            appID,
-					Type:          AppTypeTerminal,
-					Command:       command,
-					Width:         prev.Width,
-					PreviousWidth: prev.PreviousWidth,
-					Writable:      prev.Writable,
-					Name:          prev.Name,
-					IconURL:       prev.IconURL,
-					TerminalID:    session.ID,
-					TerminalReady: true,
-				})
-			default:
-				appID := sm.NextAppID()
-				restored = append(restored, Application{
-					ID:            appID,
-					Type:          AppTypeURL,
-					URL:           prev.URL,
-					Width:         prev.Width,
-					PreviousWidth: prev.PreviousWidth,
-					Name:          prev.Name,
-					IconURL:       prev.IconURL,
-				})
-			}
-		}
-		if restoredSelectedIndex < 0 {
-			restoredSelectedIndex = 0
-		}
-		sm.RestoreActiveProjectApps(sid, restored, restoredSelectedIndex)
-		return len(restored), skipped
-	}
-
 	// Main page - reuses the renderer's Libro session across reloads.
 	app.Page("/", func(ctx *r.Context) *r.Node {
 		sid := sm.EnsureSession(requestLibroSessionID(ctx))
 		state := sm.Get(sid)
+
 		return renderPage(state, sid)
 	})
 
-	app.Action("password.setup", func(ctx *r.Context) string {
-		data := ctx.WsData()
-		master, _ := data["master"].(string)
-		confirm, _ := data["confirm"].(string)
-		if master != confirm {
-			return r.Notify("error", "Master passwords do not match")
-		}
-		if err := setupPasswordVault(master); err != nil {
-			return r.Notify("error", err.Error())
-		}
-		return passwordVaultStatusJS() + passwordEntriesJS() + `document.getElementById('password-setup-master').value='';document.getElementById('password-setup-confirm').value='';if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();` + showToastJS("Password vault ready", "", 1500)
-	})
-
-	app.Action("password.unlock", func(ctx *r.Context) string {
-		data := ctx.WsData()
-		master, _ := data["master"].(string)
-		if err := unlockPasswordVault(master); err != nil {
-			return r.Notify("error", err.Error())
-		}
-		return passwordVaultStatusJS() + passwordEntriesJS() + `document.getElementById('password-unlock-master').value='';if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();` + showToastJS("Password vault unlocked", "", 1200)
-	})
-
-	app.Action("password.save", func(ctx *r.Context) string {
-		data := ctx.WsData()
-		name, _ := data["name"].(string)
-		urlStr, _ := data["url"].(string)
-		username, _ := data["username"].(string)
-		password, _ := data["password"].(string)
-		note, _ := data["note"].(string)
-		id, _ := numericID(data["id"])
-		name = strings.TrimSpace(name)
-		urlStr = strings.TrimSpace(urlStr)
-		if name == "" && urlStr == "" {
-			return r.Notify("error", "Name or URL is required")
-		}
-		if password == "" {
-			return r.Notify("error", "Password is required")
-		}
-		entry := PasswordEntry{ID: id, Name: name, URL: urlStr, Username: username, Password: password, Note: note}
-		if id > 0 {
-			if err := DBUpdatePasswordEntry(entry); err != nil {
-				return r.Notify("error", err.Error())
-			}
-		} else if err := DBAddPasswordEntry(entry); err != nil {
-			return r.Notify("error", err.Error())
-		}
-		return passwordEntriesJS() + `
-document.getElementById('password-entry-name').value='';
-document.getElementById('password-entry-url').value='';
-document.getElementById('password-entry-username').value='';
-document.getElementById('password-entry-password').value='';
-document.getElementById('password-entry-note').value='';
-if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
-` + showToastJS("Password saved", "", 1300)
-	})
-
-	app.Action("password.entry", func(ctx *r.Context) string {
-		data := ctx.WsData()
-		id, _ := numericID(data["id"])
-		mode, _ := data["mode"].(string)
-		entry, err := DBLoadPasswordEntry(id)
-		if err != nil {
-			return r.Notify("error", err.Error())
-		}
-		payload, _ := jsonMarshal(map[string]any{
-			"id":       entry.ID,
-			"name":     entry.Name,
-			"url":      entry.URL,
-			"username": entry.Username,
-			"password": entry.Password,
-			"note":     entry.Note,
-		})
-		return fmt.Sprintf("if(window.__libroPasswordShowEntry)window.__libroPasswordShowEntry(%s,%s);", string(payload), components.JSString(mode))
-	})
-
-	app.Action("password.copy", func(ctx *r.Context) string {
-		data := ctx.WsData()
-		id, _ := numericID(data["id"])
-		field, _ := data["field"].(string)
-		entry, err := DBLoadPasswordEntry(id)
-		if err != nil {
-			return r.Notify("error", err.Error())
-		}
-		DBTouchPasswordEntry(id)
-		switch field {
-		case "username":
-			return passwordEntriesJS() + copyPasswordFieldJS(entry.Username, "Username copied")
-		default:
-			return passwordEntriesJS() + copyPasswordFieldJS(entry.Password, "Password copied")
-		}
-	})
-
-	app.Action("password.delete", func(ctx *r.Context) string {
-		data := ctx.WsData()
-		id, _ := numericID(data["id"])
-		if id <= 0 {
-			return r.Notify("error", "Invalid password entry")
-		}
-		if err := DBDeletePasswordEntry(id); err != nil {
-			return r.Notify("error", err.Error())
-		}
-		return passwordEntriesJS() + `if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();` + showToastJS("Password deleted", "", 1200)
-	})
+	registerSettingsActions(app)
+	registerFilesActions(app)
 
 	// Open add dialog
-	app.Action("app.dialog.open", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		side := "right"
-		if s, ok := data["side"].(string); ok && s != "" {
-			side = s
-		}
-		sm.OpenDialog(sid, side)
-		return fmt.Sprintf(`if(window.__libroCloseAllPopups)window.__libroCloseAllPopups('%s');`, DialogID) +
-			r.Show(DialogID) +
-			fmt.Sprintf(`if(window.__libroRefreshWidthAvailability)window.__libroRefreshWidthAvailability(document.getElementById('%s'));`, DialogID)
-	})
-
-	// Close add dialog
-	app.Action("app.dialog.close", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		sm.CloseDialog(sid)
-		return r.Hide(DialogID)
-	})
-
-	// Add application (URL or Terminal)
-	app.Action("app.save", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-
-		appType, _ := data["app-type"].(string)
-
-		// Determine selected width from radio button (name="app-width")
-		width := WidthLG
-		if val, ok := data["app-width"].(string); ok && val != "" {
-			width = Width(val)
-		}
-
-		name := ""
-		if val, ok := data["app-name"].(string); ok {
-			name = strings.TrimSpace(val)
-		}
-
-		state := sm.Get(sid)
-		editDBID := state.EditDBID
-
-		projectSpecific := false
-		if val, ok := data["app-project-specific"].(bool); ok {
-			projectSpecific = val
-		}
-		if projectSpecific {
-			for _, p := range state.Projects {
-				if p.Name == state.ActiveProject && p.Transient {
-					return r.Notify("error", "Temporary folders cannot save project-specific apps")
-				}
-			}
-		}
-
-		if appType == "terminal" {
-			command, _ := data["app-command"].(string)
-			command = strings.TrimSpace(command)
-			if command == "" {
-				command = components.UserShellBase()
-			}
-
-			writable := true
-			if val, ok := data["app-writable"].(bool); ok {
-				writable = val
-			}
-
-			dbSaveApp(savedAppsProjectName(state, state.ActiveProject), editDBID, "terminal", command, string(width), name, writable, projectSpecific)
-		} else {
-			url, _ := data["app-url"].(string)
-			url = strings.TrimSpace(url)
-			if url == "" {
-				return r.Notify("error", "URL is required")
-			}
-			url = ensureScheme(url)
-
-			dbSaveApp(savedAppsProjectName(state, state.ActiveProject), editDBID, "url", url, string(width), name, false, projectSpecific)
-		}
-
-		sm.CloseDialog(sid)
-		sm.Get(sid).EditDBID = -1
-
-		// Re-fetch state to ensure we have latest state for rendering
-		state = sm.Get(sid)
-
-		resp := r.NewResponse().
-			Replace(DialogID, renderAddDialog(false, sid)).
-			Replace(ManageDialogID, renderManageAppsPage(state, sid)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(projectsJS(state)).
-			Add(savedAppsJS(state))
-
-		// Refresh rendered empty-state project panes without touching live running app panes.
-		for projectName := range state.renderedProjects {
-			if projectHasRunningApps(state, projectName) {
-				continue
-			}
-			resp.Replace(projectMainID(projectName), renderMainAreaForProject(state, sid, projectName))
-			if projectName == state.ActiveProject {
-				resp.Add(fmt.Sprintf(`(function(){var el=document.getElementById('%s');if(el)el.style.display='flex';})();`, projectMainID(projectName)))
-			} else {
-				resp.Add(fmt.Sprintf(`(function(){var el=document.getElementById('%s');if(el)el.style.display='none';})();`, projectMainID(projectName)))
-			}
-		}
-
-		return resp.Build()
+	registerAction(app, "app.dialog.open", func(ctx *r.Context) string {
+		return `if(window.libroWorkspace)libroWorkspace.launcher();`
 	})
 
 	// Quick browse - open URL or Google search
-	app.Action("app.browse", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		query, _ := data["query"].(string)
-		query = strings.TrimSpace(query)
-		if query == "" {
-			return ""
-		}
-
-		// Determine if input looks like a URL or a search query
-		isURL := strings.HasPrefix(strings.ToLower(query), "file://") || (strings.Contains(query, ".") && !strings.Contains(query, " "))
-		var target string
-		if isURL {
-			target = query
-			target = ensureScheme(target)
-		} else {
-			// Google search
-			target = "https://www.google.com/search?q=" + url.QueryEscape(query)
-		}
-
-		// Check if strip already exists
-		stateBefore := sm.Get(sid)
-		hadApps := len(stateBefore.Apps)
-
-		// Save to browsed URL history (user-typed URLs only)
-		go DBSaveBrowsedURL(target)
-		sm.AddApp(sid, target, WidthLG, query)
-		state := sm.Get(sid)
-
-		projJS := projectsJS(state)
-		hydrateJS := hydrateAppAfterScrollJS(state.Apps[state.SelectedIndex].ID, sidData(sid, "id", state.Apps[state.SelectedIndex].ID))
-		if hadApps > 0 {
-			newIndex := state.SelectedIndex
-			newApp := state.Apps[newIndex]
-			frame := renderAppFramePlaceholder(newApp, newIndex, true, sid, state.ZenMode)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + projJS + hydrateJS
-		}
-
-		return renderMainAreaWithPlaceholder(state, sid, state.Apps[state.SelectedIndex].ID).ToJSReplace(projectMainID(state.ActiveProject)) + projJS + navigateJS(state, sid) + hydrateJS
-	})
 
 	// Open Neovim if available, otherwise fall back to Vim; notify if neither exists.
-	app.Action("app.nvim.open", func(ctx *r.Context) string {
+	registerAction(app, "app.nvim.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		cmd := ""
 		name := ""
@@ -747,39 +408,123 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		if cmd == "" {
 			return showToastJS("Editor not installed", "Install nvim or vim to use ⌘/Win+E", 2600)
 		}
-		return fmt.Sprintf(`__ws.callSilent('app.start',{sid:%s,type:'terminal',url:'',command:%s,width:'lg',writable:true,name:%s,iconUrl:'',side:'right'});`, components.JSString(sid), components.JSString(cmd), components.JSString(name))
+		return fmt.Sprintf(`__ws.call('app.start',{sid:%s,type:'terminal',url:'',command:%s,writable:true,name:%s,iconUrl:'',side:'right'});`, components.JSString(sid), components.JSString(cmd), components.JSString(name))
 	})
 
 	// Open the Pi coding agent if available.
-	app.Action("app.pi.open", func(ctx *r.Context) string {
+	registerAction(app, "app.pi.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		if _, err := exec.LookPath("pi"); err != nil {
 			return showToastJS("Pi agent not installed", "Install pi to use ⌘/Win+Y", 2600)
 		}
-		return fmt.Sprintf(`__ws.callSilent('app.start',{sid:%s,type:'terminal',url:'',command:'pi',width:'md',writable:true,name:'pi',iconUrl:'',side:'right'});`, components.JSString(sid))
+		return fmt.Sprintf(`__ws.call('app.start',{sid:%s,type:'terminal',url:'',command:'pi',writable:true,name:'pi',iconUrl:'',side:'right'});`, components.JSString(sid))
 	})
 
-	// Open lazygit if available.
-	app.Action("app.lazygit.open", func(ctx *r.Context) string {
+	registerAction(app, "plugin.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
-		if _, err := exec.LookPath("lazygit"); err != nil {
-			return showToastJS("Lazygit not installed", "Install lazygit to use ⌘/Win+G", 2600)
+		id, _ := ctx.WsData()["plugin"].(string)
+		dock, _ := ctx.WsData()["dock"].(string)
+		for _, p := range plugins() {
+			if p.ID != id {
+				continue
+			}
+			p.Command = agentCommand(p)
+			if p.Command != "" {
+				if _, err := exec.LookPath(extractBaseCmd(p.Command)); err != nil {
+					return showToastJS(p.Name+" is not installed", "Install "+extractBaseCmd(p.Command)+" and try again.", 3200)
+				}
+			}
+			if !validDock(dock) {
+				dock = p.Dock
+			}
+			payload, _ := json.Marshal(sidData(sid, "type", string(p.Type), "command", p.Command, "url", p.URL, "name", p.Name, "plugin", p.ID, "dock", dock, "writable", true))
+			return fmt.Sprintf("__ws.call('app.start',%s);", payload)
 		}
-		return fmt.Sprintf(`__ws.callSilent('app.start',{sid:%s,type:'terminal',url:'',command:'lazygit',width:'lg',writable:true,name:'lazygit',iconUrl:'',side:'right'});`, components.JSString(sid))
+		return r.Notify("error", "Plugin not found")
+	})
+	registerAction(app, "app.dock", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		id, _ := ctx.WsData()["id"].(string)
+		dock, _ := ctx.WsData()["dock"].(string)
+		if !validDock(dock) || dock == "bottom" {
+			return ""
+		}
+		state := sm.Get(sid)
+		for _, a := range state.Apps {
+			if a.ID == id {
+				if dock == "center" && !isAgentApp(a) {
+					return r.Notify("error", "The main area is only for agents")
+				}
+				sm.SetAppPlugin(sid, id, a.PluginID, dock)
+				return fmt.Sprintf("var f=document.getElementById(%s);if(f)f.dataset.dock=%s;if(window.libroWorkspace)libroWorkspace.select(%s);", components.JSString("frame-"+id), components.JSString(dock), components.JSString(id))
+			}
+		}
+		return ""
 	})
 
-	// Start a saved/predefined application
-	app.Action("app.start", func(ctx *r.Context) string {
+	// Start an application instance.
+	registerAction(app, "app.start", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 
 		appType, _ := data["type"].(string)
-		width := WidthLG
+		width := DBDefaultPanelWidth()
 		if val, ok := data["width"].(string); ok && val != "" {
 			width = Width(val)
 		}
 		name, _ := data["name"].(string)
 		side, _ := data["side"].(string)
+		pluginID, _ := data["plugin"].(string)
+		if pluginID == "" && appType == "terminal" {
+			command, _ := data["command"].(string)
+			candidate := pluginForApp(Application{Type: AppTypeTerminal, Command: command})
+			if candidate.Dock == "center" && strings.TrimSpace(command) == candidate.Command {
+				pluginID = candidate.ID
+			}
+		}
+		dock, _ := data["dock"].(string)
+		if pluginID != "" {
+			var plugin *Plugin
+			for _, candidate := range plugins() {
+				if candidate.ID == pluginID {
+					matched := candidate
+					plugin = &matched
+					break
+				}
+			}
+			if plugin == nil {
+				return r.Notify("error", "Plugin not found")
+			}
+			if plugin.Disabled || plugin.Removed {
+				return r.Notify("error", "This agent is disabled in Settings")
+			}
+			plugin.Command = agentCommand(*plugin)
+			if plugin.Dock == "center" {
+				data["command"] = plugin.Command
+			}
+			if plugin.Command != "" {
+				if _, err := exec.LookPath(extractBaseCmd(plugin.Command)); err != nil {
+					return showToastJS(plugin.Name+" is not installed", "Install "+extractBaseCmd(plugin.Command)+" and try again.", 3200)
+				}
+			}
+		}
+		command, _ := data["command"].(string)
+		if dock == "center" && !isAgentApp(Application{Type: AppType(appType), Command: command, PluginID: pluginID}) {
+			return r.Notify("error", "The main area is only for agents. Add other agents as agent plugins.")
+		}
+		if dock == "bottom" {
+			width = WidthFull
+			if appType != "terminal" || (pluginID != "" && pluginID != "terminal") {
+				return r.Notify("error", "The bottom panel only supports a shell terminal")
+			}
+			data["command"] = ""
+			name = "Terminal"
+			for _, existing := range sm.Get(sid).Apps {
+				if appDock(existing) == "bottom" {
+					return fmt.Sprintf("if(window.libroWorkspace)libroWorkspace.select(%s);", components.JSString(existing.ID))
+				}
+			}
+		}
 		// Compute insertion index relative to currently selected app
 		insertIdx := -1 // default: append
 		switch side {
@@ -812,6 +557,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 
 			appID := sm.NextAppID()
 			sm.InsertTerminalPlaceholder(sid, appID, width, command, writable, name, iconURL, insertIdx)
+			sm.SetAppPlugin(sid, appID, pluginID, dock)
 
 			state := sm.Get(sid)
 			newApp := &state.Apps[state.SelectedIndex]
@@ -820,7 +566,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			projJS := projectsJS(state)
 			hydrateJS := hydrateAppAfterScrollJS(newApp.ID, sidData(sid, "id", newApp.ID))
 			if hadApps > 0 {
-				frame := renderAppFramePlaceholder(*newApp, state.SelectedIndex, true, sid, state.ZenMode)
+				frame := renderAppFramePlaceholder(*newApp, state.SelectedIndex, true, sid)
 				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
 			}
 
@@ -841,20 +587,22 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 
 		sm.InsertApp(sid, url, width, name, insertIdx)
 		state := sm.Get(sid)
+		sm.SetAppPlugin(sid, state.Apps[state.SelectedIndex].ID, pluginID, dock)
+		state = sm.Get(sid)
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
 		projJS := projectsJS(state)
 		hydrateJS := hydrateAppAfterScrollJS(state.Apps[state.SelectedIndex].ID, sidData(sid, "id", state.Apps[state.SelectedIndex].ID))
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
-			frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid, state.ZenMode)
+			frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid)
 			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
 		}
 
 		return renderMainAreaWithPlaceholder(state, sid, state.Apps[state.SelectedIndex].ID).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS + navigateJS(state, sid) + hydrateJS
 	})
 
-	app.Action("app.hydrate", func(ctx *r.Context) string {
+	registerAction(app, "app.hydrate", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		appID, _ := data["id"].(string)
@@ -931,17 +679,13 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	// Close/remove application
-	app.Action("app.close", func(ctx *r.Context) string {
+	registerAction(app, "app.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		appID, _ := data["id"].(string)
 		if appID == "" {
 			return ""
 		}
-
-		// Check how many apps before removing
-		state := sm.Get(sid)
-		hadApps := len(state.Apps)
 
 		removed := sm.RemoveAppByID(sid, appID)
 
@@ -952,29 +696,23 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			}
 		}
 
-		state = sm.Get(sid)
+		state := sm.Get(sid)
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
 		projJS := projectsJS(state)
 
-		// If no apps left, full replace to show empty state
-		// Pool the webview first so it survives the DOM replace
-		if len(state.Apps) == 0 || hadApps <= 1 {
-			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS
-		}
-
-		// Otherwise, remove just the app frame and update navigation
+		// Remove the clicked frame even if its server state was lost on restart.
+		// The workspace observer restores the empty state when no panels remain.
 		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + projJS
 	})
 
 	// Close current (selected) app — no app ID needed from client
-	app.Action("app.close.current", func(ctx *r.Context) string {
+	registerAction(app, "app.close.current", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		state := sm.Get(sid)
 		if len(state.Apps) == 0 {
 			return "/* noop */"
 		}
 		appID := state.Apps[state.SelectedIndex].ID
-		hadApps := len(state.Apps)
 
 		removed := sm.RemoveAppByID(sid, appID)
 		if removed != nil {
@@ -986,14 +724,11 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		state = sm.Get(sid)
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
 		projJS := projectsJS(state)
-		if len(state.Apps) == 0 || hadApps <= 1 {
-			return poolWebviewJS(appID) + renderMainArea(state, sid).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS
-		}
 		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + projJS
 	})
 
 	// Emergency restart for a terminal app's native PTY session.
-	app.Action("app.terminal.restart", func(ctx *r.Context) string {
+	registerAction(app, "app.terminal.restart", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		appID, _ := data["id"].(string)
@@ -1021,116 +756,8 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		return fmt.Sprintf(`(function(){if(window.__libroRestartTerminal)window.__libroRestartTerminal(%s);})();`, components.JSString(term.ID)) + settleAppFrameJS(term.ID) + r.Notify("success", "Terminal restarted")
 	})
 
-	// Close all running apps in the active project.
-	app.Action("project.apps.close", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		projectName, apps := sm.CloseActiveProjectApps(sid)
-		targetProject := sm.ProjectToShowAfterClosingActive(sid, projectName)
-		if projectName != "" && projectName != "home" {
-			sm.RemoveNavSlot(sid, projectName)
-			DBSetProjectNavSlot(projectName, 0)
-		}
-		for _, a := range apps {
-			if a.Type == AppTypeTerminal {
-				tm.Stop(a.ID)
-			}
-		}
-
-		if targetProject != "" && targetProject != projectName {
-			sm.SwitchProject(sid, targetProject)
-		}
-
-		state := sm.Get(sid)
-		resp := r.NewResponse().
-			Add(parkFloatingPopupsJS()).
-			Add(closeDevtoolsForAppsJS(apps)).
-			Replace(projectMainID(projectName), renderMainAreaForProject(state, sid, projectName)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(projectsJS(state))
-
-		if state.ActiveProject != projectName {
-			if sm.IsProjectRendered(sid, state.ActiveProject) {
-				resp.Add(switchProjectJS(state.ActiveProject, nil))
-			} else {
-				resp.Add(switchProjectJS(state.ActiveProject, renderMainArea(state, sid)))
-			}
-			resp.Add(updateHashJS(state.ActiveProject)).
-				Add(projectToastJS(state.ActiveProject)).
-				Add(focusSelectedAppJS(state)).
-				Add(savedAppsJS(state))
-		} else {
-			resp.Add(focusSelectedAppJS(state))
-		}
-
-		resp.Add(showToastJS("Closed project", projectName, 1300))
-		return resp.Build()
-	})
-
-	// Save all running apps in the active project for reopen without closing them.
-	app.Action("project.apps.save", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		projectName, count := sm.SaveActiveProjectApps(sid)
-		if count == 0 {
-			return r.Notify("error", "No open apps in "+projectName)
-		}
-		state := sm.Get(sid)
-		return r.NewResponse().
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(projectsJS(state)).
-			Add(showToastJS("Saved apps", projectName, 1300)).
-			Build()
-	})
-
-	// Clear the saved reopen snapshot for the active project.
-	app.Action("project.apps.clean", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		projectName, hadSaved := sm.ClearClosedProjectApps(sid)
-		if !hadSaved {
-			return r.Notify("error", "Nothing saved for "+projectName)
-		}
-		state := sm.Get(sid)
-		return r.NewResponse().
-			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(projectsJS(state)).
-			Add(showToastJS("Cleared saved apps", projectName, 1300)).
-			Build()
-	})
-
-	// Reopen the saved apps for the active project.
-	app.Action("project.apps.open", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		projectName, snap := sm.TakeClosedProjectApps(sid)
-		if snap == nil || len(snap.Apps) == 0 {
-			return r.Notify("error", "Nothing to open for "+projectName)
-		}
-		restoredCount, skipped := restoreClosedApps(sid, snap)
-		if restoredCount == 0 {
-			msg := "Failed to reopen apps"
-			if len(skipped) > 0 {
-				msg = "Failed to reopen: " + strings.Join(skipped, ", ")
-			}
-			return r.Notify("error", msg)
-		}
-		state := sm.Get(sid)
-		time.Sleep(500 * time.Millisecond)
-		toastTitle := "Reopened apps"
-		toastBody := projectName
-		if len(skipped) > 0 {
-			toastTitle = "Reopened with skips"
-			toastBody = strings.Join(skipped, ", ")
-		}
-		return r.NewResponse().
-			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(projectsJS(state)).
-			Add(focusSelectedAppJS(state)).
-			Add(showToastJS(toastTitle, toastBody, 1800)).
-			Build()
-	})
-
 	// Navigate left - JS-only update to preserve iframes
-	app.Action("app.navigate.left", func(ctx *r.Context) string {
+	registerAction(app, "app.navigate.left", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		sm.NavigateLeft(sid)
 		state := sm.Get(sid)
@@ -1138,7 +765,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	// Navigate right - JS-only update to preserve iframes
-	app.Action("app.navigate.right", func(ctx *r.Context) string {
+	registerAction(app, "app.navigate.right", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		sm.NavigateRight(sid)
 		state := sm.Get(sid)
@@ -1146,7 +773,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	// Move app left — swap with neighbor, JS-only DOM swap to preserve iframes
-	app.Action("app.move.left", func(ctx *r.Context) string {
+	registerAction(app, "app.move.left", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		if !sm.MoveAppLeft(sid) {
 			return "/* noop */"
@@ -1156,7 +783,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	// Move app right — swap with neighbor, JS-only DOM swap to preserve iframes
-	app.Action("app.move.right", func(ctx *r.Context) string {
+	registerAction(app, "app.move.right", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		if !sm.MoveAppRight(sid) {
 			return "/* noop */"
@@ -1166,7 +793,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	// Move selected app to another project, then activate that project.
-	app.Action("app.move.to.project", func(ctx *r.Context) string {
+	registerAction(app, "app.move.to.project", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		target, _ := data["target"].(string)
@@ -1203,7 +830,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		js.WriteString(closeDevtoolsForAppJS(appID))
 		if sourceSnap, ok := state.snapshots[sourceProject]; ok && sourceSnap != nil && len(sourceSnap.Apps) > 0 {
 			js.WriteString(removeAppJS(appID))
-			js.WriteString(navigateProjectJS(sourceProject, sourceSnap.Apps, sourceSnap.SelectedIndex, state.ZenMode, sid))
+			js.WriteString(navigateProjectJS(sourceProject, sourceSnap.Apps, sourceSnap.SelectedIndex, sid))
 		} else {
 			js.WriteString(poolWebviewJS(appID))
 			js.WriteString(renderMainAreaForProject(state, sid, sourceProject).ToJSReplace(projectMainID(sourceProject)))
@@ -1211,7 +838,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 
 		if targetRenderedBefore {
 			if targetHadApps {
-				frame := renderAppFrame(*moved, state.SelectedIndex, true, sid, state.ZenMode)
+				frame := renderAppFrame(*moved, state.SelectedIndex, true, sid)
 				js.WriteString(insertAppJS(frame, false, target))
 				js.WriteString(switchProjectJS(target, nil))
 				js.WriteString(navigateJS(state, sid))
@@ -1223,19 +850,17 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			js.WriteString(switchProjectJS(target, renderMainArea(state, sid)))
 		}
 
-		return r.NewResponse().
+		return newResponse().
 			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(js.String()).
 			Add(updateHashJS(target)).
-			Add(projectToastJS(state.ActiveProject)).
 			Add(focusSelectedAppJS(state)).
-			Add(savedAppsJS(state)).
 			Build()
 	})
 
 	// Resize app to specific width — JS-only update to preserve iframes
-	app.Action("app.resize", func(ctx *r.Context) string {
+	registerAction(app, "app.resize", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		appID, _ := data["id"].(string)
@@ -1259,23 +884,17 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	// Toggle maximize — switch selected app between full width and previous width
-	app.Action("app.maximize.toggle", func(ctx *r.Context) string {
+	registerAction(app, "app.maximize.toggle", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
-		data := ctx.WsData()
-		maxPixels := 0
-		if v, ok := data["maxPixel"].(float64); ok {
-			maxPixels = int(v)
-		}
-		newWidth, appID := sm.ToggleMaxWidth(sid, maxPixels)
-		if appID == "" {
+		state := sm.Get(sid)
+		if len(state.Apps) == 0 {
 			return ""
 		}
-		state := sm.Get(sid)
-		return resizeJS(state, newWidth, appID)
+		return fmt.Sprintf("if(window.libroWorkspace)libroWorkspace.maximize(%s);", selectedAppID(state))
 	})
 
 	// Step selected app width by one tier up/down.
-	app.Action("app.resize.step", func(ctx *r.Context) string {
+	registerAction(app, "app.resize.step", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		delta := 0
@@ -1298,7 +917,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	// Select specific app - JS-only update to preserve iframes
-	app.Action("app.select", func(ctx *r.Context) string {
+	registerAction(app, "app.select", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		idx := 0
@@ -1307,11 +926,14 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		}
 		sm.SelectApp(sid, idx)
 		state := sm.Get(sid)
+		if focus, ok := data["focus"].(bool); ok && !focus {
+			return ""
+		}
 		return navigateJS(state, sid) + updateAppPreviewJS(state)
 	})
 
 	// Open an empty browser panel
-	app.Action("app.browse.open", func(ctx *r.Context) string {
+	registerAction(app, "app.browse.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		side, _ := data["side"].(string)
@@ -1328,7 +950,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		stateBefore := sm.Get(sid)
 		hadApps := len(stateBefore.Apps)
 
-		sm.InsertApp(sid, "", WidthLG, "New Tab", insertIdx)
+		sm.InsertApp(sid, "", DBDefaultPanelWidth(), "New Tab", insertIdx)
 		state := sm.Get(sid)
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
@@ -1336,7 +958,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		hydrateJS := hydrateAppAfterScrollJS(state.Apps[state.SelectedIndex].ID, sidData(sid, "id", state.Apps[state.SelectedIndex].ID))
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
-			frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid, state.ZenMode)
+			frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid)
 			focusJS := fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, newApp.ID)
 			if popup {
 				focusJS = fmt.Sprintf(`setTimeout(function(){if(window.__libroOpenURLPopupFor)window.__libroOpenURLPopupFor(%s,'');},220);`, components.JSString(newApp.ID))
@@ -1349,7 +971,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			focusJS = fmt.Sprintf(`setTimeout(function(){if(window.__libroOpenURLPopupFor)window.__libroOpenURLPopupFor(%s,'');},220);`, components.JSString(state.Apps[state.SelectedIndex].ID))
 		}
 
-		return r.NewResponse().
+		return newResponse().
 			Replace(projectMainID(state.ActiveProject), renderMainAreaWithPlaceholder(state, sid, state.Apps[state.SelectedIndex].ID)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(projectsJS(state)).
@@ -1360,69 +982,14 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	// Quick open - show the app search dialog
-	app.Action("app.run.open", func(ctx *r.Context) string {
-		data := ctx.WsData()
-		side, _ := data["side"].(string)
-		if side == "" {
-			side = "right"
-		}
-		return fmt.Sprintf(`if(window.__libroOpenSearch)window.__libroOpenSearch('%s');`, side)
+	registerAction(app, "plugin.launcher.open", func(ctx *r.Context) string {
+		return `if(window.libroWorkspace)libroWorkspace.launcher();`
 	})
 
 	// Execute a terminal command directly (called from search dialog)
-	app.Action("app.run.execute", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		command, _ := data["command"].(string)
-		command = strings.TrimSpace(command)
-		side, _ := data["side"].(string)
-		if command == "" {
-			return ""
-		}
-
-		insertIdx := -1
-		switch side {
-		case "left":
-			insertIdx = sm.SelectedIndex(sid)
-		case "right":
-			insertIdx = sm.SelectedIndex(sid) + 1
-		}
-
-		stateBefore := sm.Get(sid)
-		hadApps := len(stateBefore.Apps)
-
-		appID := sm.NextAppID()
-		sm.InsertTerminalPlaceholder(sid, appID, WidthLG, command, true, "", "", insertIdx)
-
-		// Save to run history
-		go DBSaveRunCommand(command)
-		state := sm.Get(sid)
-
-		// Update run commands JS
-		runCmdsJS := runCommandsJS()
-
-		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
-		projJS := projectsJS(state)
-		hydrateJS := hydrateAppAfterScrollJS(appID, sidData(sid, "id", appID))
-		if hadApps > 0 {
-			newApp := state.Apps[state.SelectedIndex]
-			frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid, state.ZenMode)
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + runCmdsJS + hydrateJS
-		}
-
-		newApp := state.Apps[state.SelectedIndex]
-		return r.NewResponse().
-			Replace(projectMainID(state.ActiveProject), renderMainAreaWithPlaceholder(state, sid, newApp.ID)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(projectsJS(state)).
-			Add(runCmdsJS).
-			Add(navigateJS(state, sid)).
-			Add(hydrateJS).
-			Build()
-	})
 
 	// Set URL for a running app — navigates the iframe and updates session state only.
-	app.Action("app.url.set", func(ctx *r.Context) string {
+	registerAction(app, "app.url.set", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		appID, _ := data["id"].(string)
@@ -1437,53 +1004,16 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		if idx < 0 {
 			return ""
 		}
-		// Save to browsed URL history (user-typed URLs only)
-		go DBSaveBrowsedURL(newURL)
-		// Navigate webview. Do not update saved_apps here: a running app's current
-		// URL may diverge from the saved launcher URL (e.g. trello.com -> a board).
+		if observed, _ := data["observed"].(bool); observed {
+			return ""
+		}
+		// Navigate the running browser instance.
 		return fmt.Sprintf(`(function(){window.__libroWvNavigate(%s,%s);var inp=document.getElementById('urlinput-'+%s);if(inp)inp.value=%s;})();`, components.JSString(appID), components.JSString(newURL), components.JSString(appID), components.JSString(newURL))
-	})
-
-	// Delete single history item
-	app.Action("history.delete", func(ctx *r.Context) string {
-		data := ctx.WsData()
-		urlStr, _ := data["url"].(string)
-		if urlStr == "" {
-			return ""
-		}
-		DBDeleteBrowsedURL(urlStr)
-		if strings.HasPrefix(strings.ToLower(urlStr), "file://") {
-			DBDeleteBrowsedURL("https://" + urlStr)
-		}
-		return fmt.Sprintf(`(function(){var u=%s;var bad='https://'+u;window.__libroBrowsedURLs=window.__libroBrowsedURLs.filter(function(x){return x!==u&&x!==bad;});if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}})();`, components.JSString(urlStr))
-	})
-
-	// Clear browsing history
-	app.Action("history.clear", func(ctx *r.Context) string {
-		DBClearBrowsedURLs()
-		return `window.__libroBrowsedURLs=[];if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}`
-	})
-
-	// Delete single run history item
-	app.Action("run.history.delete", func(ctx *r.Context) string {
-		data := ctx.WsData()
-		command, _ := data["command"].(string)
-		if command == "" {
-			return ""
-		}
-		DBDeleteRunCommand(command)
-		return fmt.Sprintf(`(function(){var c=%s;window.__libroRunCommands=(window.__libroRunCommands||[]).filter(function(x){return x!==c;});if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}})();`, components.JSString(command))
-	})
-
-	// Clear run history
-	app.Action("run.history.clear", func(ctx *r.Context) string {
-		DBClearRunCommands()
-		return `window.__libroRunCommands=[];if(window.__libroSearchRegistered){var inp=document.getElementById('search-input');if(inp){var ev=new Event('input');inp.dispatchEvent(ev);}}`
 	})
 
 	// Lookup directories for the unified project dialog. Bare terms search common
 	// code roots recursively; absolute paths list matching child directories.
-	app.Action("project.lookup", func(ctx *r.Context) string {
+	registerAction(app, "project.lookup", func(ctx *r.Context) string {
 		data := ctx.WsData()
 		query, _ := data["query"].(string)
 		seq, _ := data["seq"].(float64)
@@ -1497,19 +1027,19 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	// Open the unified project dialog in folder-browse mode.
-	app.Action("project.dialog.open", func(ctx *r.Context) string {
+	registerAction(app, "project.dialog.open", func(ctx *r.Context) string {
 		return `if(window.__libroOpenProjectDialog)window.__libroOpenProjectDialog();`
 	})
 
 	// Close project dialog
-	app.Action("project.dialog.close", func(ctx *r.Context) string {
+	registerAction(app, "project.dialog.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		sm.CloseProjectDialog(sid)
 		return r.Hide(ProjectDialogID)
 	})
 
 	// Create a new project
-	app.Action("project.create", func(ctx *r.Context) string {
+	registerAction(app, "project.create", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 
@@ -1546,7 +1076,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 
 	// Open a folder as a session-only project. This sets the active working
 	// directory for newly opened apps without persisting it to the project list.
-	app.Action("project.open.folder", func(ctx *r.Context) string {
+	registerAction(app, "project.open.folder", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		path, _ := ctx.WsData()["project-path"].(string)
 		path = strings.TrimSpace(path)
@@ -1569,7 +1099,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	// Confirm creating a missing project folder, then create the project.
-	app.Action("project.create.confirm", func(ctx *r.Context) string {
+	registerAction(app, "project.create.confirm", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		path, _ := ctx.WsData()["path"].(string)
 		path = strings.TrimSpace(path)
@@ -1590,30 +1120,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		return finalizeProjectCreate(sid, path, name, false)
 	})
 
-	// Toggle zen mode — hides top bar, sidebar, and app toolbars
-	app.Action("zen.toggle", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		source, _ := ctx.WsData()["source"].(string)
-		sm.ToggleZenMode(sid)
-		state := sm.Get(sid)
-		resp := r.NewResponse().
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(projectsJS(state))
-		// Toggle toolbar visibility on all app frames and update zen borders
-		if state.ZenMode {
-			resp.Add(`document.querySelectorAll('[data-app-toolbar]').forEach(function(t){t.style.display='none';});`)
-		} else {
-			resp.Add(`document.querySelectorAll('[data-app-toolbar]').forEach(function(t){t.style.display='';});`)
-		}
-		// navigateJS handles zen border classes on selected/unselected apps
-		resp.Add(navigateJS(state, sid))
-		if source == "click" {
-			resp.Add(showToastJS("Zen mode", "Toggle with ⌘ + Z", 1800))
-		}
-		return resp.Build()
-	})
-
-	switchToProjectName := func(sid, name string, assignShortcut bool) string {
+	switchToProjectName := func(sid, name string) string {
 		if name == "" {
 			return "/* noop */"
 		}
@@ -1621,32 +1128,12 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		prevState := sm.Get(sid)
 		closeDevtoolsJS := closeDevtoolsForAppsJS(prevState.Apps)
 
-		// Branch shortcuts can exist before their virtual project has been created
+		// Worktrees can exist before their virtual project has been created
 		// in the current session. Resolve the matching worktree lazily.
-		if strings.Contains(name, "/") {
-			parts := strings.SplitN(name, "/", 2)
-			parentProject, branch := parts[0], parts[1]
-			projectPath := sm.GetProjectPath(sid, parentProject)
-			if projectPath != "" && branch != "" {
-				if worktrees, err := GitListWorktrees(projectPath); err == nil {
-					for _, wt := range worktrees {
-						if wt.IsBare || wt.Branch != branch {
-							continue
-						}
-						sm.AddVirtualProject(sid, name, wt.Path, parentProject)
-						break
-					}
-				}
-			}
-		}
+		restoreWorktreeProject(sm, sid, name)
 
 		if !sm.SwitchProject(sid, name) {
 			return "/* noop */"
-		}
-
-		assignedSlot := 0
-		if assignShortcut && sm.GetNavSlotForProject(sid, name) == 0 {
-			assignedSlot = ensureProjectNavSlot(sid, name, true)
 		}
 
 		state := sm.Get(sid)
@@ -1660,155 +1147,30 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			jsSwitch = switchProjectJS(name, renderMainArea(state, sid))
 		}
 
-		resp := r.NewResponse().
+		resp := newResponse().
 			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(closeDevtoolsJS).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
-			Add(projectToastJS(state.ActiveProject)).
-			Add(focusSelectedAppJS(state)).
-			Add(savedAppsJS(state))
-		if assignedSlot >= 2 && assignedSlot <= 9 {
-			resp.Add(showToastJS(fmt.Sprintf("Ctrl+%d assigned", assignedSlot), name, 1500))
-		}
+			Add(focusSelectedAppJS(state))
 		return resp.Build()
 	}
 
 	// Switch active project
-	app.Action("project.switch", func(ctx *r.Context) string {
+	registerAction(app, "project.switch", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		name, _ := data["name"].(string)
-		assignShortcut, _ := data["assignShortcut"].(bool)
-		resp := switchToProjectName(sid, name, assignShortcut)
+		resp := switchToProjectName(sid, name)
 		if resp == "/* noop */" {
 			return r.Notify("error", "Project not found")
 		}
 		return resp
 	})
 
-	// Navigate to next project
-	app.Action("project.navigate.next", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		name := sm.NextProject(sid)
-		if name == "" {
-			return "/* noop */"
-		}
-		return switchToProjectName(sid, name, false)
-	})
-
-	// Navigate to previous project
-	app.Action("project.navigate.prev", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		name := sm.PrevProject(sid)
-		if name == "" {
-			return "/* noop */"
-		}
-		return switchToProjectName(sid, name, false)
-	})
-
-	// Select project by nav slot (Ctrl+1 = home, Ctrl+2-9 = assigned slots)
-	app.Action("project.select", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		slot := 0
-		if v, ok := data["index"].(float64); ok {
-			slot = int(v) + 1 // JS sends 0-based, convert to 1-based slot
-		}
-
-		var name string
-		if slot == 1 {
-			// Ctrl+1 always goes to home
-			name = "home"
-		} else {
-			// Ctrl+2-9: look up from nav slots
-			name = sm.NavSlotProject(sid, slot)
-		}
-		return switchToProjectName(sid, name, false)
-	})
-
-	// Select previous project (Ctrl+0)
-	app.Action("project.select.last", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		name := sm.PreviousProject(sid)
-		if name == "" {
-			return "/* noop */"
-		}
-		return switchToProjectName(sid, name, false)
-	})
-
-	// Add a nav slot shortcut to a project/branch
-	app.Action("nav.slot.add", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		name, _ := data["name"].(string)
-		if name == "" || name == "home" {
-			return ""
-		}
-		if slot := sm.AssignNavSlot(sid, name); slot >= 2 && slot <= 9 {
-			DBSetProjectNavSlot(name, slot)
-		}
-		state := sm.Get(sid)
-		return r.NewResponse().
-			Add(projectsJS(state)).
-			Build()
-	})
-
-	// Remove a nav slot shortcut from a project/branch
-	app.Action("nav.slot.remove", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		name, _ := data["name"].(string)
-		if name == "" || name == "home" {
-			return ""
-		}
-		sm.RemoveNavSlot(sid, name)
-		DBSetProjectNavSlot(name, 0)
-		state := sm.Get(sid)
-		return r.NewResponse().
-			Add(projectsJS(state)).
-			Build()
-	})
-
-	// Toggle a nav slot for the currently active project/worktree (Win+X).
-	app.Action("nav.slot.toggle.active", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		stateBefore := sm.Get(sid)
-		name := stateBefore.ActiveProject
-		if name == "" {
-			return "/* noop */"
-		}
-		if name == "home" {
-			return showToastJS("Ctrl+1 is fixed", "Home is always assigned to Ctrl+1", 1400)
-		}
-
-		title := ""
-		subtitle := ""
-		if slot := sm.GetNavSlotForProject(sid, name); slot >= 2 && slot <= 9 {
-			sm.RemoveNavSlot(sid, name)
-			DBSetProjectNavSlot(name, 0)
-			title = fmt.Sprintf("Ctrl+%d removed", slot)
-			subtitle = name
-		} else {
-			slot := sm.AssignNavSlot(sid, name)
-			if slot < 2 || slot > 9 {
-				return showToastJS("No free shortcut", "Ctrl+2 through Ctrl+9 are already assigned", 1500)
-			}
-			DBSetProjectNavSlot(name, slot)
-			title = fmt.Sprintf("Ctrl+%d assigned", slot)
-			subtitle = name
-		}
-
-		state := sm.Get(sid)
-		return r.NewResponse().
-			Add(projectsJS(state)).
-			Add(showToastJS(title, subtitle, 1300)).
-			Build()
-	})
-
 	// Remove a project
-	app.Action("project.remove", func(ctx *r.Context) string {
+	registerAction(app, "project.remove", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		name, _ := data["name"].(string)
@@ -1842,7 +1204,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		// Remove project from DB
 		DBRemoveProject(name)
 
-		resp := r.NewResponse().
+		resp := newResponse().
 			Add(parkFloatingPopupsJS()).
 			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
@@ -1856,73 +1218,8 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 		return resp.Build()
 	})
 
-	// Open manage apps overlay
-	app.Action("app.manage.open", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		state := sm.Get(sid)
-		state.ManageOpen = true
-		return r.NewResponse().
-			Replace(ManageDialogID, renderManageAppsPage(state, sid)).
-			Add(r.Show(ManageDialogID)).
-			Build()
-	})
-
-	// Close manage apps popup
-	app.Action("app.manage.close", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		state := sm.Get(sid)
-		state.ManageOpen = false
-		return r.Hide(ManageDialogID)
-	})
-
-	// Delete a saved app from DB
-	app.Action("app.saved.delete", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		var dbid int64
-		if v, ok := data["dbid"].(float64); ok {
-			dbid = int64(v)
-		}
-		if dbid <= 0 {
-			return ""
-		}
-		DBRemoveSavedAppByID(dbid)
-		state := sm.Get(sid)
-		// Re-render the visible surfaces that consume saved app data.
-		resp := r.NewResponse().
-			Replace(ManageDialogID, renderManageAppsPage(state, sid)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(projectsJS(state)).
-			Add(savedAppsJS(state))
-		for projectName := range state.renderedProjects {
-			if projectHasRunningApps(state, projectName) {
-				continue
-			}
-			resp.Replace(projectMainID(projectName), renderMainAreaForProject(state, sid, projectName))
-			if projectName == state.ActiveProject {
-				resp.Add(fmt.Sprintf(`(function(){var el=document.getElementById('%s');if(el)el.style.display='flex';})();`, projectMainID(projectName)))
-			} else {
-				resp.Add(fmt.Sprintf(`(function(){var el=document.getElementById('%s');if(el)el.style.display='none';})();`, projectMainID(projectName)))
-			}
-		}
-		return resp.Build()
-	})
-
-	// Set edit DB ID for editing a saved app
-	app.Action("app.saved.edit", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		var dbid int64
-		if v, ok := data["dbid"].(float64); ok {
-			dbid = int64(v)
-		}
-		state := sm.Get(sid)
-		state.EditDBID = dbid
-		return ""
-	})
-
 	// Check if there are running apps before closing — returns JS to show dialog or force close
-	app.Action("app.close.check", func(ctx *r.Context) string {
+	registerAction(app, "app.close.check", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		projectApps := sm.GetAllRunningApps(sid)
 
@@ -1958,7 +1255,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	// Close all running apps — the client handles window close separately
-	app.Action("app.close.all", func(ctx *r.Context) string {
+	registerAction(app, "app.close.all", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		projectApps := sm.GetAllRunningApps(sid)
 
@@ -1975,7 +1272,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	})
 
 	// Switch to a worktree (creates virtual project if needed)
-	app.Action("worktree.switch", func(ctx *r.Context) string {
+	registerAction(app, "worktree.switch", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		parentProject, _ := data["project"].(string)
@@ -1996,11 +1293,6 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			return r.Notify("error", "Failed to switch to worktree")
 		}
 
-		assignedSlot := 0
-		if sm.GetNavSlotForProject(sid, vtName) == 0 {
-			assignedSlot = ensureProjectNavSlot(sid, vtName, false)
-		}
-
 		state := sm.Get(sid)
 
 		var jsSwitch string
@@ -2010,21 +1302,18 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			jsSwitch = switchProjectJS(vtName, renderMainArea(state, sid))
 		}
 
-		resp := r.NewResponse().
+		resp := newResponse().
 			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(closeDevtoolsJS).
 			Add(jsSwitch).
 			Add(updateHashJS(vtName)).
 			Add(focusSelectedAppJS(state))
-		if assignedSlot >= 2 && assignedSlot <= 9 {
-			resp.Add(showToastJS(fmt.Sprintf("Ctrl+%d assigned", assignedSlot), vtName, 1500))
-		}
 		return resp.Build()
 	})
 
 	// Create a new worktree from the active project's current branch and switch to it.
-	app.Action("worktree.create", func(ctx *r.Context) string {
+	registerAction(app, "worktree.create", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		branch, _ := data["branch"].(string)
@@ -2096,7 +1385,7 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 			jsSwitch = switchProjectJS(vtName, renderMainArea(state, sid))
 		}
 
-		return r.NewResponse().
+		return newResponse().
 			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(closeDevtoolsJS).
@@ -2115,7 +1404,9 @@ if(window.__libroPasswordShowSearch)window.__libroPasswordShowSearch();
 	components.WatchGnomeTheme(func() {
 		themeMu.Lock()
 		defer themeMu.Unlock()
-		app.Broadcast(`(function(){if(window.__libroRefreshTerminalThemes)window.__libroRefreshTerminalThemes();})();`)
+		if err := app.Broadcast(actionResult(`(function(){if(window.__libroRefreshTerminalThemes)window.__libroRefreshTerminalThemes();})();`)); err != nil {
+			log.Printf("libro: broadcast terminal theme: %v", err)
+		}
 	})
 
 	if err := app.Listen(":" + Port()); err != nil {
@@ -2133,25 +1424,7 @@ func ensureScheme(u string) string {
 		strings.HasPrefix(u, "[::1]") || strings.HasPrefix(u, "[::0]") || strings.HasPrefix(u, "[::]") {
 		return "http://" + u
 	}
-	// If it doesn't look like a URL, treat it as a Google search query
-	if looksLikeSearchQuery(u) {
-		return "https://www.google.com/search?q=" + url.QueryEscape(u)
-	}
 	return "https://" + u
-}
-
-// looksLikeSearchQuery returns true if the input doesn't look like a valid URL
-// (e.g. contains spaces, has no dot, or no valid TLD-like segment).
-func looksLikeSearchQuery(u string) bool {
-	// Contains spaces → almost certainly a search query
-	if strings.Contains(u, " ") {
-		return true
-	}
-	// No dot and no colon (port) → not a domain
-	if !strings.Contains(u, ".") && !strings.Contains(u, ":") {
-		return true
-	}
-	return false
 }
 
 // extractSID gets the session ID from the action data payload
@@ -2163,15 +1436,28 @@ func extractSID(ctx *r.Context) string {
 	return "default"
 }
 
-func numericID(v any) (int64, bool) {
-	switch n := v.(type) {
-	case float64:
-		return int64(n), true
-	case int64:
-		return n, true
-	case int:
-		return int64(n), true
-	default:
-		return 0, false
+// restoreWorktreeProject resolves complete names; both project and branch names
+// may contain slashes, so splitting on a slash loses part of the parent name.
+func restoreWorktreeProject(manager *StateManager, sid, name string) {
+	state := manager.Get(sid)
+	for _, project := range state.Projects {
+		if project.Name == name {
+			return
+		}
+	}
+	for _, project := range state.Projects {
+		if project.Virtual || !strings.HasPrefix(name, project.Name+"/") {
+			continue
+		}
+		worktrees, err := GitListWorktrees(project.Path)
+		if err != nil {
+			continue
+		}
+		for _, worktree := range worktrees {
+			if !worktree.IsBare && project.Name+"/"+worktree.Branch == name {
+				manager.AddVirtualProject(sid, name, worktree.Path, project.Name)
+				return
+			}
+		}
 	}
 }

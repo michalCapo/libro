@@ -8,21 +8,19 @@ import (
 
 // renderPage renders the full page layout
 func renderPage(state *AppState, sid string) *r.Node {
-	page := r.Div("h-screen w-screen flex flex-col bg-gray-100 dark:bg-zinc-900 overflow-hidden").Render(
+	page := r.Div("h-screen w-screen flex flex-col overflow-hidden").ID("libro-workspace").Render(
 		renderTopBar(state, sid),
 		renderMainAreaWrapper(state, sid),
-		renderAddDialog(state.DialogOpen, sid),
-		renderManageAppsPage(state, sid),
+		r.Div("ws-statusbar").Render(r.Span("").Text("Local workspace"), r.Span("").Text("Agents, tools, and terminals • Libro")),
+
 		renderProjectDialog(state.ProjectDialogOpen, sid),
-		renderSearchDialog(sid),
-		renderPasswordDialog(),
-		renderShortcutsDialog(),
 		renderCloseDialog(sid),
 		renderURLPopup(sid),
 		renderResizePopup(sid),
 		renderCommandPopup(),
 		renderMoveProjectPopup(),
 		renderWorktreeCreatePopup(),
+		r.Div("hidden").ID(ActionEffectsID).Attr("aria-hidden", "true"),
 	)
 	page.JS(libroSessionCookieJS(sid) +
 		popupRegistryJS() +
@@ -30,16 +28,10 @@ func renderPage(state *AppState, sid string) *r.Node {
 		flashCSS() +
 		termIconSetupJS() +
 		terminalFrameSetupJS() +
-		projectToastSetupJS() +
+		toastSetupJS() +
 		appWidthPolicyJS(sid) +
 		keyboardShortcutsJS(sid) +
-		savedAppsJS(state) +
-		passwordVaultStatusJS() +
-		passwordEntriesJS() +
 		initHashJS(sid) +
-		searchDialogJS(sid) +
-		passwordDialogJS(sid) +
-		shortcutsDialogJS() +
 		closeDialogJS(sid) +
 		components.BrowserJS() +
 		projectDialogJS(sid) +
@@ -49,7 +41,7 @@ func renderPage(state *AppState, sid string) *r.Node {
 		commandPopupJS(sid) +
 		moveProjectPopupJS(sid) +
 		worktreeCreatePopupJS(sid) +
-		manageAppsJS(),
+		workspaceJS(sid),
 	)
 	return page
 }

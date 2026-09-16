@@ -3,9 +3,7 @@ package components
 // DOM ID constants owned by the dialog/popup components.
 // libro re-exports these via aliases so existing references continue to work.
 const (
-	AddDialogID           = "add-dialog"
 	ProjectDialogID       = "project-dialog"
-	SearchDialogID        = "search-dialog"
 	ShortcutsDialogID     = "shortcuts-dialog"
 	CloseDialogID         = "close-dialog"
 	URLPopupID            = "url-popup"
@@ -13,5 +11,4 @@ const (
 	CommandPopupID        = "command-popup"
 	MoveProjectPopupID    = "move-project-popup"
 	WorktreeCreatePopupID = "worktree-create-popup"
-	PasswordDialogID      = "password-dialog"
 )

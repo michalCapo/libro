@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, session, ipcMain, shell, clipboard, globalShortcut, webContents, WebContentsView, nativeImage, powerMonitor } = require('electron')
+const { app, BrowserWindow, Menu, session, ipcMain, clipboard, globalShortcut, webContents, WebContentsView, nativeImage, powerMonitor } = require('electron')
 const { spawn } = require('child_process')
 const fs = require('fs')
 const path = require('path')
@@ -639,62 +639,6 @@ function createWindow() {
     callback({ video: request.frame })
   }, { useSystemPicker: true })
 
-  // Handle file downloads from webviews — auto-save to Downloads, show toast
-  let nextDownloadId = 1
-  const activeDownloads = new Map() // id -> DownloadItem
-
-  libroSession.on('will-download', (event, item) => {
-    const id = nextDownloadId++
-    const filename = item.getFilename()
-    const downloadsDir = app.getPath('downloads')
-    const savePath = path.join(downloadsDir, filename)
-    item.setSavePath(savePath)
-    activeDownloads.set(id, item)
-
-    const safeFilename = JSON.stringify(filename)
-    const totalBytes = item.getTotalBytes()
-
-    // Show downloading toast with cancel button
-    if (mainWindow) {
-      mainWindow.webContents.executeJavaScript(`
-        if (window.__libroShowDownloadProgress) window.__libroShowDownloadProgress(${id}, ${safeFilename}, 0, ${totalBytes});
-      `)
-    }
-
-    item.on('updated', (e, state) => {
-      if (!mainWindow) return
-      if (state === 'progressing' && !item.isPaused()) {
-        mainWindow.webContents.executeJavaScript(`
-          if (window.__libroUpdateDownloadProgress) window.__libroUpdateDownloadProgress(${id}, ${item.getReceivedBytes()}, ${totalBytes});
-        `)
-      }
-    })
-
-    item.once('done', (e, state) => {
-      activeDownloads.delete(id)
-      if (!mainWindow) return
-      if (state === 'completed') {
-        const safePath = JSON.stringify(savePath)
-        mainWindow.webContents.executeJavaScript(`
-          if (window.__libroShowDownloadToast) window.__libroShowDownloadToast(${id}, ${safeFilename}, ${safePath});
-        `)
-      } else if (state === 'cancelled') {
-        mainWindow.webContents.executeJavaScript(`
-          if (window.__libroRemoveDownloadToast) window.__libroRemoveDownloadToast(${id});
-        `)
-      } else {
-        mainWindow.webContents.executeJavaScript(`
-          if (window.__libroShowDownloadFailed) window.__libroShowDownloadFailed(${id}, ${safeFilename});
-        `)
-      }
-    })
-  })
-
-  ipcMain.on('libro-cancel-download', (event, id) => {
-    const item = activeDownloads.get(id)
-    if (item) item.cancel()
-  })
-
   mainWindow = new BrowserWindow({
     width: 1920,
     height: 1080,
@@ -756,24 +700,6 @@ function createWindow() {
     mainWindow.maximize()
   })
 
-  ipcMain.on('libro-toggle-webview-devtools', (event, targetId, bounds, panel) => {
-    const pair = ensureDevtoolsOverlay(targetId, bounds)
-    if (!pair) return
-    try {
-      if (pair.entry.opened && pair.target.isDevToolsOpened()) {
-        closeDevtoolsOverlay(pair.target)
-      } else {
-        pair.target.openDevTools({ mode: 'detach', activate: false })
-        resetDevtoolsZoom(pair.devtools)
-        pair.entry.opened = true
-        selectDevToolsPanel(pair.devtools, panel)
-        refocusDevtoolsTarget(pair.target)
-      }
-    } catch (err) {
-      console.error('Failed to toggle webview DevTools:', err.message)
-    }
-  })
-
   ipcMain.on('libro-open-webview-devtools', (event, targetId, bounds, panel) => {
     const pair = ensureDevtoolsOverlay(targetId, bounds)
     if (!pair) return
@@ -826,15 +752,11 @@ function createWindow() {
   })
 
   ipcMain.on('libro-copy-clipboard', (event, text) => {
-    if (text) clipboard.writeText(text)
-  })
-
-  ipcMain.on('libro-open-path', (event, filePath) => {
-    shell.openPath(filePath)
-  })
-
-  ipcMain.on('libro-open-downloads-folder', () => {
-    shell.openPath(app.getPath('downloads'))
+    if (text) {
+      clipboard.writeText(text).catch((err) => {
+        console.error('Failed to copy to clipboard:', err.message)
+      })
+    }
   })
 
   ipcMain.on('libro-zoom-in', () => {
@@ -907,11 +829,6 @@ app.on('web-contents-created', (event, contents) => {
     })
 
     contents.setWindowOpenHandler(({ url, disposition }) => {
-      // Download links (e.g. <a download>) — trigger download instead of opening a tab
-      if (disposition === 'save-to-disk' && url && url !== 'about:blank') {
-        contents.downloadURL(url)
-        return { action: 'deny' }
-      }
       // Allow script-driven about:blank popups to open as native windows.
       // Some sites render generated content into the new window after calling
       // window.open(), so converting these to Libro tabs loses the content.
@@ -1034,7 +951,7 @@ app.on('web-contents-created', (event, contents) => {
         e.preventDefault()
         if (mainWindow) {
           mainWindow.webContents.executeJavaScript(`
-            if (window.__libroOpenSearch) window.__libroOpenSearch('right');
+            if (window.libroWorkspace) window.libroWorkspace.launcher();
           `)
         }
         return
@@ -1112,32 +1029,6 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
-      // Super+X: toggle active project shortcut assignment
-      if (input.meta && !input.control && code === 'keyx') {
-        if (shouldSkipDuplicateShortcut()) return
-        e.preventDefault()
-        if (mainWindow) {
-          mainWindow.webContents.executeJavaScript(`
-            document.dispatchEvent(new KeyboardEvent('keydown', {
-              key: 'x', code: 'KeyX', metaKey: true, bubbles: true, cancelable: true
-            }));
-          `)
-        }
-        return
-      }
-      // Super+Z: zen mode toggle — must preventDefault to block browser Undo
-      if (input.meta && !input.control && code === 'keyz') {
-        if (shouldSkipDuplicateShortcut()) return
-        e.preventDefault()
-        if (mainWindow) {
-          mainWindow.webContents.executeJavaScript(`
-            document.dispatchEvent(new KeyboardEvent('keydown', {
-              key: 'z', code: 'KeyZ', metaKey: true, bubbles: true, cancelable: true
-            }));
-          `)
-        }
-        return
-      }
       // Super+F: toggle maximize width on selected app
       if (input.meta && !input.control && code === 'keyf') {
         if (shouldSkipDuplicateShortcut()) return
@@ -1188,7 +1079,7 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Meta (Super/Win) shortcuts: h, l, q, n, enter, z, o, f, g, r, x, y, ;, ,, .
+    // Meta (Super/Win) shortcuts: h, l, q, n, enter, o, f, g, r, y, ;, ,, .
     if (input.meta && !input.control && code === 'keyn') {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
@@ -1201,7 +1092,7 @@ app.on('web-contents-created', (event, contents) => {
       triggerTerminalAppShortcut()
       return
     }
-    if (input.meta && !input.control && (['h', 'l', 'q', 'b', 'e', 'z', 'o', 'f', 'g', 'r', 'x', 'y', ';', ',', '.'].includes(key) || ['keyo', 'keyb', 'keye', 'keyy', 'semicolon', 'comma', 'period'].includes(code))) {
+    if (input.meta && !input.control && (['h', 'l', 'q', 'b', 'e', 'o', 'f', 'g', 'r', 'y', ';', ',', '.'].includes(key) || ['keyo', 'keyb', 'keye', 'keyy', 'semicolon', 'comma', 'period'].includes(code))) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {
@@ -1231,23 +1122,6 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Ctrl+0–9 shortcuts (project switching)
-    if (input.control && key >= '0' && key <= '9') {
-      if (shouldSkipDuplicateShortcut()) return
-      e.preventDefault()
-      if (mainWindow) {
-        mainWindow.webContents.executeJavaScript(`
-          document.dispatchEvent(new KeyboardEvent('keydown', {
-            key: '${key}',
-            code: '${input.code || ''}',
-            ctrlKey: true,
-            bubbles: true,
-            cancelable: true
-          }));
-        `)
-      }
-    }
-
     // Vim-style mode toggle: 'i' enters insert mode, 'Esc' exits.
     // Source of truth lives here in the main process so the swap happens
     // before any other intercept can fire on the same event loop tick.
@@ -1262,19 +1136,12 @@ app.on('web-contents-created', (event, contents) => {
       if (currentMode === 'insert' && key === 'escape') {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
-        contents.executeJavaScript(`
-          (function(){
-            var el = document.activeElement;
-            while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
-            if (el && typeof el.blur === 'function') { try { el.blur(); } catch(err) {} }
-          })();
-        `).catch(() => {})
         setWebviewBrowserMode('normal')
         return
       }
     }
 
-    // Browser vim-style keys (j/k/h/l/g/G/b/f) for webview scrolling/navigation.
+    // Browser vim-style keys (j/k/h/l/g/G) for webview scrolling.
     // Handled here in the main process so they work even while the page is loading,
     // before the guest-injected browserShortcutsScript is active.
     if (isWebview && !input.meta && !input.control && !input.alt && !webviewInputFocused.get(contents.id) && webviewBrowserMode.get(contents.id) !== 'insert') {
@@ -1291,8 +1158,6 @@ app.on('web-contents-created', (event, contents) => {
         'h': "window.scrollBy({left:-480,behavior:'smooth'})",
         'l': "window.scrollBy({left:480,behavior:'smooth'})",
         'g': "window.scrollTo({top:0,behavior:'smooth'})",
-        'b': "history.back()",
-        'f': "history.forward()",
       }
       if (!input.shift && browserKeyActions[key]) {
         if (shouldSkipDuplicateShortcut()) return

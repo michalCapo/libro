@@ -4,6 +4,7 @@ package libro
 type Width string
 
 const (
+	WidthXS   Width = "xs"
 	WidthSM   Width = "sm"
 	WidthMD   Width = "md"
 	WidthLG   Width = "lg"
@@ -15,7 +16,7 @@ const (
 
 // AllWidths returns all available width options in order
 func AllWidths() []Width {
-	return []Width{WidthSM, WidthMD, WidthLG, WidthXL, Width2XL, Width3XL, WidthFull}
+	return []Width{WidthXS, WidthSM, WidthMD, WidthLG, WidthXL, Width2XL, Width3XL, WidthFull}
 }
 
 // Step returns the neighboring width tier clamped to the valid range.
@@ -41,18 +42,20 @@ func (w Width) Step(delta int) Width {
 // Label returns the display label for a width
 func (w Width) Label() string {
 	switch w {
+	case WidthXS:
+		return "XS (320px)"
 	case WidthSM:
-		return "SM (max 480px)"
+		return "SM (480px)"
 	case WidthMD:
-		return "MD (max 640px)"
+		return "MD (640px)"
 	case WidthLG:
-		return "LG (max 960px)"
+		return "LG (960px)"
 	case WidthXL:
-		return "XL (max 1280px)"
+		return "XL (1280px)"
 	case Width2XL:
-		return "2XL (max 1920px)"
+		return "2XL (1920px)"
 	case Width3XL:
-		return "3XL (max 2560px)"
+		return "3XL (2560px)"
 	case WidthFull:
 		return "FULL (100%)"
 	default:
@@ -63,6 +66,8 @@ func (w Width) Label() string {
 // PixelWidth returns the fixed pixel width for the given width tier
 func (w Width) PixelWidth() string {
 	switch w {
+	case WidthXS:
+		return "320px"
 	case WidthSM:
 		return "480px"
 	case WidthMD:
@@ -85,6 +90,8 @@ func (w Width) PixelWidth() string {
 // PixelWidthInt returns the fixed pixel width as an integer
 func (w Width) PixelWidthInt() int {
 	switch w {
+	case WidthXS:
+		return 320
 	case WidthSM:
 		return 480
 	case WidthMD:
@@ -113,7 +120,7 @@ func (w Width) ClampFixedPixel(maxPixels int) Width {
 	if px := w.PixelWidthInt(); px == 0 || px <= maxPixels {
 		return w
 	}
-	clamped := WidthSM
+	clamped := WidthXS
 	for _, candidate := range AllWidths() {
 		px := candidate.PixelWidthInt()
 		if px > 0 && px <= maxPixels {

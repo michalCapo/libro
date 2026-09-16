@@ -13,35 +13,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// SavedApp represents a persisted application definition (no runtime state like Port/ID).
-type SavedApp struct {
-	DBID            int64  // database row ID (used for edit/delete operations)
-	ProjectName     string // owning project for this saved app
-	Type            string // "url" or "terminal"
-	URL             string
-	Command         string
-	Width           string
-	Writable        bool
-	Name            string
-	IconURL         string // cached icon URL discovered via web search
-	ProjectSpecific bool   // if true, only visible in the project it was saved to
-}
-
-// ClosedProjectApp represents an app snapshot persisted for project reopen.
-type ClosedProjectApp struct {
-	ProjectName   string
-	Type          string
-	URL           string
-	Command       string
-	Width         string
-	PreviousWidth string
-	Writable      bool
-	Name          string
-	IconURL       string
-	Position      int
-	SelectedIndex int
-}
-
 var (
 	db   *sql.DB
 	dbMu sync.Mutex
@@ -65,7 +36,6 @@ func InitDB() {
 	}
 
 	createTables()
-	migrateTables()
 	ensureHomeProject()
 }
 
@@ -164,81 +134,17 @@ func copyFile(src, dst string) error {
 
 func createTables() {
 	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 		CREATE TABLE IF NOT EXISTS projects (
 			name     TEXT PRIMARY KEY,
 			path     TEXT NOT NULL,
-			position INTEGER NOT NULL DEFAULT 0,
-			nav_slot INTEGER NOT NULL DEFAULT 0
+			position INTEGER NOT NULL DEFAULT 0
 		);
-		CREATE TABLE IF NOT EXISTS browsed_urls (
-			id         INTEGER PRIMARY KEY AUTOINCREMENT,
-			url        TEXT NOT NULL UNIQUE,
-			title      TEXT NOT NULL DEFAULT '',
-			visited_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-		CREATE TABLE IF NOT EXISTS run_history (
-			id     INTEGER PRIMARY KEY AUTOINCREMENT,
-			command TEXT NOT NULL UNIQUE,
-			run_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-		CREATE TABLE IF NOT EXISTS password_entries (
-			id                INTEGER PRIMARY KEY AUTOINCREMENT,
-			name_cipher       TEXT NOT NULL DEFAULT '',
-			url_cipher        TEXT NOT NULL DEFAULT '',
-			username_cipher   TEXT NOT NULL DEFAULT '',
-			password_cipher   TEXT NOT NULL DEFAULT '',
-			note_cipher       TEXT NOT NULL DEFAULT '',
-			created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-		CREATE TABLE IF NOT EXISTS settings (
-				key   TEXT PRIMARY KEY,
-				value TEXT NOT NULL DEFAULT ''
-			);
-			CREATE TABLE IF NOT EXISTS saved_apps (
-			id           INTEGER PRIMARY KEY AUTOINCREMENT,
-			project_name TEXT NOT NULL DEFAULT 'home',
-			type         TEXT NOT NULL,
-			url          TEXT NOT NULL DEFAULT '',
-			command      TEXT NOT NULL DEFAULT '',
-			width        TEXT NOT NULL DEFAULT 'lg',
-			writable     INTEGER NOT NULL DEFAULT 1,
-			name         TEXT NOT NULL DEFAULT '',
-			icon_url     TEXT NOT NULL DEFAULT '',
-			position     INTEGER NOT NULL DEFAULT 0,
-			FOREIGN KEY (project_name) REFERENCES projects(name) ON DELETE CASCADE
-		);
-		CREATE TABLE IF NOT EXISTS closed_project_apps (
-			id             INTEGER PRIMARY KEY AUTOINCREMENT,
-			project_name   TEXT NOT NULL,
-			type           TEXT NOT NULL,
-			url            TEXT NOT NULL DEFAULT '',
-			command        TEXT NOT NULL DEFAULT '',
-			width          TEXT NOT NULL DEFAULT 'lg',
-			previous_width TEXT NOT NULL DEFAULT '',
-			writable       INTEGER NOT NULL DEFAULT 1,
-			name           TEXT NOT NULL DEFAULT '',
-			icon_url       TEXT NOT NULL DEFAULT '',
-			position       INTEGER NOT NULL DEFAULT 0,
-			selected_index INTEGER NOT NULL DEFAULT 0,
-			FOREIGN KEY (project_name) REFERENCES projects(name) ON DELETE CASCADE
-		);
+
 	`)
 	if err != nil {
 		log.Fatalf("db: failed to create tables: %v", err)
 	}
-}
-
-// migrateTables adds columns that may be missing in older databases.
-func migrateTables() {
-	// Add nav_slot column if it doesn't exist (project Ctrl+2-9 shortcuts)
-	_, _ = db.Exec("ALTER TABLE projects ADD COLUMN nav_slot INTEGER NOT NULL DEFAULT 0")
-	// Add icon_url column if it doesn't exist (added for icon discovery feature)
-	_, _ = db.Exec("ALTER TABLE saved_apps ADD COLUMN icon_url TEXT NOT NULL DEFAULT ''")
-	// Add project_specific column (app visible only in its project when true)
-	_, _ = db.Exec("ALTER TABLE saved_apps ADD COLUMN project_specific INTEGER NOT NULL DEFAULT 0")
-	// Add encrypted note column for password entries.
-	_, _ = db.Exec("ALTER TABLE password_entries ADD COLUMN note_cipher TEXT NOT NULL DEFAULT ''")
 }
 
 func ensureHomeProject() {
@@ -246,7 +152,7 @@ func ensureHomeProject() {
 	if home == "" {
 		home = "/"
 	}
-	_, err := db.Exec(`INSERT OR IGNORE INTO projects (name, path, position, nav_slot) VALUES ('home', ?, 0, 0)`, home)
+	_, err := db.Exec(`INSERT OR IGNORE INTO projects (name, path, position) VALUES ('home', ?, 0)`, home)
 	if err != nil {
 		log.Printf("db: failed to ensure home project: %v", err)
 	}
@@ -266,7 +172,7 @@ func DBLoadProjects() []Project {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
-	rows, err := db.Query("SELECT name, path, nav_slot FROM projects ORDER BY position, rowid")
+	rows, err := db.Query("SELECT name, path FROM projects ORDER BY position, rowid")
 	if err != nil {
 		log.Printf("db: load projects: %v", err)
 		return []Project{{Name: "home", Path: defaultHomeDir()}}
@@ -276,7 +182,7 @@ func DBLoadProjects() []Project {
 	var projects []Project
 	for rows.Next() {
 		var p Project
-		if err := rows.Scan(&p.Name, &p.Path, &p.NavSlot); err != nil {
+		if err := rows.Scan(&p.Name, &p.Path); err != nil {
 			continue
 		}
 		projects = append(projects, p)
@@ -292,8 +198,8 @@ func DBSaveProject(name, path string) {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
-	var existingPosition, existingNavSlot int
-	err := db.QueryRow("SELECT position, nav_slot FROM projects WHERE name = ?", name).Scan(&existingPosition, &existingNavSlot)
+	var existingPosition int
+	err := db.QueryRow("SELECT position FROM projects WHERE name = ?", name).Scan(&existingPosition)
 	if err != nil && err != sql.ErrNoRows {
 		log.Printf("db: lookup project %s: %v", name, err)
 		return
@@ -306,22 +212,11 @@ func DBSaveProject(name, path string) {
 	}
 
 	_, err = db.Exec(
-		"INSERT OR REPLACE INTO projects (name, path, position, nav_slot) VALUES (?, ?, ?, ?)",
-		name, path, position, existingNavSlot,
+		"INSERT OR REPLACE INTO projects (name, path, position) VALUES (?, ?, ?)",
+		name, path, position,
 	)
 	if err != nil {
 		log.Printf("db: save project %s: %v", name, err)
-	}
-}
-
-// DBSetProjectNavSlot updates one project's persisted Ctrl+2-9 shortcut slot.
-func DBSetProjectNavSlot(name string, slot int) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := db.Exec("UPDATE projects SET nav_slot = ? WHERE name = ?", slot, name)
-	if err != nil {
-		log.Printf("db: set nav slot %s=%d: %v", name, slot, err)
 	}
 }
 
@@ -358,473 +253,5 @@ func DBRemoveProject(name string) {
 	_, err := db.Exec("DELETE FROM projects WHERE name = ?", name)
 	if err != nil {
 		log.Printf("db: remove project %s: %v", name, err)
-	}
-}
-
-// --- Closed Project Apps ---
-
-// DBLoadClosedProjectApps returns the persisted reopen snapshot for a project.
-func DBLoadClosedProjectApps(projectName string) []ClosedProjectApp {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	rows, err := db.Query(
-		"SELECT project_name, type, url, command, width, previous_width, writable, name, icon_url, position, selected_index FROM closed_project_apps WHERE project_name = ? ORDER BY position, id",
-		projectName,
-	)
-	if err != nil {
-		log.Printf("db: load closed project apps for %s: %v", projectName, err)
-		return nil
-	}
-	defer rows.Close()
-
-	var apps []ClosedProjectApp
-	for rows.Next() {
-		var a ClosedProjectApp
-		var writable int
-		if err := rows.Scan(&a.ProjectName, &a.Type, &a.URL, &a.Command, &a.Width, &a.PreviousWidth, &writable, &a.Name, &a.IconURL, &a.Position, &a.SelectedIndex); err != nil {
-			continue
-		}
-		a.Writable = writable != 0
-		apps = append(apps, a)
-	}
-	return apps
-}
-
-// DBSaveClosedProjectApps replaces the persisted reopen snapshot for a project.
-func DBSaveClosedProjectApps(projectName string, apps []ClosedProjectApp) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	tx, err := db.Begin()
-	if err != nil {
-		log.Printf("db: begin save closed project apps for %s: %v", projectName, err)
-		return
-	}
-	defer tx.Rollback()
-
-	if _, err := tx.Exec("DELETE FROM closed_project_apps WHERE project_name = ?", projectName); err != nil {
-		log.Printf("db: clear closed project apps for %s: %v", projectName, err)
-		return
-	}
-
-	for i, app := range apps {
-		writable := 0
-		if app.Writable {
-			writable = 1
-		}
-		position := app.Position
-		if position == 0 && i > 0 {
-			position = i
-		}
-		if _, err := tx.Exec(
-			"INSERT INTO closed_project_apps (project_name, type, url, command, width, previous_width, writable, name, icon_url, position, selected_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			projectName, app.Type, app.URL, app.Command, app.Width, app.PreviousWidth, writable, app.Name, app.IconURL, position, app.SelectedIndex,
-		); err != nil {
-			log.Printf("db: insert closed project app for %s: %v", projectName, err)
-			return
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		log.Printf("db: commit closed project apps for %s: %v", projectName, err)
-	}
-}
-
-// DBClearClosedProjectApps removes the persisted reopen snapshot for a project.
-func DBClearClosedProjectApps(projectName string) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := db.Exec("DELETE FROM closed_project_apps WHERE project_name = ?", projectName)
-	if err != nil {
-		log.Printf("db: clear closed project apps for %s: %v", projectName, err)
-	}
-}
-
-// --- Saved Apps CRUD ---
-
-// DBLoadSavedApps returns saved apps for a project, ordered by position.
-func DBLoadSavedApps(projectName string) []SavedApp {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	rows, err := db.Query(
-		"SELECT id, project_name, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps WHERE project_name = ? ORDER BY position, id",
-		projectName,
-	)
-	if err != nil {
-		log.Printf("db: load saved apps for %s: %v", projectName, err)
-		return nil
-	}
-	defer rows.Close()
-
-	var apps []SavedApp
-	for rows.Next() {
-		var a SavedApp
-		var writable, projectSpecific int
-		if err := rows.Scan(&a.DBID, &a.ProjectName, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL, &projectSpecific); err != nil {
-			continue
-		}
-		a.Writable = writable != 0
-		a.ProjectSpecific = projectSpecific != 0
-		apps = append(apps, a)
-	}
-	return apps
-}
-
-// DBLoadAllSavedApps returns all saved apps across all projects.
-func DBLoadAllSavedApps() []SavedApp {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	rows, err := db.Query("SELECT id, project_name, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps ORDER BY LOWER(project_name), LOWER(COALESCE(NULLIF(name,''), command, url)), id")
-	if err != nil {
-		log.Printf("db: load all saved apps: %v", err)
-		return nil
-	}
-	defer rows.Close()
-
-	var apps []SavedApp
-	for rows.Next() {
-		var a SavedApp
-		var writable, projectSpecific int
-		if err := rows.Scan(&a.DBID, &a.ProjectName, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL, &projectSpecific); err != nil {
-			continue
-		}
-		a.Writable = writable != 0
-		a.ProjectSpecific = projectSpecific != 0
-		apps = append(apps, a)
-	}
-	return apps
-}
-
-// DBLoadVisibleSavedApps returns saved apps visible in a project:
-// all non-project-specific apps plus project-specific apps belonging to this project.
-func DBLoadVisibleSavedApps(projectName string) []SavedApp {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	rows, err := db.Query(
-		"SELECT id, project_name, type, url, command, width, writable, name, icon_url, project_specific FROM saved_apps WHERE project_specific = 0 OR project_name = ? ORDER BY LOWER(COALESCE(NULLIF(name,''), command, url)), id",
-		projectName,
-	)
-	if err != nil {
-		log.Printf("db: load visible saved apps for %s: %v", projectName, err)
-		return nil
-	}
-	defer rows.Close()
-
-	var apps []SavedApp
-	for rows.Next() {
-		var a SavedApp
-		var writable, projectSpecific int
-		if err := rows.Scan(&a.DBID, &a.ProjectName, &a.Type, &a.URL, &a.Command, &a.Width, &writable, &a.Name, &a.IconURL, &projectSpecific); err != nil {
-			continue
-		}
-		a.Writable = writable != 0
-		a.ProjectSpecific = projectSpecific != 0
-		apps = append(apps, a)
-	}
-	return apps
-}
-
-// DBAddSavedApp appends a saved app to a project.
-func DBAddSavedApp(projectName string, app SavedApp) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	var maxPos int
-	_ = db.QueryRow("SELECT COALESCE(MAX(position),0) FROM saved_apps WHERE project_name = ?", projectName).Scan(&maxPos)
-
-	writable := 0
-	if app.Writable {
-		writable = 1
-	}
-	projectSpecific := 0
-	if app.ProjectSpecific {
-		projectSpecific = 1
-	}
-	_, err := db.Exec(
-		"INSERT INTO saved_apps (project_name, type, url, command, width, writable, name, icon_url, position, project_specific) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		projectName, app.Type, app.URL, app.Command, app.Width, writable, app.Name, app.IconURL, maxPos+1, projectSpecific,
-	)
-	if err != nil {
-		log.Printf("db: add saved app: %v", err)
-	}
-}
-
-// DBUpdateSavedApp updates a saved app at a given index (0-based) within a project.
-func DBUpdateSavedApp(projectName string, index int, app SavedApp) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	// Find the app ID at this position index
-	id := dbAppIDAtIndex(projectName, index)
-	if id < 0 {
-		return
-	}
-
-	writable := 0
-	if app.Writable {
-		writable = 1
-	}
-	projectSpecific := 0
-	if app.ProjectSpecific {
-		projectSpecific = 1
-	}
-	_, err := db.Exec(
-		"UPDATE saved_apps SET type=?, url=?, command=?, width=?, writable=?, name=?, icon_url=?, project_specific=? WHERE id=?",
-		app.Type, app.URL, app.Command, app.Width, writable, app.Name, app.IconURL, projectSpecific, id,
-	)
-	if err != nil {
-		log.Printf("db: update saved app at %d: %v", index, err)
-	}
-}
-
-// DBUpdateSavedAppURL updates the URL of a saved app at a given index.
-func DBUpdateSavedAppURL(projectName string, index int, newURL string) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	id := dbAppIDAtIndex(projectName, index)
-	if id < 0 {
-		return
-	}
-
-	_, err := db.Exec("UPDATE saved_apps SET url=? WHERE id=?", newURL, id)
-	if err != nil {
-		log.Printf("db: update saved app url at %d: %v", index, err)
-	}
-}
-
-// DBRemoveSavedApp removes a saved app at a given index within a project.
-func DBRemoveSavedApp(projectName string, index int) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	id := dbAppIDAtIndex(projectName, index)
-	if id < 0 {
-		return
-	}
-
-	_, err := db.Exec("DELETE FROM saved_apps WHERE id=?", id)
-	if err != nil {
-		log.Printf("db: remove saved app at %d: %v", index, err)
-	}
-}
-
-// DBRemoveSavedAppByID removes a saved app by its database row ID.
-func DBRemoveSavedAppByID(id int64) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := db.Exec("DELETE FROM saved_apps WHERE id=?", id)
-	if err != nil {
-		log.Printf("db: remove saved app by id %d: %v", id, err)
-	}
-}
-
-// DBUpdateSavedAppByID updates a saved app by its database row ID.
-func DBUpdateSavedAppByID(id int64, app SavedApp) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	writable := 0
-	if app.Writable {
-		writable = 1
-	}
-	projectSpecific := 0
-	if app.ProjectSpecific {
-		projectSpecific = 1
-	}
-	_, err := db.Exec(
-		"UPDATE saved_apps SET type=?, url=?, command=?, width=?, writable=?, name=?, icon_url=?, project_specific=? WHERE id=?",
-		app.Type, app.URL, app.Command, app.Width, writable, app.Name, app.IconURL, projectSpecific, id,
-	)
-	if err != nil {
-		log.Printf("db: update saved app by id %d: %v", id, err)
-	}
-}
-
-// DBRemoveSavedAppsByProject removes all saved apps for a project.
-func DBRemoveSavedAppsByProject(projectName string) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := db.Exec("DELETE FROM saved_apps WHERE project_name=?", projectName)
-	if err != nil {
-		log.Printf("db: remove saved apps for %s: %v", projectName, err)
-	}
-}
-
-// dbAppIDAtIndex returns the database row ID for a saved app at a 0-based index. Must be called with dbMu held.
-func dbAppIDAtIndex(projectName string, index int) int64 {
-	rows, err := db.Query("SELECT id FROM saved_apps WHERE project_name=? ORDER BY position, id", projectName)
-	if err != nil {
-		return -1
-	}
-	defer rows.Close()
-
-	i := 0
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return -1
-		}
-		if i == index {
-			return id
-		}
-		i++
-	}
-	return -1
-}
-
-// --- Browsed URLs ---
-
-// DBSaveBrowsedURL upserts a URL into the browsed_urls table (updates visited_at if exists).
-func DBSaveBrowsedURL(urlStr string) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := db.Exec(
-		"INSERT INTO browsed_urls (url, visited_at) VALUES (?, CURRENT_TIMESTAMP) ON CONFLICT(url) DO UPDATE SET visited_at=CURRENT_TIMESTAMP",
-		urlStr,
-	)
-	if err != nil {
-		log.Printf("db: save browsed url: %v", err)
-	}
-}
-
-// DBDeleteBrowsedURL deletes a single URL from the browsed_urls table.
-func DBDeleteBrowsedURL(urlStr string) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := db.Exec("DELETE FROM browsed_urls WHERE url = ?", urlStr)
-	if err != nil {
-		log.Printf("db: delete browsed url: %v", err)
-	}
-}
-
-// DBClearBrowsedURLs deletes all entries from the browsed_urls table.
-func DBClearBrowsedURLs() {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := db.Exec("DELETE FROM browsed_urls")
-	if err != nil {
-		log.Printf("db: clear browsed urls: %v", err)
-	}
-}
-
-// DBLoadBrowsedURLs returns all browsed URLs ordered by most recently visited.
-func DBLoadBrowsedURLs() []string {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	rows, err := db.Query("SELECT url FROM browsed_urls ORDER BY visited_at DESC LIMIT 200")
-	if err != nil {
-		log.Printf("db: load browsed urls: %v", err)
-		return nil
-	}
-	defer rows.Close()
-
-	var urls []string
-	for rows.Next() {
-		var u string
-		if err := rows.Scan(&u); err != nil {
-			continue
-		}
-		urls = append(urls, u)
-	}
-	return urls
-}
-
-// DBSaveRunCommand upserts a command into the run_history table.
-func DBSaveRunCommand(command string) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := db.Exec(
-		"INSERT INTO run_history (command, run_at) VALUES (?, CURRENT_TIMESTAMP) ON CONFLICT(command) DO UPDATE SET run_at=CURRENT_TIMESTAMP",
-		command,
-	)
-	if err != nil {
-		log.Printf("db: save run command: %v", err)
-	}
-}
-
-// DBDeleteRunCommand deletes a single command from the run_history table.
-func DBDeleteRunCommand(command string) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := db.Exec("DELETE FROM run_history WHERE command = ?", command)
-	if err != nil {
-		log.Printf("db: delete run command: %v", err)
-	}
-}
-
-// DBClearRunCommands deletes all entries from the run_history table.
-func DBClearRunCommands() {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := db.Exec("DELETE FROM run_history")
-	if err != nil {
-		log.Printf("db: clear run commands: %v", err)
-	}
-}
-
-// DBLoadRunCommands returns all run history commands ordered by most recently run.
-func DBLoadRunCommands() []string {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	rows, err := db.Query("SELECT command FROM run_history ORDER BY run_at DESC LIMIT 200")
-	if err != nil {
-		log.Printf("db: load run commands: %v", err)
-		return nil
-	}
-	defer rows.Close()
-
-	var cmds []string
-	for rows.Next() {
-		var c string
-		if err := rows.Scan(&c); err != nil {
-			continue
-		}
-		cmds = append(cmds, c)
-	}
-	return cmds
-}
-
-// --- Settings ---
-
-// DBGetSetting returns the value for a setting key, or defaultVal if not found.
-func DBGetSetting(key, defaultVal string) string {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	var val string
-	err := db.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&val)
-	if err != nil {
-		return defaultVal
-	}
-	return val
-}
-
-// DBSetSetting upserts a setting key/value pair.
-func DBSetSetting(key, value string) {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	_, err := db.Exec(
-		"INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=?",
-		key, value, value,
-	)
-	if err != nil {
-		log.Printf("db: set setting %s: %v", key, err)
 	}
 }

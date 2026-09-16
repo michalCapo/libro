@@ -3,8 +3,7 @@ package components
 // BrowserJS returns the JavaScript that manages Electron webview elements.
 // It initializes webview tags, handles navigation events, and provides
 // back/forward/reload/navigate functions via the webview DOM API.
-// It also injects browser-mode keyboard shortcuts (j/k/h/l/b/f/o/r/Enter)
-// into webview guest pages and provides find-in-page support (/, n, p).
+// It also injects browser-mode scrolling, address, reload, and viewport shortcuts.
 func BrowserJS() string {
 	return browserScript
 }
@@ -20,8 +19,6 @@ var initialized = {};
 var browserShortcutsScript = '(' + function(){
 	if(window.__libroBrowserShortcuts) return;
 	window.__libroBrowserShortcuts = true;
-	window.__libroHoveredLink = '';
-	window.__libroHoveredElement = null;
 	function elementRole(el) {
 		if (!el || !el.getAttribute) return '';
 		return (el.getAttribute('role') || '').toLowerCase();
@@ -40,34 +37,6 @@ var browserShortcutsScript = '(' + function(){
 			if (role === 'textbox' || role === 'searchbox' || role === 'combobox' || role === 'spinbutton') return true;
 		}
 		return false;
-	}
-	function nearestActivatableElement(el) {
-		var node = el && el.nodeType === 3 ? el.parentElement : el;
-		while (node) {
-			if (node.nodeType === 1) {
-				var tag = node.tagName ? node.tagName.toUpperCase() : '';
-				var role = elementRole(node);
-				if (
-					tag === 'A' ||
-					tag === 'BUTTON' ||
-					tag === 'SUMMARY' ||
-					tag === 'OPTION' ||
-					role === 'link' ||
-					role === 'button' ||
-					role === 'menuitem' ||
-					role === 'menuitemcheckbox' ||
-					role === 'menuitemradio' ||
-					role === 'option' ||
-					role === 'tab'
-				) return node;
-				if (tag === 'INPUT') {
-					var inputType = ((node.getAttribute && node.getAttribute('type')) || node.type || '').toLowerCase();
-					if (['button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'image'].indexOf(inputType) >= 0) return node;
-				}
-			}
-			node = node.parentElement || node.parentNode;
-		}
-		return null;
 	}
 	function activeEditableElement() {
 		var el = document.activeElement;
@@ -89,12 +58,6 @@ var browserShortcutsScript = '(' + function(){
 		}
 		console.log(activeEditableElement() ? '__libro:inputfocus' : '__libro:inputblur');
 	}
-	document.addEventListener('mouseover', function(e) {
-		var el = e.target;
-		window.__libroHoveredElement = el || null;
-		while (el && el.tagName !== 'A') el = el.parentElement;
-		window.__libroHoveredLink = (el && el.href) ? el.href : '';
-	}, true);
 	// Track input focus state — the Electron main process listens for these
 	// console messages to decide whether to intercept plain keys (j/k/h/l etc.)
 	// or let them through to text input fields.
@@ -115,10 +78,7 @@ var browserShortcutsScript = '(' + function(){
 		// main process has already short-circuited the matching shortcuts.
 		if (window.__libroKeyboardPassthrough || window.__libroBrowserMode === 'insert') return;
 		var ae = activeEditableElement();
-		if(ae) {
-			if(e.key==='Escape' && ae && typeof ae.blur === 'function') { ae.blur(); e.preventDefault(); e.stopPropagation(); }
-			return;
-		}
+		if(ae) return;
 		var handled = true;
 		switch(e.key) {
 			case 'g': window.scrollTo({top: 0, behavior: 'smooth'}); break;
@@ -127,66 +87,16 @@ var browserShortcutsScript = '(' + function(){
 			case 'k': window.scrollBy({top: -800, behavior: 'smooth'}); break;
 			case 'h': window.scrollBy({left: -480, behavior: 'smooth'}); break;
 			case 'l': window.scrollBy({left: 480, behavior: 'smooth'}); break;
-			case 'b': history.back(); break;
-			case 'f': history.forward(); break;
-			case 'y':
-				var sel = window.getSelection();
-				var txt = sel ? sel.toString() : '';
-				if (txt) {
-					console.log('__libro:copytext:' + txt);
-				} else if (window.__libroHoveredLink) {
-					console.log('__libro:copytext:' + window.__libroHoveredLink);
-				}
-				break;
-			case 'c':
-				console.log('__libro:console');
-				break;
 			case 'o': console.log('__libro:urlpopup'); break;
 			case 'r': console.log('__libro:reload'); break;
 			case 'm': console.log('__libro:viewport'); break;
 			case 'M': console.log('__libro:viewportrotate'); break;
-			case '/': console.log('__libro:search'); break;
-			case 'n': console.log('__libro:findnext'); break;
-			case 'N': console.log('__libro:findprev'); break;
-			case 'p': console.log('__libro:findprev'); break;
-			case 'Escape': console.log('__libro:searchclear'); break;
-			case 'Enter':
-				if(nearestActivatableElement(document.activeElement)){
-					handled=false;
-				}else{
-					console.log('__libro:enter');
-				}
-				break;
 			default: handled = false;
 		}
 		if(handled) { e.preventDefault(); e.stopPropagation(); }
 	}, true);
 	syncInputFocus();
 } + ')()';
-
-window.__libroToggleConsole = function(appID) {
-	var wv = window.__libroWebviews[appID];
-	if (!wv || !window.libroElectron || typeof window.libroElectron.toggleWebviewDevTools !== 'function') return;
-	whenReady(appID, function() {
-		try {
-			var targetId = webviewContentsID(wv);
-			if (!targetId) return;
-			var panel = document.getElementById('devtools-panel-' + appID);
-			var opening = !!(panel && panel.classList.contains('hidden'));
-			if (!opening) {
-				window.libroElectron.closeWebviewDevTools(targetId);
-				setDevtoolsPanelVisible(appID, false);
-				refocusWebview(appID, wv);
-				return;
-			}
-			setDevtoolsPanelVisible(appID, true);
-			var bounds = devtoolsPanelBounds(appID);
-			if (!bounds) return;
-			window.libroElectron.toggleWebviewDevTools(targetId, bounds, 'console');
-			refocusWebview(appID, wv);
-		} catch (err) {}
-	});
-};
 
 window.__libroOpenConsole = function(appID) {
 	var wv = window.__libroWebviews[appID];
@@ -218,8 +128,6 @@ window.__libroCloseConsole = function(appID) {
 	});
 };
 
-// --- Find-in-page state per webview ---
-var searchState = {}; // appID -> {query, barEl, inputEl, countEl}
 var devtoolsPanelObservers = {};
 var devtoolsPanelSyncers = {};
 var browserModeState = {}; // appID -> 'normal' | 'insert'
@@ -443,276 +351,6 @@ if (window.libroElectron && typeof window.libroElectron.onWebviewDevToolsClosed 
 	});
 }
 
-function getOrCreateSearchBar(appID) {
-	if (searchState[appID] && searchState[appID].barEl && searchState[appID].barEl.parentNode) {
-		return searchState[appID];
-	}
-	var wv = window.__libroWebviews[appID];
-	if (!wv) return null;
-
-	var container = wv.closest('[data-app-id]');
-	if (!container) return null;
-	var wrapper = container.children[1];
-	if (!wrapper) return null;
-
-	var bar = document.createElement('div');
-	bar.className = 'absolute top-2 right-2 z-50 flex items-center gap-1.5 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-600 rounded-md shadow-lg px-2 py-1.5';
-	bar.style.display = 'none';
-
-	var input = document.createElement('input');
-	input.type = 'text';
-	input.placeholder = 'Find in page…';
-	input.className = 'text-xs font-mono bg-transparent outline-none text-gray-700 dark:text-zinc-300 placeholder-gray-400 dark:placeholder-zinc-500';
-	input.style.width = '180px';
-
-	var countLabel = document.createElement('span');
-	countLabel.className = 'text-[10px] text-gray-400 dark:text-zinc-500 font-mono whitespace-nowrap';
-
-	var closeBtn = document.createElement('button');
-	closeBtn.className = 'flex items-center justify-center text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 cursor-pointer';
-	closeBtn.innerHTML = '<span class="material-icons-round text-sm">close</span>';
-
-	bar.appendChild(input);
-	bar.appendChild(countLabel);
-	bar.appendChild(closeBtn);
-	wrapper.appendChild(bar);
-
-	var state = {query: '', barEl: bar, inputEl: input, countEl: countLabel, findActive: false, matchRect: null};
-	searchState[appID] = state;
-
-	function doFind(forward) {
-		var q = input.value;
-		if (!q) return;
-		var isSame = (q === state.query && state.findActive);
-		state.query = q;
-		state.findActive = true;
-		wv.findInPage(q, {forward: forward, findNext: isSame});
-	}
-
-	input.addEventListener('keydown', function(e) {
-		e.stopPropagation();
-		if (e.key === 'Enter') {
-			e.preventDefault();
-			doFind(!e.shiftKey);
-			// Hide bar but keep search active — n/p will continue navigating
-			state.barEl.style.display = 'none';
-			wv.focus();
-		}
-		if (e.key === 'Escape') {
-			e.preventDefault();
-			clearSearch(appID);
-		}
-	});
-
-	input.addEventListener('input', function() {
-		var q = input.value;
-		if (q) {
-			// Stop any active search before starting a new one to prevent freezing
-			if (state.findActive && q !== state.query) {
-				try { wv.stopFindInPage('clearSelection'); } catch(err) {}
-			}
-			state.query = q;
-			state.findActive = true;
-			wv.findInPage(q, {forward: true, findNext: false});
-		} else {
-			state.findActive = false;
-			state.countEl.textContent = '';
-			try { wv.stopFindInPage('clearSelection'); } catch(err) {}
-		}
-	});
-
-	closeBtn.addEventListener('click', function() {
-		clearSearch(appID);
-	});
-
-	wv.addEventListener('found-in-page', function(e) {
-		if (e.result && searchState[appID]) {
-			searchState[appID].countEl.textContent = e.result.activeMatchOrdinal + '/' + e.result.matches;
-			if (e.result.selectionArea) {
-				searchState[appID].matchRect = e.result.selectionArea;
-			}
-		}
-	});
-
-	return state;
-}
-
-function showSearchBar(appID) {
-	var state = getOrCreateSearchBar(appID);
-	if (!state) return;
-	// Stop previous search to prevent freeze when starting a new one
-	if (state.findActive) {
-		var wv = window.__libroWebviews[appID];
-		if (wv) { try { wv.stopFindInPage('clearSelection'); } catch(err) {} }
-		state.findActive = false;
-	}
-	state.barEl.style.display = 'flex';
-	state.inputEl.value = state.query || '';
-	state.inputEl.focus();
-	state.inputEl.select();
-}
-
-function clearSearch(appID) {
-	var state = searchState[appID];
-	if (!state) return;
-	state.barEl.style.display = 'none';
-	state.query = '';
-	state.findActive = false;
-	state.matchRect = null;
-	state.countEl.textContent = '';
-	state.inputEl.value = '';
-	var wv = window.__libroWebviews[appID];
-	if (wv) {
-		try { wv.stopFindInPage('clearSelection'); } catch(err) {}
-		wv.focus();
-	}
-}
-
-function findInPageNext(appID) {
-	var state = searchState[appID];
-	if (!state || !state.query || !state.findActive) {
-		showSearchBar(appID);
-		return;
-	}
-	var wv = window.__libroWebviews[appID];
-	if (wv) wv.findInPage(state.query, {forward: true, findNext: true});
-}
-
-function findInPagePrev(appID) {
-	var state = searchState[appID];
-	if (!state || !state.query || !state.findActive) {
-		showSearchBar(appID);
-		return;
-	}
-	var wv = window.__libroWebviews[appID];
-	if (wv) wv.findInPage(state.query, {forward: false, findNext: true});
-}
-
-function handleEnter(appID) {
-	var wv = window.__libroWebviews[appID];
-	if (!wv) return;
-	var state = searchState[appID];
-	var activationScript =
-		'(function(targetX,targetY,query){' +
-		'function roleOf(el){return el&&el.getAttribute?String(el.getAttribute("role")||"").toLowerCase():"";}' +
-		'function normalizeText(value){return String(value||"").replace(/\\s+/g," ").trim().toLowerCase();}' +
-		'function nearest(node){' +
-		'var cur=node&&node.nodeType===3?node.parentElement:node;' +
-		'while(cur){' +
-		'if(cur.nodeType===1){' +
-		'var tag=cur.tagName?cur.tagName.toUpperCase():"";' +
-		'var role=roleOf(cur);' +
-		'if(tag==="A"||tag==="BUTTON"||tag==="SUMMARY"||tag==="OPTION"||role==="link"||role==="button"||role==="menuitem"||role==="menuitemcheckbox"||role==="menuitemradio"||role==="option"||role==="tab") return cur;' +
-		'if(tag==="INPUT"){' +
-		'var inputType=String((cur.getAttribute&&cur.getAttribute("type"))||cur.type||"").toLowerCase();' +
-		'if(["button","submit","reset","checkbox","radio","file","image"].indexOf(inputType)>=0) return cur;' +
-		'}' +
-		'}' +
-		'cur=cur.parentElement||cur.parentNode;' +
-		'}' +
-		'return null;' +
-		'}' +
-		'function dispatchEnter(el){' +
-		'var opts={key:"Enter",code:"Enter",which:13,keyCode:13,bubbles:true,cancelable:true};' +
-		'var down=new KeyboardEvent("keydown",opts);' +
-		'el.dispatchEvent(down);' +
-		'if(down.defaultPrevented) return true;' +
-		'var press=new KeyboardEvent("keypress",opts);' +
-		'el.dispatchEvent(press);' +
-		'if(press.defaultPrevented) return true;' +
-		'var up=new KeyboardEvent("keyup",opts);' +
-		'el.dispatchEvent(up);' +
-		'return up.defaultPrevented;' +
-		'}' +
-		'function submitNearestForm(el){' +
-		'var form=el&&el.closest?el.closest("form"):null;' +
-		'if(!form) return false;' +
-		'if(typeof form.requestSubmit==="function"){form.requestSubmit();return true;}' +
-		'if(typeof form.submit==="function"){form.submit();return true;}' +
-		'return false;' +
-		'}' +
-		'function candidateFromPoint(x,y){' +
-		'if(typeof x!=="number"||typeof y!=="number") return null;' +
-		'var points=[[x,y],[x-window.scrollX,y-window.scrollY],[x+window.scrollX,y+window.scrollY]];' +
-		'for(var p=0;p<points.length;p++){' +
-		'var px=points[p][0], py=points[p][1];' +
-		'if(!isFinite(px)||!isFinite(py)) continue;' +
-		'var hit=null;' +
-		'if(typeof document.elementsFromPoint==="function"){' +
-		'var stack=document.elementsFromPoint(px,py)||[];' +
-		'for(var i=0;i<stack.length;i++){ hit=nearest(stack[i]); if(hit) return hit; }' +
-		'}' +
-		'if(typeof document.caretPositionFromPoint==="function"){' +
-		'var pos=document.caretPositionFromPoint(px,py);' +
-		'if(pos){ hit=nearest(pos.offsetNode); if(hit) return hit; }' +
-		'}' +
-		'if(typeof document.caretRangeFromPoint==="function"){' +
-		'var range=document.caretRangeFromPoint(px,py);' +
-		'if(range){ hit=nearest(range.startContainer); if(hit) return hit; }' +
-		'}' +
-		'var single=document.elementFromPoint(px,py);' +
-		'hit=nearest(single);' +
-		'if(hit) return hit;' +
-		'}' +
-		'return null;' +
-		'}' +
-		'function queryFallback(text){' +
-		'var q=normalizeText(text);' +
-		'if(!q) return null;' +
-		'var nodes=document.querySelectorAll("a[href],button,[role=link],[role=button],[role=menuitem],[role=menuitemcheckbox],[role=menuitemradio],[role=option],[role=tab],summary,input[type=button],input[type=submit],input[type=reset],input[type=image]");' +
-		'for(var i=0;i<nodes.length;i++){' +
-		'var el=nodes[i];' +
-		'var rect=el.getBoundingClientRect?el.getBoundingClientRect():null;' +
-		'if(rect&&rect.width===0&&rect.height===0) continue;' +
-		'var txt=normalizeText(el.innerText||el.textContent||el.value||el.getAttribute("aria-label"));' +
-		'if(txt&&txt.indexOf(q)!==-1) return el;' +
-		'}' +
-		'return null;' +
-		'}' +
-		'function activate(el){' +
-		'if(!el) return false;' +
-		'try{if(typeof el.focus==="function") el.focus({preventScroll:true});}catch(err){try{if(typeof el.focus==="function") el.focus();}catch(err2){}}' +
-		'var tag=el.tagName?el.tagName.toUpperCase():"";' +
-		'var role=roleOf(el);' +
-		'if(tag==="A"&&el.href){el.click();return true;}' +
-		'if(tag==="BUTTON"||tag==="SUMMARY"){el.click();return true;}' +
-		'if(tag==="INPUT"){' +
-		'var inputType=String((el.getAttribute&&el.getAttribute("type"))||el.type||"").toLowerCase();' +
-		'if(["button","submit","reset","checkbox","radio","file","image"].indexOf(inputType)>=0){el.click();return true;}' +
-		'if(submitNearestForm(el)) return true;' +
-		'}' +
-		'if(role==="link"||role==="button"||role==="menuitem"||role==="menuitemcheckbox"||role==="menuitemradio"||role==="option"||role==="tab"){' +
-		'if(dispatchEnter(el)) return true;' +
-		'if(typeof el.click==="function"){el.click();return true;}' +
-		'}' +
-		'if(dispatchEnter(el)) return true;' +
-		'if(submitNearestForm(el)) return true;' +
-		'if(typeof el.click==="function"){el.click();return true;}' +
-		'return false;' +
-		'}' +
-		'var target=nearest(document.activeElement);' +
-		'if(!target) target=candidateFromPoint(targetX,targetY);' +
-		'if(!target&&window.getSelection){' +
-		'var sel=window.getSelection();' +
-		'if(sel&&sel.rangeCount) target=nearest(sel.anchorNode)||nearest(sel.focusNode);' +
-		'}' +
-		'if(!target) target=queryFallback(query);' +
-		'if(!target&&typeof targetX==="number"&&typeof targetY==="number") target=document.elementFromPoint(targetX,targetY);' +
-		'if(target) activate(target);' +
-		'})';
-	if (state && state.findActive && state.matchRect) {
-		// Use elementFromPoint with the match rectangle from find-in-page
-		var r = state.matchRect;
-		var cx = r.x + Math.round(r.width / 2);
-		var cy = r.y + Math.round(r.height / 2);
-		wv.executeJavaScript(activationScript + '(' + cx + ',' + cy + ',' + JSON.stringify(state.query || '') + ')').catch(function(){});
-	} else {
-		wv.executeJavaScript(activationScript + '(null,null,"")').catch(function(){});
-	}
-}
-
-// --- End browser shortcuts / find-in-page ---
-
 function whenReady(appID, fn) {
 	if (ready[appID]) { fn(); return; }
 	if (!queued[appID]) queued[appID] = [];
@@ -890,7 +528,6 @@ function initWebview(wv) {
 					delete initialized[oldAppID];
 					delete ready[oldAppID];
 					delete queued[oldAppID];
-					delete searchState[oldAppID];
 					delete browserModeState[oldAppID];
 					if (mobileViewportOrientation[oldAppID]) mobileViewportOrientation[appID] = mobileViewportOrientation[oldAppID];
 					delete mobileViewportOrientation[oldAppID];
@@ -928,6 +565,7 @@ function initWebview(wv) {
 
 function safeWebviewLoadURL(wv, url) {
 	if (!wv || !url) return;
+	wv.__libroLastRequestedURL = url;
 	// Avoid piling up overlapping Electron <webview>.loadURL calls. Those commonly
 	// reject with ERR_ABORTED and can trigger GuestViewManager/MaxListeners noise.
 	if (wv.__libroPendingURL === url) return;
@@ -938,16 +576,43 @@ function safeWebviewLoadURL(wv, url) {
 	try {
 		var p = wv.loadURL(url);
 		if (p && typeof p.catch === 'function') p.catch(function(err) {
+			if (wv.__libroPendingURL === url) wv.__libroPendingURL = '';
 			if (err && err.code && err.code !== 'ERR_ABORTED') console.warn('[libro-browser] loadURL failed:', err.code, url);
 		});
 	} catch (err) {
+		wv.__libroPendingURL = '';
 		if (err && err.code !== 'ERR_ABORTED') console.warn('[libro-browser] loadURL failed:', err && err.code ? err.code : err, url);
 	}
+}
+
+function showBrowserError(wv, message, failedURL) {
+	wv.__libroPendingURL = '';
+	var host = wv.closest('[data-app-content]');
+	if (!host) return;
+	var previous = host.querySelector('.ws-browser-error'); if (previous) previous.remove();
+	var panel = document.createElement('div'); panel.className = 'ws-browser-error'; panel.setAttribute('role', 'alert');
+	var title = document.createElement('h2'); title.textContent = 'Could not load this page';
+	var detail = document.createElement('p'); detail.textContent = message;
+	var retry = document.createElement('button'); retry.className = 'ws-launch'; retry.textContent = 'Retry';
+	retry.onclick = function() { panel.remove(); safeWebviewLoadURL(wv, failedURL || wv.__libroLastRequestedURL || wv.getAttribute('src') || 'about:blank'); };
+	panel.append(title, detail, retry); host.appendChild(panel);
+}
+
+function updateBrowserNavigation(wv) {
+	var frame = wv.closest('[data-app-id]'); if (!frame) return;
+	try {
+		var back = frame.querySelector('button[title="Back"]'); if (back) back.disabled = !wv.canGoBack();
+		var forward = frame.querySelector('button[title="Forward"]'); if (forward) forward.disabled = !wv.canGoForward();
+	} catch (_) {}
 }
 
 function bindWebviewEvents(wv) {
 	if (wv.__libroEventsBound) return;
 	wv.__libroEventsBound = true;
+	wv.addEventListener('focus', function() {
+		var appID = currentAppID(wv);
+		if (appID && window.__libroSelectedApp !== appID && window.libroWorkspace) libroWorkspace.select(appID);
+	});
 
 	wv.addEventListener('dom-ready', function() {
 		var appID = currentAppID(wv);
@@ -965,6 +630,8 @@ function bindWebviewEvents(wv) {
 		if (!appID) return;
 		var inp = document.getElementById('urlinput-' + appID);
 		if (inp && e.url) inp.value = e.url;
+		updateBrowserNavigation(wv);
+		if (e.url && !e.url.startsWith('data:')) __ws.call('app.url.set', {sid:wv.getAttribute('data-sid'), id:appID, url:e.url, observed:true});
 		// Full-page navigation discards page JS — reset to normal mode
 		applyBrowserMode(appID, 'normal');
 	});
@@ -974,6 +641,8 @@ function bindWebviewEvents(wv) {
 		if (!appID) return;
 		var inp = document.getElementById('urlinput-' + appID);
 		if (inp && e.url) inp.value = e.url;
+		updateBrowserNavigation(wv);
+		if (e.url && !e.url.startsWith('data:')) __ws.call('app.url.set', {sid:wv.getAttribute('data-sid'), id:appID, url:e.url, observed:true});
 	});
 
 	// Re-inject browser shortcuts after full page navigation
@@ -988,71 +657,36 @@ function bindWebviewEvents(wv) {
 		var appID = currentAppID(wv);
 		if (!appID) return;
 		var msg = e.message;
-		if (msg === '__libro:search') showSearchBar(appID);
-		else if (msg === '__libro:findnext') findInPageNext(appID);
-		else if (msg === '__libro:findprev') findInPagePrev(appID);
-		else if (msg === '__libro:searchclear') clearSearch(appID);
-		else if (msg === '__libro:enter') handleEnter(appID);
-		else if (msg === '__libro:console') window.__libroToggleConsole(appID);
-		else if (msg === '__libro:urlpopup') { if (window.__libroOpenURLPopup) window.__libroOpenURLPopup(); }
+		if (msg === '__libro:urlpopup') { if (window.__libroOpenURLPopup) window.__libroOpenURLPopup(); }
 		else if (msg === '__libro:reload') { if (window.__libroWvReload) window.__libroWvReload(appID); }
 		else if (msg === '__libro:mobile' || msg === '__libro:viewport') { if (window.__libroToggleSelectedBrowserMobile) window.__libroToggleSelectedBrowserMobile(appID); }
 		else if (msg === '__libro:viewportrotate') { if (window.__libroRotateSelectedBrowserViewport) window.__libroRotateSelectedBrowserViewport(appID); }
-		else if (msg === '__libro:copyurl') {
-			var inp = document.getElementById('urlinput-' + appID);
-			if (inp && navigator.clipboard) navigator.clipboard.writeText(inp.value);
-		}
-		else if (msg && msg.startsWith('__libro:copytext:')) {
-			var text = msg.substring('__libro:copytext:'.length);
-			if (text) {
-				if (window.libroElectron && window.libroElectron.copyToClipboard) {
-					window.libroElectron.copyToClipboard(text);
-				} else if (navigator.clipboard) {
-					navigator.clipboard.writeText(text);
-				}
-				if (window.__libroShowToast) {
-					var preview = text.length > 60 ? text.substring(0, 60) + '…' : text;
-					window.__libroShowToast('Copied', preview, 1500);
-				}
-			}
-		}
 	});
 
-	// Show an actionable error page on load failure. Keep the original URL in
-	// Libro instead of silently redirecting so the user can retry or choose search.
+	// Keep failures in host UI: error documents must not replace the requested
+	// page, pollute history, or turn subframe failures into full-page failures.
 	wv.addEventListener('did-fail-load', function(e) {
-		var appID = currentAppID(wv);
-		if (!appID) return;
-		// Ignore aborted loads (e.g. navigation interrupted by another navigation)
-		if (e.errorCode === -3) return;
-		var failedUrl = e.validatedURL || wv.getAttribute('src') || '';
-		var errorDesc = e.errorDescription || 'Unknown error';
-		var query = failedUrl;
-		try {
-			var u = new URL(failedUrl);
-			query = u.hostname + (u.pathname && u.pathname !== '/' ? u.pathname : '');
-		} catch(err) {}
-		var searchUrl = 'https://www.google.com/search?q=' + encodeURIComponent(query || failedUrl || errorDesc);
-		function esc(s) { return String(s || '').replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
-		var html = '<!doctype html><html><head><meta name="color-scheme" content="light dark"><style>' +
-			':root{color-scheme:light;--page:oklch(97% 0.006 250);--card:oklch(99% 0.004 250);--fg:oklch(24% 0.02 250);--muted:oklch(48% 0.025 250);--subtle:oklch(56% 0.02 250);--border:oklch(88% 0.012 250);--search-fg:oklch(36% 0.04 250);--shadow:rgba(15,23,42,.08)}' +
-			'@media (prefers-color-scheme:dark){:root{color-scheme:dark;--page:oklch(14% 0.012 250);--card:oklch(18% 0.012 250);--fg:oklch(88% 0.012 250);--muted:oklch(70% 0.018 250);--subtle:oklch(60% 0.018 250);--border:oklch(32% 0.012 250);--search-fg:oklch(82% 0.018 250);--shadow:rgba(0,0,0,.28)}}' +
-			'body{display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:var(--page);color:var(--fg)}' +
-			'main{width:min(440px,calc(100vw - 40px));text-align:center;padding:28px;border:1px solid var(--border);border-radius:14px;background:var(--card);box-shadow:0 18px 45px var(--shadow)}' +
-			'.icon{font-size:28px;margin-bottom:12px}.title{font-size:16px;line-height:1.3;margin:0 0 8px;font-weight:650}.desc{font-size:13px;line-height:1.5;margin:0 0 14px;color:var(--muted)}.url{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--subtle);word-break:break-all;margin:0 0 18px}.actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}button{border-radius:7px;padding:8px 12px;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer}.retry{border:0;background:oklch(54% 0.18 260);color:white}.search{border:1px solid var(--border);background:transparent;color:var(--search-fg)}' +
-			'</style></head><body>' +
-			'<main>' +
-			'<div class="icon">&#9888;</div>' +
-			'<h1 class="title">Could not load this page</h1>' +
-			'<p class="desc">' + esc(errorDesc) + '</p>' +
-			'<p class="url">' + esc(failedUrl) + '</p>' +
-			'<div class="actions">' +
-			'<button class="retry" onclick="location.href=' + JSON.stringify(failedUrl).replace(/"/g,'&quot;') + '">Retry</button>' +
-			'<button class="search" onclick="location.href=' + JSON.stringify(searchUrl).replace(/"/g,'&quot;') + '">Search web</button>' +
-			'</div></main></body></html>';
-		safeWebviewLoadURL(wv, 'data:text/html;charset=utf-8,' + encodeURIComponent(html));
+		if (e.errorCode === -3 || e.isMainFrame === false) return;
+		showBrowserError(wv, e.errorDescription || 'Could not load this page', e.validatedURL);
 	});
-
+	wv.addEventListener('render-process-gone', function() {
+		ready[currentAppID(wv)] = false;
+		showBrowserError(wv, 'The browser process stopped. Reload to reconnect.');
+	});
+	wv.addEventListener('did-start-loading', function() {
+		var frame = wv.closest('[data-app-id]');
+		if (frame) { frame.dataset.browserLoading = 'true'; var error = frame.querySelector('.ws-browser-error'); if (error) error.remove(); }
+	});
+	wv.addEventListener('did-stop-loading', function() {
+		wv.__libroPendingURL = '';
+		var frame = wv.closest('[data-app-id]');
+		if (frame) frame.dataset.browserLoading = 'false';
+		updateBrowserNavigation(wv);
+	});
+	wv.addEventListener('page-title-updated', function(e) {
+		var frame = wv.closest('[data-app-id]');
+		if (frame && e.title) { frame.dataset.appName = e.title; if (window.libroWorkspace) libroWorkspace.refresh(); }
+	});
 	// Loading indicator removal (search up to flex-col container)
 	var loadingParent = wv.closest('.flex.flex-col') || wv.parentNode;
 	var loading = loadingParent && loadingParent.querySelector('[data-webview-loading]');
@@ -1071,6 +705,9 @@ function bindWebviewEvents(wv) {
 }
 
 function initAll() {
+	// Plain browsers expose <webview> as an inert element. Registering it would
+	// route navigation into a guest that never becomes ready instead of the iframe.
+	if (!window.libroElectron) return;
 	document.querySelectorAll('webview[data-webview-app]:not([data-pool-origin])').forEach(initWebview);
 }
 
@@ -1106,7 +743,6 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 						delete initialized[id];
 						delete ready[id];
 						delete queued[id];
-						delete searchState[id];
 						delete browserModeState[id];
 						delete mobileViewState[id];
 						delete mobileViewportOrientation[id];
@@ -1125,7 +761,6 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 					delete initialized[id];
 					delete ready[id];
 					delete queued[id];
-					delete searchState[id];
 					delete browserModeState[id];
 					delete mobileViewState[id];
 					delete mobileViewportOrientation[id];
@@ -1143,7 +778,22 @@ function syncBrowserFallbackFrames(root) {
 	});
 	scope.querySelectorAll('iframe[data-browser-iframe-app]').forEach(function(frame) {
 		frame.style.display = useElectron ? 'none' : 'block';
+		if (!useElectron && !frame.hasAttribute('src')) frame.setAttribute('src', frame.getAttribute('data-browser-src') || 'about:blank');
+		if (!useElectron) updateBrowserFallbackUI(frame);
 	});
+}
+
+function updateBrowserFallbackUI(frame) {
+	var appID = frame.getAttribute('data-browser-iframe-app');
+	var url = frame.getAttribute('src') || 'about:blank';
+	var hasURL = url !== 'about:blank';
+	var notice = document.querySelector('[data-browser-fallback-notice="' + appID + '"]');
+	if (notice) notice.style.display = hasURL ? 'block' : 'none';
+	var link = document.querySelector('[data-browser-external-link="' + appID + '"]');
+	if (link) link.setAttribute('href', url);
+	var host = frame.closest('[data-app-content]');
+	var loading = host && host.querySelector('[data-webview-loading]');
+	if (loading && hasURL) loading.remove();
 }
 
 function getBrowserFallbackFrame(appID) {
@@ -1206,6 +856,22 @@ window.__libroWvNavigate = function(appID, url) {
 	var frame = getBrowserFallbackFrame(appID);
 	if (!frame) return;
 	frame.setAttribute('src', url || 'about:blank');
+	updateBrowserFallbackUI(frame);
+};
+
+window.__libroNavigateAddress = function(appID, value) {
+	var url = String(value || '').trim();
+	if (!url) return false;
+	if (!/^(https?|file):\/\//i.test(url)) {
+		url = (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|\/|$)/i.test(url) ? 'http://' : 'https://') + url;
+	}
+	try { var parsed = new URL(url); if (!['http:', 'https:', 'file:'].includes(parsed.protocol)) return false; url = parsed.href; }
+	catch (_) { if (window.__libroShowToast) window.__libroShowToast('Invalid address', 'Enter a valid website or file URL.', 2200); return false; }
+	var host = document.querySelector('[data-webview-app="'+appID+'"], [data-browser-iframe-app="'+appID+'"]');
+	if (!host) return false;
+	var input = document.getElementById('urlinput-'+appID); if (input) input.value = url;
+	__ws.call('app.url.set', {sid:host.getAttribute('data-sid'), id:appID, url:url});
+	return true;
 };
 syncBrowserFallbackFrames(document);
 var runtimeFrameObserver = new MutationObserver(function(mutations) {

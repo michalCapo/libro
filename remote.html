@@ -36,14 +36,12 @@
     <strong>Current implementation:</strong> <code>libro</code> starts one local HTTP/WebSocket server on port <code>8100</code> and opens the Electron desktop shell by default. <code>libro --no-desktop</code> exists today but should be removed by this refactor. <code>libro --version</code> prints the version.<br />
     <strong>Current terminal baseline:</strong> terminals no longer use <code>ttyd</code>; Libro serves <code>xterm.js</code> panels over <code>/terminal/ws/&lt;id&gt;</code> backed by Go PTYs.<br />
     <strong>Proposed architecture:</strong> every project belongs to a runtime machine; each runtime machine has one reusable headless Libro daemon; the GUI becomes the desktop shell, connection manager, and local-services owner.<br />
-    <strong>Proposed security rule:</strong> passwords/vault stay on the GUI machine, never on the remote headless server by default.
   </section>
 
   <h2>1. Target Model</h2>
   <pre><code>Local machine
   Libro GUI / Electron
     - connection registry for local + remote runtimes
-    - local password vault
     - SSH tunnel manager
     - browser/webview shell
         |
@@ -66,7 +64,6 @@ Runtime machine A / B / local
     <div class="card"><strong>Current local runtime</strong><br /><code>libro</code> starts the local server and desktop shell together. The current <code>--no-desktop</code> flag is removed by the remote refactor instead of kept as an alias.</div>
     <div class="card"><strong>Proposed local runtime</strong><br />GUI starts or connects to one local <code>libro headless</code> daemon and asks it to open local project paths.</div>
     <div class="card"><strong>Proposed remote runtime</strong><br />GUI uploads/starts one <code>libro headless</code> daemon per remote user/machine through system SSH and connects through a local port forward.</div>
-    <div class="card"><strong>Password vault</strong><br />Currently stored in the local Libro database. In the proposal, it stays owned by the GUI process and stored on the local desktop machine.</div>
   </div>
 
   <h2>2. Current Code Baseline</h2>
@@ -190,26 +187,6 @@ open workspace /home/me/code/app</code></pre>
     <li>Cookie/header-based auth can replace the query-token bootstrap later, but is not required for v1.</li>
   </ul>
 
-  <h2>9. Proposed Password Vault Rule</h2>
-  <p><strong>In remote mode, passwords must be stored where the GUI runs, not where headless runs.</strong></p>
-  <p>Therefore:</p>
-  <ul>
-    <li>The encrypted password DB stays on the local GUI machine.</li>
-    <li>Remote headless does not create/read/write password vault entries.</li>
-    <li>Remote headless never receives password metadata, encrypted blobs, entry names, URLs, usernames, or decrypted secrets.</li>
-    <li>Password command palette UI is implemented by the GUI shell or a local-only service, not by remote headless.</li>
-    <li>Copy username/password writes to the local clipboard.</li>
-    <li>If a remote terminal needs a secret, user pastes it intentionally into the terminal.</li>
-  </ul>
-
-  <h3>Implementation options</h3>
-  <table>
-    <tr><th>Option</th><th>Description</th><th>Recommendation</th></tr>
-    <tr><td>GUI-local overlay</td><td>Password dialog is rendered by local GUI on top of remote web UI.</td><td class="ok">Best long-term security boundary.</td></tr>
-    <tr><td>Local password API</td><td>Remote page sends a message to Electron preload/main process to open local password UI.</td><td class="ok">Good practical implementation.</td></tr>
-    <tr><td>Remote vault</td><td>Password DB stored on remote headless server.</td><td class="bad">Do not use by default.</td></tr>
-  </table>
-
   <h2>10. Proposed Data Ownership</h2>
   <table>
     <tr><th>Data</th><th>Stored where?</th><th>Reason</th></tr>
@@ -218,8 +195,6 @@ open workspace /home/me/code/app</code></pre>
     <tr><td>Run history for a workspace</td><td>Headless runtime machine</td><td>Commands are machine/project-specific.</td></tr>
     <tr><td>Saved browser/terminal apps</td><td>Headless runtime machine DB</td><td>Saved apps are scoped to projects on the runtime machine for v1; no GUI-global saved-app catalog initially.</td></tr>
     <tr><td>Browser URL history</td><td>GUI machine or profile-level</td><td>Browser is local UI.</td></tr>
-    <tr><td>Browser downloads</td><td>GUI machine</td><td>Browser panels are local Electron webviews.</td></tr>
-    <tr><td>Password vault</td><td>GUI machine only</td><td>Secrets should not be copied to remote servers.</td></tr>
     <tr><td>SSH connections list</td><td>GUI machine</td><td>Connection manager config.</td></tr>
     <tr><td>Remote daemon metadata</td><td>Remote machine under <code>~/.libro/server/runtime.json</code></td><td>Lets GUI reconnect to the one daemon for that SSH alias/machine.</td></tr>
     <tr><td>Remote server binary</td><td>Remote machine</td><td>Installed runtime component.</td></tr>
@@ -265,7 +240,6 @@ open workspace /home/me/code/app</code></pre>
   <p>Headless would not own:</p>
   <ul>
     <li>Local desktop window lifecycle.</li>
-    <li>Local encrypted password vault.</li>
     <li>SSH connection configuration.</li>
     <li>Local OS clipboard secrets, except ordinary page copy operations.</li>
   </ul>
@@ -277,10 +251,8 @@ open workspace /home/me/code/app</code></pre>
     <li>Maintain SSH tunnels and reconnect logic.</li>
     <li>Maintain the runtime connection registry.</li>
     <li>Render Electron window/webviews.</li>
-    <li>Own password vault and secret copy UX.</li>
     <li>Manage remote connection profiles.</li>
     <li>Forward ports for remote dev servers.</li>
-    <li>Store browser downloads on the GUI machine.</li>
   </ul>
 
   <h2>14. Proposed Port Forwarding for Remote Dev Servers</h2>
@@ -321,9 +293,8 @@ http://127.0.0.1:17645</code></pre>
     <tr><th>Area</th><th>Change</th></tr>
     <tr><td>Process entrypoint</td><td>Add explicit <code>gui</code> and <code>headless</code> modes. Remove <code>--no-desktop</code>.</td></tr>
     <tr><td>Server binding</td><td>Allow <code>--host</code>, <code>--port</code>, <code>--token</code>, <code>--json-ready</code>. Workspaces are opened through API calls, not a daemon startup flag.</td></tr>
-    <tr><td>DB paths</td><td>Headless uses one runtime-machine data dir/DB; GUI uses local data dir for passwords/connection profiles.</td></tr>
+    <tr><td>DB paths</td><td>Headless uses one runtime-machine data dir/DB; GUI uses a local data dir for connection profiles.</td></tr>
     <tr><td>Connection registry</td><td>Add GUI-local registry that maps runtime IDs to direct URLs or SSH tunnels and routes project actions by active runtime.</td></tr>
-    <tr><td>Password code</td><td>Move password vault operations out of headless remote path into GUI-local module/API.</td></tr>
     <tr><td>Desktop launch</td><td>GUI no longer assumes one embedded local server only; it can connect to local and remote runtime URLs.</td></tr>
     <tr><td>Remote manager</td><td>New package for system SSH connection, binary install, daemon start, tunnel, reconnect metadata, and lazy localhost forwarding.</td></tr>
     <tr><td>Terminal backend</td><td class="ok">Done for local runtime: native PTY + xterm WebSocket. Remote work should reuse this path and add token-aware headless auth.</td></tr>
@@ -335,7 +306,6 @@ internal/gui            // desktop shell and local services
 internal/connections    // GUI runtime registry and action routing
 internal/remote         // system SSH install/start/tunnel manager
 internal/terminal       // future extraction target for current internal/components/terminal.go
-internal/secrets        // GUI-local password vault only
 internal/workspace      // workspace/project runtime logic</code></pre>
 
   <h2>18. Migration Plan</h2>
@@ -343,7 +313,6 @@ internal/workspace      // workspace/project runtime logic</code></pre>
     <li>Introduce <code>libro headless</code> mode using the current Go server without Electron.</li>
     <li>Add token auth and <code>LIBRO_READY</code> startup protocol.</li>
     <li>Change GUI startup to always connect to a headless URL, even for local projects.</li>
-    <li>Move password vault into GUI-local service and remove remote server dependency for secrets.</li>
     <li class="ok">Native Go PTY terminals are already implemented locally; harden them under headless token auth.</li>
     <li>Add local headless daemon launcher.</li>
     <li>Add remote SSH installer, daemon manager, tunnel manager, and <code>runtime.json</code> reconnect metadata.</li>
@@ -361,11 +330,8 @@ internal/workspace      // workspace/project runtime logic</code></pre>
     <li>Project picker groups projects by machine and does not create one <code>home</code> project per remote runtime.</li>
     <li>Terminal, nvim, git, worktree, run, debug, and agent commands execute on the headless runtime machine through native PTYs.</li>
     <li class="ok">Remote terminal support does not require <code>ttyd</code> or per-terminal TCP ports.</li>
-    <li>Password vault remains on the GUI machine and is not created on the remote server.</li>
-    <li>Remote headless never receives password metadata or encrypted password blobs.</li>
     <li>Remote headless binds to remote localhost only and requires token auth.</li>
     <li>Remote localhost web apps can be opened through lazy managed SSH port forwarding from local Electron browser panels.</li>
-    <li>Browser downloads are saved on the GUI machine.</li>
     <li>Missing remote tools produce clear doctor/install-hint messages.</li>
   </ul>
 </main>

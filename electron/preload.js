@@ -13,9 +13,6 @@ contextBridge.exposeInMainWorld('libroElectron', {
   toggleMaximize: function () {
     ipcRenderer.send('libro-toggle-maximize')
   },
-  toggleWebviewDevTools: function (webContentsId, bounds, panel) {
-    ipcRenderer.send('libro-toggle-webview-devtools', webContentsId, bounds, panel)
-  },
   openWebviewDevTools: function (webContentsId, bounds, panel) {
     ipcRenderer.send('libro-open-webview-devtools', webContentsId, bounds, panel)
   },
@@ -43,15 +40,6 @@ contextBridge.exposeInMainWorld('libroElectron', {
   },
   zoomReset: function () {
     ipcRenderer.send('libro-zoom-reset')
-  },
-  openPath: function (filePath) {
-    ipcRenderer.send('libro-open-path', filePath)
-  },
-  openDownloadsFolder: function () {
-    ipcRenderer.send('libro-open-downloads-folder')
-  },
-  cancelDownload: function (id) {
-    ipcRenderer.send('libro-cancel-download', id)
   },
   copyToClipboard: function (text) {
     ipcRenderer.send('libro-copy-clipboard', text)

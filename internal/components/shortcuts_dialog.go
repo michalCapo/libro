@@ -17,7 +17,7 @@ func ShortcutsDialog() *r.Node {
 	}
 	sections := []section{
 		{"Apps", "", []shortcut{
-			{"⌘ + O", "Open launcher/search on right"},
+			{"⌘ + O", "Open plugin launcher"},
 			{"⌘ + Enter", "Open terminal in Libro"},
 			{"⌘ + ;", "Command palette"},
 			{"⌘ + Q", "Close current app"},
@@ -27,26 +27,14 @@ func ShortcutsDialog() *r.Node {
 			{"⌘ + +", "Zoom in (whole app)"},
 			{"⌘ + -", "Zoom out (whole app)"},
 			{"⌘ + 0", "Reset zoom (whole app)"},
-			{"quit", "Quit Libro from command palette"},
 		}},
-		{"Navigation", "Win + X toggles an automatic Ctrl + 2-9 assignment for the current project", []shortcut{
+		{"Navigation", "", []shortcut{
 			{"⌘ + H", "Navigate left"},
 			{"⌘ + L", "Navigate right"},
 			{"⌘ + [", "Move app left"},
 			{"⌘ + ]", "Move app right"},
 			{"⌘ + Ctrl + Y", "Move app to project"},
 			{"⌘ + N", "Open projects"},
-			{"⌘ + G", "Open lazygit if installed"},
-			{"⌘ + X", "Assign or remove current project shortcut"},
-			{"Ctrl + 1", "Switch to home project"},
-			{"Ctrl + 2–9", "Switch to assigned project or worktree"},
-			{"Ctrl + 0", "Switch to previous project"},
-			{"⌘ + Z", "Toggle zen mode (hide UI)"},
-		}},
-		{"Search", "⌘ + O to open", []shortcut{
-			{": query", "Search the internet"},
-			{"! command", "Run terminal command"},
-			{"d", "Delete selected history item when available"},
 		}},
 		{"Browser", "", []shortcut{
 			{"⌘ + B", "New browser with URL popup"},
@@ -57,18 +45,11 @@ func ShortcutsDialog() *r.Node {
 			{"g / G", "Go to top / bottom of page"},
 			{"j / k", "Scroll down / up"},
 			{"h / l", "Scroll left / right"},
-			{"o", "URL / search popup for browser apps"},
+			{"o", "Open browser address"},
 			{"r", "Reload browser page"},
 			{"m", "Cycle viewport size (SM / MD / XL / previous size)"},
 			{"M", "Rotate SM / MD / XL viewport portrait or landscape"},
-			{"/", "Find in page"},
-			{"n / N / p", "Find next / previous"},
 			{"i / Esc", "Enter / exit insert mode"},
-			{"Esc", "Clear search / blur input"},
-			{"b / f", "Page back / forward"},
-			{"y", "Copy selected text or URL"},
-			{"c", "Open DevTools Console tab"},
-			{"Enter", "Follow link / click button"},
 		}},
 	}
 
@@ -79,32 +60,23 @@ func ShortcutsDialog() *r.Node {
 			mt = "mt-0"
 		}
 		sectionRows := make([]*r.Node, 0, len(sec.shortcuts))
-		for j, s := range sec.shortcuts {
-			borderCls := "border-t border-gray-100 dark:border-zinc-800"
-			if j == 0 {
-				borderCls = ""
-			}
+		for _, s := range sec.shortcuts {
 			sectionRows = append(sectionRows,
-				r.Div("flex items-center justify-between gap-3 px-3 py-2.5 "+borderCls).Render(
-					r.Div("flex items-center gap-3 min-w-0").Render(
-						r.I("material-icons-round text-gray-400 dark:text-zinc-600 text-base").Text("keyboard"),
-						r.Span("text-sm text-gray-700 dark:text-zinc-300 truncate").Text(s.desc),
-					),
-					r.Span("text-[10px] font-mono font-semibold uppercase tracking-wider px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400").Text(s.keys),
+				r.Div("ws-shortcut-row").Render(
+					r.Span("").Text(s.desc),
+					r.El("kbd", "").Text(s.keys),
 				),
 			)
 		}
 		header := []*r.Node{
-			r.Div("px-1 pb-0.5 text-sm font-bold uppercase tracking-wider text-gray-700 dark:text-zinc-300").Text(sec.title),
+			r.El("h2", "ws-shortcut-heading").Text(sec.title),
 		}
 		if sec.subtitle != "" {
 			header = append(header,
-				r.Div("px-1 pb-2 text-[10px] uppercase tracking-wider text-gray-400 dark:text-zinc-500").Text(sec.subtitle),
+				r.Div("ws-shortcut-subtitle").Text(sec.subtitle),
 			)
-		} else {
-			header = append(header, r.Div("pb-2").Text(""))
 		}
-		card := r.Div("border border-gray-200 dark:border-zinc-700/50 rounded-lg overflow-hidden").Render(sectionRows...)
+		card := r.Div("ws-shortcut-group").Render(sectionRows...)
 		rows = append(rows,
 			r.Div(mt).Render(
 				append(header, card)...,
@@ -112,20 +84,17 @@ func ShortcutsDialog() *r.Node {
 		)
 	}
 
-	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
+	return r.Div("ws-popup fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
 		ID(ShortcutsDialogID).
 		OnClick(r.JS(HideJS(ShortcutsDialogID))).
 		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-2xl mx-4 overflow-hidden").
+			r.Div("ws-shortcuts-panel w-full max-w-2xl mx-4 overflow-hidden").
+				Attr("role", "dialog").Attr("aria-modal", "true").Attr("aria-label", "Keyboard shortcuts").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
-						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("keyboard"),
-						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").Text("Keyboard Shortcuts"),
-					),
-					r.Div("max-h-[60vh] overflow-y-auto px-4 py-4").Render(rows...),
-					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
-						r.Span("").Text("Esc close"),
+					r.Div("ws-shortcuts-body").Render(rows...),
+					r.Div("px-6 py-3 text-xs text-gray-500 dark:text-zinc-400").Render(
+						r.Span("").Text("Esc to close"),
 					),
 				),
 		)

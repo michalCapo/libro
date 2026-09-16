@@ -7,27 +7,24 @@ import (
 // WorktreeCreatePopup renders the popup used to create a new git worktree
 // (and matching branch) from the current project's branch.
 func WorktreeCreatePopup() *r.Node {
-	return r.Div("fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
+	return r.Div("ws-popup fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
 		ID(WorktreeCreatePopupID).
 		OnClick(r.JS(HideJS(WorktreeCreatePopupID))).
 		Render(
-			r.Div("bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-md mx-4 overflow-hidden").
+			r.Div("bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden").
+				Attr("role", "dialog").Attr("aria-modal", "true").Attr("aria-label", "New worktree").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
-						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("alt_route"),
-						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").Text("New Worktree"),
-						r.Span("text-[11px] font-mono text-gray-500 dark:text-zinc-500").
-							ID("worktree-create-context").
-							Text(""),
-					),
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
+					r.Div("ws-command-search").Render(
+						r.I("material-icons-round").Attr("aria-hidden", "true").Text("search"),
 						r.Input("w-full bg-transparent text-gray-800 dark:text-zinc-200 text-sm placeholder-gray-400 dark:placeholder-zinc-500 outline-none font-mono").
 							ID("worktree-create-input").
 							Attr("type", "text").
 							Attr("placeholder", "new-branch-name").
 							Attr("autocomplete", "off").
 							Attr("spellcheck", "false"),
+						r.Span("text-[11px] font-mono text-gray-500 dark:text-zinc-500").ID("worktree-create-context").Text(""),
+						r.Button("ws-command-dismiss").Attr("type", "button").Attr("aria-label", "Close worktree picker").OnClick(r.JS(HideJS(WorktreeCreatePopupID))).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("close")),
 					),
 					r.Div("max-h-80 overflow-y-auto").
 						ID("worktree-create-branches"),
