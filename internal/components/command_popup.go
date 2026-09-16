@@ -4,7 +4,7 @@ import (
 	r "github.com/michalCapo/g-sui/ui"
 )
 
-// CommandPopup renders the global command palette (Cmd+;).
+// CommandPopup renders the global command palette (Ctrl+; or Cmd+;).
 func CommandPopup() *r.Node {
 	return r.Div("ws-popup fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
 		ID(CommandPopupID).

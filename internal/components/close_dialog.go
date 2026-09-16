@@ -12,24 +12,25 @@ func CloseDialog(sid string) *r.Node {
 	return r.Div("ws-popup fixed inset-0 z-[70] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
 		ID(CloseDialogID).
 		Render(
-			r.Div("bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden").
+			r.Div("ws-close-panel").
+				Attr("role", "dialog").Attr("aria-modal", "true").Attr("aria-labelledby", "close-dialog-title").
 				OnClick(r.JS("event.stopPropagation()")).
 				Render(
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
+					r.Div("ws-close-heading").Render(
 						r.I("material-icons-round text-amber-500 text-lg").Text("warning"),
-						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").Text("Quit Libro?"),
+						r.Span("text-sm font-medium text-gray-800 dark:text-zinc-200 flex-1").ID("close-dialog-title").Text("Quit Libro?"),
 					),
-					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50").Render(
+					r.Div("ws-close-description").Render(
 						r.P("text-sm text-gray-600 dark:text-zinc-400").Text("The following applications are still running:"),
 					),
 					r.Div("max-h-80 overflow-y-auto").ID("close-dialog-apps"),
-					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
+					r.Div("ws-close-footer").Render(
 						r.Span("").Text("Esc cancel"),
 						r.Div("flex items-center gap-2").Render(
-							r.Button("px-3 py-1 text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 font-mono text-xs rounded hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer").
+							r.Button("ws-close-button").Attr("type", "button").
 								Text("Cancel").
 								Attr("onclick", HideJS(CloseDialogID)+"if(window.__electronCloseAbort)window.__electronCloseAbort();"),
-							r.Button("px-4 py-1 bg-red-500 hover:bg-red-600 text-white font-mono text-xs font-medium rounded transition-colors cursor-pointer").
+							r.Button("ws-close-button ws-close-quit").Attr("type", "button").
 								ID("close-dialog-confirm").
 								Text("Quit").
 								Attr("onclick", fmt.Sprintf("__ws.call('app.close.all',{sid:'%s'});", sid)+HideJS(CloseDialogID)+"if(window.libroElectron)window.libroElectron.forceClose();else window.close();"),

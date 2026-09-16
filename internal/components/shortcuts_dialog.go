@@ -19,7 +19,7 @@ func ShortcutsDialog() *r.Node {
 		{"Apps", "", []shortcut{
 			{"⌘ + O", "Open plugin launcher"},
 			{"⌘ + Enter", "Open terminal in Libro"},
-			{"⌘ + ;", "Command palette"},
+			{"Ctrl + ; / ⌘ + ;", "Command palette"},
 			{"⌘ + Q", "Close current app"},
 			{"⌘ + ,", "Decrease app width"},
 			{"⌘ + .", "Increase app width"},

@@ -3716,7 +3716,7 @@ func keyboardShortcutsJS(sid string) string {
 					if (window.__libroOpenMoveProject) window.__libroOpenMoveProject();
 					return;
 				}
-				if (e.metaKey && !e.ctrlKey && (e.key === ';' || e.code === 'Semicolon')) {
+				if ((e.metaKey !== e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === ';' || e.code === 'Semicolon')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					if (window.__libroOpenCommandPalette) window.__libroOpenCommandPalette();

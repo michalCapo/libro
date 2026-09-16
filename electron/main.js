@@ -1064,6 +1064,20 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
+    // Forward Ctrl+; from embedded browser and terminal views to the workspace.
+    if (input.control && !input.meta && !input.alt && !input.shift && (key === ';' || code === 'semicolon')) {
+      if (shouldSkipDuplicateShortcut()) return
+      e.preventDefault()
+      if (mainWindow) {
+        mainWindow.webContents.executeJavaScript(`
+          document.dispatchEvent(new KeyboardEvent('keydown', {
+            key: ';', code: 'Semicolon', ctrlKey: true, bubbles: true, cancelable: true
+          }));
+        `).catch(() => {})
+      }
+      return
+    }
+
     // Meta+Ctrl shortcuts: u, i, y (move app / open move-project popup)
     if (input.meta && input.control && ['keyu', 'keyi', 'keyy'].includes(code)) {
       if (shouldSkipDuplicateShortcut()) return

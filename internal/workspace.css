@@ -300,3 +300,22 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-tool-buttons{display:flex;flex-direction:column;gap:8px}
 .ws-tool-rail{overflow-y:auto;scrollbar-width:thin}
 .ws-agent-config-row[hidden]{display:none}
+
+/* Quit confirmation keeps the app tree inset and the actions visible. */
+#close-dialog>.ws-close-panel{display:flex;flex-direction:column;width:min(440px,calc(100vw - 32px));overflow:hidden}
+#close-dialog .ws-close-heading{display:flex;align-items:center;gap:10px;padding:20px 20px 12px;flex-shrink:0}
+#close-dialog .ws-close-description{padding:0 20px 16px;flex-shrink:0}
+#close-dialog .ws-close-description p{margin:0;color:var(--ws-muted);font-size:13px;line-height:20px}
+#close-dialog-apps{min-height:0;max-height:320px;overflow-y:auto;padding:0 20px 8px}
+#close-dialog-apps>div{margin:0 0 16px}
+#close-dialog-apps>div:last-child{margin-bottom:0}
+#close-dialog-apps>div>div{display:flex;align-items:center;gap:8px;min-height:28px;font-size:13px;line-height:20px}
+#close-dialog-apps>div>div:first-child{margin-bottom:4px;color:var(--ws-fg);overflow-wrap:anywhere}
+#close-dialog-apps>div>div:not(:first-child){margin-left:26px;padding:2px 0;color:var(--ws-muted)}
+#close-dialog-apps .material-icons-round{flex-shrink:0;font-size:18px;color:var(--ws-muted)}
+#close-dialog .ws-close-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px 20px;flex-shrink:0}
+#close-dialog .ws-close-footer>div{display:flex;gap:8px;margin-left:auto}
+#close-dialog .ws-close-button{display:inline-flex;align-items:center;justify-content:center;min-width:80px;min-height:36px;padding:7px 16px;border:1px solid var(--ws-control-line);border-radius:8px;background:var(--ws-raised);color:var(--ws-fg);font-family:inherit;font-size:13px;font-weight:500;line-height:20px}
+#close-dialog .ws-close-button:hover{background:var(--ws-hover)}
+#close-dialog .ws-close-quit{background:#c62828;border-color:transparent;color:#fff}
+#close-dialog .ws-close-quit:hover{background:#ab2020}
