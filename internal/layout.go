@@ -22,8 +22,7 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderWorktreeCreatePopup(),
 		r.Div("hidden").ID(ActionEffectsID).Attr("aria-hidden", "true"),
 	)
-	page.JS(libroSessionCookieJS(sid) +
-		popupRegistryJS() +
+	page.JS(popupRegistryJS() +
 		uxHardenJS() +
 		flashCSS() +
 		termIconSetupJS() +

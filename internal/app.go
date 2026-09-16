@@ -287,53 +287,6 @@ func projectNameForPath(sid, path string) (string, bool) {
 	return "", false
 }
 
-const libroSessionCookieName = "libro_sid"
-
-func validLibroSessionID(sid string) bool {
-	if sid == "" || len(sid) > 64 || !strings.HasPrefix(sid, "session-") {
-		return false
-	}
-	rest := strings.TrimPrefix(sid, "session-")
-	if rest == "" {
-		return false
-	}
-	for _, ch := range rest {
-		if ch < '0' || ch > '9' {
-			return false
-		}
-	}
-	return true
-}
-
-func requestLibroSessionID(ctx *r.Context) string {
-	if ctx == nil || ctx.Request == nil {
-		return ""
-	}
-	cookie, err := ctx.Request.Cookie(libroSessionCookieName)
-	if err != nil || cookie == nil {
-		return ""
-	}
-	sid := strings.TrimSpace(cookie.Value)
-	if !validLibroSessionID(sid) {
-		return ""
-	}
-	return sid
-}
-
-func libroSessionCookieJS(sid string) string {
-	if sid == "" {
-		return ""
-	}
-	return fmt.Sprintf(`
-(function(){
-	window.__libroSessionID=%s;
-	try {
-		document.cookie=%s+'='+encodeURIComponent(%s)+'; Path=/; SameSite=Lax; Max-Age=31536000';
-	} catch (err) {}
-})();
-`, components.JSString(sid), components.JSString(libroSessionCookieName), components.JSString(sid))
-}
-
 var (
 	sm                  = NewStateManager()
 	tm                  = components.NewTerminalManager()
@@ -375,9 +328,9 @@ func Run(assets embed.FS) {
 	app.Assets(assets, "assets", "/assets/")
 	app.Favicon = "/assets/logo.svg"
 
-	// Main page - reuses the renderer's Libro session across reloads.
+	// Each page starts with an empty workspace.
 	app.Page("/", func(ctx *r.Context) *r.Node {
-		sid := sm.EnsureSession(requestLibroSessionID(ctx))
+		sid := sm.NewSession()
 		state := sm.Get(sid)
 
 		return renderPage(state, sid)
@@ -1240,11 +1193,20 @@ func Run(assets embed.FS) {
 	// Check if there are running apps before closing — returns JS to show dialog or force close
 	registerAction(app, "app.close.check", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
-		projectApps := sm.GetAllRunningApps(sid)
+		sm.mu.RLock()
+		sessionIDs := make([]string, 0, len(sm.states))
+		for id := range sm.states {
+			sessionIDs = append(sessionIDs, id)
+		}
+		sm.mu.RUnlock()
+		var projectApps []ProjectApps
+		for _, id := range sessionIDs {
+			projectApps = append(projectApps, sm.GetAllRunningApps(id)...)
+		}
 
 		// No running apps — close immediately
 		if len(projectApps) == 0 {
-			return `if(window.libroElectron)window.libroElectron.forceClose();else window.close();`
+			return fmt.Sprintf(`__ws.call('app.close.all',{sid:%s});`, components.JSString(sid))
 		}
 
 		// Build tree HTML: project > apps
@@ -1273,21 +1235,13 @@ func Run(assets embed.FS) {
 			components.JSString(html.String()), CloseDialogID)
 	})
 
-	// Close all running apps — the client handles window close separately
+	// Finish cleanup before allowing the renderer to close the desktop window.
 	registerAction(app, "app.close.all", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		projectApps := sm.GetAllRunningApps(sid)
-
-		// Stop all terminal processes across all projects
-		for _, pa := range projectApps {
-			for _, a := range pa.Apps {
-				if a.Type == AppTypeTerminal {
-					tm.Stop(a.ID)
-				}
-			}
-		}
-
-		return ""
+		tm.StopAll()
+		sm.mu.Lock()
+		sm.states = make(map[string]*AppState)
+		sm.mu.Unlock()
+		return `if(window.libroElectron)window.libroElectron.forceClose();else window.close();`
 	})
 
 	// Switch to a worktree (creates virtual project if needed)

@@ -26,22 +26,6 @@ func TestEnsureSchemePreservesFileURLCaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestValidLibroSessionID(t *testing.T) {
-	valid := []string{"session-1", "session-123456"}
-	for _, sid := range valid {
-		if !validLibroSessionID(sid) {
-			t.Fatalf("validLibroSessionID(%q) = false, want true", sid)
-		}
-	}
-
-	invalid := []string{"", "session-", "session-abc", "other-1", "session-1/path"}
-	for _, sid := range invalid {
-		if validLibroSessionID(sid) {
-			t.Fatalf("validLibroSessionID(%q) = true, want false", sid)
-		}
-	}
-}
-
 func TestFaviconURLUsesWorkingGoogleEndpoint(t *testing.T) {
 	got := faviconURL("https://discord.com/channels", 32)
 	want := "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https%3A%2F%2Fdiscord.com&size=32"

@@ -463,24 +463,20 @@ function startGoServer() {
   })
 }
 
-function stopGoServer() {
+async function stopGoServer() {
   if (!goProcess) return
   const child = goProcess
-  try {
-    child.kill('SIGTERM')
-  } catch (err) {
-    console.error('Failed to stop Go server:', err.message)
-  }
-  if (goProcessForceKillTimer) clearTimeout(goProcessForceKillTimer)
-  goProcessForceKillTimer = setTimeout(() => {
-    if (goProcess === child) {
-      try {
-        child.kill('SIGKILL')
-      } catch (err) {}
-      goProcess = null
+  await new Promise((resolve) => {
+    child.once('exit', resolve)
+    goProcessForceKillTimer = setTimeout(() => {
+      try { child.kill('SIGKILL') } catch (err) {}
+    }, 2500)
+    try { child.kill('SIGTERM') } catch (err) {
+      console.error('Failed to stop Go server:', err.message)
+      clearTimeout(goProcessForceKillTimer)
+      resolve()
     }
-    goProcessForceKillTimer = null
-  }, 2500)
+  })
 }
 
 function refreshTerminalFramesAfterResume() {
@@ -579,6 +575,7 @@ async function flushLibroSessionData() {
 async function quitApp() {
   if (isQuitting) return
   isQuitting = true
+  await stopGoServer()
   await flushLibroSessionData()
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.destroy()

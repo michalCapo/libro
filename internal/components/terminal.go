@@ -73,6 +73,7 @@ func shellQuote(s string) string {
 type TerminalManager struct {
 	mu       sync.Mutex
 	sessions map[string]*TerminalSession
+	launchMu sync.Mutex // serializes launches with StopAll
 }
 
 // TerminalSession is one PTY process plus its connected browser clients.
@@ -83,9 +84,10 @@ type TerminalSession struct {
 	Cwd      string
 	Writable bool
 
-	cmd        *exec.Cmd
-	ptyFile    *os.File
-	outputDone chan struct{}
+	cmd         *exec.Cmd
+	ptyFile     *os.File
+	outputDone  chan struct{}
+	processDone chan struct{}
 
 	mu          sync.Mutex
 	clients     map[*terminalClient]bool
@@ -135,6 +137,8 @@ func NewTerminalManager() *TerminalManager {
 
 // Start launches (or returns) a PTY session for the given app.
 func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*TerminalSession, error) {
+	tm.launchMu.Lock()
+	defer tm.launchMu.Unlock()
 	if appID == "" {
 		return nil, fmt.Errorf("empty terminal id")
 	}
@@ -182,6 +186,7 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 		cmd:         cmd,
 		ptyFile:     ptyFile,
 		outputDone:  make(chan struct{}),
+		processDone: make(chan struct{}),
 		clients:     make(map[*terminalClient]bool),
 		cols:        100,
 		rows:        30,
@@ -190,15 +195,6 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 	}
 
 	tm.mu.Lock()
-	if existing := tm.sessions[appID]; existing != nil && !existing.isClosed() {
-		tm.mu.Unlock()
-		_ = ptyFile.Close()
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
-		activity.cleanup()
-		return existing, nil
-	}
 	tm.sessions[appID] = s
 	tm.mu.Unlock()
 
@@ -317,6 +313,7 @@ func (s *TerminalSession) waitForOutputFlush(timeout time.Duration) {
 }
 
 func (tm *TerminalManager) waitLoop(s *TerminalSession) {
+	defer close(s.processDone)
 	err := s.cmd.Wait()
 	code := 0
 	if err != nil {
@@ -363,6 +360,8 @@ func (tm *TerminalManager) Restart(appID, command string, writable bool, cwd str
 
 // StopAll terminates all sessions managed by this TerminalManager.
 func (tm *TerminalManager) StopAll() {
+	tm.launchMu.Lock()
+	defer tm.launchMu.Unlock()
 	tm.mu.Lock()
 	ids := make([]string, 0, len(tm.sessions))
 	for id := range tm.sessions {
@@ -412,6 +411,9 @@ func (s *TerminalSession) close(killProcess bool) {
 		_ = ptyFile.Close()
 	}
 	s.activity.cleanup()
+	if killProcess && s.processDone != nil {
+		<-s.processDone
+	}
 }
 
 func (s *TerminalSession) addClient(c *terminalClient) {

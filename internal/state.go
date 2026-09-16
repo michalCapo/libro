@@ -126,24 +126,6 @@ func newAppStateFromDB() *AppState {
 	}
 }
 
-// EnsureSession returns an existing session when possible, or creates one with
-// the requested ID. This lets a renderer reload keep the same in-memory strip.
-func (sm *StateManager) EnsureSession(sessionID string) string {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	if sessionID != "" {
-		if _, ok := sm.states[sessionID]; ok {
-			return sessionID
-		}
-		sm.states[sessionID] = newAppStateFromDB()
-		return sessionID
-	}
-	sm.nextID++
-	sid := fmt.Sprintf("session-%d", sm.nextID)
-	sm.states[sid] = newAppStateFromDB()
-	return sid
-}
-
 // Get returns the state for a session, creating one if it doesn't exist
 // IterTerminalApps invokes fn for every terminal Application across all
 // sessions and project snapshots. Read lock is held for the duration, so fn

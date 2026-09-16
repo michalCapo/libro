@@ -33,7 +33,7 @@ func CloseDialog(sid string) *r.Node {
 							r.Button("ws-close-button ws-close-quit").Attr("type", "button").
 								ID("close-dialog-confirm").
 								Text("Quit").
-								Attr("onclick", fmt.Sprintf("__ws.call('app.close.all',{sid:'%s'});", sid)+HideJS(CloseDialogID)+"if(window.libroElectron)window.libroElectron.forceClose();else window.close();"),
+								Attr("onclick", fmt.Sprintf("__ws.call('app.close.all',{sid:'%s'});", sid)),
 						),
 					),
 				),

@@ -46,6 +46,6 @@ Built-ins: Codex, Pi, Claude, OpenCode, Terminal, Browser, Files, Nvim, Git (`la
 
 This manifest API covers CLI and web apps. It does not load arbitrary renderer scripts or compiled Go extensions. Add functionality through a CLI or a web app and let Libro host it.
 
-Tabs and collapsed panels keep their sessions alive. Project switching keeps all project sessions mounted. Closing a terminal stops its PTY. Browser cookies use Electron's persistent `persist:libro` partition.
+Tabs and collapsed panels keep their sessions alive. Project switching keeps all project sessions mounted. Closing a terminal stops its PTY and child processes. Quitting asks for confirmation when panels are open and finishes terminal cleanup before closing. Open panels are never saved or restored across launches or page reloads. Browser cookies use Electron's persistent `persist:libro` partition.
 
 In web mode (`--no-desktop`), browser plugins use iframes. Sites that block embedding cannot load there. Use **Open in new tab**, or run Libro in desktop mode (`go run .`) to browse inside the panel. Local previews still work when their server allows embedding.
