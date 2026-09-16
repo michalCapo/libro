@@ -96,9 +96,9 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - Projects are tied to directories.
 - Each project keeps its own in-memory running strip while inactive projects stay hidden.
 - Git repositories expose worktrees in the project picker.
-- `Ctrl + N` opens the project/worktree picker.
+- `Ctrl + P` opens the project/worktree picker.
 - **Commands → New worktree from current branch** creates a worktree.
-- Project and worktree icons turn blue and spin while any agent is working, then show a green check when all active agents finish. Codex, Pi, Claude, and OpenCode use lifecycle signals, not terminal inactivity. Launch commands must start with the agent executable; shell aliases and wrapper scripts are not automatically instrumented. Codex requires terminal-title `run-state` support. Pi and OpenCode must allow the launch-local extension/plugin, and Claude must allow session hooks.
+- Project and worktree icons turn blue and spin while any agent is working, then show a green check when all active agents finish. Codex, Pi, Claude, and OpenCode use lifecycle signals, not terminal inactivity. Launch commands must start with the agent executable or `ollama launch claude` (with optional `--model`/`--yes` flags and Claude arguments after `--`); shell aliases and other wrapper scripts are not automatically instrumented. Codex requires terminal-title `run-state` support. Pi and OpenCode must allow the launch-local extension/plugin, and Claude must allow session hooks.
 
 ### Browser Workflow
 
