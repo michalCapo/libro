@@ -120,7 +120,7 @@ Scope: the built workspace shell and its dialogs. Source of truth is `internal/w
 
 `bg` is the near-white main surface; `chrome` is the soft gray navigation surface; `raised` is the white selected row and control surface. `fg` carries primary text, `muted` secondary text and icons. `line` separates surfaces; `control-line` outlines compact controls; `hover` gives restrained pointer feedback. `popup`, `popup-row`, and `popup-muted` apply the same hierarchy to overlays. Each `dark-` counterpart is applied under `html.dark`.
 
-The muted text token was checked against the sidebar surface at 4.57:1. This does not claim a complete accessibility audit of embedded content. Terminal backgrounds also follow the system color-scheme media query independently of the shell class.
+The muted text token was checked against the sidebar surface at 4.57:1. This does not claim a complete accessibility audit of embedded content. Terminal backgrounds and colors follow the shell theme, including live changes. Settings provides Auto (the default), Light, and Dark. Auto follows the OS color scheme; explicit choices override it and persist through the UI library’s theme storage.
 
 ## Typography
 

@@ -521,7 +521,28 @@
   let savedWidth = 'md';
   let settingsFocus;
   function settings() { settingsFocus = document.activeElement; call('settings.open'); }
+  function themePreference() {
+    try {
+      const mode = localStorage.getItem('theme');
+      return mode === 'dark' || mode === 'light' ? mode : 'system';
+    } catch (_) {
+      return 'system';
+    }
+  }
+  function saveTheme(mode) {
+    if (!['system', 'light', 'dark'].includes(mode)) return;
+    const status = document.getElementById('workspace-theme-status');
+    try {
+      window.setTheme(mode);
+      status.textContent = '';
+    } catch (_) {
+      document.getElementById('workspace-theme').value = themePreference();
+      status.textContent = 'Could not save theme. Please try again.';
+    }
+  }
   function showSettings(width, commands = {}, bindings = toolKeys) {
+    document.getElementById('workspace-theme').value = themePreference();
+    document.getElementById('workspace-theme-status').textContent = '';
     toolKeys = bindings; fillToolKeys(bindings); updateToolHints();
     document.getElementById('tool-key-status').textContent = '';
     document.getElementById('agent-command-rows').replaceChildren();
@@ -617,7 +638,7 @@
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New panels will use this width.' : 'Could not save. Please try again.';
   }
-  window.libroWorkspace = {saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;

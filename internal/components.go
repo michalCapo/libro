@@ -3117,7 +3117,7 @@ func terminalFrameSetupJS() string {
 			}
 
 			function termTheme() {
-				var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+				var dark = document.documentElement.classList.contains('dark');
 				return dark ? {
 					background: '#1e1e1e', foreground: '#d4d4d4', cursor: '#d4d4d4', selectionBackground: '#264f78'
 				} : {
@@ -3500,12 +3500,9 @@ func terminalFrameSetupJS() string {
 			new MutationObserver(function(mutations) {
 				mutations.forEach(function(mutation) { mutation.addedNodes.forEach(scan); });
 			}).observe(document.body, { childList: true, subtree: true });
-			if (window.matchMedia) {
-				var mq = window.matchMedia('(prefers-color-scheme: dark)');
-				var onTheme = function() { window.__libroRefreshTerminalThemes(); };
-				if (mq.addEventListener) mq.addEventListener('change', onTheme);
-				else if (mq.addListener) mq.addListener(onTheme);
-			}
+			new MutationObserver(function() {
+				window.__libroRefreshTerminalThemes();
+			}).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 		})();
 `
 }

@@ -265,6 +265,21 @@ func renderWorkspaceSettings() *r.Node {
 			r.El("h1", "").ID("workspace-settings-title").Attr("tabindex", "-1").Text("Settings"),
 		),
 		r.Div("ws-settings-content").Render(
+			r.El("h2", "ws-shortcut-heading").Text("Appearance"),
+			r.Div("ws-settings-group").Render(
+				r.Div("ws-settings-row").Render(
+					r.Div("ws-settings-copy").Render(
+						r.El("label", "").Attr("for", "workspace-theme").Text("Theme"),
+						r.P("").ID("workspace-theme-help").Text("Auto follows your operating system. Changes apply immediately."),
+					),
+					r.El("select", "ws-settings-select").ID("workspace-theme").Attr("aria-describedby", "workspace-theme-help").On("change", r.JS("libroWorkspace.saveTheme(event.target.value)")).Render(
+						r.El("option", "").Attr("value", "system").Text("Auto"),
+						r.El("option", "").Attr("value", "light").Text("Light"),
+						r.El("option", "").Attr("value", "dark").Text("Dark"),
+					),
+				),
+			),
+			r.P("ws-settings-status").ID("workspace-theme-status").Attr("role", "status"),
 			r.El("h2", "ws-shortcut-heading").Text("Panels"),
 			r.Div("ws-settings-group").Render(
 				r.Div("ws-settings-row").Render(
