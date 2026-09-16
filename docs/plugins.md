@@ -49,3 +49,5 @@ This manifest API covers CLI and web apps. It does not load arbitrary renderer s
 Tabs and collapsed panels keep their sessions alive. Project switching keeps all project sessions mounted. Closing a terminal stops its PTY and child processes. Quitting asks for confirmation when panels are open and finishes terminal cleanup before closing. Open panels are never saved or restored across launches or page reloads. Browser cookies use Electron's persistent `persist:libro` partition.
 
 In web mode (`--no-desktop`), browser plugins use iframes. Sites that block embedding cannot load there. Use **Open in new tab**, or run Libro in desktop mode (`go run .`) to browse inside the panel. Local previews still work when their server allows embedding.
+
+Panel size shortcuts: **Ctrl+,** decreases the selected panel by one size step; **Ctrl+.** increases it. Resizing stops at the smallest or largest allowed size and never wraps around. Change **Decrease panel size** and **Increase panel size** in **Settings → Keyboard shortcuts**, then click **Save shortcuts**.

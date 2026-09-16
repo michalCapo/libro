@@ -124,7 +124,7 @@ Tool shortcuts are remappable in **Settings → Keyboard shortcuts**. Use Ctrl, 
 - `Ctrl + G` toggle Git
 - `Ctrl + D` toggle Database
 - `Ctrl + Q` close the selected panel
-- `Ctrl + ,` / `Ctrl + .` decrease / increase selected panel size
+- `Ctrl + ,` decreases the selected panel size by one step; `Ctrl + .` increases it. At the smallest or largest allowed size, the panel stays at that size; it never wraps around. Remap these under **Settings → Keyboard shortcuts → Decrease panel size / Increase panel size**, then click **Save shortcuts**.
 - `Ctrl + P` open the project/worktree picker
 - `Ctrl + N` open the agent launcher
 - `Ctrl + H` / `Ctrl + L` select the previous / next panel in the active project, including the visible tool when it fits beside the agents (wraps at either end)
