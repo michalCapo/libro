@@ -17,6 +17,9 @@ func TestFixedPanelWidths(t *testing.T) {
 	if WidthSM.Step(-1) != WidthXS || WidthXS.Step(-1) != WidthXS || WidthXS.Step(1) != WidthSM {
 		t.Fatal("width shortcuts must include XS and stop at the smallest size")
 	}
+	if Width3XL.Step(1) != WidthFull || WidthFull.Step(1) != WidthFull || WidthFull.Step(-1) != Width3XL {
+		t.Fatal("width shortcuts must stop at the largest size")
+	}
 	if WidthLG.ClampFixedPixel(320) != WidthXS {
 		t.Fatal("width clamp must support XS")
 	}

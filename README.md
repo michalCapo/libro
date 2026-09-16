@@ -1,20 +1,22 @@
 # Libro
 
-Libro is a Go + Electron desktop workspace for CLI coding agents. Run Codex, Pi, Claude, or another agent alongside browser tools and terminals in a horizontal row of fixed-width panels. Switch projects on the left.
+Libro is a Go + Electron desktop workspace for CLI coding agents. Run Codex, Pi, Claude, or OpenCode as side-by-side agent panels, with browser, editor, and repository tools in a right sidebar and one shell terminal per project at the bottom. Switch projects on the left.
 
-The right sidebar opens Terminal, Git, and Browser tools. The sidebar shows one tool at a time at its selected width. Switching tool tabs keeps their sessions running. The bottom panel runs one shell terminal per project. Hide it to keep its session running, then reopen it from the titlebar. Use panel width controls to resize panels. Open **Commands** to launch a tool, or **New agent session** to run an agent or custom command.
+Open **New agent session** to launch an agent, or **Apps & plugins** to open a tool. Open **Commands** for the command palette. Panel widths are fixed, so a new panel never resizes the others — scroll the strip horizontally to reach panels outside the viewport.
 
-Tools use a small local plugin manifest. See [Creating plugins](docs/plugins.md) for the API and examples.
+Tools and agents use a small local plugin manifest. See [Creating plugins](docs/plugins.md) for the API and examples.
 
-![Demo](demo/demo.gif)
+![Libro with the app launcher open](demo/screenshot.png)
 
 ## What It Does
 
-- Opens agent, tool, and terminal tab groups in one desktop window.
-- Keeps per-project strip state in memory while you switch between projects.
+- Runs agent panels (Codex, Pi, Claude, OpenCode) side by side in one desktop window.
+- Hosts tools in the right sidebar: Terminal, Browser, Files, Nvim, Git, Database.
+- Keeps per-project panel state in memory while you switch between projects.
 - Saves reusable app definitions in SQLite, either globally or per project.
-- Integrates Git worktrees into the project picker and shortcut system.
-- Supports browser-oriented shortcuts, including URL popup, vim-style navigation, and per-panel DevTools.
+- Integrates Git worktrees into the project picker.
+- Tracks agent state: project icons spin while any agent works and turn green when all agents finish.
+- Remappable shortcuts for every tool in **Settings → Keyboard shortcuts**.
 
 ## Install
 
@@ -73,18 +75,20 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 
 ## Features
 
-### Apps
+### Panels
 
-- Browser apps support editable URLs, address popup, reload, and DevTools.
-- Terminal apps default to the user's shell when no command is provided.
+- Center panels run CLI agents; right sidebar tools are Terminal, Browser, Files, Nvim, Git, and Database; the bottom panel is one shell terminal per project.
 - Panels sit side by side at fixed widths. New panels default to MD (640px) without resizing existing panels. Change this in **Settings → Default panel width**; the preference is saved for all projects.
 - Choose XS (320px), SM (480px), MD (640px), LG (960px), XL (1280px), or 2XL (1920px) from the panel toolbar. Existing 3XL and full-width options remain available.
-- Scroll horizontally or use the previous/next panel buttons to reach panels outside the viewport. Browser viewport shortcuts remain available.
+- Scroll horizontally or use the previous/next panel buttons to reach panels outside the viewport.
+- Tabs and hidden panels keep their sessions alive. Closing a terminal stops its PTY.
 
 ### Search And Commands
 
-- `⌘ + O` opens the plugin launcher.
-- `⌘ + ;` opens the command palette for app and project actions.
+- `⌘ + O` opens the app launcher.
+- `⌘ + ;` opens the command palette for workspace, project, and panel commands.
+- `` Ctrl + ` `` toggles the bottom terminal.
+- `Ctrl + A` focuses the current agent, or opens the agent launcher when none is open.
 
 ### Projects And Worktrees
 
@@ -93,63 +97,54 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - Each project keeps its own in-memory running strip while inactive projects stay hidden.
 - Git repositories expose worktrees in the project picker.
 - `⌘ + N` opens the project/worktree picker.
-- `⌘ + G` creates a new worktree from the current branch.
+- **Commands → New worktree from current branch** creates a worktree.
+- Project and worktree icons turn blue and spin while any agent is working, then show a green check when all active agents finish. Codex, Pi, Claude, and OpenCode use lifecycle signals, not terminal inactivity. Launch commands must start with the agent executable; shell aliases and wrapper scripts are not automatically instrumented. Codex requires terminal-title `run-state` support. Pi and OpenCode must allow the launch-local extension/plugin, and Claude must allow session hooks.
 
 ### Browser Workflow
 
 - Plain-key browser navigation is supported in normal mode (outside input fields, not in insert mode):
   - `o` open browser address popup
   - `r` reload page
-  - `m` cycle selected browser through mobile `xs`, `sm`, `md`, and its previous size
-  - `g / G` top / bottom
+  - `m` cycle viewport width (normal → SM → MD → XL); `M` rotate portrait/landscape
+  - `g` top, `Shift + G` bottom
   - `j / k` scroll down / up
   - `h / l` scroll left / right
   - `i` enter insert mode; `Esc` exits insert mode
 
 ## Keyboard Shortcuts
 
-### Apps
+Tool shortcuts are remappable in **Settings → Keyboard shortcuts**. Use Ctrl, Alt, or Meta with a letter, number, `=`, or `-`.
 
-- `⌘ + O` open launcher/search popup on the right
-- `⌘ + Enter` open terminal in Libro
-- `⌘ + E` open `nvim` in Libro, falling back to `vim`; shows a notice if neither is installed
-- `⌘/Win + Y` open Pi agent in Libro if available, using `MD` width
-- `⌘ + ;` open command palette
-- `⌘ + Q` close current app
-- `⌘ + ,` decrease selected app width
-- `⌘ + .` increase selected app width
-- `⌘ + F` toggle full width
-- `⌘ + +` zoom in
-- `⌘ + -` zoom out
-- `⌘ + 0` reset zoom
-- `quit` quit Libro from the command palette
+### Tools
 
-### Navigation
-
+- `Ctrl + T` toggle Terminal
+- `Ctrl + B` toggle Browser
+- `Ctrl + F` toggle Files
+- `Ctrl + E` toggle Nvim
+- `Ctrl + G` toggle Git
+- `Ctrl + D` toggle Database
+- `Ctrl + Q` close the selected panel
+- `Ctrl + P` open the project/worktree picker
+- `Ctrl + N` open the agent launcher
 - `Ctrl + H` / `Ctrl + L` select the previous / next agent in the active project (wraps at either end)
 - `Ctrl + Shift + P` toggle the project sidebar
-- `⌘ + H` select app to the left
-- `⌘ + L` select app to the right
-- `⌘ + [` move app left
-- `⌘ + ]` move app right
-- `⌘ + Enter` open terminal in Libro
-- `⌘ + Ctrl + Y` move app to another project
-- `⌘ + N` open project and worktree picker
-- `⌘ + G` create worktree from current branch
+- `Ctrl + =` / `Ctrl + -` / `Ctrl + 0` zoom in / out / reset
 
-Project and worktree icons turn blue and spin while any agent is working, then
-show a green check when all active agents finish. Codex, Pi, Claude, and OpenCode
-use lifecycle signals, not terminal inactivity. Open a new agent session after
-updating Libro to enable tracking. Launch commands must start with the agent
-executable; shell aliases and wrapper scripts are not automatically instrumented.
-Codex requires terminal-title `run-state` support. Pi and OpenCode must allow
-the launch-local extension/plugin, and Claude must allow session hooks.
+### Workspace (desktop mode)
 
-### Browser
-
-- `⌘ + B` new browser with URL popup
-- `o` open URL/search popup (normal mode)
-- `r` reload page (normal mode)
+- `⌘/Win + O` open app launcher
+- `⌘/Win + ;` open command palette
+- `⌘/Win + N` open project and worktree picker
+- `⌘/Win + Enter` open a terminal tool panel
+- `⌘/Win + B` new browser with URL popup
+- `⌘/Win + Y` open Pi agent if available
+- `⌘/Win + Q` close current panel
+- `⌘/Win + ,` / `⌘/Win + .` decrease / increase selected panel width
+- `⌘/Win + F` maximize the selected panel
+- `⌘/Win + [` / `⌘/Win + ]` move panel left / right
+- `⌘/Win + Ctrl + Y` move panel to another project
+- `⌘/Win + +` / `⌘/Win + -` / `⌘/Win + 0` zoom in / out / reset
+- **Commands → Quit Libro** quits cleanly
 
 ## Development Notes
 

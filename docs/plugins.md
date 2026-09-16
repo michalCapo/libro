@@ -42,7 +42,7 @@ Terminal commands run in the active project's directory. Install their executabl
 
 Open **Apps & plugins** in the project sidebar to launch an installed plugin. The plus button in a panel opens it in that panel. Use a tab group's position selector to move its active app without restarting it. Each launch creates an independent instance.
 
-Built-ins: Codex, Pi, Claude, Terminal, Browser, Nvim, Git (`lazyrepo`), and Database (`lazydata`). Duplicate built-in IDs and invalid manifests are skipped with a server log message. Plugins are read at startup.
+Built-ins: Codex, Pi, Claude, OpenCode, Terminal, Browser, Files, Nvim, Git (`lazyrepo`), and Database (`lazydata`). `center` dock plugins are CLI agents and must define a command; `right` and `bottom` plugins are tools. Duplicate built-in IDs and invalid manifests are skipped with a server log message. Plugins are read at startup.
 
 This manifest API covers CLI and web apps. It does not load arbitrary renderer scripts or compiled Go extensions. Add functionality through a CLI or a web app and let Libro host it.
 

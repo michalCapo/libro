@@ -4,7 +4,7 @@
 
 ## Platform
 
-web
+desktop (Go + Electron), with a browser fallback
 
 ## Product Purpose
 

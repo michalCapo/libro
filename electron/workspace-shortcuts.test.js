@@ -8,7 +8,7 @@ const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8')
 const forwarding = main.slice(main.indexOf('    // Keep workspace navigation'), main.indexOf('    // Forward Ctrl+;'))
 
 test('browser forwards workspace shortcuts, including repeat state', () => {
-  for (const key of ['a', 'b', 'h', 'l', 'p']) {
+  for (const key of ['a', 'b', 'h', 'l', 'p', ',', '.']) {
     for (const repeat of [false, true]) {
       let prevented = false
       let forwarded
@@ -49,4 +49,21 @@ test('Ctrl+A hides tools and selects the remembered agent without requiring an o
   })
   assert.equal(state.hidden.has('browser'), true)
   assert.equal(selected, 'agent-2')
+})
+
+test('panel size shortcuts use saved bindings and ignore key repeat', () => {
+  const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = workspace.slice(workspace.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"), workspace.indexOf("    if (binding && binding === toolKeys['toggle-projects'])"))
+  for (const [binding, delta] of [['Ctrl+,', -1], ['Ctrl+.', 1], ['Alt+S', -1]]) {
+    for (const repeat of [false, true]) {
+      const calls = []
+      vm.runInNewContext('(function () {' + handler + '})()', {
+        binding, sid: 'session',
+        toolKeys: { 'panel-size-down': binding === 'Alt+S' ? binding : 'Ctrl+,', 'panel-size-up': 'Ctrl+.' },
+        window: { __libroResizeSelectedAppStep: (...args) => calls.push(args) },
+        event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
+      })
+      assert.deepEqual(calls, repeat ? [] : [[delta, 'session']])
+    }
+  }
 })

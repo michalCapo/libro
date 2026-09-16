@@ -334,7 +334,7 @@
   let toolKeys = window.__libroToolKeys || {};
   function shortcut(event) {
     const key = event.key === '+' ? '=' : event.key;
-    if (!/^[a-z0-9=\-]$/i.test(key) || !(event.ctrlKey || event.altKey || event.metaKey)) return '';
+    if (!/^[a-z0-9=,.\-]$/i.test(key) || !(event.ctrlKey || event.altKey || event.metaKey)) return '';
     return (event.ctrlKey ? 'Ctrl+' : '') + (event.altKey ? 'Alt+' : '') + (event.shiftKey && event.key !== '+' ? 'Shift+' : '') + (event.metaKey ? 'Meta+' : '') + key.toUpperCase();
   }
   function zoom(action) {
@@ -386,6 +386,11 @@
       return;
     }
     if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open]')) return;
+    if (binding && (binding === toolKeys['panel-size-down'] || binding === toolKeys['panel-size-up'])) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) window.__libroResizeSelectedAppStep(binding === toolKeys['panel-size-down'] ? -1 : 1, sid);
+      return;
+    }
     if (binding && binding === toolKeys['toggle-projects']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) { prefs.projects = !prefs.projects; save(); refresh(); }
