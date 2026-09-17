@@ -114,7 +114,7 @@ test('workspace syncs initial bindings and saved settings to Electron', () => {
   assert.deepEqual(calls, [['Ctrl+F'], ['Alt+F'], ['']])
 })
 
-test('Ctrl+A hides tools and selects the remembered agent without requiring an overlay', () => {
+for (const overlay of [false, true]) test('Ctrl+A selects the remembered agent with overlay=' + overlay, () => {
   const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = workspace.slice(workspace.indexOf("    if (binding === 'Ctrl+A')"), workspace.indexOf("    if (binding === 'Ctrl+D'"))
   const panels = [
@@ -125,11 +125,11 @@ test('Ctrl+A hides tools and selects the remembered agent without requiring an o
   const state = { agent: 'agent-2', hidden: new Set() }
   let selected
   vm.runInNewContext('(function () {' + handler + '})()', {
-    binding: 'Ctrl+A', activeGrid: () => ({}), frames: () => panels,
+    binding: 'Ctrl+A', activeGrid: () => ({ querySelector: () => overlay }), frames: () => panels,
     dockState: () => state, select: id => { selected = id },
     event: { preventDefault() {}, stopImmediatePropagation() {} },
   })
-  assert.equal(state.hidden.has('browser'), true)
+  assert.equal(state.hidden.has('browser'), overlay)
   assert.equal(selected, 'agent-2')
 })
 
@@ -276,4 +276,23 @@ test('Ctrl+1–9 selects the numbered project once', () => {
     })
     assert.equal(clicked, repeat ? 0 : 1)
   }
+})
+
+for (const overlay of [false, true]) test('clicking an agent preserves side-by-side tools with overlay=' + overlay, () => {
+  const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = workspace.slice(workspace.indexOf("  root.addEventListener('pointerdown', event => {"), workspace.indexOf('  updateToolHints();', workspace.indexOf("  root.addEventListener('pointerdown', event => {")))
+  const grid = { querySelector: () => overlay }
+  const agent = { dataset: { appId: 'agent', dock: 'center' }, parentElement: grid }
+  const browser = { dataset: { appId: 'browser', dock: 'right' } }
+  const state = { hidden: new Set() }
+  const window = { __libroSelectedApp: 'browser' }
+  const calls = []
+  vm.runInNewContext(handler, {
+    root: { addEventListener: (type, callback) => callback({ target: { closest: () => agent } }) },
+    window, frames: () => [agent, browser], dockState: () => state,
+    refresh() {}, call: (action, data) => calls.push([action, data.index, data.focus]),
+  })
+  assert.equal(state.hidden.has('browser'), overlay)
+  assert.equal(window.__libroSelectedApp, 'agent')
+  assert.deepEqual(calls, [['app.select', 0, false]])
 })
