@@ -108,7 +108,7 @@ Libro follows the supplied T3 Code reference: near-white content, softly gray si
 - Flat app panels separated by fine rules.
 - Rounded selection surfaces and softly lifted popups.
 
-Scope: the built workspace shell and its dialogs. Source of truth is `internal/workspace.css`, supported by `workspace.go`, `workspace.js`, `components.go`, and the popup components. Embedded terminals and browser pages retain their own content styling. `PRODUCT.md` fixes the brand and horizontal workspace structure. This is a record of the implementation, not a new visual direction.
+Scope: the built workspace shell and its dialogs. Source of truth is `internal/workspace.css`, supported by `workspace.go`, `workspace.js`, `components.go`, and the popup components. Embedded terminals and browser pages retain their own content styling. `PRODUCT.md` fixes the brand and docked workspace structure. This is a record of the implementation, not a new visual direction.
 
 ## Colors
 
@@ -130,9 +130,11 @@ Use the system sans-serif stack in `body`; there is no separate display font. Bo
 
 The shell has a 56px titlebar, a 26px statusbar, and left project navigation. The sidebar is 216px wide. At 760px or less it overlays the content between the titlebar and statusbar, with width `min(216px, calc(100vw - 48px))`. It defaults closed on small screens when no preference exists; selecting a project closes it. The brand and trailing status text hide, and empty-state headings become 24px.
 
-The main area is one horizontal row of full-height, non-shrinking app panels with no gap or outer card padding. Width presets are XS 320px, SM 480px, MD 640px, LG 960px, XL 1280px, and 2XL 1920px. These are panel widths, not viewport breakpoints. Legacy 3XL 2560px and MAX (full strip width, formerly called FULL) remain available as steps beyond 2XL; the existing screen-width policy disables 3XL on Full HD or smaller screens. MAX uses available strip width. Maximizing temporarily fills the strip and hides other panels. Selecting an offscreen panel scrolls it into view.
+The main area uses center, right, and bottom docks with no outer card padding. Center agent panels remain visible side by side. The right dock keeps multiple tools alive but shows one selected tool at a time. If the selected tool and center panels do not fit together, the tool overlays the right side. The bottom dock can show the project shell or start command below the main row. A shared tab row selects running agents and tools and exposes their size picker.
 
-Toolbars are at least 48px tall and allow controls to wrap. Popups are centered with viewport height limits and internal scrolling. Commands and the app launcher are at most 420px wide with a 24px viewport gutter; other existing dialogs retain their component-specific widths. At small widths, preserve the carousel rather than stacking panels.
+Width presets are XS 320px, SM 480px, MD 640px, LG 960px, XL 1280px, and 2XL 1920px. These are panel widths, not viewport breakpoints. Legacy 3XL 2560px and MAX (full strip width, formerly called FULL) remain available as steps beyond 2XL; the existing screen-width policy disables 3XL on Full HD or smaller screens. MAX uses available workspace width. Maximizing temporarily fills the workspace and hides other panels.
+
+Toolbars are at least 48px tall and allow controls to wrap. Popups are centered with viewport height limits and internal scrolling. Commands and the app launcher are at most 420px wide with a 24px viewport gutter; other existing dialogs retain their component-specific widths. At small widths, preserve the dock and tab model and overlay the selected right tool instead of stacking panels.
 
 ## Elevation & Depth
 
@@ -146,7 +148,7 @@ Use the frontmatter radii by role: small keycaps and size badges, gently rounded
 
 ## Components
 
-- **Navigation:** the sidebar starts with one compact utility row: search grows to fill the space, followed by icon buttons for switching projects, adding a project, and starting a new agent session. Project rows are at least 44px high. Selection uses the raised surface and primary text. Worktrees indent beneath projects. Removal appears on hover or keyboard focus and remains visible on touch devices.
+- **Navigation:** the sidebar starts with one compact utility row: search grows to fill the space, followed by icon buttons for switching projects, adding a project, and starting a new agent session. Project rows are at least 44px high. Selection uses the raised surface and primary text. Worktrees indent beneath projects. Running agents appear below their project as direct session links. Project icons show agent working and done states, and a terminal glyph marks a running bottom command. Removal appears on hover or keyboard focus and remains visible on touch devices.
 - **Actions:** launch and new-session buttons are compact bordered raised controls, at least 36px high. Icon buttons are quiet, square controls. Hover uses the neutral hover surface; focus uses the blue outline.
 - **Fields:** ordinary popup fields use raised fill, a fine border, and an accent caret. Search fields sit inside a rounded light search surface with an icon and dismiss action. Their inner border and outline are removed; the shared search wrapper shows focus-within feedback.
 - **Size controls:** only the selected size appears in the panel toolbar, with raised fill and a fine ring. Hover or click opens a floating size picker with every preset, including the current size. Keyboard users open it with Enter, Space, or Arrow Down; Escape dismisses it. The command resize picker uses rounded rows and radio indicators.
@@ -164,6 +166,6 @@ Use the frontmatter radii by role: small keycaps and size badges, gently rounded
 
 ## Settings and panel controls
 
-Settings is a workspace page reached from the sidebar. Grouped rows provide the global default panel widths for agent and tool panels (XS–2XL), initially MD (640px) and LG (960px). Changes save to SQLite and apply only to newly opened panels. The page also holds theme (Auto, Light, Dark), an agent-done notification sound, agent command management (edit, rename, disable, remove, custom agents, autolaunch), and remappable keyboard shortcuts.
+Settings is a workspace page reached from the sidebar. Grouped rows provide the global default panel widths for agent and tool panels (XS–2XL), initially MD (640px) and LG (960px). Changes save to SQLite and apply only to newly opened panels. The page also holds theme (Auto, Light, Dark), an agent-done notification sound, agent command management (edit, rename, disable, remove, custom agents, autolaunch), tool command management (edit, disable, remove, and add custom CLI tools), and remappable keyboard shortcuts.
 
 Panel toolbars fit within the workspace viewport while terminal content retains its fixed width. The close button comes before the title and appears on panel hover or button keyboard focus; it remains visible for touch input. Worktree rows use their dedicated switch action with project, path, and branch.

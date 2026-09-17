@@ -40,7 +40,7 @@ For a local browser tool:
 
 Terminal commands run in the active project's directory. Install their executables separately and make them available on Libro's PATH. Commands run with your local user permissions; install manifests you trust. Plugin installation does not run commands. Opening the plugin does.
 
-Open **Apps & plugins** in the project sidebar to launch an installed plugin. The plus button in a panel opens it in that panel. Use a tab group's position selector to move its active app without restarting it. Each launch creates an independent instance.
+Open **Apps & plugins** in the project sidebar to launch an installed plugin. The right tool rail opens or toggles configured tools. The shared tab row switches between running agents and tools without restarting them. Each launch from **Apps & plugins** creates an independent instance.
 
 Built-ins: Codex, Pi, Claude, OpenCode, Terminal, Browser, Files, Nvim, Git (`lazyrepo`), and Database (`lazydata`). `center` dock plugins are CLI agents and must define a command; `right` and `bottom` plugins are tools. Duplicate built-in IDs and invalid manifests are skipped with a server log message. Plugins are read at startup.
 
@@ -51,3 +51,5 @@ Tabs and collapsed panels keep their sessions alive. Project switching keeps all
 In web mode (`--no-desktop`), browser plugins use iframes. Sites that block embedding cannot load there. Use **Open in new tab**, or run Libro in desktop mode (`go run .`) to browse inside the panel. Local previews still work when their server allows embedding.
 
 Panel size shortcuts: **Ctrl+.** decreases the selected panel by one size step; **Ctrl+,** increases it. Resizing stops at the smallest or largest allowed size and never wraps around. **Ctrl+M** toggles the selected panel between its current size and MAX (full strip width). Change these in **Settings → Keyboard shortcuts**, then click **Save shortcuts**.
+
+Browser instances can coexist. **Ctrl+Shift+B** opens a new blank browser, while **Ctrl+[** and **Ctrl+]** cycle through browser panels. These shortcuts are remappable in **Settings → Keyboard shortcuts**.
