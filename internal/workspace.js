@@ -389,7 +389,7 @@
     const state = dockState(grid);
     const existing = frames(grid).find(frame => frame.dataset.dock === 'right' && frame.dataset.plugin === id);
     if (!existing) { openPlugin(id, 'right'); return; }
-    if (existing.dataset.dockVisible === 'true') {
+    if (existing.dataset.dockVisible === 'true' && existing.dataset.appId === window.__libroSelectedApp) {
       state.hidden.add(existing.dataset.appId); refresh();
     } else select(existing.dataset.appId);
   }
@@ -584,7 +584,7 @@
     const terminals = frames(grid).filter(frame => frame.dataset.dock === 'bottom');
     const terminal = terminals.find(frame => frame.dataset.appId === state.bottomID) || terminals[0];
     if (!terminal) { openPlugin('terminal', 'bottom'); return; }
-    state.bottom = !state.bottom;
+    state.bottom = !state.bottom || terminal.dataset.appId !== window.__libroSelectedApp;
     if (state.bottom) select(terminal.dataset.appId); else refresh();
   }
   function layoutDocks(grid, all, full) {

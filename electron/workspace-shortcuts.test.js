@@ -10,6 +10,48 @@ const matching = main.slice(main.indexOf('let workspaceShortcuts'), main.indexOf
 const defaults = [...fs.readFileSync(path.join(__dirname, '../internal/keybindings.go'), 'utf8')
   .matchAll(/\{"[^"\n]+", "[^"\n]+", "([^"]+)"\}/g)].map(match => match[1])
 
+const toolIDs = [...fs.readFileSync(path.join(__dirname, '../internal/plugins.go'), 'utf8')
+  .matchAll(/ID: "([^"]+)"[^\n]+Dock: "right"/g)].map(match => match[1])
+
+for (const plugin of [...toolIDs, 'custom-tool']) test(plugin + ' focuses an open panel before toggling it closed', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('  function tool(id)'), source.indexOf('  let toolKeys'))
+  for (const visible of [false, true]) for (const selected of ['agent', 'git']) {
+    const state = { hidden: new Set(visible ? [] : ['git']) }
+    const calls = []
+    vm.runInNewContext(handler + ';tool(plugin)', {
+      plugin,
+      activeGrid: () => ({}), dockState: () => state,
+      frames: () => [{ dataset: { dock: 'right', plugin, appId: 'git', dockVisible: String(visible) } }],
+      window: { __libroSelectedApp: selected },
+      select(id) { state.hidden.delete(id); calls.push(['select', id]) },
+      refresh() { calls.push(['refresh']) },
+    })
+    const hide = visible && selected === 'git'
+    assert.equal(state.hidden.has('git'), hide)
+    assert.deepEqual(calls, hide ? [['refresh']] : [['select', 'git']])
+  }
+})
+
+test('bottom terminal focuses before toggling closed', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('  function bottom()'), source.indexOf('  function layoutDocks'))
+  for (const visible of [false, true]) for (const selected of ['agent', 'shell']) {
+    const state = { bottom: visible, bottomID: 'shell' }
+    const calls = []
+    vm.runInNewContext(handler + ';bottom()', {
+      activeGrid: () => ({}), dockState: () => state,
+      frames: () => [{ dataset: { dock: 'bottom', appId: 'shell' } }],
+      window: { __libroSelectedApp: selected },
+      select(id) { calls.push(['select', id]) },
+      refresh() { calls.push(['refresh']) },
+    })
+    const hide = visible && selected === 'shell'
+    assert.equal(state.bottom, !hide)
+    assert.deepEqual(calls, hide ? [['refresh']] : [['select', 'shell']])
+  }
+})
+
 function inputFor(binding, repeat = false) {
   const key = binding.split('+').at(-1).toLowerCase()
   return { key, code: 'Key' + key.toUpperCase(), control: binding.includes('Ctrl+'),
