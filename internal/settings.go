@@ -250,7 +250,7 @@ func registerSettingsActions(app *r.App) {
 		if err := DBSetDefaultPanelWidth(Width(value)); err != nil {
 			return "libroWorkspace.settingsSaved(false);"
 		}
-		return "libroWorkspace.settingsSaved(true);"
+		return fmt.Sprintf("libroWorkspace.settingsSaved(true,%s);", components.JSString(Width(value).PixelWidth()))
 	})
 }
 
@@ -261,7 +261,6 @@ func renderWorkspaceSettings() *r.Node {
 	}
 	return r.El("section", "ws-settings").ID("workspace-settings").Attr("hidden", "").Attr("aria-labelledby", "workspace-settings-title").Render(
 		r.Div("ws-settings-header").Render(
-			workspaceButton("Back to workspace", "arrow_back", "libroWorkspace.closeSettings()"),
 			r.El("h1", "").ID("workspace-settings-title").Attr("tabindex", "-1").Text("Settings"),
 		),
 		r.Div("ws-settings-content").Render(

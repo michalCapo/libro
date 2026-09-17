@@ -2,6 +2,7 @@
   if (window.libroWorkspace) return;
   const root = document.getElementById('libro-workspace');
   const sid = window.__libroWorkspaceSID;
+  root.style.setProperty('--ws-default-panel-width', window.__libroDefaultPanelWidth);
   let maximized = '';
   const dockStates = new Map();
   function dockState(grid) {
@@ -511,7 +512,7 @@
     const visible = full ? [full] : [...center, ...right];
     const columns = (overlay ? center : visible).map(frame => full ? grid.clientWidth + 'px' : width(frame) + 'px');
     if (center.length === 1 && !full) columns[0] = 'minmax(' + width(center[0]) + 'px, 1fr)';
-    if (!center.length && !full) columns.unshift(right.length && !overlay ? '320px' : 'minmax(0, 1fr)');
+    if (!center.length && !full) columns.unshift(right.length && !overlay ? 'var(--ws-default-panel-width)' : 'minmax(0, 1fr)');
     grid.style.gridTemplateColumns = columns.join(' ') || 'minmax(0, 1fr)';
     grid.style.gridTemplateRows = bottomVisible ? 'minmax(120px, 1fr) minmax(120px, 35%)' : 'minmax(0, 1fr)';
     all.forEach(frame => {
@@ -582,7 +583,11 @@
   }
   let savedWidth = 'md';
   let settingsFocus;
-  function settings() { settingsFocus = document.activeElement; call('settings.open'); }
+  function settings() {
+    if (!document.getElementById('workspace-settings').hidden) { closeSettings(); return; }
+    settingsFocus = document.activeElement;
+    call('settings.open');
+  }
   function themePreference() {
     try {
       const mode = localStorage.getItem('theme');
@@ -696,9 +701,13 @@
       refresh();
     }
   }
-  function settingsSaved(ok) {
+  function settingsSaved(ok, width) {
     const select = document.getElementById('default-panel-width');
-    if (ok) savedWidth = select.value; else select.value = savedWidth;
+    if (ok) {
+      savedWidth = select.value;
+      root.style.setProperty('--ws-default-panel-width', width);
+      refresh();
+    } else select.value = savedWidth;
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New panels will use this width.' : 'Could not save. Please try again.';
   }

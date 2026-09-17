@@ -19,7 +19,7 @@ func workspaceJS(sid string) string {
 	list, _ := json.Marshal(plugins())
 	keys, _ := json.Marshal(toolKeybindings())
 	defaults, _ := json.Marshal(defaultToolKeybindings())
-	return "window.__libroToolKeys=" + string(keys) + ";window.__libroDefaultToolKeys=" + string(defaults) + ";" + fmt.Sprintf("window.__libroWorkspaceSID=%s;window.__libroPlugins=%s;var wsStyle=document.createElement('style');wsStyle.textContent=%s;document.head.appendChild(wsStyle);", components.JSString(sid), list, components.JSString(string(css))) + string(filesJS) + string(js)
+	return "window.__libroToolKeys=" + string(keys) + ";window.__libroDefaultToolKeys=" + string(defaults) + ";" + fmt.Sprintf("window.__libroWorkspaceSID=%s;window.__libroDefaultPanelWidth=%s;window.__libroPlugins=%s;var wsStyle=document.createElement('style');wsStyle.textContent=%s;document.head.appendChild(wsStyle);", components.JSString(sid), components.JSString(DBDefaultPanelWidth().PixelWidth()), list, components.JSString(string(css))) + string(filesJS) + string(js)
 }
 
 func workspaceAppName(app Application) string {
