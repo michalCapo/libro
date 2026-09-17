@@ -598,7 +598,7 @@
     if (center.length === 1 && !full) columns[0] = 'minmax(' + width(center[0]) + 'px, 1fr)';
     if (!center.length && !full) columns.unshift('minmax(0, 1fr)');
     grid.style.gridTemplateColumns = columns.join(' ') || 'minmax(0, 1fr)';
-    grid.style.gridTemplateRows = bottomVisible ? 'minmax(120px, 1fr) minmax(120px, 29.75%)' : 'minmax(0, 1fr)';
+    grid.style.gridTemplateRows = bottomVisible ? 'minmax(120px, 1fr) minmax(120px, 25.2875%)' : 'minmax(0, 1fr)';
     all.forEach(frame => {
       const index = visible.indexOf(frame);
       const show = index >= 0 || (frame === terminal && bottomVisible);
