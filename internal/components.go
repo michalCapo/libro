@@ -996,6 +996,22 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			OnClick(r.JS(fmt.Sprintf(`window.__libroWvReload('%s')`, app.ID)))
 		reloadBtn.Render(r.I("material-icons-round text-sm").Text("refresh"))
 
+		zoomButtons := r.Div("flex items-center gap-0.5 shrink-0").
+			Attr("role", "group").Attr("aria-label", "Browser zoom")
+		for _, zoom := range []struct {
+			label, icon string
+			step        int
+		}{
+			{"Zoom out", "remove", -1},
+			{"Reset zoom to 100%", "restart_alt", 0},
+			{"Zoom in", "add", 1},
+		} {
+			zoomButtons.Render(r.Button(btnCls).
+				Attr("title", zoom.label).Attr("aria-label", zoom.label).
+				Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text(zoom.icon)).
+				OnClick(r.JS(fmt.Sprintf(`window.__libroWvZoom(%s,%d)`, components.JSString(app.ID), zoom.step))))
+		}
+
 		// URL input — on Enter, navigate webview and update server state
 		urlInputCls := "flex-1 min-w-0 rounded-sm text-[11px] font-mono outline-none px-2 h-6"
 		if selected {
@@ -1029,7 +1045,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		globe := r.Div(globeBadgeCls).Render(globeIcon)
 
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
-			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn)
+			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn, zoomButtons)
 	} else if app.Type == AppTypeTerminal {
 		labelText := workspaceAppName(app)
 

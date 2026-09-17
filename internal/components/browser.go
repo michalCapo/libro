@@ -835,6 +835,14 @@ window.__libroWvReload = function(appID) {
 		frame.setAttribute('src', frame.getAttribute('src') || 'about:blank');
 	}
 };
+window.__libroWvZoom = function(appID, step) {
+	var wv = window.__libroWebviews[appID];
+	if (!wv) return;
+	whenReady(appID, function() {
+		var level = step === 0 ? 0 : Math.max(-5, Math.min(5, wv.getZoomLevel() + step));
+		wv.setZoomLevel(level);
+	});
+};
 window.__libroOpenNewTab = function(url) {
 	if (url === 'about:blank') url = '';
 	// Find the sid from any webview with a data-sid attribute
