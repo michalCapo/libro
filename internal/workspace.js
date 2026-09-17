@@ -594,7 +594,7 @@
     const visible = full ? [full] : [...center, ...right];
     const columns = (overlay ? center : visible).map(frame => full ? grid.clientWidth + 'px' : width(frame) + 'px');
     if (center.length === 1 && !full) columns[0] = 'minmax(' + width(center[0]) + 'px, 1fr)';
-    if (!center.length && !full) columns.unshift(right.length && !overlay ? 'var(--ws-default-panel-width)' : 'minmax(0, 1fr)');
+    if (!center.length && !full) columns.unshift('minmax(0, 1fr)');
     grid.style.gridTemplateColumns = columns.join(' ') || 'minmax(0, 1fr)';
     grid.style.gridTemplateRows = bottomVisible ? 'minmax(120px, 1fr) minmax(120px, 29.75%)' : 'minmax(0, 1fr)';
     all.forEach(frame => {
