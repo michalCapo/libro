@@ -66,7 +66,11 @@ func registerProjectCommandActions(app *r.App) {
 		sm.SetAppPlugin(sid, id, "project-command", "bottom")
 		state = sm.Get(sid)
 		frame := renderAppFramePlaceholder(state.Apps[state.SelectedIndex], state.SelectedIndex, true, sid)
-		return js + insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + projectsJS(state) + hydrateAppAfterScrollJS(id, sidData(sid, "id", id)) + fmt.Sprintf(`libroWorkspace.select(%s);`, components.JSString(id))
+		result := js + insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + projectsJS(state) + hydrateAppAfterScrollJS(id, sidData(sid, "id", id)) + fmt.Sprintf(`libroWorkspace.select(%s);`, components.JSString(id))
+		if js != "" {
+			return "libroWorkspace.restartProject(function(){" + result + "});"
+		}
+		return result
 	})
 	registerAction(app, "project.command.stop", func(ctx *r.Context) string {
 		sid := extractSID(ctx)

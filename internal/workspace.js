@@ -3,6 +3,7 @@
   const root = document.getElementById('libro-workspace');
   const sid = window.__libroWorkspaceSID;
   let maximized = '';
+  let keepBottomHidden = false;
   const dockStates = new Map();
   function dockState(grid) {
     const key = grid.dataset.workspaceProject;
@@ -93,6 +94,7 @@
     if (!document.getElementById('workspace-settings').hidden) closeSettings();
     const frame = document.getElementById('frame-' + id);
     if (!frame) return;
+    if (keepBottomHidden && frame.dataset.dock === 'bottom') return;
     const grid = frame.parentElement;
     const state = dockState(grid);
     state.hidden.delete(id);
@@ -561,6 +563,21 @@
     call('app.close', {id});
     refresh();
   }
+  function restartProject(update) {
+    const grid = activeGrid();
+    const selected = window.__libroSelectedApp;
+    keepBottomHidden = !!grid && !dockState(grid).bottom;
+    try {
+      update();
+    } finally {
+      if (keepBottomHidden) {
+        dockState(grid).bottom = false;
+        window.__libroSelectedApp = document.getElementById('frame-' + selected) ? selected : '';
+      }
+      refresh();
+      keepBottomHidden = false;
+    }
+  }
   function bottom() {
     const grid = activeGrid(); if (!grid) return;
     const state = dockState(grid);
@@ -577,14 +594,14 @@
     all.forEach(frame => {
       if (!frame.dataset.dockSeen) {
         frame.dataset.dockSeen = 'true';
-        if (frame.dataset.dock === 'bottom') state.bottom = true;
+        if (frame.dataset.dock === 'bottom' && !keepBottomHidden) state.bottom = true;
         if (frame.dataset.dock === 'right') state.right = frame.dataset.appId;
       }
     });
     if (selected && grid.dataset.lastSelected !== selected.dataset.appId) {
         state.hidden.delete(selected.dataset.appId);
         if (selected.dataset.dock === 'right') state.right = selected.dataset.appId;
-        if (selected.dataset.dock === 'bottom') state.bottom = true;
+        if (selected.dataset.dock === 'bottom' && !keepBottomHidden) state.bottom = true;
     }
     if (selected?.dataset.dock === 'center') state.agent = selected.dataset.appId;
     grid.dataset.lastSelected = selected?.dataset.appId || '';
@@ -815,7 +832,7 @@
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
   }
-  window.libroWorkspace = {projectSettings, saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {restartProject, projectSettings, saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;
