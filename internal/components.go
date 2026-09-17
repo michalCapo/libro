@@ -1550,7 +1550,6 @@ func commandPopupJS(sid string) string {
 				for(var i=0;i<list.length;i++){if(list[i].isActive){active=list[i];break;}}
 				if(!active){if(window.__libroShowToast)window.__libroShowToast('No active project','',2000);return;}
 				if(active.kind==='worktree'){if(window.__libroShowToast)window.__libroShowToast('Cannot remove a worktree from here','Use git worktree remove instead',2500);return;}
-				if(active.name==='home'){if(window.__libroShowToast)window.__libroShowToast('Cannot remove home project','',2000);return;}
 				var run=function(){__ws.call('project.remove',{sid:'%s',name:active.name});};
 				if(window.__libroConfirmAction){window.__libroConfirmAction('Remove project?', 'Remove project "'+active.name+'" from Libro?\n\nThis only removes it from the project list. Files on disk are kept.', run);}else{run();}
 			}},
@@ -2334,7 +2333,7 @@ func projectDialogJS(sid string) string {
 			html+='<div class="flex-1 min-w-0"><div class="text-sm truncate '+(dk?'text-zinc-200':'text-gray-800')+'">'+escapeHtml(primary)+activeBadge+tempBadge+'</div>';
 			html+='<div class="text-[11px] truncate '+(dk?'text-zinc-500':'text-gray-400')+'">'+escapeHtml(secondary)+'</div></div>';
 			html+='<div class="ml-auto shrink-0 flex items-center justify-end gap-2 w-24">';
-			if(item.kind!=='worktree'&&item.name!=='home'){
+			if(item.kind!=='worktree'){
 				html+='<button data-project-remove="'+i+'" title="Remove project" class="opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity p-1 rounded '+(dk?'hover:bg-red-900/40 text-zinc-500 hover:text-red-300':'hover:bg-red-50 text-gray-400 hover:text-red-600')+'"><i class="material-icons-round text-base pointer-events-none">delete_outline</i></button>';
 			}else{
 				html+='<span class="w-6 h-6 shrink-0"></span>';
@@ -2572,7 +2571,7 @@ func projectDialogJS(sid string) string {
 	function removeAt(idx){
 		if(idx<0||idx>=filtered.length)return;
 		var item=filtered[idx];
-		if(!item||item.kind==='worktree'||item.name==='home')return;
+		if(!item||item.kind==='worktree')return;
 		var remove=function(){closePopup();__ws.call('project.remove',{sid:'%s',name:item.name});};
 		if(window.__libroConfirmAction){window.__libroConfirmAction('Remove project?', 'Remove project "'+item.name+'" from Libro?\n\nThis only removes it from the project list. Files on disk are kept.', remove);}else{remove();}
 	}
@@ -2971,7 +2970,11 @@ func renderProjectDialog(visible bool, sid string) *r.Node {
 
 // updateHashJS returns JS that updates the URL hash to the given project name
 func updateHashJS(name string) string {
-	return fmt.Sprintf("history.replaceState(null,'','#%s');document.title=%s;", name, components.JSString(name+" — Libro"))
+	title := "Libro"
+	if name != "" {
+		title = name + " — Libro"
+	}
+	return fmt.Sprintf("history.replaceState(null,'',%s);document.title=%s;", components.JSString("#"+name), components.JSString(title))
 }
 
 // initHashJS handles hash-based project navigation on page load.
@@ -2981,12 +2984,12 @@ func initHashJS(sid string) string {
 (function _initHash(){
 	if(typeof __ws==='undefined'||!__ws.connected||!__ws.connected()){setTimeout(_initHash,50);return;}
 	var hash=location.hash.replace('#','');
-	if(hash&&hash!=='home'){
+	if(hash){
 		setTimeout(function(){__ws.call('project.switch',{sid:'%s',name:hash});},100);
 	}
-	if(!location.hash){history.replaceState(null,'','#home');}
-	var proj=location.hash.replace('#','')||'home';
-	document.title=proj+' \u2014 Libro';
+	var proj=hash||window.__libroActiveProject||'';
+	if(proj&&!hash){history.replaceState(null,'','#'+proj);}
+	document.title=proj?proj+' \u2014 Libro':'Libro';
 })();
 `, sid)
 }

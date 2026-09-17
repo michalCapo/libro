@@ -36,7 +36,7 @@ func InitDB() {
 	}
 
 	createTables()
-	ensureHomeProject()
+	removeDefaultHomeProject()
 }
 
 func dbFilePath() string {
@@ -147,14 +147,27 @@ func createTables() {
 	}
 }
 
-func ensureHomeProject() {
-	home, _ := os.UserHomeDir()
-	if home == "" {
-		home = "/"
-	}
-	_, err := db.Exec(`INSERT OR IGNORE INTO projects (name, path, position) VALUES ('home', ?, 0)`, home)
+// Remove the old automatically seeded project once, preserving later user additions.
+func removeDefaultHomeProject() {
+	home, err := os.UserHomeDir()
 	if err != nil {
-		log.Printf("db: failed to ensure home project: %v", err)
+		return
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("db: migrate default project: %v", err)
+		return
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec(`DELETE FROM projects WHERE name = 'home' AND path = ? AND position = 0
+		AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'default_home_removed')`, home); err == nil {
+		_, err = tx.Exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('default_home_removed', 'true')`)
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
+		log.Printf("db: migrate default project: %v", err)
 	}
 }
 
@@ -175,7 +188,7 @@ func DBLoadProjects() []Project {
 	rows, err := db.Query("SELECT name, path FROM projects ORDER BY position, rowid")
 	if err != nil {
 		log.Printf("db: load projects: %v", err)
-		return []Project{{Name: "home", Path: defaultHomeDir()}}
+		return nil
 	}
 	defer rows.Close()
 
@@ -186,9 +199,6 @@ func DBLoadProjects() []Project {
 			continue
 		}
 		projects = append(projects, p)
-	}
-	if len(projects) == 0 {
-		return []Project{{Name: "home", Path: defaultHomeDir()}}
 	}
 	return projects
 }
@@ -220,7 +230,7 @@ func DBSaveProject(name, path string) {
 	}
 }
 
-// DBFindProjectByPath returns the most specific non-home project whose path
+// DBFindProjectByPath returns the most specific project whose path
 // matches the given working directory exactly or as an ancestor.
 func DBFindProjectByPath(path string) (Project, bool) {
 	projects := DBLoadProjects()
@@ -229,9 +239,6 @@ func DBFindProjectByPath(path string) (Project, bool) {
 	var best Project
 	bestLen := -1
 	for _, p := range projects {
-		if p.Name == "home" {
-			continue
-		}
 		projectPath := filepath.Clean(p.Path)
 		if cleanPath != projectPath && !strings.HasPrefix(cleanPath, projectPath+string(os.PathSeparator)) {
 			continue

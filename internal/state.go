@@ -113,13 +113,15 @@ func newAppStateFromDB() *AppState {
 	projects := DBLoadProjects()
 	detectGitRepos(projects)
 	rendered := make(map[string]bool)
+	activeProject := ""
 	if len(projects) > 0 {
-		rendered[projects[0].Name] = true
+		activeProject = projects[0].Name
 	}
+	rendered[activeProject] = true
 
 	return &AppState{
 		Projects:      projects,
-		ActiveProject: projects[0].Name,
+		ActiveProject: activeProject,
 		snapshots:     make(map[string]*projectSnapshot),
 
 		renderedProjects: rendered,
@@ -195,9 +197,7 @@ func (sm *StateManager) addApp(sessionID, url string, width Width, name string) 
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject: "home",
-			snapshots:     make(map[string]*projectSnapshot),
+			snapshots: make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -227,9 +227,7 @@ func (sm *StateManager) InsertApp(sessionID, url string, width Width, name strin
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject: "home",
-			snapshots:     make(map[string]*projectSnapshot),
+			snapshots: make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -261,9 +259,7 @@ func (sm *StateManager) addTerminalApp(sessionID string, appID string, command s
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject: "home",
-			snapshots:     make(map[string]*projectSnapshot),
+			snapshots: make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -296,9 +292,7 @@ func (sm *StateManager) InsertTerminalApp(sessionID string, appID string, comman
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject: "home",
-			snapshots:     make(map[string]*projectSnapshot),
+			snapshots: make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -332,9 +326,7 @@ func (sm *StateManager) InsertTerminal(sessionID, appID string, width Width, com
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject: "home",
-			snapshots:     make(map[string]*projectSnapshot),
+			snapshots: make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -366,9 +358,7 @@ func (sm *StateManager) InsertPendingTerminal(sessionID, appID string, width Wid
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject: "home",
-			snapshots:     make(map[string]*projectSnapshot),
+			snapshots: make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -397,9 +387,7 @@ func (sm *StateManager) InsertTerminalPlaceholder(sessionID, appID string, width
 	s := sm.states[sessionID]
 	if s == nil {
 		s = &AppState{
-			Projects:      []Project{{Name: "home", Path: defaultHomeDir()}},
-			ActiveProject: "home",
-			snapshots:     make(map[string]*projectSnapshot),
+			snapshots: make(map[string]*projectSnapshot),
 		}
 		sm.states[sessionID] = s
 	}
@@ -845,15 +833,18 @@ func (sm *StateManager) AddProjectWithOptions(sessionID, name, path string, tran
 }
 
 // RemoveProject removes a project from the session. Returns the project's snapshotted apps (for cleanup) and success.
-// The "home" project cannot be removed.
 func (sm *StateManager) RemoveProject(sessionID, projectName string) ([]Application, bool) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
-	if s == nil || projectName == "home" {
+	if s == nil {
 		return nil, false
 	}
 
+	return s.removeProject(projectName)
+}
+
+func (s *AppState) removeProject(projectName string) ([]Application, bool) {
 	idx := -1
 	for i, p := range s.Projects {
 		if p.Name == projectName {
@@ -876,7 +867,18 @@ func (sm *StateManager) RemoveProject(sessionID, projectName string) ([]Applicat
 	delete(s.renderedProjects, projectName)
 
 	if s.ActiveProject == projectName {
-		s.ActiveProject = "home"
+		apps = s.Apps
+		s.Apps = nil
+		s.SelectedIndex = 0
+		s.ActiveProject = ""
+		if len(s.Projects) > 0 {
+			s.ActiveProject = s.Projects[0].Name
+			if snap, ok := s.snapshots[s.ActiveProject]; ok {
+				s.Apps = snap.Apps
+				s.SelectedIndex = snap.SelectedIndex
+				delete(s.snapshots, s.ActiveProject)
+			}
+		}
 	}
 
 	return apps, true
@@ -1091,32 +1093,12 @@ func (sm *StateManager) RemoveVirtualProject(sessionID, name string) ([]Applicat
 		return nil, false
 	}
 
-	idx := -1
-	for i, p := range s.Projects {
+	for _, p := range s.Projects {
 		if p.Name == name && p.Virtual {
-			idx = i
-			break
+			return s.removeProject(name)
 		}
 	}
-	if idx < 0 {
-		return nil, false
-	}
-
-	s.Projects = append(s.Projects[:idx], s.Projects[idx+1:]...)
-
-	var apps []Application
-	if snap, ok := s.snapshots[name]; ok {
-		apps = snap.Apps
-		delete(s.snapshots, name)
-	}
-
-	delete(s.renderedProjects, name)
-
-	if s.ActiveProject == name {
-		s.ActiveProject = "home"
-	}
-
-	return apps, true
+	return nil, false
 }
 
 // OpenWorktreeDialog sets the worktree dialog open flag

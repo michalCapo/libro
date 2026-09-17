@@ -1146,18 +1146,13 @@ func Run(assets embed.FS) {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		name, _ := data["name"].(string)
-		if name == "" || name == "home" {
+		if name == "" {
 			return ""
 		}
 
 		// Check if we're removing the active project
 		stateBefore := sm.Get(sid)
 		wasActive := stateBefore.ActiveProject == name
-
-		// If removing active project, switch to home first
-		if wasActive {
-			sm.SwitchProject(sid, "home")
-		}
 
 		apps, ok := sm.RemoveProject(sid, name)
 		if !ok {
@@ -1183,8 +1178,13 @@ func Run(assets embed.FS) {
 			Add(fmt.Sprintf(`(function(){var el=document.getElementById(%s);if(el)el.remove();})();`, components.JSString(projectMainID(name))))
 
 		if wasActive {
-			resp.Replace(projectMainID("home"), renderMainArea(state, sid)).
-				Add(updateHashJS("home"))
+			var content *r.Node
+			if !sm.IsProjectRendered(sid, state.ActiveProject) {
+				content = renderMainArea(state, sid)
+			}
+			resp.Add(switchProjectJS(state.ActiveProject, content)).
+				Add(updateHashJS(state.ActiveProject)).
+				Add(focusSelectedAppJS(state))
 		}
 
 		return resp.Build()

@@ -187,7 +187,7 @@
       row.append(icon, node('span', '', project.displayName || project.name));
       row.onclick = () => { closeSettings(); if (innerWidth <= 760) { prefs.projects = false; save(); } if (project.kind === 'worktree') call('worktree.switch', {project:project.name, path:project.path, branch:project.branch}); else call('project.switch', {name:project.name}); };
       item.append(row);
-      if (project.kind !== 'worktree' && project.name !== 'home') {
+      if (project.kind !== 'worktree') {
         const label = project.displayName || project.name;
         const remove = button('Remove ' + label + ' from Libro', 'close', event => {
           event.stopPropagation();
