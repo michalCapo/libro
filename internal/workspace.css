@@ -303,6 +303,9 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-tool-tab-group .ws-tool-tab{padding:0;min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;color:var(--ws-fg)}
 .ws-tool-tab-group [data-size-trigger]{border:0;box-shadow:none!important;background:transparent!important;font-size:10px;color:var(--ws-muted);padding:1px 5px;min-height:24px}
 .ws-tool-tab-group[data-selected=false]{background:transparent}
+.ws-tool-tab-group[data-selected=true]{border-color:var(--ws-accent);background:color-mix(in srgb,var(--ws-accent) 12%,var(--ws-raised))}
+.ws-tool-tab-group[data-selected=true] .ws-tool-tab{background:transparent;color:var(--ws-accent);font-weight:600}
+.ws-tool-tab-group[data-selected=true] [data-size-trigger]{color:var(--ws-accent)}
 .ws-tool-sizes .ws-size-picker button{padding:4px 6px;font-size:10px;border-radius:6px;color:var(--ws-fg)}
 .ws-tool-sizes .ws-size-picker button:hover,.ws-tool-sizes .ws-size-picker button[aria-pressed=true]{background:var(--ws-hover)}
 
