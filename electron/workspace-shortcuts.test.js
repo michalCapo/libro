@@ -33,6 +33,30 @@ for (const plugin of [...toolIDs, 'custom-tool']) test(plugin + ' focuses an ope
   }
 })
 
+test('project switches preserve bottom terminal visibility when restoring selection', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const layout = source.slice(source.indexOf('  function layoutDocks('), source.indexOf('    let tabs = grid.parentElement')) + '\n  }'
+  for (const visible of [false, true]) {
+    const state = { bottom: visible, hidden: new Set() }
+    const grid = { dataset: {}, style: {}, clientWidth: 1000, querySelector: () => ({}) }
+    const shell = {
+      dataset: { appId: 'shell', dock: 'bottom', dockSeen: 'true' },
+      style: {}, querySelector: () => ({}),
+    }
+    const window = { __libroSelectedApp: 'shell' }
+    const context = { grid, shell, window, dockState: () => state, keepBottomHidden: false }
+    // The inactive project's layout clears lastSelected before switching back.
+    vm.runInNewContext(layout + ';layoutDocks(grid, [shell]);', context)
+    window.__libroSelectedApp = 'other-project-agent'
+    vm.runInNewContext(layout + ';layoutDocks(grid, [shell]);', context)
+    window.__libroSelectedApp = 'shell'
+    vm.runInNewContext(layout + ';layoutDocks(grid, [shell]);', context)
+    assert.equal(state.bottom, visible)
+    assert.equal(shell.dataset.dockVisible, String(visible))
+    assert.equal(shell.inert, !visible)
+  }
+})
+
 test('bottom terminal focuses before toggling closed', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('  function bottom()'), source.indexOf('  function layoutDocks'))

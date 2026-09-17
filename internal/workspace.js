@@ -693,7 +693,8 @@
     if (selected && grid.dataset.lastSelected !== selected.dataset.appId) {
         state.hidden.delete(selected.dataset.appId);
         if (selected.dataset.dock === 'right') state.right = selected.dataset.appId;
-        if (selected.dataset.dock === 'bottom' && !keepBottomHidden) state.bottom = true;
+        // Restoring selection on a project switch must preserve bottom visibility.
+        // Explicit selection opens the terminal in select().
     }
     if (selected?.dataset.appType === 'url' && selected.dataset.plugin !== 'files') state.browser = selected.dataset.appId;
     if (selected?.dataset.dock === 'center') state.agent = selected.dataset.appId;
