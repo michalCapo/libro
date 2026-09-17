@@ -3453,6 +3453,12 @@ func terminalFrameSetupJS() string {
 						ws.onerror = function() { try { ws.close(); } catch (err) {} };
 					}
 
+					term.onTitleChange(function(title) {
+						const frame = document.getElementById('frame-' + appID);
+						if (!frame || frame.dataset.dock !== 'center') return;
+						const task = title.replace(/^(Working|Thinking|Waiting|Ready|Starting)(?:\s*[·|—-]\s*|$)/, '').trim();
+						if (task) frame.dataset.taskTitle = task.slice(0, 240);
+					});
 					term.onData(function(data) {
 						data = stripTerminalFocusReports(data);
 						if (!data) return;

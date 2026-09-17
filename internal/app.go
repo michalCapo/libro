@@ -1180,6 +1180,15 @@ func Run(assets embed.FS) {
 		if resp == "/* noop */" {
 			return r.Notify("error", "Project not found")
 		}
+		if id, _ := data["appId"].(string); id != "" {
+			for index, panel := range sm.Get(sid).Apps {
+				if panel.ID == id {
+					sm.SelectApp(sid, index)
+					resp += navigateJS(sm.Get(sid), sid)
+					break
+				}
+			}
+		}
 		return resp
 	})
 

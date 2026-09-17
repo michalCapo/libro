@@ -221,6 +221,42 @@
       list.append(item);
     });
   }
+  function renderProjectAgents() {
+    const grids = new Map([...document.querySelectorAll('[data-workspace-project]')].map(grid => [grid.dataset.workspaceProject, grid]));
+    document.querySelectorAll('.ws-project-row').forEach(row => {
+      const grid = grids.get(row.dataset.projectKey);
+      const agents = grid ? frames(grid).filter(frame => frame.dataset.dock === 'center') : [];
+      let tree = row.parentElement.nextElementSibling;
+      if (!tree?.classList.contains('ws-project-agents')) tree = null;
+      if (!agents.length) { tree?.remove(); return; }
+      if (!tree) {
+        tree = node('div', 'ws-project-agents');
+        tree.setAttribute('role', 'group');
+        tree.setAttribute('aria-label', row.querySelector('span').textContent + ' agents');
+        row.parentElement.after(tree);
+      }
+      const entries = agents.map(frame => ({id:frame.dataset.appId, name:frame.dataset.appName || 'Agent', title:frame.dataset.taskTitle || '', selected:grid.dataset.workspaceProject === window.__libroActiveProject && frame.dataset.appId === window.__libroSelectedApp}));
+      const signature = JSON.stringify(entries);
+      if (tree.dataset.signature === signature) return;
+      tree.dataset.signature = signature;
+      tree.replaceChildren();
+      entries.forEach((entry, index) => {
+        const label = entry.title || entry.name + ' session ' + (index + 1);
+        const tab = node('button', 'ws-project-agent'); tab.type = 'button';
+        tab.setAttribute('aria-current', String(entry.selected));
+        tab.title = entry.name + ': ' + label;
+        const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
+        tab.append(icon, node('span', '', label));
+        tab.onclick = () => {
+          closeSettings();
+          if (innerWidth <= 760) { prefs.projects = false; save(); }
+          if (grid.dataset.workspaceProject === window.__libroActiveProject) select(entry.id);
+          else call('project.switch', {name:grid.dataset.workspaceProject, appId:entry.id});
+        };
+        tree.append(tab);
+      });
+    });
+  }
   function renderProjectShortcuts() {
     const running = new Set([...document.querySelectorAll('[data-workspace-project]')]
       .filter(grid => frames(grid).length > 0).map(grid => grid.dataset.workspaceProject));
@@ -342,6 +378,7 @@
     });
     renderToolRail();
     renderProjects();
+    renderProjectAgents();
     renderProjectShortcuts();
     renderProjectActivity();
     renderProjectTerminals();
@@ -372,7 +409,7 @@
       });
       layoutDocks(grid, all, full);
     });
-    observer.observe(document.getElementById('main-area'), {childList:true, subtree:true, attributes:true, attributeFilter:['style', 'data-dock']});
+    observer.observe(document.getElementById('main-area'), {childList:true, subtree:true, attributes:true, attributeFilter:['style', 'data-dock', 'data-task-title', 'data-app-name']});
   }
   function renderToolRail() {
     const rail = document.getElementById('workspace-tool-buttons'); if (!rail) return;
@@ -401,7 +438,8 @@
     const browsers = frames(grid).filter(frame => frame.dataset.appType === 'url' && frame.dataset.plugin !== 'files');
     if (!browsers.length) return;
     const selected = browsers.findIndex(frame => frame.dataset.appId === window.__libroSelectedApp);
-    const current = selected >= 0 ? selected : browsers.findIndex(frame => frame.dataset.appId === dockState(grid).right);
+    const state = dockState(grid);
+    const current = selected >= 0 ? selected : browsers.findIndex(frame => frame.dataset.appId === (state.browser || state.right));
     const next = current < 0 ? (delta > 0 ? 0 : browsers.length - 1) : (current + delta + browsers.length) % browsers.length;
     select(browsers[next].dataset.appId);
   }
@@ -625,6 +663,7 @@
         if (selected.dataset.dock === 'right') state.right = selected.dataset.appId;
         if (selected.dataset.dock === 'bottom' && !keepBottomHidden) state.bottom = true;
     }
+    if (selected?.dataset.appType === 'url' && selected.dataset.plugin !== 'files') state.browser = selected.dataset.appId;
     if (selected?.dataset.dock === 'center') state.agent = selected.dataset.appId;
     grid.dataset.lastSelected = selected?.dataset.appId || '';
     const width = frame => frame.style.width.endsWith('%') ? grid.clientWidth : parseFloat(frame.style.width) || frame.offsetWidth;

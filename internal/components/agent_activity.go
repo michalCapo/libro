@@ -42,7 +42,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 	}
 	a := &agentActivity{kind: kind}
 	if kind == "codex" {
-		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state"]'` + parts[2]), a, nil
+		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","thread-title"]'` + parts[2]), a, nil
 	}
 	dir, err := os.MkdirTemp("", "libro-agent-")
 	if err != nil {
@@ -199,7 +199,8 @@ func (a *agentActivity) output(data []byte, report func(string)) {
 					report("exited")
 				}
 				if a.kind == "codex" && (strings.HasPrefix(title, "0;") || strings.HasPrefix(title, "2;")) {
-					switch title[2:] {
+					state, _, _ := strings.Cut(title[2:], " | ")
+					switch state {
 					case "Working", "Thinking", "Waiting":
 						report("working")
 					case "Ready":

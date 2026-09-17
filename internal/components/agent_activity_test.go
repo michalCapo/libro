@@ -13,10 +13,10 @@ import (
 func TestCodexActivityAcrossPTYChunks(t *testing.T) {
 	a := &agentActivity{kind: "codex"}
 	var got []string
-	for _, chunk := range []string{"Ready in ordinary output", "\x1b", "]0;Work", "ing\x07", "\x1b]2;Thinking\x1b", "\\", "\x1b]0;Ready\x07", "\x1b]777;libro;exited\x07"} {
+	for _, chunk := range []string{"Ready in ordinary output", "\x1b", "]0;Work", "ing\x07", "\x1b]2;Thinking\x1b", "\\", "\x1b]0;Ready\x07", "\x1b]2;Working | Fix sidebar\x07", "\x1b]2;Ready | Fix sidebar\x07", "\x1b]777;libro;exited\x07"} {
 		a.output([]byte(chunk), func(status string) { got = append(got, status) })
 	}
-	if want := []string{"working", "working", "done", "exited"}; !reflect.DeepEqual(got, want) {
+	if want := []string{"working", "working", "done", "working", "done", "exited"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("statuses = %v, want %v", got, want)
 	}
 }

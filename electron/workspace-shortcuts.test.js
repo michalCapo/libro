@@ -423,3 +423,40 @@ test('browser shortcuts accept brackets, custom bindings, and ignore repeat', ()
     }
   }
 })
+
+test('browser cycling runs at capture phase from terminals and other focused panels', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const navigate = source.slice(source.indexOf('  function navigateBrowser('), source.indexOf('  let toolKeys'))
+  const normalize = source.slice(source.indexOf('  function shortcut('), source.indexOf('  function zoom('))
+  const start = source.indexOf("  window.addEventListener('keydown', event => {\n    const input")
+  const end = source.indexOf("  window.addEventListener('keydown', event => {\n    if (!event.ctrlKey", start)
+  for (const focused of ['agent', 'terminal', 'git', 'files']) {
+    for (const [key, expected] of [['[', 'one'], [']', 'three']]) {
+      let keydown
+      let prevented = false
+      let stopped = false
+      const calls = []
+      const state = { browser: 'two', right: focused }
+      vm.runInNewContext(navigate + normalize + source.slice(start, end), {
+        window: {
+          __libroSelectedApp: focused,
+          addEventListener(type, handler, capture) {
+            assert.equal(type, 'keydown')
+            assert.equal(capture, true)
+            keydown = handler
+          },
+        },
+        document: { getElementById: () => ({ hidden: true }), querySelector: () => null },
+        toolKeys: { 'previous-browser': 'Ctrl+[', 'next-browser': 'Ctrl+]' },
+        activeGrid: () => ({}), dockState: () => state,
+        frames: () => ['one', 'two', 'three'].map(appId => ({ dataset: { appId, appType: 'url', plugin: 'browser' } })),
+        select: id => calls.push(id),
+      })
+      keydown({ key, ctrlKey: true, target: { closest: () => null },
+        preventDefault() { prevented = true }, stopImmediatePropagation() { stopped = true } })
+      assert.deepEqual(calls, [expected], focused + ': Ctrl+' + key)
+      assert.equal(prevented, true)
+      assert.equal(stopped, true)
+    }
+  }
+})
