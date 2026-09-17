@@ -13,7 +13,11 @@
   let prefs = {};
   try { prefs = JSON.parse(localStorage.getItem('libro.workspace') || '{}') || {}; } catch (_) {}
   if (typeof prefs.projects !== 'boolean') prefs.projects = innerWidth > 760;
-  const call = (action, data = {}) => __ws.call(action, {sid, ...data});
+  const call = (action, data = {}) => {
+    if (action === 'project.switch') acknowledgeProjectActivity(data.name);
+    if (action === 'worktree.switch') acknowledgeProjectActivity(data.project + '/' + data.branch);
+    return __ws.call(action, {sid, ...data});
+  };
   const node = (tag, cls, text) => { const el = document.createElement(tag); el.className = cls; if (text) el.textContent = text; return el; };
   const button = (label, icon, action) => {
     const el = node('button', 'ws-button'); el.type = 'button'; el.title = label; el.setAttribute('aria-label', label);
@@ -322,12 +326,40 @@
       status.textContent = 'Could not save. Please try again.';
     }
   }
+  const acknowledgedAgents = new Set();
+  function acknowledgeProjectActivity(key) {
+    const grid = [...document.querySelectorAll('[data-workspace-project]')].find(grid => grid.dataset.workspaceProject === key);
+    if (!grid) return;
+    let changed = false;
+    frames(grid).forEach(frame => {
+      const id = frame.dataset.appId;
+      if (window.__libroAgentStatuses?.[id] === 'done' && !acknowledgedAgents.has(id)) {
+        acknowledgedAgents.add(id);
+        changed = true;
+      }
+    });
+    if (changed) renderProjectActivity();
+  }
+  function acknowledgeProjectInteraction(event) {
+    const row = event.target.closest?.('.ws-project-row');
+    const project = event.target.closest?.('.ws-project');
+    const grid = project?.querySelector('[data-workspace-project]');
+    const key = row?.dataset.projectKey || grid?.dataset.workspaceProject;
+    if (key) acknowledgeProjectActivity(key);
+    else if (event.type === 'keydown' && event.target === document.body) acknowledgeProjectActivity(window.__libroActiveProject);
+  }
+  ['pointerdown', 'keydown', 'input', 'wheel'].forEach(type => {
+    document.addEventListener(type, acknowledgeProjectInteraction, {capture:true, passive:true});
+  });
   function renderProjectActivity() {
     const statuses = window.__libroAgentStatuses || {};
+    for (const id of acknowledgedAgents) {
+      if (statuses[id] && statuses[id] !== 'done') acknowledgedAgents.delete(id);
+    }
     const projects = new Map();
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
       const agents = frames(grid).filter(frame => frame.dataset.dock === 'center');
-      const states = agents.map(frame => statuses[frame.dataset.appId]);
+      const states = agents.map(frame => acknowledgedAgents.has(frame.dataset.appId) && statuses[frame.dataset.appId] === 'done' ? 'idle' : statuses[frame.dataset.appId]);
       projects.set(grid.dataset.workspaceProject, states.includes('working') ? 'working' :
         states.includes('done') && states.every(state => state === 'done' || state === 'idle') ? 'done' : '');
     });

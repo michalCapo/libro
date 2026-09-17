@@ -5,7 +5,7 @@ const vm = require('node:vm')
 const { test } = require('node:test')
 
 const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-const source = workspace.slice(workspace.indexOf('  let notificationAudio;'), workspace.indexOf('  function renderProjectActivity()'))
+const source = workspace.slice(workspace.indexOf('  let notificationAudio;'), workspace.indexOf('  const acknowledgedAgents ='))
 function setup(prefs = {}) {
   const elements = { 'notification-sound': {}, 'notification-sound-status': {} }
   const listeners = {}
