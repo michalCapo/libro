@@ -448,10 +448,6 @@ func Run(assets embed.FS) {
 		}
 
 		appType, _ := data["type"].(string)
-		width := DBDefaultPanelWidth()
-		if val, ok := data["width"].(string); ok && val != "" {
-			width = Width(val)
-		}
 		name, _ := data["name"].(string)
 		side, _ := data["side"].(string)
 		pluginID, _ := data["plugin"].(string)
@@ -489,6 +485,10 @@ func Run(assets embed.FS) {
 			}
 		}
 		command, _ := data["command"].(string)
+		width := defaultAppWidth(Application{Type: AppType(appType), Command: command, PluginID: pluginID})
+		if val, ok := data["width"].(string); ok && val != "" {
+			width = Width(val)
+		}
 		if dock == "center" && !isAgentApp(Application{Type: AppType(appType), Command: command, PluginID: pluginID}) {
 			return r.Notify("error", "The main area is only for agents. Add other agents as agent plugins.")
 		}
@@ -949,7 +949,7 @@ func Run(assets embed.FS) {
 		stateBefore := sm.Get(sid)
 		hadApps := len(stateBefore.Apps)
 
-		sm.InsertApp(sid, "", DBDefaultPanelWidth(), "New Tab", insertIdx)
+		sm.InsertApp(sid, "", DBDefaultToolPanelWidth(), "New Tab", insertIdx)
 		state := sm.Get(sid)
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)

@@ -33,3 +33,40 @@ func TestProjectFiles(t *testing.T) {
 		t.Fatal("followed escaping symlink")
 	}
 }
+
+func TestProjectFileToOpen(t *testing.T) {
+	root := t.TempDir()
+	name := ".hidden file.bin"
+	if err := os.WriteFile(filepath.Join(root, name), []byte{0, 1, 2}, 0600); err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.EvalSymlinks(filepath.Join(root, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := projectFileToOpen(root, name)
+	if err != nil || got != want {
+		t.Fatalf("open path = %q, %v; want %q", got, err, want)
+	}
+	for _, path := range []string{"", ".", "../outside", want, "missing"} {
+		if _, err := projectFileToOpen(root, path); err == nil {
+			t.Errorf("accepted %q", path)
+		}
+	}
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(outside, []byte("outside"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
+		t.Skip(err)
+	}
+	if _, err := projectFileToOpen(root, "escape"); err == nil {
+		t.Fatal("accepted escaping symlink")
+	}
+	if err := os.Symlink(name, filepath.Join(root, "local-link")); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := projectFileToOpen(root, "local-link"); err != nil || got != want {
+		t.Fatalf("local symlink = %q, %v; want %q", got, err, want)
+	}
+}

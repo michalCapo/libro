@@ -1,16 +1,17 @@
 (function () {
   const states = new Map();
-  function request(s, path, preview = false) {
+  function request(s, path, preview = false, external = false) {
     const token = String(++s.sequence);
-    s.pending.set(token, {path, preview});
+    s.pending.set(token, {path, preview, external});
     if (preview) s.previewRequest = token;
-    s.status.textContent = 'Loading…';
-    __ws.call('files.read', {sid:window.__libroWorkspaceSID, id:s.id, path, request:token});
+    s.status.textContent = external ? 'Opening…' : 'Loading…';
+    __ws.call(external ? 'files.open' : 'files.read', {sid:window.__libroWorkspaceSID, id:s.id, path, request:token});
   }
   function visible(s) {
     const result = [], query = s.filter.value.toLowerCase();
     function walk(path, depth) {
       for (const item of s.children.get(path) || []) {
+        if (!s.hidden.checked && item.name.startsWith('.')) continue;
         if (!query || item.path.toLowerCase().includes(query)) result.push({...item, depth});
         if (item.dir && s.expanded.has(item.path)) walk(item.path, depth + 1);
       }
@@ -51,16 +52,18 @@
     for (const [id,s] of states) if (!s.el.isConnected) states.delete(id);
     document.querySelectorAll('[data-files]').forEach(el => {
       if (states.get(el.dataset.files)?.el === el) return;
-      const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,sequence:0,items:[]};
+      const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,sequence:0,items:[]};
       states.set(s.id,s);
+      s.hidden.onchange = () => { s.index = 0; render(s); };
       s.filter.oninput = () => { s.index = 0; render(s); };
       s.filter.onkeydown = event => { if (event.key === 'Escape' || event.key === 'ArrowDown' || event.key === 'Enter') { event.preventDefault(); s.tree.focus(); if (event.key === 'Enter') open(s); } };
       s.tree.onkeydown = event => {
         if (event.ctrlKey || event.altKey || event.metaKey) return;
         const key = event.key, item = s.items[s.index];
-        if (!['j','k','h','l','g','G','/','Enter','ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End'].includes(key)) return;
+        if (!['j','k','h','l','g','G','o','/','Enter','Backspace','ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End'].includes(key)) return;
         event.preventDefault(); event.stopPropagation();
         if (key === '/') { s.filter.focus(); s.filter.select(); return; }
+        if (key === 'o') { if (item && !item.dir && !event.repeat) request(s,item.path,false,true); return; }
         if (key === 'g') { if (Date.now() - (s.lastG || 0) < 500) s.index = 0; s.lastG = Date.now(); }
         else if (key === 'G' || key === 'End') s.index = s.items.length - 1;
         else if (key === 'Home') s.index = 0;
@@ -68,7 +71,7 @@
         else if (key === 'k' || key === 'ArrowUp') s.index--;
         else if (key === 'l' || key === 'ArrowRight' || key === 'Enter') { open(s,key !== 'Enter'); return; }
         else if (item) {
-          if (item.dir && s.expanded.has(item.path)) s.expanded.delete(item.path);
+          if (key !== 'Backspace' && item.dir && s.expanded.has(item.path)) s.expanded.delete(item.path);
           else { const parent = item.path.split('/').slice(0,-1).join('/'); const index = s.items.findIndex(entry => entry.path === parent); if (index >= 0) s.index = index; }
         }
         render(s); s.tree.querySelector('[aria-selected=true]')?.scrollIntoView({block:'nearest'});
@@ -82,7 +85,7 @@
     s.pending.delete(result.request);
     if (pending.preview && s.previewRequest !== result.request) return;
     s.status.textContent = result.error || '';
-    if (result.error) return;
+    if (result.error || pending.external) return;
     if (result.directory) { s.children.set(pending.path,result.entries || []); render(s); }
     else { s.el.querySelector('.ws-file-path').textContent = result.path; s.el.querySelector('.ws-file-text').textContent = result.text || '(Empty file)'; }
   }

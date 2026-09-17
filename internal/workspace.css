@@ -206,7 +206,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-settings[hidden]{display:none}
 .ws-settings-header{display:flex;align-items:center;gap:12px;padding:18px 24px}
 .ws-settings-header h1{font-size:16px;font-weight:500;margin:0}
-.ws-settings-content{box-sizing:border-box;width:100%;max-width:var(--ws-default-panel-width);margin:32px auto;padding:0 32px}
+.ws-settings-content{box-sizing:border-box;width:100%;max-width:960px;margin:32px auto;padding:0 32px}
 .ws-settings-group{border:1px solid var(--ws-line);border-radius:16px;background:var(--ws-bg);overflow:hidden}
 .ws-settings-row{display:flex;align-items:center;justify-content:space-between;gap:32px;padding:20px}
 .ws-settings-copy{min-width:0}.ws-settings-copy label{font-size:15px;font-weight:500}.ws-settings-copy p{color:var(--ws-muted);font-size:14px;line-height:1.6;margin:6px 0 0;max-width:62ch}
@@ -277,13 +277,19 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-file-sidebar{display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--ws-line)}
 .ws-file-filter{margin:8px;padding:7px 10px;min-width:0;border:1px solid var(--ws-control-line);border-radius:7px;background:var(--ws-raised);color:var(--ws-fg);font:inherit}
 .ws-file-tree{flex:1;min-height:0;overflow:auto;font-size:13px}
+.ws-file-hidden{display:flex;align-items:center;gap:6px;margin:0 8px 8px;font-size:12px;color:var(--ws-muted);cursor:pointer}
 .ws-file-row{display:flex;align-items:center;gap:6px;min-height:30px;padding-right:8px;cursor:pointer}
 .ws-file-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ws-file-row .material-icons-round{font-size:18px;color:var(--ws-muted)}
 .ws-file-row:hover{background:var(--ws-hover)}
 .ws-file-row[aria-selected=true]{background:var(--ws-hover);color:var(--ws-fg)}
 .ws-file-tree:focus-visible{outline:2px solid var(--ws-accent);outline-offset:-2px}
-.ws-file-help,.ws-file-status{padding:8px;font-size:11px;color:var(--ws-muted)}
+.ws-file-help{flex-shrink:0;max-height:45%;overflow:auto;padding:8px;border-top:1px solid var(--ws-line);font-size:12px;color:var(--ws-muted)}
+.ws-file-help summary{cursor:pointer;color:var(--ws-fg)}
+.ws-file-help summary:focus-visible{outline:2px solid var(--ws-accent);outline-offset:2px}
+.ws-file-shortcuts{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 8px;margin-top:8px}
+.ws-file-shortcuts kbd{justify-self:end;white-space:nowrap;font:11px/18px ui-monospace,monospace;color:var(--ws-fg);background:var(--ws-raised);border:1px solid var(--ws-line);border-radius:4px;padding:0 4px}
+.ws-file-status{padding:8px;font-size:11px;color:var(--ws-muted)}
 .ws-file-status:empty{display:none}
 
 /* Agent tab: name and size stay together. */

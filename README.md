@@ -78,7 +78,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 ### Panels
 
 - Center panels run CLI agents; right sidebar tools are Terminal, Browser, Files, Nvim, Git, and Database; the bottom panel holds the project shell and its start command.
-- Panels sit side by side at fixed widths. New panels default to MD (640px) without resizing existing panels. Change this in **Settings → Default panel width**; the preference is saved for all projects.
+- Panels sit side by side at fixed widths. New agents default to MD (640px) and new tools to LG (960px). Change these separately in **Settings → Panels → Agent panel width / Tool panel width**. Both preferences apply across projects; existing panels keep their widths.
 - Choose XS (320px), SM (480px), MD (640px), LG (960px), XL (1280px), or 2XL (1920px) from the panel toolbar. Existing 3XL and full-width options remain available.
 - Scroll horizontally or use the previous/next panel buttons to reach panels outside the viewport.
 - Tabs and hidden panels keep their sessions alive. Closing a terminal stops its PTY.

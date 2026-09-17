@@ -22,19 +22,42 @@ func validDefaultPanelWidth(width Width) bool {
 }
 
 func DBDefaultPanelWidth() Width {
+	return dbPanelWidth("default_panel_width", WidthMD)
+}
+
+func DBDefaultToolPanelWidth() Width {
+	return dbPanelWidth("default_tool_panel_width", WidthLG)
+}
+
+func defaultAppWidth(app Application) Width {
+	if isAgentApp(app) {
+		return DBDefaultPanelWidth()
+	}
+	return DBDefaultToolPanelWidth()
+}
+
+func dbPanelWidth(key string, fallback Width) Width {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 	if db == nil {
-		return WidthMD
+		return fallback
 	}
 	var value string
-	if err := db.QueryRow(`SELECT value FROM settings WHERE key = 'default_panel_width'`).Scan(&value); err != nil || !validDefaultPanelWidth(Width(value)) {
-		return WidthMD
+	if err := db.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&value); err != nil || !validDefaultPanelWidth(Width(value)) {
+		return fallback
 	}
 	return Width(value)
 }
 
 func DBSetDefaultPanelWidth(width Width) error {
+	return dbSetPanelWidth("default_panel_width", width)
+}
+
+func DBSetDefaultToolPanelWidth(width Width) error {
+	return dbSetPanelWidth("default_tool_panel_width", width)
+}
+
+func dbSetPanelWidth(key string, width Width) error {
 	if !validDefaultPanelWidth(width) {
 		return fmt.Errorf("invalid default panel width: %s", width)
 	}
@@ -43,7 +66,7 @@ func DBSetDefaultPanelWidth(width Width) error {
 	if db == nil {
 		return fmt.Errorf("settings database is unavailable")
 	}
-	_, err := db.Exec(`INSERT INTO settings (key, value) VALUES ('default_panel_width', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, string(width))
+	_, err := db.Exec(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, string(width))
 	return err
 }
 
@@ -261,14 +284,19 @@ func registerSettingsActions(app *r.App) {
 		encoded, _ := json.Marshal(commands)
 		keys, _ := json.Marshal(toolKeybindings())
 		list, _ := json.Marshal(plugins())
-		return fmt.Sprintf("window.__libroPlugins=%s;libroWorkspace.showSettings(%s,%s,%s);", list, components.JSString(string(DBDefaultPanelWidth())), encoded, keys)
+		return fmt.Sprintf("window.__libroPlugins=%s;libroWorkspace.showSettings(%s,%s,%s,%s);", list, components.JSString(string(DBDefaultPanelWidth())), encoded, keys, components.JSString(string(DBDefaultToolPanelWidth())))
 	})
 	registerAction(app, "settings.width", func(ctx *r.Context) string {
 		value, _ := ctx.WsData()["width"].(string)
-		if err := DBSetDefaultPanelWidth(Width(value)); err != nil {
-			return "libroWorkspace.settingsSaved(false);"
+		tool, _ := ctx.WsData()["tool"].(bool)
+		setter := DBSetDefaultPanelWidth
+		if tool {
+			setter = DBSetDefaultToolPanelWidth
 		}
-		return fmt.Sprintf("libroWorkspace.settingsSaved(true,%s);", components.JSString(Width(value).PixelWidth()))
+		if err := setter(Width(value)); err != nil {
+			return fmt.Sprintf("libroWorkspace.settingsSaved(false,%t);", tool)
+		}
+		return fmt.Sprintf("libroWorkspace.settingsSaved(true,%t);", tool)
 	})
 }
 
@@ -315,12 +343,20 @@ func renderWorkspaceSettings() *r.Node {
 			r.Div("ws-settings-group").Render(
 				r.Div("ws-settings-row").Render(
 					r.Div("ws-settings-copy").Render(
-						r.El("label", "").Attr("for", "default-panel-width").Text("Default panel width"),
-						r.P("").ID("default-panel-width-help").Text("The width of new panels in every project. Existing panels keep their current width."),
+						r.El("label", "").Attr("for", "default-panel-width").Text("Agent panel width"),
+						r.P("").ID("default-panel-width-help").Text("Default width for new agent panels in every project."),
 					),
 					r.El("select", "ws-settings-select").ID("default-panel-width").Attr("aria-describedby", "default-panel-width-help").On("change", r.JS("libroWorkspace.saveSettings(event.target.value)")).Render(options...),
 				),
+				r.Div("ws-settings-row").Render(
+					r.Div("ws-settings-copy").Render(
+						r.El("label", "").Attr("for", "default-tool-panel-width").Text("Tool panel width"),
+						r.P("").ID("default-tool-panel-width-help").Text("Default width for new tool panels, such as Files and Browser."),
+					),
+					r.El("select", "ws-settings-select").ID("default-tool-panel-width").Attr("aria-describedby", "default-tool-panel-width-help").On("change", r.JS("libroWorkspace.saveSettings(event.target.value,true)")).Render(options...),
+				),
 			),
+			r.P("ws-settings-status").Text("Existing panels keep their current width."),
 			r.P("ws-settings-status").ID("workspace-settings-status").Attr("role", "status").Attr("aria-live", "polite"),
 			r.El("h2", "ws-shortcut-heading").Text("Agent commands"),
 			r.P("ws-settings-status").Text("CLI commands used to start agents in every project. Include any flags you need. Running sessions are unchanged. Autolaunch opens one enabled agent when you open a project with no agent panels. Leave all unchecked to choose manually."),

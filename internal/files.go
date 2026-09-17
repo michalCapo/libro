@@ -92,44 +92,97 @@ func readProjectFile(rootPath, path string) (fileResult, error) {
 	return result, nil
 }
 
+func projectFileToOpen(rootPath, path string) (string, error) {
+	if !filepath.IsLocal(path) {
+		return "", fmt.Errorf("path must stay inside the project")
+	}
+	root, err := filepath.Abs(rootPath)
+	if err != nil {
+		return "", err
+	}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(filepath.Join(root, path))
+	if err != nil {
+		return "", err
+	}
+	relative, err := filepath.Rel(root, resolved)
+	if err != nil || !filepath.IsLocal(relative) {
+		return "", fmt.Errorf("path must stay inside the project")
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("only regular files can be opened")
+	}
+	return resolved, nil
+}
+
 func registerFilesActions(app *r.App) {
-	registerAction(app, "files.read", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		id, _ := data["id"].(string)
-		path, _ := data["path"].(string)
-		request, _ := data["request"].(string)
-		allowed := false
-		for _, a := range sm.Get(sid).Apps {
-			if a.ID == id && a.PluginID == "files" {
-				allowed = true
-				break
+	for _, action := range []string{"files.read", "files.open"} {
+		registerAction(app, action, func(ctx *r.Context) string {
+			sid := extractSID(ctx)
+			data := ctx.WsData()
+			id, _ := data["id"].(string)
+			path, _ := data["path"].(string)
+			request, _ := data["request"].(string)
+			allowed := false
+			for _, a := range sm.Get(sid).Apps {
+				if a.ID == id && a.PluginID == "files" {
+					allowed = true
+					break
+				}
 			}
-		}
-		result := fileResult{ID: id, Path: path, Request: request}
-		if allowed {
-			value, err := readProjectFile(sm.GetActiveProjectPath(sid), path)
-			result = value
-			result.ID = id
-			result.Request = request
-			if err != nil {
-				result.Error = err.Error()
+			result := fileResult{ID: id, Path: path, Request: request}
+			if allowed && action == "files.open" {
+				file, err := projectFileToOpen(sm.GetActiveProjectPath(sid), path)
+				if err == nil {
+					err = openBrowser(file)
+				}
+				if err != nil {
+					result.Error = err.Error()
+				}
+			} else if allowed {
+				value, err := readProjectFile(sm.GetActiveProjectPath(sid), path)
+				result = value
+				result.ID = id
+				result.Request = request
+				if err != nil {
+					result.Error = err.Error()
+				}
+			} else {
+				result.Error = "Switch to this project to browse its files"
 			}
-		} else {
-			result.Error = "Switch to this project to browse its files"
-		}
-		raw, _ := json.Marshal(result)
-		return fmt.Sprintf("window.libroFiles.receive(%s);", raw)
-	})
+			raw, _ := json.Marshal(result)
+			return fmt.Sprintf("window.libroFiles.receive(%s);", raw)
+		})
+	}
 }
 
 func renderFiles(app Application) *r.Node {
+	help := r.Div("ws-file-shortcuts")
+	for _, shortcut := range []struct{ keys, action string }{
+		{"j / k", "Move down / up"},
+		{"h / l", "Fold / open folder"},
+		{"Backspace", "Parent folder"},
+		{"gg / G", "First / last item"},
+		{"/", "Filter files"},
+		{"Enter", "Preview file"},
+		{"o", "Open externally"},
+	} {
+		help.Render(r.Span("").Text(shortcut.action), r.El("kbd", "").Text(shortcut.keys))
+	}
 	return r.Div("ws-files").Attr("data-files", app.ID).Render(
 		r.Div("ws-file-preview").Render(r.Div("ws-file-path").Text("Open file"), r.El("pre", "ws-file-text").Attr("tabindex", "0").Text("Select a file from the project tree.")),
 		r.Div("ws-file-sidebar").Render(
 			r.Input("ws-file-filter").Attr("placeholder", "Filter files…").Attr("aria-label", "Filter files"),
+			r.El("label", "ws-file-hidden").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Show hidden files")),
 			r.Div("ws-file-tree").Attr("role", "tree").Attr("aria-label", "Project files").Attr("tabindex", "0"),
-			r.Div("ws-file-help").Text("j/k move · h/l fold/open · gg/G first/last · / filter · Enter preview"),
+			r.El("details", "ws-file-help").Attr("open", "open").Render(r.El("summary", "").Text("Keyboard shortcuts"), help),
 			r.Div("ws-file-status").Attr("role", "status"),
 		),
 	)

@@ -2,7 +2,6 @@
   if (window.libroWorkspace) return;
   const root = document.getElementById('libro-workspace');
   const sid = window.__libroWorkspaceSID;
-  root.style.setProperty('--ws-default-panel-width', window.__libroDefaultPanelWidth);
   let maximized = '';
   const dockStates = new Map();
   function dockState(grid) {
@@ -670,7 +669,7 @@
     const next = apps[Math.max(0, Math.min(apps.length - 1, index + delta))];
     if (next) select(next.dataset.appId);
   }
-  let savedWidth = 'md';
+  let savedWidth = 'md', savedToolWidth = 'lg';
   let settingsFocus;
   function settings() {
     if (!document.getElementById('workspace-settings').hidden) { closeSettings(); return; }
@@ -696,7 +695,7 @@
       status.textContent = 'Could not save theme. Please try again.';
     }
   }
-  function showSettings(width, commands = {}, bindings = toolKeys) {
+  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg') {
     document.getElementById('notification-sound').value = prefs.notificationSound === false ? 'off' : 'on';
     document.getElementById('notification-sound-status').textContent = '';
     document.getElementById('workspace-theme').value = themePreference();
@@ -710,7 +709,9 @@
     window.__libroPlugins.filter(p => !p.removed && p.dock === 'center' && p.type === 'terminal').forEach(p => addAgentRow(p, commands[p.id] || p.command));
     document.querySelector('#agent-commands-form [role=status]').textContent = '';
     savedWidth = width;
+    savedToolWidth = toolWidth;
     document.getElementById('default-panel-width').value = width;
+    document.getElementById('default-tool-panel-width').value = toolWidth;
     document.getElementById('workspace-settings-status').textContent = '';
     document.getElementById('workspace-settings').hidden = false;
     document.querySelectorAll('.ws-project').forEach(project => project.inert = true);
@@ -721,10 +722,10 @@
     document.querySelectorAll('.ws-project').forEach(project => project.inert = false);
     if (settingsFocus?.isConnected) settingsFocus.focus();
   }
-  function saveSettings(width) {
-    document.getElementById('default-panel-width').disabled = true;
+  function saveSettings(width, tool = false) {
+    document.getElementById(tool ? 'default-tool-panel-width' : 'default-panel-width').disabled = true;
     document.getElementById('workspace-settings-status').textContent = 'Saving…';
-    call('settings.width', {width});
+    call('settings.width', {width, tool});
   }
   let removedAgents = {};
   function addAgentRow(plugin, command, toolRow = false) {
@@ -804,15 +805,15 @@
       refresh();
     }
   }
-  function settingsSaved(ok, width) {
-    const select = document.getElementById('default-panel-width');
+  function settingsSaved(ok, tool = false) {
+    const select = document.getElementById(tool ? 'default-tool-panel-width' : 'default-panel-width');
     if (ok) {
-      savedWidth = select.value;
-      root.style.setProperty('--ws-default-panel-width', width);
+      if (tool) savedToolWidth = select.value;
+      else savedWidth = select.value;
       refresh();
-    } else select.value = savedWidth;
+    } else select.value = tool ? savedToolWidth : savedWidth;
     select.disabled = false;
-    document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New panels will use this width.' : 'Could not save. Please try again.';
+    document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
   }
   window.libroWorkspace = {projectSettings, saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
