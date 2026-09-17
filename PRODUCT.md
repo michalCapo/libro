@@ -8,7 +8,7 @@ desktop (Go + Electron), with a browser fallback
 
 ## Product Purpose
 
-Libro is a Go and Electron desktop workspace for CLI coding agents. The main area runs Codex, Pi, Claude, or another CLI in a native terminal. Projects retain their running apps when the user switches context.
+Libro is a Go and Electron desktop workspace for CLI coding agents. The main area runs Codex, Pi, Claude, OpenCode, or another CLI in a native terminal. Projects retain their running apps when the user switches context.
 
 ## Capabilities and Constraints
 

@@ -130,7 +130,7 @@ Use the system sans-serif stack in `body`; there is no separate display font. Bo
 
 The shell has a 56px titlebar, a 26px statusbar, and left project navigation. The sidebar is 216px wide. At 760px or less it overlays the content between the titlebar and statusbar, with width `min(216px, calc(100vw - 48px))`. It defaults closed on small screens when no preference exists; selecting a project closes it. The brand and trailing status text hide, and empty-state headings become 24px.
 
-The main area is one horizontal row of full-height, non-shrinking app panels with no gap or outer card padding. Width presets are XS 320px, SM 480px, MD 640px, LG 960px, XL 1280px, and 2XL 1920px. These are panel widths, not viewport breakpoints. Legacy 3XL 2560px and FULL remain available; the existing screen-width policy disables 3XL on Full HD or smaller screens. FULL uses available strip width. Maximizing temporarily fills the strip and hides other panels. Selecting an offscreen panel scrolls it into view.
+The main area is one horizontal row of full-height, non-shrinking app panels with no gap or outer card padding. Width presets are XS 320px, SM 480px, MD 640px, LG 960px, XL 1280px, and 2XL 1920px. These are panel widths, not viewport breakpoints. Legacy 3XL 2560px and MAX (full strip width, formerly called FULL) remain available as steps beyond 2XL; the existing screen-width policy disables 3XL on Full HD or smaller screens. MAX uses available strip width. Maximizing temporarily fills the strip and hides other panels. Selecting an offscreen panel scrolls it into view.
 
 Toolbars are at least 48px tall and allow controls to wrap. Popups are centered with viewport height limits and internal scrolling. Commands and the app launcher are at most 420px wide with a 24px viewport gutter; other existing dialogs retain their component-specific widths. At small widths, preserve the carousel rather than stacking panels.
 
@@ -164,6 +164,6 @@ Use the frontmatter radii by role: small keycaps and size badges, gently rounded
 
 ## Settings and panel controls
 
-Settings is a workspace page reached from the sidebar. A grouped row provides the global default panel width (XS–2XL), initially MD (640px). Changes save to SQLite and apply only to newly opened panels.
+Settings is a workspace page reached from the sidebar. Grouped rows provide the global default panel widths for agent and tool panels (XS–2XL), initially MD (640px) and LG (960px). Changes save to SQLite and apply only to newly opened panels. The page also holds theme (Auto, Light, Dark), an agent-done notification sound, agent command management (edit, rename, disable, remove, custom agents, autolaunch), and remappable keyboard shortcuts.
 
 Panel toolbars fit within the workspace viewport while terminal content retains its fixed width. The close button comes before the title and appears on panel hover or button keyboard focus; it remains visible for touch input. Worktree rows use their dedicated switch action with project, path, and branch.

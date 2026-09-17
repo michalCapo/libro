@@ -79,7 +79,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 
 - Center panels run CLI agents; right sidebar tools are Terminal, Browser, Files, Nvim, Git, and Database; the bottom panel holds the project shell and its start command.
 - Panels sit side by side at fixed widths. New agents default to MD (640px) and new tools to LG (960px). Change these separately in **Settings → Panels → Agent panel width / Tool panel width**. Both preferences apply across projects; existing panels keep their widths.
-- Choose XS (320px), SM (480px), MD (640px), LG (960px), XL (1280px), or 2XL (1920px) from the panel toolbar. Existing 3XL and full-width options remain available.
+- Choose XS (320px), SM (480px), MD (640px), LG (960px), XL (1280px), or 2XL (1920px) from the panel toolbar. 3XL (2560px) and MAX (full strip width) remain available as steps beyond 2XL. `Ctrl + M` toggles the selected panel between its current size and MAX.
 - Scroll horizontally or use the previous/next panel buttons to reach panels outside the viewport.
 - Tabs and hidden panels keep their sessions alive. Closing a terminal stops its PTY.
 
@@ -112,6 +112,16 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
   - `h / l` scroll left / right
   - `i` enter insert mode; `Esc` exits insert mode
 
+### Settings
+
+**Settings** in the project sidebar opens a workspace settings page:
+
+- **Theme**: Auto (follows the OS), Light, or Dark. Changes apply immediately.
+- **Agent done sound**: plays a short notification whenever an agent finishes, in any project.
+- **Panels**: default agent and tool panel widths for newly opened panels.
+- **Agent commands**: edit launch commands, rename agents, disable or remove them from the launcher, and add custom agents. One enabled agent can be set to autolaunch when a project opens with no agent panels; leave all unchecked to choose manually. Running sessions are unchanged.
+- **Keyboard shortcuts**: remap every tool shortcut and restore defaults.
+
 ## Keyboard Shortcuts
 
 Tool shortcuts are remappable in **Settings → Keyboard shortcuts**. Use Ctrl, Alt, or Meta with a letter, number, `,`, `.`, `=`, or `-`.
@@ -125,7 +135,10 @@ Tool shortcuts are remappable in **Settings → Keyboard shortcuts**. Use Ctrl, 
 - `Ctrl + G` toggle Git
 - `Ctrl + D` toggle Database
 - `Ctrl + Q` close the selected panel
-- `Ctrl + ,` decreases the selected panel size by one step; `Ctrl + .` increases it. At the smallest or largest allowed size, the panel stays at that size; it never wraps around. Remap these under **Settings → Keyboard shortcuts → Decrease panel size / Increase panel size**, then click **Save shortcuts**.
+- `Ctrl + Shift + Q` close the current project and stop its running panels and terminals
+- `Ctrl + .` decreases the selected panel size by one step; `Ctrl + ,` increases it. At the smallest or largest allowed size, the panel stays at that size; it never wraps around. Remap these under **Settings → Keyboard shortcuts → Decrease panel size / Increase panel size**, then click **Save shortcuts**.
+- `Ctrl + M` toggle the selected panel between its current size and MAX (full strip width)
+- `Ctrl + 1` – `Ctrl + 9` switch to the project at that position in the sidebar
 - `Ctrl + P` open the project/worktree picker
 - `Ctrl + N` open the agent launcher
 - `Ctrl + H` / `Ctrl + L` select the previous / next panel in the active project, including the visible tool when it fits beside the agents (wraps at either end)
