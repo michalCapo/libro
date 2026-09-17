@@ -243,22 +243,31 @@
       const signature = JSON.stringify(entries);
       if (tree.dataset.signature === signature) return;
       tree.dataset.signature = signature;
-      tree.replaceChildren();
+      const tabs = new Map([...tree.children].map(tab => [tab.dataset.agentId, tab]));
       entries.forEach((entry, index) => {
         const label = entry.title || entry.name + ' session ' + (index + 1);
-        const tab = node('button', 'ws-project-agent'); tab.type = 'button';
+        let tab = tabs.get(entry.id);
+        if (!tab) {
+          tab = node('button', 'ws-project-agent'); tab.type = 'button';
+          tab.dataset.agentId = entry.id;
+          const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
+          tab.append(icon, node('span', '', label));
+        }
+        tabs.delete(entry.id);
         tab.setAttribute('aria-current', String(entry.selected));
         tab.title = entry.name + ': ' + label;
-        const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
-        tab.append(icon, node('span', '', label));
+        const text = tab.querySelector('span');
+        if (text.textContent !== label) text.textContent = label;
         tab.onclick = () => {
           closeSettings();
           if (innerWidth <= 760) { prefs.projects = false; save(); }
           if (grid.dataset.workspaceProject === window.__libroActiveProject) select(entry.id);
           else call('project.switch', {name:grid.dataset.workspaceProject, appId:entry.id});
         };
-        tree.append(tab);
+        // Keep the button mounted while terminal titles animate, including during a click.
+        if (tree.children[index] !== tab) tree.insertBefore(tab, tree.children[index] || null);
       });
+      tabs.forEach(tab => tab.remove());
     });
   }
   function renderProjectShortcuts() {
