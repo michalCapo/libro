@@ -24,9 +24,11 @@ func URLPopup(_ string) *r.Node {
 							Attr("placeholder", "Enter URL...").
 							Attr("aria-label", "Browser address").
 							Attr("autocomplete", "off").
+							Attr("role", "combobox").Attr("aria-autocomplete", "list").Attr("aria-controls", "url-popup-results").Attr("aria-expanded", "false").
 							Attr("spellcheck", "false"),
 						r.Button("ws-command-dismiss").Attr("type", "button").Attr("aria-label", "Close browser address").OnClick(r.JS(HideJS(URLPopupID))).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("close")),
 					),
+					r.Div("").ID("url-popup-results").Attr("role", "listbox").Attr("aria-label", "Recent addresses").Attr("hidden", "hidden"),
 					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(
 						r.Span("").Text("Enter open"),
 						r.Span("").Text("Esc close"),

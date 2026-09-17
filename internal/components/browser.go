@@ -878,6 +878,7 @@ window.__libroNavigateAddress = function(appID, value) {
 	var host = document.querySelector('[data-webview-app="'+appID+'"], [data-browser-iframe-app="'+appID+'"]');
 	if (!host) return false;
 	var input = document.getElementById('urlinput-'+appID); if (input) input.value = url;
+	if(window.__libroRememberURL)window.__libroRememberURL(url);
 	__ws.call('app.url.set', {sid:host.getAttribute('data-sid'), id:appID, url:url});
 	return true;
 };

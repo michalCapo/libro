@@ -572,7 +572,7 @@ func Run(assets embed.FS) {
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
 		projJS := projectsJS(state)
-		hydrateJS := hydrateAppAfterScrollJS(state.Apps[state.SelectedIndex].ID, sidData(sid, "id", state.Apps[state.SelectedIndex].ID))
+		hydrateJS := hydrateAppAfterScrollJS(state.Apps[state.SelectedIndex].ID, sidData(sid, "id", state.Apps[state.SelectedIndex].ID, "openURL", state.Apps[state.SelectedIndex].URL == ""))
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
 			frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid)
@@ -640,6 +640,7 @@ func Run(assets embed.FS) {
 			}
 		}
 
+		openURL, _ := data["openURL"].(bool)
 		contentJS := renderAppContent(state.Apps[idx], sid, false, nil).ToJSReplace(appContentID(appID))
 		return fmt.Sprintf(`
 (function(){
@@ -655,7 +656,8 @@ func Run(assets embed.FS) {
 		setTimeout(function(){window.__libroOpenURLPopupFor(appID,reopenURLPopupValue);},30);
 	}
 })();
-`, components.JSString(appID), components.JSString(appContentID(appID)), components.JSString(URLPopupID), contentJS) + settleHydratedAppContentJS(appID)
+`, components.JSString(appID), components.JSString(appContentID(appID)), components.JSString(URLPopupID), contentJS) + settleHydratedAppContentJS(appID) + fmt.Sprintf(`
+requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && window.__libroSelectedApp===%s && window.__libroOpenURLPopupFor)window.__libroOpenURLPopupFor(%s,'');});});`, openURL, components.JSString(appID), components.JSString(appID))
 	})
 
 	// Close/remove application
@@ -950,7 +952,6 @@ func Run(assets embed.FS) {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
 		side, _ := data["side"].(string)
-		popup, _ := data["popup"].(bool)
 		// Compute insertion index relative to currently selected app
 		insertIdx := -1 // default: append
 		switch side {
@@ -968,20 +969,11 @@ func Run(assets embed.FS) {
 
 		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
 		projJS := projectsJS(state)
-		hydrateJS := hydrateAppAfterScrollJS(state.Apps[state.SelectedIndex].ID, sidData(sid, "id", state.Apps[state.SelectedIndex].ID))
+		hydrateJS := hydrateAppAfterScrollJS(state.Apps[state.SelectedIndex].ID, sidData(sid, "id", state.Apps[state.SelectedIndex].ID, "openURL", state.Apps[state.SelectedIndex].URL == ""))
 		if hadApps > 0 {
 			newApp := state.Apps[state.SelectedIndex]
 			frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid)
-			focusJS := fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, newApp.ID)
-			if popup {
-				focusJS = fmt.Sprintf(`setTimeout(function(){if(window.__libroOpenURLPopupFor)window.__libroOpenURLPopupFor(%s,'');},220);`, components.JSString(newApp.ID))
-			}
-			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS + focusJS
-		}
-
-		focusJS := fmt.Sprintf(`setTimeout(function(){var inp=document.getElementById('urlinput-%s');if(inp){inp.value='';inp.focus();inp.select();}},200);`, state.Apps[state.SelectedIndex].ID)
-		if popup {
-			focusJS = fmt.Sprintf(`setTimeout(function(){if(window.__libroOpenURLPopupFor)window.__libroOpenURLPopupFor(%s,'');},220);`, components.JSString(state.Apps[state.SelectedIndex].ID))
+			return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
 		}
 
 		return newResponse().
@@ -990,7 +982,6 @@ func Run(assets embed.FS) {
 			Add(projectsJS(state)).
 			Add(navigateJS(state, sid)).
 			Add(hydrateJS).
-			Add(focusJS).
 			Build()
 	})
 
