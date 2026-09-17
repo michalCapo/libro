@@ -441,11 +441,13 @@ const shortcutEventDedup = new Map()
 // Saved workspace bindings must win over shortcuts in guest pages.
 let workspaceShortcuts = new Set()
 function isWorkspaceShortcut(input) {
+  if (input.control && !input.meta && !input.alt && !input.shift &&
+      (input.code === 'Backquote' || input.key === '`')) return true
   const key = input.key === '+' ? '=' : input.key || ''
   const binding = (input.control ? 'Ctrl+' : '') + (input.alt ? 'Alt+' : '') +
     (input.shift && input.key !== '+' ? 'Shift+' : '') + (input.meta ? 'Meta+' : '') + key.toUpperCase()
   return workspaceShortcuts.has(binding) || binding === 'Ctrl+A' ||
-    /^Ctrl\+[1-9]$/.test(binding) || binding === 'Ctrl+`'
+    /^Ctrl\+[1-9]$/.test(binding)
 }
 
 // Find the Go binary — look next to the electron dir, or in PATH

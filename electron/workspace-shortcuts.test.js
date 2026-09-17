@@ -59,6 +59,45 @@ test('updated and disabled bindings release browser shortcuts and normalize plus
   assert.equal(matches({ key: 'f' }), false)
 })
 
+test('browser forwards the physical bottom terminal shortcut across keyboard layouts', () => {
+  for (const key of ['`', 'Dead', '§', ';']) {
+    let toggled = 0
+    let prevented = 0
+    const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+    const bottomHandler = workspace.slice(workspace.indexOf("  window.addEventListener('keydown', event => {\n    if (!event.ctrlKey"), workspace.indexOf('  function terminalExited'))
+    const renderer = vm.createContext({
+      window: {
+        addEventListener(type, handler) { this.handler = handler },
+        dispatchEvent(event) { this.handler(event) },
+      },
+      KeyboardEvent: function (type, options) {
+        return { type, ...options, preventDefault() {}, stopImmediatePropagation() {} }
+      },
+      bottom() { toggled++ },
+    })
+    vm.runInContext(bottomHandler, renderer)
+    for (const repeat of [false, true]) {
+      vm.runInNewContext(matching + '\n(function () {' + forwarding + '})()', {
+        input: { key, code: 'Backquote', control: true, isAutoRepeat: repeat },
+        isMainWindowContents: false, shouldSkipDuplicateShortcut: () => false,
+        e: { preventDefault() { prevented++ } },
+        mainWindow: { webContents: { executeJavaScript(script) {
+          vm.runInContext(script, renderer)
+          return Promise.resolve()
+        } } },
+      })
+    }
+    assert.equal(prevented, 2, key)
+    assert.equal(toggled, 1, key)
+  }
+  const context = vm.createContext({})
+  vm.runInContext(matching, context)
+  for (const modifier of ['alt', 'meta', 'shift']) {
+    context.input = { key: 'Dead', code: 'Backquote', control: true, [modifier]: true }
+    assert.equal(vm.runInContext('isWorkspaceShortcut(input)', context), false, modifier)
+  }
+})
+
 test('workspace syncs initial bindings and saved settings to Electron', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const init = source.slice(source.indexOf('  let toolKeys'), source.indexOf('  function shortcut'))
