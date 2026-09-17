@@ -342,6 +342,14 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-project-item:has(.ws-project-shortcut):has(.ws-project-remove) .ws-project-settings{right:66px}
 .ws-project-item:has(.ws-project-shortcut) .ws-project-remove{right:36px}
 .ws-project-shortcut{position:absolute;right:12px}
+.ws-project-item:has(.ws-project-shortcut):has(.ws-project-terminal) .ws-project-terminal{position:absolute;right:40px}
+.ws-project-item:has(.ws-project-shortcut):has(.ws-project-terminal) .ws-project-row{padding-right:94px}
+.ws-project-item:has(.ws-project-shortcut):has(.ws-project-terminal) .ws-project-settings{right:64px}
+.ws-project-item:has(.ws-project-shortcut):has(.ws-project-terminal):has(.ws-project-remove) .ws-project-row{padding-right:124px}
+.ws-project-item:has(.ws-project-shortcut):has(.ws-project-terminal):has(.ws-project-remove) .ws-project-settings{right:94px}
+.ws-project-item:has(.ws-project-shortcut):has(.ws-project-terminal) .ws-project-remove{right:64px}
+#libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-terminal){flex-direction:column;gap:2px;padding:0}
+#libro-workspace[data-projects=false] .ws-project-row .ws-project-terminal{position:static;order:1;width:12px;height:12px}
 #libro-workspace[data-projects=false] .ws-project-shortcut{position:static}
 #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-shortcut)>.material-icons-round{display:none}
 
