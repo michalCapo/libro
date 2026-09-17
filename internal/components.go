@@ -2391,7 +2391,7 @@ func projectDialogJS(sid string) string {
 				var idx=parseInt(el.getAttribute('data-dir-idx'),10);
 				if(Number.isNaN(idx))return;
 				selectedIdx=idx;
-				openSelectedDirectory();
+				openSelectedDirectory(true);
 			});
 		});
 	}
@@ -2496,8 +2496,8 @@ func projectDialogJS(sid string) string {
 		var run=function(){closePopup();__ws.call('project.create.confirm',{sid:'%s',path:path});};
 		if(window.__libroConfirmAction){window.__libroConfirmAction('Create folder?', 'Create this folder and open it as a new Libro project?\n\n'+path, run);}else{run();}
 	}
-	function openSelectedDirectory(){
-		var typed=typedDirectoryPath();
+	function openSelectedDirectory(fromClick){
+		var typed=fromClick?'':typedDirectoryPath();
 		if(typed){
 			if(dirMatches.length===0){confirmCreateProject(typed);}else{
 				closePopup();
