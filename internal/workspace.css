@@ -67,7 +67,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 #libro-workspace .ws-grid{scrollbar-width:thin;scrollbar-color:var(--ws-line) var(--ws-bg)}
 #libro-workspace .ws-grid::-webkit-scrollbar{display:block!important;height:8px!important}
 #libro-workspace .ws-grid::-webkit-scrollbar-thumb{background:var(--ws-line)}
-.ws-grid>[data-app-id]{min-height:0;max-width:none;height:100%;border:0!important;border-right:1px solid var(--ws-line)!important;border-radius:0!important;animation:none!important;background:var(--ws-bg)!important;overflow:hidden}
+.ws-grid>[data-app-id]{min-height:0;max-width:none;height:100%;border:0!important;border-inline:1px solid var(--ws-control-line)!important;border-radius:0!important;animation:none!important;background:var(--ws-bg)!important;overflow:hidden}
 .ws-grid>[data-app-id]>[data-app-toolbar]{width:min(100%,100cqw);box-sizing:border-box;background:var(--ws-bg)!important;color:var(--ws-fg)!important;border-color:var(--ws-line)!important;min-height:48px;gap:8px!important;padding:8px 12px!important;flex-wrap:wrap}
 .ws-grid>[data-selected=true]>[data-app-toolbar]{box-shadow:inset 0 -1px var(--ws-accent)}
 .ws-grid [data-app-toolbar] button,.ws-grid [data-app-toolbar] input{color:var(--ws-fg)!important}
@@ -226,7 +226,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-grid>[data-dock-visible=false]{display:none!important}
 .ws-grid>.ws-empty{grid-row:1;grid-column:1;min-width:0}
 .ws-grid:has(>[data-app-id])>.ws-empty{display:flex}
-.ws-grid>[data-dock=bottom]{border-top:1px solid var(--ws-line)!important}
+.ws-grid>[data-dock=bottom]{border-top:1px solid var(--ws-control-line)!important}
 .ws-tool-rail{display:flex;flex-direction:column;gap:8px;padding:8px;border-left:1px solid var(--ws-line);background:var(--ws-chrome);flex-shrink:0}
 .ws-tool-rail .ws-button{width:36px;height:36px}
 .ws-tool-tabs{display:flex;justify-content:flex-end;gap:4px;min-height:36px;overflow-x:auto;padding:4px 8px;border-bottom:1px solid var(--ws-line);background:var(--ws-chrome);flex-shrink:0}
@@ -245,7 +245,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-agent-command-row [role=status]:empty{display:none}
 @media(max-width:520px){.ws-agent-command-row{grid-template-columns:minmax(0,1fr) auto;padding:12px}.ws-agent-command-row label{grid-column:1 / -1}.ws-agent-command{min-width:0;width:100%}}
 
-.ws-grid>[data-tool-overlay=true]{position:absolute;top:0;z-index:45;border-left:1px solid var(--ws-line)!important;box-shadow:-8px 0 24px rgb(0 0 0 / 12%)}
+.ws-grid>[data-tool-overlay=true]{position:absolute;top:0;z-index:45;box-shadow:-8px 0 24px rgb(0 0 0 / 12%)}
 
 .ws-grid [data-hide-bottom]{margin-left:auto;flex-shrink:0}
 
