@@ -333,3 +333,6 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 #close-dialog .ws-close-button:hover{background:var(--ws-hover)}
 #close-dialog .ws-close-quit{background:#c62828;border-color:transparent;color:#fff}
 #close-dialog .ws-close-quit:hover{background:#ab2020}
+
+.ws-project-shortcut{flex:none;min-width:20px;height:20px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;border:1px solid var(--ws-control-line);border-radius:4px;background:var(--ws-raised);color:var(--ws-muted);font:11px/1 ui-monospace,monospace}
+#libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-shortcut)>.material-icons-round{display:none}

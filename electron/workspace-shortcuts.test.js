@@ -8,7 +8,7 @@ const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8')
 const forwarding = main.slice(main.indexOf('    // Keep workspace navigation'), main.indexOf('    // Forward Ctrl+;'))
 
 test('browser forwards workspace shortcuts, including repeat state', () => {
-  for (const key of ['a', 'b', 'h', 'l', 'p', 'q', 'r', 't', ',', '.']) {
+  for (const key of ['a', 'b', 'h', 'l', 'p', 'q', 'r', 't', ',', '.', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
     for (const repeat of [false, true]) {
       let prevented = false
       let forwarded
@@ -148,5 +148,50 @@ test('close project uses saved binding and ignores repeat', () => {
       })
       assert.deepEqual(calls, repeat ? [] : ['project.close'])
     }
+  }
+})
+
+test('project numbers skip empty projects and update when the last panel closes', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const render = source.slice(source.indexOf('  function renderProjectShortcuts()'), source.indexOf('  let notificationAudio;'))
+  const rows = Array.from({ length: 12 }, (_, i) => ({
+    dataset: { projectKey: String(i) }, attributes: {}, badge: null,
+    querySelector() { return this.badge },
+    append(badge) { this.badge = badge; badge.remove = () => { this.badge = null } },
+    setAttribute(key, value) { this.attributes[key] = value },
+    removeAttribute(key) { delete this.attributes[key] },
+  }))
+  const grids = rows.map((row, i) => ({ dataset: { workspaceProject: row.dataset.projectKey }, panels: i ? [{}] : [] }))
+  const context = vm.createContext({
+    document: { querySelectorAll: selector => selector === '.ws-project-row' ? rows : grids },
+    frames: grid => grid.panels,
+    node: () => ({ setAttribute() {} }),
+  })
+  vm.runInContext(render + '\nrenderProjectShortcuts();', context)
+  assert.deepEqual(rows.map(row => row.dataset.projectShortcut), ['', '1', '2', '3', '4', '5', '6', '7', '8', '9', '', ''])
+  assert.equal(rows[1].badge.textContent, '1')
+  assert.equal(rows[1].attributes['aria-keyshortcuts'], 'Control+1')
+  grids[1].panels = []
+  vm.runInContext('renderProjectShortcuts()', context)
+  assert.equal(rows[1].badge, null)
+  assert.equal(rows[1].attributes['aria-keyshortcuts'], undefined)
+  assert.equal(rows[2].dataset.projectShortcut, '1')
+  assert.equal(rows[10].dataset.projectShortcut, '9')
+})
+
+test('Ctrl+1–9 selects the numbered project once', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('    if (event.ctrlKey &&'), source.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"))
+  for (const key of ['1', '9']) for (const repeat of [false, true]) {
+    let clicked = 0
+    vm.runInNewContext('(function () {' + handler + '})()', {
+      event: { key, ctrlKey: true, repeat, preventDefault() {}, stopImmediatePropagation() {} },
+      renderProjectShortcuts() {},
+      document: { querySelector(selector) {
+        assert.equal(selector, '.ws-project-row[data-project-shortcut="' + key + '"]')
+        return { click() { clicked++ } }
+      } },
+    })
+    assert.equal(clicked, repeat ? 0 : 1)
   }
 })

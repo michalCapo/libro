@@ -220,6 +220,21 @@
       list.append(item);
     });
   }
+  function renderProjectShortcuts() {
+    const running = new Set([...document.querySelectorAll('[data-workspace-project]')]
+      .filter(grid => frames(grid).length > 0).map(grid => grid.dataset.workspaceProject));
+    let index = 0;
+    document.querySelectorAll('.ws-project-row').forEach(row => {
+      const number = running.has(row.dataset.projectKey) && index < 9 ? String(++index) : '';
+      row.dataset.projectShortcut = number;
+      let badge = row.querySelector('.ws-project-shortcut');
+      if (!number) { badge?.remove(); row.removeAttribute('aria-keyshortcuts'); return; }
+      if (!badge) { badge = node('kbd', 'ws-project-shortcut'); badge.setAttribute('aria-hidden', 'true'); row.append(badge); }
+      badge.textContent = number;
+      badge.title = 'Ctrl+' + number;
+      row.setAttribute('aria-keyshortcuts', 'Control+' + number);
+    });
+  }
   let notificationAudio;
   function enableNotificationAudio() {
     if (prefs.notificationSound === false) return;
@@ -303,6 +318,7 @@
     });
     renderToolRail();
     renderProjects();
+    renderProjectShortcuts();
     renderProjectActivity();
     window.libroFiles?.init();
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
@@ -407,6 +423,14 @@
       return;
     }
     if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open]')) return;
+    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && /^[1-9]$/.test(event.key)) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) {
+        renderProjectShortcuts();
+        document.querySelector('.ws-project-row[data-project-shortcut="' + event.key + '"]')?.click();
+      }
+      return;
+    }
     if (binding && (binding === toolKeys['panel-size-down'] || binding === toolKeys['panel-size-up'])) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) window.__libroResizeSelectedAppStep(binding === toolKeys['panel-size-down'] ? -1 : 1, sid);

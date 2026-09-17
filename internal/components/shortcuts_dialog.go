@@ -30,6 +30,7 @@ func ShortcutsDialog() *r.Node {
 		}},
 		{"Navigation", "", []shortcut{
 			{"Ctrl + H / L", "Previous / next panel"},
+			{"Ctrl + 1–9", "Switch to numbered project with open panels"},
 			{"Ctrl + Shift + P", "Toggle project sidebar"},
 			{"⌘ + H", "Navigate left"},
 			{"⌘ + L", "Navigate right"},

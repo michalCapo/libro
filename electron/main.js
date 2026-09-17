@@ -1027,7 +1027,7 @@ app.on('web-contents-created', (event, contents) => {
 
     // Keep workspace navigation available while a browser tool has focus.
     if (input.control && !input.meta && !input.alt &&
-        ((!input.shift && ['a', 'b', 'h', 'l', ',', '.'].includes(key)) || (input.shift && ['p', 'q', 'r', 't'].includes(key)))) {
+        ((!input.shift && ['a', 'b', 'h', 'l', ',', '.', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(key)) || (input.shift && ['p', 'q', 'r', 't'].includes(key)))) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       mainWindow?.webContents.executeJavaScript(`
