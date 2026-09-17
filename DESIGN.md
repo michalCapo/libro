@@ -128,7 +128,7 @@ Use the system sans-serif stack in `body`; there is no separate display font. Bo
 
 ## Layout
 
-The shell has a 56px titlebar, a 26px statusbar, and left project navigation. The sidebar is 252px wide, reduced to 216px at viewport widths of 1050px or less. At 760px or less it overlays the content between the titlebar and statusbar, with width `min(252px, calc(100vw - 48px))`. It defaults closed on small screens when no preference exists; selecting a project closes it. The brand and trailing status text hide, and empty-state headings become 24px.
+The shell has a 56px titlebar, a 26px statusbar, and left project navigation. The sidebar is 216px wide. At 760px or less it overlays the content between the titlebar and statusbar, with width `min(216px, calc(100vw - 48px))`. It defaults closed on small screens when no preference exists; selecting a project closes it. The brand and trailing status text hide, and empty-state headings become 24px.
 
 The main area is one horizontal row of full-height, non-shrinking app panels with no gap or outer card padding. Width presets are XS 320px, SM 480px, MD 640px, LG 960px, XL 1280px, and 2XL 1920px. These are panel widths, not viewport breakpoints. Legacy 3XL 2560px and FULL remain available; the existing screen-width policy disables 3XL on Full HD or smaller screens. FULL uses available strip width. Maximizing temporarily fills the strip and hides other panels. Selecting an offscreen panel scrolls it into view.
 

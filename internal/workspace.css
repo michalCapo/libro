@@ -1,6 +1,6 @@
 /* T3-inspired desktop chrome around a horizontal row of fixed-width panels.
    Shared surface, control, and typography tokens also style every popup. */
-:root{--ws-bg:#fcfcfd;--ws-chrome:#f7f7f8;--ws-raised:#fff;--ws-line:#e9e9ec;--ws-control-line:#d4d4db;--ws-fg:#29292e;--ws-muted:#70707b;--ws-hover:#efeff2;--ws-accent:#2452df;--ws-popup:#f7f7f8;--ws-popup-row:#fff;--ws-popup-muted:#70707b;--ws-projects:252px}
+:root{--ws-bg:#fcfcfd;--ws-chrome:#f7f7f8;--ws-raised:#fff;--ws-line:#e9e9ec;--ws-control-line:#d4d4db;--ws-fg:#29292e;--ws-muted:#70707b;--ws-hover:#efeff2;--ws-accent:#2452df;--ws-popup:#f7f7f8;--ws-popup-row:#fff;--ws-popup-muted:#70707b;--ws-projects:216px}
 html.dark{--ws-bg:#1c1c1f;--ws-chrome:#222225;--ws-raised:#2b2b30;--ws-line:#333339;--ws-control-line:#484850;--ws-fg:#e6e6eb;--ws-muted:#aaaab5;--ws-hover:#303036;--ws-accent:#8aa7ff;--ws-popup:#252529;--ws-popup-row:#34343b;--ws-popup-muted:#aaaab5}
 #libro-workspace{background:var(--ws-bg);color:var(--ws-fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 #libro-workspace ::selection{background:#4873ef33}
@@ -182,8 +182,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 #libro-workspace[data-projects=false] .ws-project-item{margin-bottom:8px}
 #libro-workspace[data-projects=false] .ws-sidebar-footer{display:flex;flex-direction:column;gap:8px}
 #libro-workspace[data-projects=false] .ws-project-list{scrollbar-width:none}
-@media(max-width:1050px){:root{--ws-projects:216px}}
-@media(max-width:760px){.ws-sidebar{position:absolute;left:0;top:0;bottom:26px;width:min(252px,calc(100vw - 48px));z-index:60;box-shadow:8px 0 24px #0002}.ws-titlebar{gap:6px;padding-right:8px}.ws-titlebar-home{width:auto;border-right:0;background:transparent;padding:0 8px;gap:6px}.ws-brand{display:none}.ws-project-symbol{margin-left:0}.ws-project-title{max-width:35vw}.ws-statusbar>span:last-child{display:none}.ws-shortcut-row{gap:8px;font-size:12px}.ws-empty h1{font-size:24px}}
+@media(max-width:760px){.ws-sidebar{position:absolute;left:0;top:0;bottom:26px;width:min(var(--ws-projects),calc(100vw - 48px));z-index:60;box-shadow:8px 0 24px #0002}.ws-titlebar{gap:6px;padding-right:8px}.ws-titlebar-home{width:auto;border-right:0;background:transparent;padding:0 8px;gap:6px}.ws-brand{display:none}.ws-project-symbol{margin-left:0}.ws-project-title{max-width:35vw}.ws-statusbar>span:last-child{display:none}.ws-shortcut-row{gap:8px;font-size:12px}.ws-empty h1{font-size:24px}}
 @media(prefers-reduced-motion:reduce){#libro-workspace *,#libro-workspace *::before{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .ws-popup .font-mono{font-family:inherit}

@@ -468,7 +468,7 @@
     }
     if (binding && binding === toolKeys['panel-size-max']) {
       event.preventDefault(); event.stopImmediatePropagation();
-      if (!event.repeat && window.__libroSelectedApp) window.__libroResizeApp(window.__libroSelectedApp, 'full', sid);
+      if (!event.repeat && window.__libroSelectedApp) call('app.resize.max.toggle', {maxPixel: window.__libroAppWidthMaxPixel()});
       return;
     }
     if (binding && binding === toolKeys['toggle-projects']) {

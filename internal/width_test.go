@@ -24,3 +24,24 @@ func TestFixedPanelWidths(t *testing.T) {
 		t.Fatal("width clamp must support XS")
 	}
 }
+
+func TestToggleMaxWidthRestoresPreviousSize(t *testing.T) {
+	for _, initial := range []Width{WidthXS, WidthSM, WidthMD, WidthLG, WidthXL, Width2XL} {
+		t.Run(string(initial), func(t *testing.T) {
+			sm := NewStateManager()
+			s := &AppState{Apps: []Application{{ID: "panel", Width: initial}, {ID: "other", Width: WidthSM}}}
+			sm.states["test"] = s
+			for cycle := 0; cycle < 2; cycle++ {
+				for _, want := range []Width{WidthFull, initial} {
+					width, id := sm.ToggleMaxWidth("test", 1920)
+					if width != want || id != "panel" || s.Apps[0].Width != want {
+						t.Fatalf("toggle = (%s, %s), want (%s, panel)", width, id, want)
+					}
+				}
+			}
+			if s.Apps[1].Width != WidthSM {
+				t.Fatal("toggle changed another panel's width")
+			}
+		})
+	}
+}

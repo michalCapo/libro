@@ -882,6 +882,20 @@ func Run(assets embed.FS) {
 		return resizeJS(state, width, appID)
 	})
 
+	// Toggle full width while keeping the other panels visible.
+	registerAction(app, "app.resize.max.toggle", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		maxPixels := 0
+		if v, ok := ctx.WsData()["maxPixel"].(float64); ok {
+			maxPixels = int(v)
+		}
+		width, appID := sm.ToggleMaxWidth(sid, maxPixels)
+		if appID == "" {
+			return "/* noop */"
+		}
+		return resizeJS(sm.Get(sid), width, appID)
+	})
+
 	// Toggle maximize — switch selected app between full width and previous width
 	registerAction(app, "app.maximize.toggle", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
