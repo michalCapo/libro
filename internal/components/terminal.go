@@ -101,6 +101,7 @@ type TerminalSession struct {
 	agentWorked   bool
 	agentEnded    bool
 	agentMu       sync.Mutex
+	processStatus string
 }
 
 type terminalClient struct {
@@ -204,7 +205,32 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 	go tm.readLoop(s)
 	go tm.waitLoop(s)
 	go s.watchAgentActivity()
+	go s.watchProcessActivity()
 	return s, nil
+}
+
+// The shell stays alive after commands finish, so session existence is not activity.
+func (s *TerminalSession) watchProcessActivity() {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		status := "idle"
+		if terminalHasChildren(s.cmd.Process.Pid) {
+			status = "running"
+		}
+		s.mu.Lock()
+		changed := s.processStatus != status
+		s.processStatus = status
+		s.mu.Unlock()
+		if changed {
+			s.broadcast(terminalWSMessage{Type: "process-status", Data: status})
+		}
+		select {
+		case <-s.processDone:
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 func terminalCommand(command, shell string) *exec.Cmd {
@@ -429,6 +455,9 @@ func (s *TerminalSession) addClient(c *terminalClient) {
 	s.clients[c] = true
 	cols, rows := s.cols, s.rows
 	status := s.agentStatus
+	if s.processStatus != "" {
+		_ = c.send(terminalWSMessage{Type: "process-status", Data: s.processStatus})
+	}
 	if status != "" {
 		_ = c.send(terminalWSMessage{Type: "agent-status", Data: status})
 	}

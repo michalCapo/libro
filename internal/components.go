@@ -3388,6 +3388,11 @@ func terminalFrameSetupJS() string {
 							}
 							var msg;
 							try { msg = JSON.parse(raw); } catch (err) { return; }
+							if (msg.type === 'process-status') {
+                                el.dataset.processStatus = msg.data;
+                                window.dispatchEvent(new Event('libro-process-status'));
+                                return;
+                            }
 							if (msg.type === 'agent-status') {
 								window.__libroAgentStatuses = window.__libroAgentStatuses || {};
 								window.__libroAgentStatuses[appID] = msg.data;
@@ -3396,6 +3401,8 @@ func terminalFrameSetupJS() string {
 							}
 							if (msg.type === 'output') term.write(msg.data || '');
 							else if (msg.type === 'exit') {
+                                delete el.dataset.processStatus;
+                                window.dispatchEvent(new Event('libro-process-status'));
                                 if (window.__libroAgentStatuses) delete window.__libroAgentStatuses[appID];
                                 window.dispatchEvent(new Event('libro-agent-status'));
                                 term.write('\r\n[process exited: ' + (msg.code || 0) + ']\r\n');
@@ -3407,6 +3414,8 @@ func terminalFrameSetupJS() string {
 							else if (msg.type === 'error') term.write('\r\n[terminal error: ' + (msg.message || 'unknown') + ']\r\n');
 						};
 						ws.onclose = function() {
+                            delete el.dataset.processStatus;
+                            window.dispatchEvent(new Event('libro-process-status'));
 							if (window.__libroAgentStatuses) delete window.__libroAgentStatuses[appID];
 							window.dispatchEvent(new Event('libro-agent-status'));
 							if (controller.closed || !el.isConnected) return;
@@ -3645,13 +3654,13 @@ func keyboardShortcutsJS(sid string) string {
 				if (e.metaKey && !e.ctrlKey && (e.key === ',' || e.code === 'Comma')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					if(window.__libroResizeSelectedAppStep)window.__libroResizeSelectedAppStep(-1,"%s");
+					if(window.__libroResizeSelectedAppStep)window.__libroResizeSelectedAppStep(1,"%s");
 					return;
 				}
 				if (e.metaKey && !e.ctrlKey && (e.key === '.' || e.code === 'Period')) {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					if(window.__libroResizeSelectedAppStep)window.__libroResizeSelectedAppStep(1,"%s");
+					if(window.__libroResizeSelectedAppStep)window.__libroResizeSelectedAppStep(-1,"%s");
 					return;
 				}
 				if (e.metaKey && !e.ctrlKey && (e.key === '[' || e.code === 'BracketLeft')) {

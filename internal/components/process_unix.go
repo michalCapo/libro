@@ -10,6 +10,10 @@ import (
 	"syscall"
 )
 
+func terminalHasChildren(pid int) bool {
+	return exec.Command("pgrep", "-P", strconv.Itoa(pid)).Run() == nil
+}
+
 // killTerminalProcess includes jobs with their own process groups.
 func killTerminalProcess(process *os.Process) {
 	output, err := exec.Command("ps", "-axo", "pid=,ppid=").Output()

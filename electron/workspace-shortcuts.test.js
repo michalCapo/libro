@@ -84,12 +84,12 @@ test('a hidden bottom shell exiting keeps the visible project command open', () 
 test('panel size shortcuts use saved bindings and ignore key repeat', () => {
   const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = workspace.slice(workspace.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"), workspace.indexOf("    if (binding && binding === toolKeys['toggle-projects'])"))
-  for (const [binding, delta] of [['Ctrl+,', -1], ['Ctrl+.', 1], ['Alt+S', -1]]) {
+  for (const [binding, delta] of [['Ctrl+,', 1], ['Ctrl+.', -1], ['Alt+S', -1]]) {
     for (const repeat of [false, true]) {
       const calls = []
       vm.runInNewContext('(function () {' + handler + '})()', {
         binding, sid: 'session',
-        toolKeys: { 'panel-size-down': binding === 'Alt+S' ? binding : 'Ctrl+,', 'panel-size-up': 'Ctrl+.' },
+        toolKeys: { 'panel-size-down': binding === 'Alt+S' ? binding : 'Ctrl+.', 'panel-size-up': 'Ctrl+,' },
         window: { __libroResizeSelectedAppStep: (...args) => calls.push(args) },
         event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
       })

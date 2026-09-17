@@ -45,6 +45,8 @@ html.dark .ws-grid [data-terminal],html.dark .ws-grid .xterm,html.dark .ws-grid 
 .ws-project-command-dialog .ws-agent-actions{justify-content:flex-end}
 .ws-project-row span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ws-project-row .material-icons-round{font-size:18px;flex-shrink:0;color:var(--ws-muted)}
+.ws-project-terminal{width:18px;height:18px;flex-shrink:0;fill:none;stroke:#15803d;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-row[data-agent-status=working] .material-icons-round{color:var(--ws-accent);animation:ws-agent-working 1s linear infinite}
 .ws-project-row[data-agent-status=done] .material-icons-round{color:#15803d;animation:ws-agent-done .45s cubic-bezier(.22,1,.36,1)}
 html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4ade80}

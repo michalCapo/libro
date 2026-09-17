@@ -304,6 +304,29 @@
     });
   }
   window.addEventListener('libro-agent-status', renderProjectActivity);
+  function renderProjectTerminals() {
+    const running = new Set([...document.querySelectorAll('[data-workspace-project]')]
+      .filter(grid => grid.querySelector('[data-dock="bottom"] [data-process-status="running"]'))
+      .map(grid => grid.dataset.workspaceProject));
+    document.querySelectorAll('.ws-project-row').forEach(row => {
+      const active = running.has(row.dataset.projectKey);
+      let icon = row.querySelector('.ws-project-terminal');
+      if (!active) { icon?.remove(); return; }
+      if (icon) return;
+      icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      icon.classList.add('ws-project-terminal');
+      icon.setAttribute('viewBox', '0 0 24 24');
+      icon.setAttribute('role', 'img');
+      icon.setAttribute('aria-label', 'Command running in bottom terminal');
+      const title = document.createElementNS(icon.namespaceURI, 'title');
+      title.textContent = 'Command running in bottom terminal';
+      const path = document.createElementNS(icon.namespaceURI, 'path');
+      path.setAttribute('d', 'm4 5 6 6-6 6m9 0h7');
+      icon.append(title, path);
+      row.insertBefore(icon, row.querySelector('.ws-project-shortcut'));
+    });
+  }
+  window.addEventListener('libro-process-status', renderProjectTerminals);
   let queued = false;
   const observer = new MutationObserver(records => {
     if (records.some(record => (record.type === 'attributes' && record.target.matches('[data-app-id]')) || [...record.addedNodes, ...record.removedNodes].some(n => n.nodeType === 1 && (n.matches('[data-app-id], [data-workspace-project], .ws-project, #top-bar') || n.querySelector('[data-app-id], [data-workspace-project]'))))) schedule();
@@ -320,6 +343,7 @@
     renderProjects();
     renderProjectShortcuts();
     renderProjectActivity();
+    renderProjectTerminals();
     window.libroFiles?.init();
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
       // Replacing a project's DOM can reset its hidden styles. Always reconcile
@@ -567,7 +591,7 @@
     if (center.length === 1 && !full) columns[0] = 'minmax(' + width(center[0]) + 'px, 1fr)';
     if (!center.length && !full) columns.unshift(right.length && !overlay ? 'var(--ws-default-panel-width)' : 'minmax(0, 1fr)');
     grid.style.gridTemplateColumns = columns.join(' ') || 'minmax(0, 1fr)';
-    grid.style.gridTemplateRows = bottomVisible ? 'minmax(120px, 1fr) minmax(120px, 35%)' : 'minmax(0, 1fr)';
+    grid.style.gridTemplateRows = bottomVisible ? 'minmax(120px, 1fr) minmax(120px, 29.75%)' : 'minmax(0, 1fr)';
     all.forEach(frame => {
       const index = visible.indexOf(frame);
       const show = index >= 0 || (frame === terminal && bottomVisible);

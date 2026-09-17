@@ -49,6 +49,40 @@ func TestKillTerminalProcessStopsChildJobs(t *testing.T) {
 	}
 }
 
+func TestTerminalHasChildrenTracksCommandCompletion(t *testing.T) {
+	cmd := exec.Command("bash", "--noprofile", "--norc")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { killTerminalProcess(cmd.Process); _ = cmd.Wait() })
+	if terminalHasChildren(cmd.Process.Pid) {
+		t.Fatal("idle shell reported as running a command")
+	}
+	if _, err := stdin.Write([]byte("sleep 60\n")); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for !terminalHasChildren(cmd.Process.Pid) {
+		if time.Now().After(deadline) {
+			t.Fatal("running command was not detected")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := exec.Command("pkill", "-TERM", "-P", strconv.Itoa(cmd.Process.Pid)).Run(); err != nil {
+		t.Fatal(err)
+	}
+	for terminalHasChildren(cmd.Process.Pid) {
+		if time.Now().After(deadline) {
+			t.Fatal("completed command still reported as running")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestStopAllStopsEveryTerminal(t *testing.T) {
 	tm := NewTerminalManager()
 	t.Cleanup(tm.StopAll)
