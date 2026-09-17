@@ -7,7 +7,7 @@ import (
 )
 
 // CloseDialog renders the quit confirmation dialog (hidden by default).
-// It is populated dynamically when the user runs the quit command.
+// It is populated dynamically when the user closes the desktop window.
 func CloseDialog(sid string) *r.Node {
 	return r.Div("ws-popup fixed inset-0 z-[70] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
 		ID(CloseDialogID).
@@ -29,7 +29,7 @@ func CloseDialog(sid string) *r.Node {
 						r.Div("flex items-center gap-2").Render(
 							r.Button("ws-close-button").Attr("type", "button").
 								Text("Cancel").
-								Attr("onclick", HideJS(CloseDialogID)+"if(window.__electronCloseAbort)window.__electronCloseAbort();"),
+								Attr("onclick", HideJS(CloseDialogID)),
 							r.Button("ws-close-button ws-close-quit").Attr("type", "button").
 								ID("close-dialog-confirm").
 								Text("Quit").

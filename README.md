@@ -63,7 +63,7 @@ go run . --version
 - Persistence: SQLite database plus a few settings stored in `libro.db`
 - Fallback: if no Electron runtime is available, Libro opens the UI in the default browser
 
-Native window-close requests are intentionally ignored. Quitting is routed through the `quit` command. Libro asks before closing running panels, stops terminal processes and their child jobs, then closes the desktop window. Open panels are not saved or restored; launching or reloading Libro starts with an empty workspace. Projects, settings, and browser cookies are still saved.
+Close the desktop window or use the operating system’s quit action to quit Libro. Libro asks before closing running panels, stops terminal processes and their child jobs, then closes the desktop window. Open panels are not saved or restored; launching or reloading Libro starts with an empty workspace. Projects, settings, and browser cookies are still saved.
 
 ## Data Locations
 
@@ -136,7 +136,7 @@ Tool shortcuts are remappable in **Settings → Keyboard shortcuts**. Use Ctrl, 
 - `` Ctrl + ` `` toggle the bottom terminal
 - `Ctrl + A` focus the current agent, or open the agent launcher when none is open
 - `Ctrl + ;` open command palette
-- **Commands → Quit Libro** quits cleanly
+- **Close window / system Quit** shows open panels by project and quits cleanly after confirmation
 
 ## Development Notes
 

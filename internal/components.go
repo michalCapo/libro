@@ -1510,10 +1510,6 @@ func commandPopupJS(sid string) string {
             {id:'lazydata',label:'Toggle database',scope:'tools',icon:'storage',keywords:'data sql',run:function(){closePalette();libroWorkspace.tool('lazydata');}},
             {id:'bottom-terminal',label:'Toggle bottom terminal',scope:'workspace',icon:'vertical_align_bottom',shortcut:'Ctrl+'+String.fromCharCode(96),keywords:'shell bottom',run:function(){closePalette();libroWorkspace.bottom();}},
             {id:'settings',label:'Settings',scope:'workspace',icon:'settings',keywords:'preferences commands shortcuts agents',run:function(){closePalette();libroWorkspace.settings();}},
-			{id:'quit',label:'Quit Libro',scope:'app',icon:'close',keywords:'quit close exit app window desktop',run:function(){
-				closePalette();
-				if(window.__libroShowCloseDialog)window.__libroShowCloseDialog();
-			}},
 			{id:'console',label:'App console',scope:'app',icon:'code',keywords:'devtools app console inspector developer tools',run:function(){
 				closePalette();
 				if(window.libroElectron&&window.libroElectron.toggleDevTools)window.libroElectron.toggleDevTools();
@@ -2045,7 +2041,6 @@ func closeDialogJS(sid string) string {
 		if(e.key==='Escape'){
 			e.preventDefault();e.stopImmediatePropagation();
 			dlg.classList.add('hidden');
-			if(window.__electronCloseAbort)window.__electronCloseAbort();
 		}
 	},true);
 })();

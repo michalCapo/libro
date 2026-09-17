@@ -42,6 +42,7 @@ const serverURL = `http://localhost:${port}`
 let goProcess = null
 let mainWindow = null
 let isQuitting = false
+let quitReady = false
 let goProcessForceKillTimer = null
 let webviewPreloadRegistered = false
 const devtoolsOverlays = new Map()
@@ -284,10 +285,17 @@ function dispatchToMainWindow(js) {
   })
 }
 
-function showQuitCommandOnlyToast() {
+function requestQuit(event) {
+  if (quitReady) return
+  event.preventDefault()
+  if (isQuitting) return
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    quitApp().catch((err) => console.error('Failed to quit cleanly:', err.message))
+    return
+  }
   dispatchToMainWindow(`
-    if (window.__libroNotifyQuitCommandOnly) {
-      window.__libroNotifyQuitCommandOnly();
+    if (window.__libroShowCloseDialog) {
+      window.__libroShowCloseDialog();
     }
   `)
 }
@@ -577,6 +585,7 @@ async function quitApp() {
   isQuitting = true
   await stopGoServer()
   await flushLibroSessionData()
+  quitReady = true
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.destroy()
     return
@@ -634,12 +643,7 @@ function createWindow() {
     console.error(`Failed to load Libro UI at ${serverURL}:`, err && err.message ? err.message : err)
   })
 
-  // Native window-close requests are ignored unless quit was requested explicitly.
-  mainWindow.on('close', (e) => {
-    if (isQuitting) return
-    e.preventDefault()
-    showQuitCommandOnlyToast()
-  })
+  mainWindow.on('close', requestQuit)
 
   // Renderer signals that user confirmed close (or no apps were running)
   ipcMain.on('libro-force-close', () => {
@@ -1201,11 +1205,7 @@ app.on('ready', async () => {
   powerMonitor.on('resume', refreshTerminalFramesAfterResume)
 })
 
-app.on('before-quit', (e) => {
-  if (isQuitting) return
-  e.preventDefault()
-  showQuitCommandOnlyToast()
-})
+app.on('before-quit', requestQuit)
 
 app.on('window-all-closed', () => {
   if (isQuitting) {
