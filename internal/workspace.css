@@ -356,8 +356,9 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-project-item:has(.ws-project-shortcut):has(.ws-project-terminal):has(.ws-project-remove) .ws-project-row{padding-right:124px}
 .ws-project-item:has(.ws-project-shortcut):has(.ws-project-terminal):has(.ws-project-remove) .ws-project-settings{right:94px}
 .ws-project-item:has(.ws-project-shortcut):has(.ws-project-terminal) .ws-project-remove{right:64px}
-#libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-terminal){flex-direction:column;gap:2px;padding:0}
-#libro-workspace[data-projects=false] .ws-project-row .ws-project-terminal{position:static;order:1;width:12px;height:12px}
+#libro-workspace[data-projects=false] .ws-project-row .ws-project-terminal{display:none}
+#libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-terminal) .ws-project-shortcut{border-color:#15803d}
+html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-terminal) .ws-project-shortcut{border-color:#4ade80}
 #libro-workspace[data-projects=false] .ws-project-shortcut{position:static}
 #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-shortcut)>.material-icons-round{display:none}
 
