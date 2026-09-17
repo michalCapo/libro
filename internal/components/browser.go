@@ -485,77 +485,11 @@ function focusIfSelected(appID, wv) {
 function initWebview(wv) {
 	var appID = wv.getAttribute('data-webview-app');
 	if (!appID) return;
-	if (initialized[appID]) {
-		var existing = window.__libroWebviews[appID];
-		var existingPool = document.getElementById('webview-pool');
-		if (existing && existingPool && existingPool.contains(existing) && existing !== wv && !wv.getAttribute('data-pool-origin')) {
-			delete initialized[appID];
-		} else {
-			return;
-		}
-	}
+	if (initialized[appID] && window.__libroWebviews[appID] === wv) return;
+	// A replacement must get its own guest and readiness state.
+	ready[appID] = false;
+	delete queued[appID];
 	observeDevtoolsPanel(appID);
-
-	// Check pool for a webview with the same origin — reuse it to preserve session state
-	var pool = document.getElementById('webview-pool');
-	if (pool && !wv.getAttribute('data-pool-origin')) {
-		var newSrc = wv.getAttribute('src') || '';
-		var newOrigin = '';
-		try { var u = new URL(newSrc); newOrigin = u.origin; } catch(e) {}
-		if (newOrigin && newOrigin !== 'null') {
-			var pooled = pool.querySelector('webview[data-pool-origin="' + newOrigin + '"]');
-			if (pooled) {
-				// Transfer the pooled webview into the new app frame
-				var oldAppID = pooled.getAttribute('data-webview-app');
-				var currentURL = '';
-				try { currentURL = pooled.getURL() || pooled.getAttribute('src') || ''; } catch(e) { currentURL = pooled.getAttribute('src') || ''; }
-				pooled.removeAttribute('data-pool-origin');
-				pooled.setAttribute('data-webview-app', appID);
-				pooled.setAttribute('id', wv.id || '');
-				pooled.setAttribute('data-sid', wv.getAttribute('data-sid') || '');
-				pooled.setAttribute('src', newSrc);
-				pooled.style.display = '';
-				wv.parentNode.replaceChild(pooled, wv);
-				// Migrate JS state from old app ID to new one
-				if (oldAppID && oldAppID !== appID) {
-					if (devtoolsPanelObservers[oldAppID]) {
-						try { devtoolsPanelObservers[oldAppID].disconnect(); } catch (err) {}
-						delete devtoolsPanelObservers[oldAppID];
-					}
-					stopDevtoolsBoundsSync(oldAppID);
-					delete devtoolsPanelSyncers[oldAppID];
-					delete window.__libroWebviews[oldAppID];
-					delete initialized[oldAppID];
-					delete ready[oldAppID];
-					delete queued[oldAppID];
-					delete browserModeState[oldAppID];
-					if (mobileViewportOrientation[oldAppID]) mobileViewportOrientation[appID] = mobileViewportOrientation[oldAppID];
-					delete mobileViewportOrientation[oldAppID];
-					delete mobileViewState[oldAppID];
-				}
-				window.__libroWebviews[appID] = pooled;
-				initialized[appID] = true;
-				ready[appID] = currentURL === newSrc;
-				// Update URL bar with the requested URL immediately.
-				var inp = document.getElementById('urlinput-' + appID);
-				if (inp) inp.value = newSrc;
-				// Re-bind events for the current webview element if needed.
-					bindWebviewEvents(pooled);
-					focusIfSelected(appID, pooled);
-				// Reused webviews keep their session, but must navigate to the new
-				// target or a newly opened tab can show stale content from the prior tab.
-				if (currentURL !== newSrc) {
-					safeWebviewLoadURL(pooled, newSrc);
-				} else {
-					// Remove loading indicator since the webview is already at the target.
-					var lp = pooled.closest('.flex.flex-col') || pooled.parentNode;
-					var loading = lp && lp.querySelector('[data-webview-loading]');
-					if (loading && loading.parentNode) loading.remove();
-				}
-				return;
-			}
-		}
-	}
 
 	initialized[appID] = true;
 	window.__libroWebviews[appID] = wv;
@@ -708,7 +642,7 @@ function initAll() {
 	// Plain browsers expose <webview> as an inert element. Registering it would
 	// route navigation into a guest that never becomes ready instead of the iframe.
 	if (!window.libroElectron) return;
-	document.querySelectorAll('webview[data-webview-app]:not([data-pool-origin])').forEach(initWebview);
+	document.querySelectorAll('webview[data-webview-app]').forEach(initWebview);
 }
 
 initAll();
@@ -721,18 +655,16 @@ window.addEventListener('resize', function() {
 	});
 });
 
-// Cleanup when webview removed from DOM (skip pooled webviews)
+// Clean up only the removed instance, never its replacement.
 var cleanupObserver = new MutationObserver(function(mutations) {
-	var pool = document.getElementById('webview-pool');
 	mutations.forEach(function(m) {
 		m.removedNodes.forEach(function(node) {
 				if (node.nodeType !== 1) return;
 				var wvs = node.querySelectorAll ? node.querySelectorAll('webview[data-webview-app]') : [];
 				wvs.forEach(function(wv) {
-					// Skip cleanup if webview was moved to pool
-					if (pool && pool.contains(wv)) return;
+					if (wv.isConnected) return;
 					var id = wv.getAttribute('data-webview-app');
-					if (id) {
+					if (id && window.__libroWebviews[id] === wv) {
 						if (devtoolsPanelObservers[id]) {
 							try { devtoolsPanelObservers[id].disconnect(); } catch (err) {}
 							delete devtoolsPanelObservers[id];
@@ -749,8 +681,9 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 					}
 				});
 				if (node.tagName === 'WEBVIEW' && node.getAttribute('data-webview-app')) {
-					if (pool && pool.contains(node)) return;
+					if (node.isConnected) return;
 					var id = node.getAttribute('data-webview-app');
+					if (window.__libroWebviews[id] !== node) return;
 					if (devtoolsPanelObservers[id]) {
 						try { devtoolsPanelObservers[id].disconnect(); } catch (err) {}
 						delete devtoolsPanelObservers[id];

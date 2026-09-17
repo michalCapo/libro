@@ -73,6 +73,7 @@ process.stdin.on('data', data => script += data);
 process.stdin.on('end', () => {
   for (const electron of [false, true]) {
     const listeners = {};
+    const observers = [];
     const webview = {
       style: {}, getAttribute: name => name === 'data-webview-app' ? 'test' : null,
       addEventListener: (name, fn) => { listeners[name] = fn; },
@@ -90,16 +91,17 @@ process.stdin.on('end', () => {
       contentWindow: { location: { reload() { iframe.reloaded = true; } },
         history: { back() { iframe.back = true; }, forward() { iframe.forward = true; } } },
     };
+    let currentWebview = webview;
     const document = {
       body: {}, getElementById: () => null,
       querySelector: selector => selector.startsWith('iframe[') ? iframe
         : selector.startsWith('[data-browser-fallback-notice=') ? notice
         : selector.startsWith('[data-browser-external-link=') ? link : null,
-      querySelectorAll: selector => selector.startsWith('webview[') ? [webview] : selector.startsWith('iframe[') ? [iframe] : [],
+      querySelectorAll: selector => selector.startsWith('webview[') ? [currentWebview] : selector.startsWith('iframe[') ? [iframe] : [],
     };
     const window = { addEventListener() {}, focus() {} };
     if (electron) window.libroElectron = {};
-    const context = { window, document, setTimeout() {}, MutationObserver: class { observe() {} } };
+    const context = { window, document, setTimeout() {}, MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} } };
     vm.runInNewContext(script, context);
     assert.equal(notice.style.display, 'none');
     assert.ok(!loading.removed);
@@ -111,6 +113,20 @@ process.stdin.on('end', () => {
       assert.equal(typeof listeners['dom-ready'], 'function');
       assert.equal(iframe.style.display, 'none');
       assert.equal(notice.style.display, 'none');
+      // The init observer runs before cleanup when hydration replaces a guest.
+      currentWebview = {...webview};
+      observers[0]();
+      assert.equal(window.__libroWebviews.test, currentWebview);
+      const removedFrame = {nodeType: 1, querySelectorAll: () => [webview]};
+      observers[1]([{removedNodes: [removedFrame]}]);
+      assert.equal(window.__libroWebviews.test, currentWebview);
+      window.__libroWvNavigate('test', url + '/replacement');
+      assert.equal(currentWebview.src, url + '/replacement');
+      currentWebview.nodeType = 1;
+      currentWebview.tagName = 'WEBVIEW';
+      currentWebview.isConnected = false;
+      observers[1]([{removedNodes: [currentWebview]}]);
+      assert.equal(window.__libroWebviews.test, undefined);
     } else {
       assert.equal(window.__libroWebviews.test, undefined);
       assert.equal(iframe.attrs.src, url);

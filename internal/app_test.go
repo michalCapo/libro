@@ -47,3 +47,11 @@ func TestFaviconURLSkipsFileURLs(t *testing.T) {
 		t.Fatalf("faviconURL(file URL) = %q, want empty", got)
 	}
 }
+
+func TestFaviconURLSkipsLocalAddresses(t *testing.T) {
+	for _, address := range []string{"http://localhost:1411", "http://app.localhost:3000", "http://127.0.0.1:8100", "http://[::1]:8100", "http://192.168.1.2", "http://intranet"} {
+		if got := faviconURL(address, 32); got != "" {
+			t.Errorf("faviconURL(%q) = %q, want empty", address, got)
+		}
+	}
+}

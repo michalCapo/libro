@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -37,6 +38,11 @@ func faviconURL(rawURL string, size int) string {
 		u, err = urlParse("https://" + rawURL)
 	}
 	if err != nil || u.Hostname() == "" || strings.EqualFold(u.Scheme, "file") {
+		return ""
+	}
+
+	host := strings.ToLower(u.Hostname())
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") || !strings.Contains(host, ".") || net.ParseIP(host) != nil {
 		return ""
 	}
 
@@ -453,10 +459,6 @@ func renderMainAreaWrapper(state *AppState, sid string) *r.Node {
 		r.Div("flex-1 flex flex-col overflow-hidden relative").ID(MainAreaID).Render(
 			renderMainArea(state, sid),
 			renderWorkspaceSettings(),
-			// Hidden pool to keep webview elements alive when their app tab is closed.
-			// This preserves session state (cookies, WebSocket connections) for sites
-			// like Discord that invalidate tokens when the webview process is destroyed.
-			r.Div("hidden").ID("webview-pool"),
 		),
 		renderWorkspaceTools(),
 	)
@@ -1391,49 +1393,13 @@ setTimeout(function(){
 }, 30);`, components.JSString(appID), state.SelectedIndex)
 }
 
-// removeAppJS returns JS that removes an app frame by its app ID from the strip.
-// For URL apps with webviews, the webview element is moved to a hidden pool
-// so its session state (cookies, WebSocket connections) stays alive.
+// removeAppJS disposes the app frame. Browser cookies stay in persist:libro;
+// moving a live webview to another parent invalidates its Electron guest.
 func removeAppJS(appID string) string {
-	return fmt.Sprintf(`
+	return parkFloatingPopupsJS() + fmt.Sprintf(`
 (function(){
 	var el=document.querySelector('[data-app-id="%s"]');
-	if(!el)return;
-	if(window.__libroParkFloatingPopups)window.__libroParkFloatingPopups();else ['resize-popup','url-popup'].forEach(function(pid){var p=document.getElementById(pid);if(p&&el.contains(p)){p.classList.add('hidden');document.body.appendChild(p);}});
-	var wv=el.querySelector('webview[data-webview-app]');
-	var pool=document.getElementById('webview-pool');
-	if(wv&&pool){
-		var origin='';
-		try{var u=new URL(wv.src||wv.getAttribute('src'));origin=u.origin;}catch(e){}
-		if(origin&&origin!=='null'){
-			wv.setAttribute('data-pool-origin',origin);
-			wv.style.display='none';
-			pool.appendChild(wv);
-		}
-	}
-	el.remove();
-})();`, appID)
-}
-
-// poolWebviewJS returns JS that moves a specific app's webview to the hidden pool
-// before a full DOM replace would destroy it. Used when closing the last app.
-func poolWebviewJS(appID string) string {
-	return fmt.Sprintf(`
-(function(){
-	var el=document.querySelector('[data-app-id="%s"]');
-	if(!el)return;
-	if(window.__libroParkFloatingPopups)window.__libroParkFloatingPopups();else ['resize-popup','url-popup'].forEach(function(pid){var p=document.getElementById(pid);if(p&&el.contains(p)){p.classList.add('hidden');document.body.appendChild(p);}});
-	var wv=el.querySelector('webview[data-webview-app]');
-	var pool=document.getElementById('webview-pool');
-	if(wv&&pool){
-		var origin='';
-		try{var u=new URL(wv.src||wv.getAttribute('src'));origin=u.origin;}catch(e){}
-		if(origin&&origin!=='null'){
-			wv.setAttribute('data-pool-origin',origin);
-			wv.style.display='none';
-			pool.appendChild(wv);
-		}
-	}
+	if(el)el.remove();
 })();`, appID)
 }
 
@@ -3030,6 +2996,8 @@ func termIconSetupJS() string {
 			var u;
 			try{u=new URL(raw);}catch(e){try{u=new URL('https://'+raw);}catch(e2){return '';}}
 			if(!u.hostname||u.protocol==='file:')return '';
+			var host=u.hostname.toLowerCase();
+			if(host==='localhost'||host.endsWith('.localhost')||!host.includes('.')||host.includes(':')||/^\d+\.\d+\.\d+\.\d+$/.test(host))return '';
 			var target=(u.protocol&&u.host)?(u.protocol+'//'+u.host):u.hostname;
 			return 'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url='+encodeURIComponent(target)+'&size='+size;
 		};
@@ -3539,6 +3507,19 @@ func terminalFrameSetupJS() string {
 			scan(document);
 			new MutationObserver(function(mutations) {
 				mutations.forEach(function(mutation) { mutation.addedNodes.forEach(scan); });
+				terminals.forEach(function(controller, el) {
+					if (el.isConnected) return;
+					controller.closed = true;
+					clearTimeout(controller.reconnectTimer);
+					clearTimeout(controller.fitTimer);
+					if (controller.fitFrame) cancelAnimationFrame(controller.fitFrame);
+					if (controller.ws) { controller.ws.onclose = null; controller.ws.close(); }
+					if (resizeObserver) resizeObserver.unobserve(el);
+					if (intersectionObserver) intersectionObserver.unobserve(el);
+					controller.term.dispose();
+					terminals.delete(el);
+					observed.delete(el);
+				});
 			}).observe(document.body, { childList: true, subtree: true });
 			new MutationObserver(function() {
 				window.__libroRefreshTerminalThemes();

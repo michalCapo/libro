@@ -646,6 +646,7 @@ func Run(assets embed.FS) {
 (function(){
 	var appID=%s;
 	var content=document.getElementById(%s);
+	if(!content||!content.querySelector('[data-app-placeholder]'))return;
 	var urlPopup=document.getElementById(%s);
 	var urlPopupInput=document.getElementById('url-popup-input');
 	var reopenURLPopup=!!(content&&urlPopup&&content.contains(urlPopup)&&!urlPopup.classList.contains('hidden'));
@@ -833,7 +834,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 			js.WriteString(removeAppJS(appID))
 			js.WriteString(navigateProjectJS(sourceProject, sourceSnap.Apps, sourceSnap.SelectedIndex, sid))
 		} else {
-			js.WriteString(poolWebviewJS(appID))
+			js.WriteString(parkFloatingPopupsJS())
 			js.WriteString(renderMainAreaForProject(state, sid, sourceProject).ToJSReplace(projectMainID(sourceProject)))
 		}
 
