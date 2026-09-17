@@ -14,6 +14,7 @@ import (
 // Plugin describes an app that runs in a Libro-managed terminal or browser.
 // Plugins never need to implement PTY, webview, tab, or project lifecycle code.
 type Plugin struct {
+	Autolaunch  bool    `json:"autolaunch,omitempty"`
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
 	Type        AppType `json:"type"`
@@ -114,6 +115,11 @@ func plugins() []Plugin {
 		var custom []Plugin
 		if db.QueryRow(`SELECT value FROM settings WHERE key = 'custom_agents'`).Scan(&raw) == nil && json.Unmarshal([]byte(raw), &custom) == nil {
 			result = append(result, custom...)
+		}
+		var autolaunch string
+		_ = db.QueryRow(`SELECT value FROM settings WHERE key = 'autolaunch_agent'`).Scan(&autolaunch)
+		for i := range result {
+			result[i].Autolaunch = result[i].ID == autolaunch
 		}
 		var names map[string]string
 		if db.QueryRow(`SELECT value FROM settings WHERE key = 'agent_names'`).Scan(&raw) == nil && json.Unmarshal([]byte(raw), &names) == nil {

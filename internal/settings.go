@@ -72,10 +72,14 @@ func saveAgentConfig(commands map[string]string, disabled map[string]bool, custo
 	if len(commands) == 0 && len(removals) == 0 {
 		return fmt.Errorf("no agent commands supplied")
 	}
-	removed := map[string]bool{}
+	var removed map[string]bool
 	if len(removals) > 0 {
 		removed = removals[0]
 	}
+	return saveAgentSettings(commands, disabled, custom, names, removed, nil)
+}
+
+func saveAgentSettings(commands map[string]string, disabled map[string]bool, custom []Plugin, names map[string]string, removed map[string]bool, autolaunch *string) error {
 	agents := map[string]bool{}
 	for _, plugin := range plugins() {
 		if plugin.Dock == "center" && plugin.Type == AppTypeTerminal {
@@ -122,6 +126,9 @@ func saveAgentConfig(commands map[string]string, disabled map[string]bool, custo
 			return fmt.Errorf("enter a CLI command")
 		}
 	}
+	if autolaunch != nil && *autolaunch != "" && (!agents[*autolaunch] || disabled[*autolaunch] || removed[*autolaunch]) {
+		return fmt.Errorf("autolaunch requires an enabled agent")
+	}
 	dbMu.Lock()
 	defer dbMu.Unlock()
 	if db == nil {
@@ -164,7 +171,7 @@ func saveAgentConfig(commands map[string]string, disabled map[string]bool, custo
 			return err
 		}
 	}
-	if len(removals) > 0 {
+	if removed != nil {
 		raw, err := json.Marshal(removed)
 		if err != nil {
 			return err
@@ -178,6 +185,11 @@ func saveAgentConfig(commands map[string]string, disabled map[string]bool, custo
 					return err
 				}
 			}
+		}
+	}
+	if autolaunch != nil {
+		if _, err := tx.Exec(`INSERT INTO settings (key,value) VALUES ('autolaunch_agent',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, *autolaunch); err != nil {
+			return err
 		}
 	}
 	return tx.Commit()
@@ -222,7 +234,12 @@ func registerSettingsActions(app *r.App) {
 					raw, _ := json.Marshal(ctx.WsData()["removed"])
 					err = json.Unmarshal(raw, &removed)
 					if err == nil {
-						err = saveAgentConfig(commands, disabled, custom, names, removed)
+						autolaunch, ok := ctx.WsData()["autolaunch"].(string)
+						if !ok {
+							err = fmt.Errorf("invalid autolaunch agent")
+						} else {
+							err = saveAgentSettings(commands, disabled, custom, names, removed, &autolaunch)
+						}
 					}
 				}
 			}
@@ -306,7 +323,7 @@ func renderWorkspaceSettings() *r.Node {
 			),
 			r.P("ws-settings-status").ID("workspace-settings-status").Attr("role", "status").Attr("aria-live", "polite"),
 			r.El("h2", "ws-shortcut-heading").Text("Agent commands"),
-			r.P("ws-settings-status").Text("CLI commands used to start agents in every project. Include any flags you need. Running sessions are unchanged."),
+			r.P("ws-settings-status").Text("CLI commands used to start agents in every project. Include any flags you need. Running sessions are unchanged. Autolaunch opens one enabled agent when you open a project with no agent panels. Leave all unchecked to choose manually."),
 			renderAgentCommands(),
 			renderToolSettings(),
 			renderToolKeybindings(),

@@ -738,8 +738,22 @@
       row.remove();
     });
     remove.hidden = checkbox.checked;
-    checkbox.onchange = () => remove.hidden = checkbox.checked;
-    row.append(toggle, name, input, remove); document.getElementById(toolRow ? 'tool-command-rows' : 'agent-command-rows').append(row);
+    checkbox.onchange = () => {
+      remove.hidden = checkbox.checked;
+      const auto = row.querySelector('[data-agent-autolaunch]');
+      if (auto) { auto.disabled = !checkbox.checked; if (!checkbox.checked) auto.checked = false; }
+    };
+    if (!toolRow) {
+      const label = node('label', 'ws-agent-autolaunch');
+      const auto = node('input', ''); auto.type = 'checkbox'; auto.dataset.agentAutolaunch = '';
+      auto.checked = !!plugin.autolaunch && !plugin.disabled; auto.disabled = !checkbox.checked;
+      auto.setAttribute('aria-label', 'Autolaunch ' + (plugin.name || 'custom agent'));
+      auto.onchange = () => {
+        if (auto.checked) document.querySelectorAll('[data-agent-autolaunch]').forEach(other => { if (other !== auto) other.checked = false; });
+      };
+      label.append(auto, node('span', '', 'Autolaunch')); row.append(label);
+    }
+    row.prepend(toggle, name, input); row.append(remove); document.getElementById(toolRow ? 'tool-command-rows' : 'agent-command-rows').append(row);
     return row;
   }
   function addCustomTool() {
@@ -771,7 +785,7 @@
     form.querySelector('[type=submit]').disabled = true;
     form.querySelector('[role=status]').textContent = 'Saving…';
     Object.keys(removedAgents).forEach(id => disabled[id] = true);
-    call('settings.agent-command', {commands, disabled, custom, names, removed:removedAgents});
+    call('settings.agent-command', {commands, disabled, custom, names, removed:removedAgents, autolaunch:form.querySelector('[data-agent-autolaunch]:checked')?.closest('[data-agent-id]').dataset.agentId || ''});
   }
   function agentCommandSaved(message, plugins) {
     const form = document.getElementById('agent-commands-form');

@@ -93,6 +93,26 @@ func (b *responseBuilder) Replace(id string, node *r.Node) *responseBuilder {
 
 func (b *responseBuilder) Build() string { return strings.Join(b.parts, "") }
 
+// Autolaunch uses app.start so command validation and terminal lifecycle stay shared.
+func projectAutolaunchJS(state *AppState, sid string) string {
+	if state.ActiveProject == "" {
+		return ""
+	}
+	for _, app := range state.Apps {
+		if isAgentApp(app) {
+			return ""
+		}
+	}
+	for _, plugin := range plugins() {
+		if !plugin.Autolaunch || plugin.Disabled || plugin.Removed || plugin.Dock != "center" || plugin.Type != AppTypeTerminal {
+			continue
+		}
+		payload, _ := json.Marshal(sidData(sid, "type", string(plugin.Type), "plugin", plugin.ID, "name", plugin.Name, "dock", "center", "writable", true, "autolaunchProject", state.ActiveProject))
+		return fmt.Sprintf("__ws.call('app.start',%s);", payload)
+	}
+	return ""
+}
+
 // finalizeProjectCreate registers the project, optionally persists it, and
 // returns the JS that switches to it and dismisses the dialog.
 func finalizeProjectCreate(sid, path, name string, transient bool) string {
@@ -118,6 +138,7 @@ func finalizeProjectCreate(sid, path, name string, transient bool) string {
 		Add(`if(window.__libroProjectDialogBind)window.__libroProjectDialogBind();`).
 		Add(jsSwitch).
 		Add(updateHashJS(name)).
+		Add(projectAutolaunchJS(state, sid)).
 		Add(focusSelectedAppJS(state))
 	if transient {
 		resp.Add(showToastJS("Opened folder", path, 1600))
@@ -419,6 +440,12 @@ func Run(assets embed.FS) {
 	registerAction(app, "app.start", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		data := ctx.WsData()
+		if project, ok := data["autolaunchProject"].(string); ok {
+			state := sm.Get(sid)
+			if state.ActiveProject != project || projectAutolaunchJS(state, sid) == "" {
+				return ""
+			}
+		}
 
 		appType, _ := data["type"].(string)
 		width := DBDefaultPanelWidth()
@@ -1125,6 +1152,7 @@ func Run(assets embed.FS) {
 			Add(closeDevtoolsJS).
 			Add(jsSwitch).
 			Add(updateHashJS(name)).
+			Add(projectAutolaunchJS(state, sid)).
 			Add(focusSelectedAppJS(state))
 		return resp.Build()
 	}
@@ -1281,6 +1309,7 @@ func Run(assets embed.FS) {
 			Add(closeDevtoolsJS).
 			Add(jsSwitch).
 			Add(updateHashJS(vtName)).
+			Add(projectAutolaunchJS(state, sid)).
 			Add(focusSelectedAppJS(state))
 		return resp.Build()
 	})
@@ -1364,6 +1393,7 @@ func Run(assets embed.FS) {
 			Add(closeDevtoolsJS).
 			Add(jsSwitch).
 			Add(updateHashJS(vtName)).
+			Add(projectAutolaunchJS(state, sid)).
 			Add(focusSelectedAppJS(state)).
 			Build()
 	})

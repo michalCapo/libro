@@ -3,6 +3,7 @@ package libro
 import (
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -127,4 +128,71 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 		t.Fatal("tool settings did not persist")
 	}
 
+}
+
+func TestAgentAutolaunch(t *testing.T) {
+	original := db
+	var err error
+	path := filepath.Join(t.TempDir(), "settings.db")
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); db = original })
+	createTables()
+	state := &AppState{ActiveProject: "project"}
+	if projectAutolaunchJS(state, "test") != "" {
+		t.Fatal("default should not autolaunch")
+	}
+	save := func(id string, disabled map[string]bool) error {
+		return saveAgentSettings(nil, disabled, nil, nil, nil, &id)
+	}
+	for _, id := range []string{"browser", "missing"} {
+		if save(id, nil) == nil {
+			t.Fatalf("accepted %s", id)
+		}
+	}
+	if save("codex", map[string]bool{"codex": true}) == nil {
+		t.Fatal("accepted disabled agent")
+	}
+	if err := save("codex", nil); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := projectAutolaunchJS(state, "test"); !strings.Contains(got, `"plugin":"codex"`) {
+		t.Fatalf("missing persisted agent: %s", got)
+	}
+	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "pi", Dock: "center"}}
+	if projectAutolaunchJS(state, "test") != "" {
+		t.Fatal("launched with an existing agent")
+	}
+	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "terminal", Dock: "bottom"}}
+	if projectAutolaunchJS(state, "test") == "" {
+		t.Fatal("bottom shell blocked agent")
+	}
+	if err := save("pi", nil); err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, p := range plugins() {
+		if p.Autolaunch {
+			count++
+			if p.ID != "pi" {
+				t.Fatal("old choice retained")
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("selected %d agents", count)
+	}
+	if err := save("", nil); err != nil {
+		t.Fatal(err)
+	}
+	if projectAutolaunchJS(state, "test") != "" {
+		t.Fatal("clearing choice did not restore default")
+	}
 }
