@@ -465,6 +465,11 @@
       if (!event.repeat) window.__libroResizeSelectedAppStep(binding === toolKeys['panel-size-down'] ? -1 : 1, sid);
       return;
     }
+    if (binding && binding === toolKeys['panel-size-max']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat && window.__libroSelectedApp) window.__libroResizeApp(window.__libroSelectedApp, 'full', sid);
+      return;
+    }
     if (binding && binding === toolKeys['toggle-projects']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) { prefs.projects = !prefs.projects; save(); refresh(); }

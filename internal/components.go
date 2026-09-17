@@ -933,7 +933,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			Attr("aria-pressed", fmt.Sprint(w == app.Width)).
 			Attr("title", w.Label()).
 			Attr("aria-label", "Resize panel to "+w.Label()).
-			Text(strings.ToUpper(string(w))).
+			Text(w.ShortLabel()).
 			OnClick(r.JS(fmt.Sprintf(
 				"this.closest('[popover]').hidePopover();if(window.__libroResizeApp){window.__libroResizeApp(%s,%s,%s)}",
 				components.JSString(app.ID),
@@ -950,9 +950,9 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		Attr("data-size-badges", "").
 		Render(
 			r.Button("ws-size-trigger").Attr("data-size-trigger", "").
-				Attr("aria-label", "Panel size: "+strings.ToUpper(string(app.Width))).
+				Attr("aria-label", "Panel size: "+app.Width.ShortLabel()).
 				Attr("aria-expanded", "false").Attr("aria-controls", "sizes-"+app.ID).
-				Text(strings.ToUpper(string(app.Width))),
+				Text(app.Width.ShortLabel()),
 			r.Div("ws-size-picker").ID("sizes-"+app.ID).Attr("popover", "auto").
 				Attr("role", "group").Attr("aria-label", "Panel size").Render(badges...),
 		)
@@ -2108,16 +2108,17 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 	var topBar = el.querySelector('[data-size-badges]');
 	if (topBar) {
 		var trigger = topBar.querySelector('[data-size-trigger]');
-		if(trigger){trigger.textContent=newWidth.toUpperCase();trigger.setAttribute('aria-label','Panel size: '+newWidth.toUpperCase());}
+		var sizeLabel = newWidth === 'full' ? 'MAX' : newWidth.toUpperCase();
+		if(trigger){trigger.textContent=sizeLabel;trigger.setAttribute('aria-label','Panel size: '+sizeLabel);}
 		var btns = topBar.querySelectorAll('[data-resize-width]');
-		var sizeLabels = ['XS','SM','MD','LG','XL','2XL','3XL','FULL'];
+		var sizeLabels = ['XS','SM','MD','LG','XL','2XL','3XL','MAX'];
 		var activeBase = 'px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase rounded-sm cursor-pointer transition-colors duration-75';
 		btns.forEach(function(b){
 			var txt = b.textContent.trim();
 			if (sizeLabels.indexOf(txt) === -1) return;
-			b.setAttribute('aria-pressed',String(txt === newWidth.toUpperCase()));
+			b.setAttribute('aria-pressed',String(txt === sizeLabel));
 			var isSelected = el.children[0] && el.children[0].className.indexOf('bg-blue-600') !== -1;
-			if (txt === newWidth.toUpperCase()) {
+			if (txt === sizeLabel) {
 				b.className = activeBase + (isSelected ? ' bg-white/25 text-white' : ' bg-blue-600 text-white');
 			} else {
 				b.className = activeBase + (isSelected ? ' text-blue-100/70 hover:text-white hover:bg-white/15' : ' text-gray-400 dark:text-zinc-500 hover:text-gray-700 dark:hover:text-zinc-300 hover:bg-gray-200 dark:hover:bg-zinc-700');

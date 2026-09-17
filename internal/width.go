@@ -1,5 +1,7 @@
 package libro
 
+import "strings"
+
 // Width represents the configurable width of an application
 type Width string
 
@@ -39,6 +41,14 @@ func (w Width) Step(delta int) Width {
 	return widths[idx]
 }
 
+// ShortLabel returns the compact display label for a width.
+func (w Width) ShortLabel() string {
+	if w == WidthFull {
+		return "MAX"
+	}
+	return strings.ToUpper(string(w))
+}
+
 // Label returns the display label for a width
 func (w Width) Label() string {
 	switch w {
@@ -57,7 +67,7 @@ func (w Width) Label() string {
 	case Width3XL:
 		return "3XL (2560px)"
 	case WidthFull:
-		return "FULL (100%)"
+		return "MAX (100%)"
 	default:
 		return string(w)
 	}

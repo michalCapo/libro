@@ -23,6 +23,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"stop-project", "Stop project command", "Ctrl+Shift+T"},
 	{"panel-size-down", "Decrease panel size", "Ctrl+."},
 	{"panel-size-up", "Increase panel size", "Ctrl+,"},
+	{"panel-size-max", "Set panel size to MAX", "Ctrl+M"},
 	{"project-picker", "Switch project", "Ctrl+P"},
 	{"new-agent", "New agent", "Ctrl+N"},
 	{"previous-agent", "Previous panel", "Ctrl+H"},

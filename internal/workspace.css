@@ -256,7 +256,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 #agent-commands-form>[role=status]:empty{display:none}
 #tool-key-form{margin-top:44px}
 #tool-key-form .ws-agent-command{min-width:0;width:100%;box-sizing:border-box}
-@media(min-width:521px){#tool-key-form .ws-agent-command-row{grid-template-columns:max-content minmax(0,1fr) auto}}
+@media(min-width:521px){#tool-key-form .ws-agent-command-row{grid-template-columns:180px minmax(0,1fr) auto}}
 .ws-agent-config-row{grid-template-columns:20px minmax(90px,1fr) minmax(0,3fr) auto}
 .ws-agent-config-row .ws-agent-command{min-width:0;width:100%}
 .ws-agent-enabled{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ws-muted)}
