@@ -54,7 +54,6 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-project-item:hover{background:var(--ws-hover)}
 .ws-project-item:has(.ws-project-row[aria-current=true]){background:var(--ws-raised)}
 .ws-project-row[aria-current=true]{color:var(--ws-fg)}
-.ws-project-row[data-kind=worktree]{padding-left:28px}
 .ws-project-remove{position:absolute;right:6px;width:26px;height:26px;opacity:0}
 .ws-project-remove .material-icons-round{font-size:15px}
 .ws-project-remove:hover{background:color-mix(in srgb,#c9362b 12%,transparent);color:#b42318}
