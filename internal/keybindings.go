@@ -13,6 +13,9 @@ import (
 var toolKeys = []struct{ ID, Name, Key string }{
 	{"terminal", "Terminal", "Ctrl+T"},
 	{"browser", "Browser", "Ctrl+B"},
+	{"new-browser", "New browser panel", "Ctrl+Shift+B"},
+	{"previous-browser", "Previous browser panel", "Ctrl+["},
+	{"next-browser", "Next browser panel", "Ctrl+]"},
 	{"files", "Files", "Ctrl+F"},
 	{"nvim", "Nvim", "Ctrl+E"},
 	{"lazyrepo", "Git", "Ctrl+G"},
@@ -33,7 +36,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"zoom-out", "Zoom out", "Ctrl+-"},
 	{"zoom-reset", "Reset zoom", "Ctrl+0"},
 }
-var shortcutPattern = regexp.MustCompile(`^(Ctrl\+)?(Alt\+)?(Shift\+)?(Meta\+)?[A-Z0-9=,.\-]$`)
+var shortcutPattern = regexp.MustCompile(`^(Ctrl\+)?(Alt\+)?(Shift\+)?(Meta\+)?[A-Z0-9=,.\[\]\-]$`)
 
 func defaultToolKeybindings() map[string]string {
 	result := map[string]string{}
@@ -60,7 +63,7 @@ func validateToolKeybindings(bindings map[string]string) error {
 			return fmt.Errorf("%s is reserved for panel actions", key)
 		}
 		if !shortcutPattern.MatchString(key) || (!strings.Contains(key, "Ctrl+") && !strings.Contains(key, "Alt+") && !strings.Contains(key, "Meta+")) {
-			return fmt.Errorf("use Ctrl, Alt, or Meta with a letter, number, comma, period, = or -")
+			return fmt.Errorf("use Ctrl, Alt, or Meta with a letter, number, comma, period, brackets, = or -")
 		}
 		if used[key] {
 			return fmt.Errorf("%s is assigned more than once", key)
@@ -154,7 +157,7 @@ func renderToolKeybindings() *r.Node {
 	rows = append(rows, r.Div("ws-settings-row").Render(r.Button("ws-launch").Attr("type", "submit").Text("Save shortcuts"), r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.resetToolKeys()")).Text("Restore defaults")))
 	return r.El("form", "").ID("tool-key-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveToolKeys()")).Render(
 		r.El("h2", "ws-shortcut-heading").Text("Keyboard shortcuts"),
-		r.P("ws-settings-status").ID("tool-key-help").Text("Select a field and press Ctrl, Alt, or Meta with a letter, number, comma, period, = or -. Clear a field to disable its shortcut."),
+		r.P("ws-settings-status").ID("tool-key-help").Text("Select a field and press Ctrl, Alt, or Meta with a letter, number, comma, period, brackets, = or -. Clear a field to disable its shortcut."),
 		r.Div("ws-settings-group").Render(rows...),
 		r.P("ws-settings-status").ID("tool-key-status").Attr("role", "status"),
 	)

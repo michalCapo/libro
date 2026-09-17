@@ -387,11 +387,23 @@
   function tool(id) {
     const grid = activeGrid(); if (!grid) return;
     const state = dockState(grid);
-    const existing = frames(grid).find(frame => frame.dataset.dock === 'right' && frame.dataset.plugin === id);
+    const matches = frames(grid).filter(frame => frame.dataset.dock === 'right' && frame.dataset.plugin === id);
+    const existing = matches.find(frame => frame.dataset.appId === window.__libroSelectedApp) ||
+      matches.find(frame => frame.dataset.appId === state.right) || matches[0];
     if (!existing) { openPlugin(id, 'right'); return; }
     if (existing.dataset.dockVisible === 'true' && existing.dataset.appId === window.__libroSelectedApp) {
       state.hidden.add(existing.dataset.appId); refresh();
     } else select(existing.dataset.appId);
+  }
+  function newBrowser() { openPlugin('browser', 'right'); }
+  function navigateBrowser(delta) {
+    const grid = activeGrid(); if (!grid) return;
+    const browsers = frames(grid).filter(frame => frame.dataset.appType === 'url' && frame.dataset.plugin !== 'files');
+    if (!browsers.length) return;
+    const selected = browsers.findIndex(frame => frame.dataset.appId === window.__libroSelectedApp);
+    const current = selected >= 0 ? selected : browsers.findIndex(frame => frame.dataset.appId === dockState(grid).right);
+    const next = current < 0 ? (delta > 0 ? 0 : browsers.length - 1) : (current + delta + browsers.length) % browsers.length;
+    select(browsers[next].dataset.appId);
   }
   let toolKeys = window.__libroToolKeys || {};
   function syncWorkspaceShortcuts() {
@@ -400,7 +412,7 @@
   syncWorkspaceShortcuts();
   function shortcut(event) {
     const key = event.key === '+' ? '=' : event.key;
-    if (!/^[a-z0-9=,.\-]$/i.test(key) || !(event.ctrlKey || event.altKey || event.metaKey)) return '';
+    if (!/^[a-z0-9=,.\[\]\-]$/i.test(key) || !(event.ctrlKey || event.altKey || event.metaKey)) return '';
     return (event.ctrlKey ? 'Ctrl+' : '') + (event.altKey ? 'Alt+' : '') + (event.shiftKey && event.key !== '+' ? 'Shift+' : '') + (event.metaKey ? 'Meta+' : '') + key.toUpperCase();
   }
   function zoom(action) {
@@ -494,6 +506,16 @@
       }
       const step = binding === toolKeys['previous-agent'] ? -1 : 1;
       select(panels[(current + step + panels.length) % panels.length].dataset.appId);
+      return;
+    }
+    if (binding && binding === toolKeys['new-browser']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) newBrowser();
+      return;
+    }
+    if (binding && (binding === toolKeys['previous-browser'] || binding === toolKeys['next-browser'])) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) navigateBrowser(binding === toolKeys['previous-browser'] ? -1 : 1);
       return;
     }
     if (binding && binding === toolKeys['new-agent']) {
@@ -832,7 +854,7 @@
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
   }
-  window.libroWorkspace = {restartProject, projectSettings, saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;

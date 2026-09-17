@@ -338,3 +338,88 @@ for (const overlay of [false, true]) test('clicking an agent preserves side-by-s
   assert.equal(window.__libroSelectedApp, 'agent')
   assert.deepEqual(calls, [['app.select', 0, false]])
 })
+
+test('new browser creates separate blank panels through the shared app lifecycle', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const launch = source.slice(source.indexOf('  function openPlugin('), source.indexOf('  function select('))
+  const browser = source.slice(source.indexOf('  function newBrowser('), source.indexOf('  let toolKeys'))
+  const calls = []
+  vm.runInNewContext(launch + browser + ';newBrowser();newBrowser();', {
+    window: { __libroPlugins: [{ id: 'browser', type: 'url', name: 'Browser', dock: 'right' }] },
+    call: (action, data) => calls.push([action, JSON.parse(JSON.stringify(data))]),
+  })
+  assert.equal(calls.length, 2)
+  for (const [action, data] of calls) {
+    assert.equal(action, 'app.start')
+    assert.equal(data.plugin, 'browser')
+    assert.equal(data.url, '')
+    assert.equal(data.dock, 'right')
+  }
+})
+
+test('browser navigation wraps, includes hidden browsers, and skips other tools', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('  function navigateBrowser('), source.indexOf('  let toolKeys'))
+  const panels = [
+    { appId: 'agent', appType: 'terminal' },
+    { appId: 'one', appType: 'url', plugin: 'browser', dockVisible: 'false' },
+    { appId: 'files', appType: 'url', plugin: 'files' },
+    { appId: 'git', appType: 'terminal' },
+    { appId: 'two', appType: 'url', plugin: 'browser' },
+    { appId: 'legacy', appType: 'url' },
+  ].map(dataset => ({ dataset }))
+  for (const [selected, right, delta, expected] of [
+    ['one', 'one', 1, 'two'], ['one', 'one', -1, 'legacy'],
+    ['legacy', 'legacy', 1, 'one'], ['two', 'two', -1, 'one'],
+    ['agent', 'two', 1, 'legacy'], ['git', 'git', 1, 'one'], ['git', 'git', -1, 'legacy'],
+  ]) {
+    const calls = []
+    vm.runInNewContext(handler + ';navigateBrowser(delta)', {
+      delta, activeGrid: () => ({}), frames: () => panels, dockState: () => ({ right }),
+      window: { __libroSelectedApp: selected }, select: id => calls.push(id),
+    })
+    assert.deepEqual(calls, [expected])
+    assert.equal(panels.length, 6)
+  }
+  for (const available of [[], [panels[1]]]) {
+    const calls = []
+    vm.runInNewContext(handler + ';navigateBrowser(1)', {
+      activeGrid: () => ({}), frames: () => available, dockState: () => ({}),
+      window: { __libroSelectedApp: 'one' }, select: id => calls.push(id),
+    })
+    assert.deepEqual(calls, available.length ? ['one'] : [])
+  }
+})
+
+test('Ctrl+B toggles the current browser when multiple browsers exist', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('  function tool(id)'), source.indexOf('  function newBrowser'))
+  const calls = []
+  const state = { right: 'two', hidden: new Set() }
+  vm.runInNewContext(handler + ";tool('browser')", {
+    activeGrid: () => ({}), dockState: () => state,
+    frames: () => ['one', 'two'].map(appId => ({ dataset: { appId, plugin: 'browser', dock: 'right', dockVisible: String(appId === 'two') } })),
+    window: { __libroSelectedApp: 'two' }, select: id => calls.push(id), refresh() {},
+  })
+  assert.equal(state.hidden.has('two'), true)
+  assert.equal(state.hidden.has('one'), false)
+  assert.deepEqual(calls, [])
+})
+
+test('browser shortcuts accept brackets, custom bindings, and ignore repeat', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const normalize = source.slice(source.indexOf('  function shortcut('), source.indexOf('  function zoom('))
+  const handler = source.slice(source.indexOf("    if (binding && binding === toolKeys['new-browser'])"), source.indexOf("    if (binding && binding === toolKeys['new-agent'])"))
+  for (const [binding, expected] of [['Ctrl+Shift+B', 'new'], ['Ctrl+[', -1], ['Ctrl+]', 1], ['Alt+B', 'new']]) {
+    for (const repeat of [false, true]) {
+      const input = inputFor(binding)
+      const calls = []
+      vm.runInNewContext(normalize + '\nconst binding = shortcut(event); (function(){' + handler + '})()', {
+        toolKeys: { 'new-browser': binding === 'Alt+B' ? binding : 'Ctrl+Shift+B', 'previous-browser': 'Ctrl+[', 'next-browser': 'Ctrl+]' },
+        event: { key: input.key, ctrlKey: input.control, shiftKey: input.shift, altKey: input.alt, repeat, preventDefault() {}, stopImmediatePropagation() {} },
+        newBrowser: () => calls.push('new'), navigateBrowser: delta => calls.push(delta),
+      })
+      assert.deepEqual(calls, repeat ? [] : [expected])
+    }
+  }
+})
