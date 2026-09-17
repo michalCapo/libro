@@ -89,16 +89,18 @@ type TerminalSession struct {
 	outputDone  chan struct{}
 	processDone chan struct{}
 
-	mu          sync.Mutex
-	clients     map[*terminalClient]bool
-	closed      bool
-	cols        uint16
-	rows        uint16
-	activity    *agentActivity
-	agentStatus string
-	agentWorked bool
-	agentEnded  bool
-	agentMu     sync.Mutex
+	mu            sync.Mutex
+	clients       map[*terminalClient]bool
+	closed        bool
+	pendingOutput []byte // startup output retained until the first client connects
+	connected     bool
+	cols          uint16
+	rows          uint16
+	activity      *agentActivity
+	agentStatus   string
+	agentWorked   bool
+	agentEnded    bool
+	agentMu       sync.Mutex
 }
 
 type terminalClient struct {
@@ -418,6 +420,12 @@ func (s *TerminalSession) close(killProcess bool) {
 
 func (s *TerminalSession) addClient(c *terminalClient) {
 	s.mu.Lock()
+	if len(s.pendingOutput) > 0 {
+		payload := append([]byte{terminalBinaryDataFrame}, s.pendingOutput...)
+		_ = c.sendBinary(payload)
+		s.pendingOutput = nil
+	}
+	s.connected = true
 	s.clients[c] = true
 	cols, rows := s.cols, s.rows
 	status := s.agentStatus
@@ -456,6 +464,12 @@ func (s *TerminalSession) broadcastOutput(data []byte) {
 		return
 	}
 	s.mu.Lock()
+	if !s.connected {
+		s.pendingOutput = append(s.pendingOutput, data...)
+		if len(s.pendingOutput) > terminalOutputMaxBatch {
+			s.pendingOutput = s.pendingOutput[len(s.pendingOutput)-terminalOutputMaxBatch:]
+		}
+	}
 	clients := make([]*terminalClient, 0, len(s.clients))
 	for c := range s.clients {
 		clients = append(clients, c)

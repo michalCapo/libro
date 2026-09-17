@@ -2889,6 +2889,7 @@ func projectsJS(state *AppState) string {
 		CurrentBranch string   `json:"currentBranch,omitempty"`
 		WorktreeRefs  []string `json:"worktreeRefs,omitempty"`
 		Transient     bool     `json:"transient,omitempty"`
+		Command       string   `json:"command,omitempty"`
 	}
 	var all []jsProject
 	for _, p := range state.Projects {
@@ -2904,6 +2905,7 @@ func projectsJS(state *AppState) string {
 			IsGit:       p.IsGitRepo,
 			IsActive:    isActive,
 			Transient:   p.Transient,
+			Command:     projectCommand(p.Path),
 		}
 
 		if p.IsGitRepo && GitAvailable() {
@@ -2948,6 +2950,7 @@ func projectsJS(state *AppState) string {
 			all = append(all, jsProject{
 				DisplayName: displayProjectName(wt.Branch, wt.Path),
 				Kind:        "worktree",
+				Command:     projectCommand(wt.Path),
 				Name:        p.Name,
 				Path:        wt.Path,
 				Branch:      wt.Branch,

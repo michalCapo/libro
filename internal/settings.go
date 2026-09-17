@@ -198,6 +198,7 @@ func renderAgentCommands() *r.Node {
 
 func registerSettingsActions(app *r.App) {
 	registerKeybindingActions(app)
+	registerProjectCommandActions(app)
 	registerToolSettings(app)
 	registerAction(app, "settings.agent-command", func(ctx *r.Context) string {
 		raw, _ := json.Marshal(ctx.WsData()["commands"])

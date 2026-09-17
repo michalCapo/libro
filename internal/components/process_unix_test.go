@@ -4,7 +4,9 @@ package components
 
 import (
 	"bufio"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -70,5 +72,56 @@ func TestStopAllStopsEveryTerminal(t *testing.T) {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
+	}
+}
+
+func TestProjectCommandRestartPreservesOtherTerminals(t *testing.T) {
+	tm := NewTerminalManager()
+	t.Cleanup(tm.StopAll)
+	cwd := t.TempDir()
+	other, err := tm.Start("shell", "", cwd, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := "pwd > command-cwd; printf PROJECT_READY; sleep 60"
+	first, err := tm.Start("project", command, cwd, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForOutput := func(s *TerminalSession) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			s.mu.Lock()
+			ready := strings.Contains(string(s.pendingOutput), "PROJECT_READY")
+			s.mu.Unlock()
+			if ready {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("startup output was lost")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	waitForOutput(first)
+	actual, err := os.ReadFile(filepath.Join(cwd, "command-cwd"))
+	if err != nil || strings.TrimSpace(string(actual)) != cwd {
+		t.Fatalf("wrong working directory: %q, %v", actual, err)
+	}
+	if err := tm.Restart("project", command, true, cwd); err != nil {
+		t.Fatal(err)
+	}
+	second := tm.session("project")
+	if second == first || !first.isClosed() {
+		t.Fatal("restart did not replace process")
+	}
+	waitForOutput(second)
+	tm.Stop("project")
+	if !second.isClosed() || tm.session("project") != nil {
+		t.Fatal("project still running")
+	}
+	if tm.session("shell") != other || other.isClosed() {
+		t.Fatal("unrelated shell was stopped")
 	}
 }

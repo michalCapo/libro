@@ -98,7 +98,7 @@
     const state = dockState(grid);
     state.hidden.delete(id);
     if (frame.dataset.dock === 'right') state.right = id;
-    if (frame.dataset.dock === 'bottom') state.bottom = true;
+    if (frame.dataset.dock === 'bottom') { state.bottom = true; state.bottomID = id; }
     window.__libroSelectedApp = id;
     if (maximized && maximized !== id) maximized = '';
     refresh();
@@ -171,6 +171,24 @@
     });
     const more = node('button', 'ws-launch', center ? 'Other agent…' : 'More…'); more.type = 'button'; more.onclick = () => launcher(zone); actions.append(more); el.append(actions); return el;
   }
+  function projectSettings(name) {
+    const project = (window.__libroProjects || []).find(p => (p.kind === 'worktree' ? p.name + '/' + p.branch : p.name) === name);
+    if (!project) return;
+    document.getElementById('project-command-dialog')?.remove();
+    const dialog = node('dialog', 'ws-plugin-dialog ws-project-command-dialog'); dialog.id = 'project-command-dialog';
+    dialog.setAttribute('aria-labelledby', 'project-command-title');
+    const heading = node('h2', '', project.displayName || project.name); heading.id = 'project-command-title';
+    const form = node('form', '');
+    const label = node('label', '', 'Start command'); label.htmlFor = 'project-command-input';
+    const input = node('input', 'ws-agent-command'); input.id = 'project-command-input'; input.value = project.command || ''; input.placeholder = 'air or bun src/dev.ts'; input.autocomplete = 'off'; input.spellcheck = false;
+    const help = node('p', 'ws-settings-status', 'Runs in this project folder. ' + (toolKeys['run-project'] || 'Start / restart project') + ' starts or restarts it; ' + (toolKeys['stop-project'] || 'Stop project command') + ' stops it. You can also use Ctrl+C in the terminal.'); help.id = 'project-command-help'; input.setAttribute('aria-describedby', help.id);
+    const actions = node('div', 'ws-agent-actions');
+    const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
+    const submit = node('button', 'ws-launch', 'Save'); submit.type = 'submit';
+    actions.append(cancel, submit); form.append(label, input, help, actions);
+    form.onsubmit = event => { event.preventDefault(); call('project.command.save', {name, command:input.value}); };
+    dialog.append(heading, form); root.append(dialog); dialog.showModal(); input.focus();
+  }
   function renderProjects() {
     const list = document.getElementById('workspace-project-list'); if (!list) return;
     const projects = window.__libroProjects || []; const signature = JSON.stringify(projects);
@@ -187,6 +205,8 @@
       row.append(icon, node('span', '', project.displayName || project.name));
       row.onclick = () => { closeSettings(); if (innerWidth <= 760) { prefs.projects = false; save(); } if (project.kind === 'worktree') call('worktree.switch', {project:project.name, path:project.path, branch:project.branch}); else call('project.switch', {name:project.name}); };
       item.append(row);
+      const settings = button('Settings for ' + projectName, 'settings', event => { event.stopPropagation(); projectSettings(row.dataset.projectKey); });
+      settings.classList.add('ws-project-settings'); item.append(settings);
       if (project.kind !== 'worktree') {
         const label = project.displayName || project.name;
         const remove = button('Remove ' + label + ' from Libro', 'close', event => {
@@ -430,6 +450,11 @@
       }
       return;
     }
+    if (binding && (binding === toolKeys['run-project'] || binding === toolKeys['stop-project'])) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) call(binding === toolKeys['run-project'] ? 'project.command.run' : 'project.command.stop');
+      return;
+    }
     if (binding && binding === toolKeys['close-project']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) call('project.close');
@@ -472,14 +497,16 @@
   function terminalExited(id) {
     const frame = document.getElementById('frame-' + id);
     if (!frame || frame.dataset.dock !== 'bottom') return;
-    dockState(frame.parentElement).bottom = false;
+    const state = dockState(frame.parentElement);
+    if (state.bottomID === id || !state.bottomID) state.bottom = false;
     call('app.close', {id});
     refresh();
   }
   function bottom() {
     const grid = activeGrid(); if (!grid) return;
     const state = dockState(grid);
-    const terminal = frames(grid).find(frame => frame.dataset.dock === 'bottom');
+    const terminals = frames(grid).filter(frame => frame.dataset.dock === 'bottom');
+    const terminal = terminals.find(frame => frame.dataset.appId === state.bottomID) || terminals[0];
     if (!terminal) { openPlugin('terminal', 'bottom'); return; }
     state.bottom = !state.bottom;
     if (state.bottom) select(terminal.dataset.appId); else refresh();
@@ -506,7 +533,9 @@
     const center = all.filter(frame => frame.dataset.dock === 'center');
     const tools = all.filter(frame => frame.dataset.dock === 'right' && !state.hidden.has(frame.dataset.appId));
     const right = [tools.find(frame => frame.dataset.appId === state.right) || tools.at(-1)].filter(Boolean);
-    const terminal = all.find(frame => frame.dataset.dock === 'bottom');
+    const terminals = all.filter(frame => frame.dataset.dock === 'bottom');
+    if (selected?.dataset.dock === 'bottom') state.bottomID = selected.dataset.appId;
+    const terminal = terminals.find(frame => frame.dataset.appId === state.bottomID) || terminals[0];
     const bottomVisible = terminal && state.bottom && !full;
     const overlay = !full && right.length > 0 && center.reduce((sum, frame) => sum + width(frame), 0) + width(right[0]) > grid.clientWidth;
     const visible = full ? [full] : [...center, ...right];
@@ -537,7 +566,7 @@
     else if (!placeholder) grid.append(empty('center', grid));
     let tabs = grid.parentElement.querySelector('.ws-tool-tabs');
     if (!tabs) { tabs = node('div', 'ws-tool-tabs'); tabs.setAttribute('aria-label', 'Agents and tools'); grid.before(tabs); }
-    const signature = [...center, ...all.filter(frame => frame.dataset.dock === 'right')].map(frame => [frame.dataset.appId, frame.dataset.appName, frame.dataset.dock === 'center' ? frame.dataset.selected : frame.dataset.dockVisible, frame.querySelector('[data-size-trigger]')?.textContent || 'MD', frame.dataset.dock]);
+    const signature = [...center, ...all.filter(frame => frame.dataset.dock === 'right'), ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, frame.dataset.appName, frame.dataset.dock === 'center' ? frame.dataset.selected : frame.dataset.dockVisible, frame.querySelector('[data-size-trigger]')?.textContent || 'MD', frame.dataset.dock]);
     if (tabs.dataset.signature !== JSON.stringify(signature)) {
       tabs.dataset.signature = JSON.stringify(signature); tabs.replaceChildren();
       signature.forEach(([id, name, shown, size, dock]) => {
@@ -560,7 +589,7 @@
           option.onclick = () => { picker.hidePopover(); window.__libroResizeApp(id, option.dataset.resizeWidth, sid); };
           picker.append(option);
         });
-        sizes.append(trigger, picker); group.append(tab, sizes); tabs.append(group);
+        sizes.append(trigger, picker); group.append(tab); if (dock !== 'bottom') group.append(sizes); tabs.append(group);
       });
     }
     tabs.hidden = signature.length === 0;
@@ -711,7 +740,7 @@
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New panels will use this width.' : 'Could not save. Please try again.';
   }
-  window.libroWorkspace = {saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {projectSettings, saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;

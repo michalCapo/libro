@@ -77,7 +77,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 
 ### Panels
 
-- Center panels run CLI agents; right sidebar tools are Terminal, Browser, Files, Nvim, Git, and Database; the bottom panel is one shell terminal per project.
+- Center panels run CLI agents; right sidebar tools are Terminal, Browser, Files, Nvim, Git, and Database; the bottom panel holds the project shell and its start command.
 - Panels sit side by side at fixed widths. New panels default to MD (640px) without resizing existing panels. Change this in **Settings → Default panel width**; the preference is saved for all projects.
 - Choose XS (320px), SM (480px), MD (640px), LG (960px), XL (1280px), or 2XL (1920px) from the panel toolbar. Existing 3XL and full-width options remain available.
 - Scroll horizontally or use the previous/next panel buttons to reach panels outside the viewport.
@@ -88,6 +88,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - `Ctrl + N` opens the agent launcher.
 - `Ctrl + ;` opens the command palette for workspace, project, and panel commands.
 - `` Ctrl + ` `` toggles the bottom terminal.
+- The gear beside a project's remove button saves its start command, such as `air` or `bun src/dev.ts`. Commands run in that project folder. `Ctrl + Shift + R` starts or restarts the command; `Ctrl + Shift + T` stops it and closes its terminal. Output and interactive input appear in the bottom terminal, where `Ctrl + C` can also interrupt the command. An existing shell stays running in a separate tab.
 - `Ctrl + A` focuses the current agent, or opens the agent launcher when none is open.
 
 ### Projects And Worktrees
