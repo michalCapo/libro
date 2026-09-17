@@ -5,16 +5,26 @@ const vm = require('node:vm')
 const { test } = require('node:test')
 
 const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8')
-const forwarding = main.slice(main.indexOf('    // Keep workspace navigation'), main.indexOf('    // Forward Ctrl+;'))
+const forwarding = main.slice(main.indexOf('    // Keep workspace navigation'), main.indexOf('    const isZoomInKey'))
+const matching = main.slice(main.indexOf('let workspaceShortcuts'), main.indexOf('// Find the Go binary'))
+const defaults = [...fs.readFileSync(path.join(__dirname, '../internal/keybindings.go'), 'utf8')
+  .matchAll(/\{"[^"\n]+", "[^"\n]+", "([^"]+)"\}/g)].map(match => match[1])
 
-test('browser forwards workspace shortcuts, including repeat state', () => {
-  for (const key of ['a', 'b', 'h', 'l', 'p', 'q', 'r', 't', ',', '.', '1', '2', '3', '4', '5', '6', '7', '8', '9']) {
+function inputFor(binding, repeat = false) {
+  const key = binding.split('+').at(-1).toLowerCase()
+  return { key, code: 'Key' + key.toUpperCase(), control: binding.includes('Ctrl+'),
+    alt: binding.includes('Alt+'), meta: binding.includes('Meta+'), shift: binding.includes('Shift+'), isAutoRepeat: repeat }
+}
+
+test('browser forwards every saved shortcut before browser actions, with modifiers and repeat state', () => {
+  const bindings = [...defaults, 'Alt+R', 'Ctrl+Alt+Shift+Meta+F', 'Meta+=']
+  for (const binding of [...bindings, 'Ctrl+A', 'Ctrl+1', 'Ctrl+9', 'Ctrl+`']) {
     for (const repeat of [false, true]) {
       let prevented = false
       let forwarded
-      const input = { key, code: 'Key' + key.toUpperCase(), control: true, shift: ['p', 'q', 'r', 't'].includes(key), isAutoRepeat: repeat }
-      vm.runInNewContext('(function () {' + forwarding + '})()', {
-        key, input, shouldSkipDuplicateShortcut: () => false,
+      const input = inputFor(binding, repeat)
+      vm.runInNewContext(matching + '\nworkspaceShortcuts = new Set(bindings); (function () {' + forwarding + '})()', {
+        bindings, input, isMainWindowContents: false, shouldSkipDuplicateShortcut: () => false,
         e: { preventDefault() { prevented = true } },
         mainWindow: { webContents: { executeJavaScript(script) {
           vm.runInNewContext(script, {
@@ -24,12 +34,45 @@ test('browser forwards workspace shortcuts, including repeat state', () => {
           return Promise.resolve()
         } } },
       })
-      assert.equal(prevented, true)
-      assert.equal(forwarded.key, key)
-      assert.equal(forwarded.ctrlKey, true)
+      assert.equal(prevented, true, binding)
+      assert.equal(forwarded.key, input.key)
+      assert.equal(forwarded.ctrlKey, input.control)
+      assert.equal(forwarded.altKey, input.alt)
+      assert.equal(forwarded.metaKey, input.meta)
+      assert.equal(forwarded.shiftKey, input.shift)
       assert.equal(forwarded.repeat, repeat)
     }
   }
+})
+
+test('updated and disabled bindings release browser shortcuts and normalize plus', () => {
+  const context = vm.createContext({})
+  vm.runInContext(matching, context)
+  const matches = input => { context.input = input; return vm.runInContext('isWorkspaceShortcut(input)', context) }
+  vm.runInContext("workspaceShortcuts = new Set(['Ctrl+F', 'Ctrl+='])", context)
+  assert.equal(matches(inputFor('Ctrl+F')), true)
+  assert.equal(matches({ key: '+', control: true, shift: true }), true)
+  assert.equal(matches(inputFor('Ctrl+Shift+F')), false)
+  vm.runInContext("workspaceShortcuts = new Set(['Alt+F'])", context)
+  assert.equal(matches(inputFor('Ctrl+F')), false)
+  assert.equal(matches(inputFor('Alt+F')), true)
+  assert.equal(matches({ key: 'f' }), false)
+})
+
+test('workspace syncs initial bindings and saved settings to Electron', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const init = source.slice(source.indexOf('  let toolKeys'), source.indexOf('  function shortcut'))
+  const hints = source.slice(source.indexOf('  function updateToolHints'), source.indexOf('  function saveToolKeys'))
+  const saved = source.slice(source.indexOf('  function toolKeysSaved'), source.indexOf("  window.addEventListener('keydown'"))
+  const calls = []
+  const context = vm.createContext({
+    window: { __libroToolKeys: { files: 'Ctrl+F' }, libroElectron: { setWorkspaceShortcuts: bindings => calls.push(Array.from(bindings)) } },
+    document: { querySelectorAll: () => [], querySelector: () => ({}), getElementById: () => ({}) },
+  })
+  vm.runInContext(init + hints + saved, context)
+  vm.runInContext("toolKeysSaved({files: 'Alt+F'}, 'Saved')", context)
+  vm.runInContext("toolKeysSaved({files: ''}, 'Saved')", context)
+  assert.deepEqual(calls, [['Ctrl+F'], ['Alt+F'], ['']])
 })
 
 test('Ctrl+A hides tools and selects the remembered agent without requiring an overlay', () => {

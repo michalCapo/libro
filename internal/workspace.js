@@ -393,6 +393,10 @@
     } else select(existing.dataset.appId);
   }
   let toolKeys = window.__libroToolKeys || {};
+  function syncWorkspaceShortcuts() {
+    window.libroElectron?.setWorkspaceShortcuts?.(Object.values(toolKeys));
+  }
+  syncWorkspaceShortcuts();
   function shortcut(event) {
     const key = event.key === '+' ? '=' : event.key;
     if (!/^[a-z0-9=,.\-]$/i.test(key) || !(event.ctrlKey || event.altKey || event.metaKey)) return '';
@@ -410,6 +414,7 @@
     document.querySelectorAll('[data-tool-key]').forEach(input => input.value = bindings[input.dataset.toolKey] || '');
   }
   function updateToolHints() {
+    syncWorkspaceShortcuts();
     document.querySelectorAll('.ws-tool-rail button').forEach(button => {
       const name = button.getAttribute('aria-label');
       const plugin = window.__libroPlugins.find(plugin => plugin.id === button.dataset.toolId);

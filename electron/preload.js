@@ -4,6 +4,9 @@ const { ipcRenderer, contextBridge, webFrame } = require('electron')
 
 // Expose IPC methods to the renderer page for close confirmation flow
 contextBridge.exposeInMainWorld('libroElectron', {
+  setWorkspaceShortcuts: function (bindings) {
+    ipcRenderer.send('libro-workspace-shortcuts', bindings)
+  },
   forceClose: function () {
     ipcRenderer.send('libro-force-close')
   },

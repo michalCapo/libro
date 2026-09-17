@@ -438,6 +438,16 @@ const webviewBrowserMode = new Map()
 const webviewKeyboardPassthrough = new Map()
 const shortcutEventDedup = new Map()
 
+// Saved workspace bindings must win over shortcuts in guest pages.
+let workspaceShortcuts = new Set()
+function isWorkspaceShortcut(input) {
+  const key = input.key === '+' ? '=' : input.key || ''
+  const binding = (input.control ? 'Ctrl+' : '') + (input.alt ? 'Alt+' : '') +
+    (input.shift && input.key !== '+' ? 'Shift+' : '') + (input.meta ? 'Meta+' : '') + key.toUpperCase()
+  return workspaceShortcuts.has(binding) || binding === 'Ctrl+A' ||
+    /^Ctrl\+[1-9]$/.test(binding) || binding === 'Ctrl+`'
+}
+
 // Find the Go binary — look next to the electron dir, or in PATH
 function findGoBinary() {
   const fs = require('fs')
@@ -644,6 +654,12 @@ function createWindow() {
   })
 
   mainWindow.on('close', requestQuit)
+
+  ipcMain.on('libro-workspace-shortcuts', (event, bindings) => {
+    if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) return
+    if (!Array.isArray(bindings) || !bindings.every(binding => typeof binding === 'string')) return
+    workspaceShortcuts = new Set(bindings.filter(Boolean))
+  })
 
   // Renderer signals that user confirmed close (or no apps were running)
   ipcMain.on('libro-force-close', () => {
@@ -871,6 +887,20 @@ app.on('web-contents-created', (event, contents) => {
       return false
     }
 
+    // Keep workspace navigation available while a browser tool has focus.
+    if (!isMainWindowContents && isWorkspaceShortcut(input)) {
+      if (shouldSkipDuplicateShortcut()) return
+      e.preventDefault()
+      mainWindow?.webContents.executeJavaScript(`
+        window.dispatchEvent(new KeyboardEvent('keydown', {
+          key: ${JSON.stringify(input.key)}, code: ${JSON.stringify(input.code || '')},
+          ctrlKey: ${!!input.control}, altKey: ${!!input.alt}, metaKey: ${!!input.meta},
+          shiftKey: ${!!input.shift}, repeat: ${!!input.isAutoRepeat}, bubbles: true, cancelable: true
+        }));
+      `).catch(() => {})
+      return
+    }
+
     const isZoomInKey = key === '+' || key === '=' || code === 'equal' || code === 'numpadadd'
     const isZoomOutKey = key === '-' || code === 'minus' || code === 'numpadsubtract'
     const isZoomResetKey = key === '0' || code === 'digit0' || code === 'numpad0'
@@ -1024,20 +1054,6 @@ app.on('web-contents-created', (event, contents) => {
     // PDF/document viewers opened from a webview) should forward app shortcuts to
     // the main host page. These child contents are not always reported as "webview",
     // so do not special-case them as host content.
-
-    // Keep workspace navigation available while a browser tool has focus.
-    if (input.control && !input.meta && !input.alt &&
-        ((!input.shift && ['a', 'b', 'h', 'l', ',', '.', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(key)) || (input.shift && ['p', 'q', 'r', 't'].includes(key)))) {
-      if (shouldSkipDuplicateShortcut()) return
-      e.preventDefault()
-      mainWindow?.webContents.executeJavaScript(`
-        window.dispatchEvent(new KeyboardEvent('keydown', {
-          key: ${JSON.stringify(input.key)}, code: ${JSON.stringify(input.code || '')},
-          ctrlKey: true, shiftKey: ${!!input.shift}, repeat: ${!!input.isAutoRepeat}, bubbles: true, cancelable: true
-        }));
-      `).catch(() => {})
-      return
-    }
 
     // Forward Ctrl+; from embedded browser and terminal views to the workspace.
     if (input.control && !input.meta && !input.alt && !input.shift && (key === ';' || code === 'semicolon')) {
