@@ -314,18 +314,32 @@ test('panel navigation includes the side-by-side tool in visual order and wraps'
   assert.equal(navigate([agent], 'agent', 'Ctrl+L').selected, undefined)
 })
 
-test('close project uses saved binding and ignores repeat', () => {
+test('close project asks for confirmation, uses saved binding and ignores repeat', () => {
   const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = workspace.slice(workspace.indexOf("    if (binding && binding === toolKeys['close-project'])"), workspace.indexOf("    if (binding && binding === toolKeys['close-panel'])"))
   for (const binding of ['Ctrl+Shift+Q', 'Alt+Q']) {
     for (const repeat of [false, true]) {
       const calls = []
+      let confirm
       vm.runInNewContext('(function () {' + handler + '})()', {
         binding, toolKeys: { 'close-project': binding },
         event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
         call: action => calls.push(action),
+        activeGrid: () => ({ dataset: { projectLabel: 'Libro' } }),
+        window: { __libroConfirmAction(title, body, onConfirm, focusConfirm) {
+          assert.equal(title, 'Close project?')
+          assert.match(body, /Libro/)
+          assert.equal(focusConfirm, true)
+          confirm = onConfirm
+        } },
       })
-      assert.deepEqual(calls, repeat ? [] : ['project.close'])
+      assert.deepEqual(calls, [])
+      if (repeat) assert.equal(confirm, undefined)
+      else {
+        assert.equal(typeof confirm, 'function')
+        confirm()
+        assert.deepEqual(calls, ['project.close'])
+      }
     }
   }
 })

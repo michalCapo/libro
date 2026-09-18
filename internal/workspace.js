@@ -617,7 +617,7 @@
       if (!event.repeat) zoom(zoomAction);
       return;
     }
-    if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open]')) return;
+    if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open], #libro-confirm-popover')) return;
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
       if (event.repeat) return;
       const now = performance.now();
@@ -699,7 +699,11 @@
     }
     if (binding && binding === toolKeys['close-project']) {
       event.preventDefault(); event.stopImmediatePropagation();
-      if (!event.repeat) call('project.close');
+      if (!event.repeat) {
+        const grid = activeGrid();
+        if (!grid) return;
+        window.__libroConfirmAction('Close project?', 'Close "' + grid.dataset.projectLabel + '"?\n\nAll apps and terminals in this project will close.\n\nEnter to confirm · Esc to cancel', () => call('project.close'), true);
+      }
       return;
     }
     if (binding && binding === toolKeys['close-panel']) {

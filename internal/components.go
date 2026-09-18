@@ -678,7 +678,7 @@ func uxHardenJS() string {
 	}
 	dialogIDs.forEach(function(id){watch(document.getElementById(id));});
 
-	window.__libroConfirmAction=function(title,body,onConfirm){
+	window.__libroConfirmAction=function(title,body,onConfirm,focusConfirm){
 		var old=document.getElementById('libro-confirm-popover');
 		if(old)old.remove();
 		var wrap=document.createElement('div');
@@ -697,7 +697,7 @@ func uxHardenJS() string {
 		wrap.addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDefault();close();}});
 		cancel.onclick=close;
 		confirm.onclick=function(){close();if(typeof onConfirm==='function')onConfirm();};
-		setTimeout(function(){cancel.focus();},0);
+		setTimeout(function(){(focusConfirm?confirm:cancel).focus();},0);
 	};
 })();
 `, ProjectDialogID, ShortcutsDialogID, CloseDialogID, CommandPopupID, MoveProjectPopupID, WorktreeCreatePopupID)
