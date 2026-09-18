@@ -195,19 +195,19 @@
     form.onsubmit = event => { event.preventDefault(); call('project.command.save', {name, command:input.value}); };
     dialog.append(heading, form); root.append(dialog); dialog.showModal(); input.focus();
   }
-  let showArchivedThreads = false;
   function newThread() {
     call('thread.create', {});
   }
-  function threadArchived(archived) { if (archived) showArchivedThreads = true; refresh(); }
+  function threadArchived() { refresh(); }
   function renderThreads() {
     const list = document.getElementById('workspace-thread-list'); if (!list) return;
     const threads = window.__libroThreads || [];
-    const signature = JSON.stringify([threads, showArchivedThreads, window.__libroActiveProject]);
+    const signature = JSON.stringify([threads, window.__libroActiveProject]);
     if (list.dataset.signature === signature) return;
     list.dataset.signature = signature; list.replaceChildren();
     const appendThread = thread => {
       const item = node('div', 'ws-project-item');
+      item.dataset.archived = String(thread.archived);
       const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button'; row.title = thread.name; row.dataset.projectKey = thread.id; row.dataset.kind = 'thread';
       row.setAttribute('aria-current', String(thread.id === window.__libroActiveProject));
       const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
@@ -222,9 +222,8 @@
     }
     const archived = threads.filter(thread => thread.archived);
     if (archived.length) {
-      const toggle = node('button', 'ws-archived-toggle', 'Archived (' + archived.length + ')'); toggle.type = 'button'; toggle.setAttribute('aria-expanded', String(showArchivedThreads));
-      toggle.onclick = () => { showArchivedThreads = !showArchivedThreads; refresh(); }; list.append(toggle);
-      if (showArchivedThreads) archived.forEach(appendThread);
+      list.append(node('div', 'ws-sidebar-heading ws-archived-heading', 'Archived'));
+      archived.forEach(appendThread);
     }
   }
   function renderProjects() {
