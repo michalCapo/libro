@@ -62,6 +62,7 @@ type AppState struct {
 	SelectedIndex int
 
 	// Project state
+	Threads           []Thread
 	Projects          []Project
 	ActiveProject     string
 	ProjectDialogOpen bool
@@ -121,6 +122,7 @@ func newAppStateFromDB() *AppState {
 
 	return &AppState{
 		Projects:      projects,
+		Threads:       loadThreads(),
 		ActiveProject: activeProject,
 		snapshots:     make(map[string]*projectSnapshot),
 
@@ -908,7 +910,7 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 	}
 
 	// Verify project exists
-	found := false
+	found := s.thread(projectName) != nil
 	for _, p := range s.Projects {
 		if p.Name == projectName {
 			found = true
@@ -1025,6 +1027,17 @@ func (sm *StateManager) GetAllRunningApps(sessionID string) []ProjectApps {
 		}
 		if len(apps) > 0 {
 			result = append(result, ProjectApps{Name: p.Name, Apps: apps})
+		}
+	}
+	for _, thread := range s.Threads {
+		var apps []Application
+		if thread.ID == s.ActiveProject {
+			apps = s.Apps
+		} else if snap := s.snapshots[thread.ID]; snap != nil {
+			apps = snap.Apps
+		}
+		if len(apps) > 0 {
+			result = append(result, ProjectApps{Name: thread.ID, Apps: apps})
 		}
 	}
 	return result

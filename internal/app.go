@@ -1163,6 +1163,8 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 		return resp.Build()
 	}
 
+	registerThreadActions(app, switchToProjectName)
+
 	// Switch active project
 	registerAction(app, "project.switch", func(ctx *r.Context) string {
 		sid := extractSID(ctx)

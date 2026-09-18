@@ -515,3 +515,31 @@ test('browser cycling runs at capture phase from terminals and other focused pan
     }
   }
 })
+
+test('double Ctrl+A hides all tools and the bottom terminal without closing them', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('  let lastCtrlA'), source.indexOf("  window.addEventListener('keydown', event => {"))
+  const detection = source.slice(source.indexOf("    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a')"), source.indexOf("    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && /^[1-9]$/"))
+  const state = {hidden:new Set(), bottom:true}
+  let now = 100, focused = 0
+  const context = vm.createContext({
+    performance:{now:() => now}, activeGrid:() => ({}), dockState:() => state,
+    frames:() => ['center', 'right', 'right', 'bottom'].map((dock, i) => ({dataset:{dock, appId:String(i)}})),
+    restoreAgentFocus:() => focused++, maximized:'tool',
+    event:{ctrlKey:true, key:'a', preventDefault(){}, stopImmediatePropagation(){}},
+  })
+  vm.runInContext(handler + '\nfunction press(){' + detection + '}', context)
+  vm.runInContext('press()', context)
+  assert.equal(focused, 0)
+  now = 300
+  vm.runInContext('press()', context)
+  assert.equal(focused, 1)
+  assert.deepEqual([...state.hidden], ['1', '2'])
+  assert.equal(state.bottom, false)
+  assert.equal(context.maximized, '')
+  now = 1000
+  vm.runInContext('press()', context)
+  now = 1500
+  vm.runInContext('press()', context)
+  assert.equal(focused, 1)
+})

@@ -998,6 +998,11 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			OnClick(r.JS(fmt.Sprintf(`window.__libroWvReload('%s')`, app.ID)))
 		reloadBtn.Render(r.I("material-icons-round text-sm").Text("refresh"))
 
+		consoleBtn := r.Button(btnCls).
+			Attr("title", "Open browser console").Attr("aria-label", "Open browser console").
+			OnClick(r.JS(fmt.Sprintf(`if(window.__libroOpenConsole)window.__libroOpenConsole(%s)`, components.JSString(app.ID)))).
+			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("code"))
+
 		zoomButtons := r.Div("flex items-center gap-0.5 shrink-0").
 			Attr("role", "group").Attr("aria-label", "Browser zoom")
 		for _, zoom := range []struct {
@@ -1047,7 +1052,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		globe := r.Div(globeBadgeCls).Render(globeIcon)
 
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
-			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn, zoomButtons)
+			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn, consoleBtn, zoomButtons)
 	} else if app.Type == AppTypeTerminal {
 		labelText := workspaceAppName(app)
 
@@ -2949,7 +2954,7 @@ func projectsJS(state *AppState) string {
 	if b == nil {
 		b = []byte("[]")
 	}
-	return fmt.Sprintf("window.__libroActiveProject=%s;window.__libroProjects=%s;if(window.libroWorkspace)libroWorkspace.refresh();", components.JSString(state.ActiveProject), string(b))
+	return threadsJS(state) + fmt.Sprintf("window.__libroActiveProject=%s;window.__libroProjects=%s;if(window.libroWorkspace)libroWorkspace.refresh();", components.JSString(state.ActiveProject), string(b))
 }
 
 // renderProjectDialog renders the create project modal
@@ -3560,6 +3565,7 @@ func keyboardShortcutsJS(sid string) string {
 				if (window.__libroScrollToApp) window.__libroScrollToApp(container);
 
 				function focusAttempt() {
+					if (document.querySelector('#url-popup:not(.hidden)')) return;
 					if ((window.__libroSelectedApp || '') !== (container.getAttribute('data-app-id') || '')) return;
 					try { window.focus(); } catch(err) {}
 

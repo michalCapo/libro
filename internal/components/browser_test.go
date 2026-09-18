@@ -148,3 +148,43 @@ process.stdin.on('end', () => {
 		t.Fatalf("browser navigation failed: %v\n%s", err, output)
 	}
 }
+
+func TestBrowserFocusPreservesURLPopup(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	const harness = `
+const assert = require('node:assert/strict'), vm = require('node:vm');
+let script = '';
+process.stdin.on('data', data => script += data);
+process.stdin.on('end', () => {
+  for (const name of ['focusIfSelected', 'refocusWebview']) {
+    const start = script.indexOf('function ' + name + '(');
+    const end = script.indexOf('\n}', start) + 2;
+    let popupOpen = false, focused = 'input';
+    const timers = [];
+    const window = { __libroSelectedApp: 'browser', focus() {} };
+    const document = { querySelector() { return popupOpen ? {} : null; } };
+    const context = { window, document, setTimeout(fn) { timers.push(fn); } };
+    vm.runInNewContext(script.slice(start, end), context);
+    const webview = { focus() { focused = 'webview'; } };
+    context[name]('browser', webview);
+    assert.equal(focused, 'webview');
+    popupOpen = true;
+    focused = 'input';
+    timers.splice(0).forEach(fn => fn());
+    assert.equal(focused, 'input', name + ' retries must preserve popup focus');
+    context[name]('browser', webview);
+    assert.equal(focused, 'input', name + ' must preserve popup focus on dom-ready');
+    popupOpen = false;
+    context[name]('browser', webview);
+    assert.equal(focused, 'webview', name + ' must restore focus after closing');
+  }
+});`
+	cmd := exec.Command(node, "-e", harness)
+	cmd.Stdin = strings.NewReader(BrowserJS())
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("browser popup focus: %v\n%s", err, output)
+	}
+}

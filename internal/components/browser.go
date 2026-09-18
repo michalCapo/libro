@@ -321,6 +321,7 @@ function refocusWebview(appID, wv) {
 	if (!wv) return;
 	function attempt() {
 		if ((window.__libroSelectedApp || '') !== appID) return;
+		if (document.querySelector('#url-popup:not(.hidden)')) return;
 		try { window.focus(); } catch(err) {}
 		try { wv.focus(); } catch(err) {}
 	}
@@ -473,6 +474,7 @@ function focusIfSelected(appID, wv) {
 	if (!appID || !wv) return;
 	function attempt() {
 		if ((window.__libroSelectedApp || '') !== appID) return;
+		if (document.querySelector('#url-popup:not(.hidden)')) return;
 		try { window.focus(); } catch(err) {}
 		try { wv.focus(); } catch(err) {}
 	}

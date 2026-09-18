@@ -60,7 +60,11 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 			workspaceButton("New agent session", "edit", "libroWorkspace.launcher('center')"),
 		),
 		r.Div("ws-sidebar-heading").Render(r.Span("").Text("Projects")),
-		r.Div("ws-project-list").ID("workspace-project-list"),
+		r.Div("ws-navigation").Render(
+			r.Div("ws-project-list").ID("workspace-project-list"),
+			r.Div("ws-sidebar-heading").Render(r.Span("").Text("Threads"), workspaceButton("New thread", "add", "libroWorkspace.newThread()")),
+			r.Div("").ID("workspace-thread-list"),
+		),
 		r.Div("ws-sidebar-footer").Render(
 			r.Button("ws-sidebar-action").OnClick(r.JS("libroWorkspace.settings()")).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("settings"), r.Span("").Text("Settings")),
 			r.Button("ws-sidebar-action").OnClick(r.JS("libroWorkspace.launcher()")).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("apps"), r.Span("").Text("Apps & plugins")),
@@ -74,6 +78,9 @@ func renderWorkspaceEmpty(state *AppState, sid string) *r.Node {
 }
 
 func workspaceProjectLabel(state *AppState) string {
+	if thread := state.thread(state.ActiveProject); thread != nil {
+		return thread.Name
+	}
 	projectLabel := filepath.Base(state.ActiveProject)
 	for _, project := range state.Projects {
 		if project.Name == state.ActiveProject && project.Path != "" {

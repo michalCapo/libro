@@ -160,10 +160,11 @@
   function empty(zone, grid) {
     const el = node('section', 'ws-empty'); el.dataset.zone = zone;
     const center = zone === 'center';
-    const heading = node(center ? 'h1' : 'h2', '', center ? 'What are we building on ' : zone === 'right' ? 'Tools for your workspace' : 'Your project terminal');
+    const standalone = (window.__libroThreads || []).some(thread => thread.id === grid.dataset.workspaceProject);
+    const heading = node(center ? 'h1' : 'h2', '', center ? (standalone ? 'What would you like to do in ' : 'What are we building on ') : zone === 'right' ? 'Tools for your workspace' : 'Your project terminal');
     if (center) heading.append(node('span', 'ws-project-accent', grid.dataset.projectLabel), document.createTextNode('?'));
     el.append(heading);
-    el.append(node('p', '', center ? 'Start an agent in this project. Your tools and terminals stay close by.' : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.'));
+    el.append(node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers. Agents start in your home folder.' : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.'));
     const actions = node('div', 'ws-agent-actions');
 
     (center ? ['codex', 'pi', 'claude'] : zone === 'right' ? ['browser', 'lazyrepo', 'terminal'] : ['terminal']).forEach(id => {
@@ -193,6 +194,49 @@
     actions.append(cancel, submit); form.append(label, input, help, actions);
     form.onsubmit = event => { event.preventDefault(); call('project.command.save', {name, command:input.value}); };
     dialog.append(heading, form); root.append(dialog); dialog.showModal(); input.focus();
+  }
+  let showArchivedThreads = false;
+  function newThread() {
+    let dialog = document.getElementById('workspace-thread-dialog');
+    if (dialog) dialog.remove();
+    dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-thread-dialog'; dialog.setAttribute('aria-label', 'New thread');
+    const form = node('form', 'ws-thread-form');
+    const label = node('label', '', 'Thread name'); label.htmlFor = 'thread-name';
+    const input = node('input', 'ws-agent-command'); input.id = 'thread-name'; input.required = true; input.maxLength = 200; input.placeholder = 'Explore an idea or fix a server';
+    const actions = node('div', 'ws-agent-actions');
+    const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
+    const create = node('button', 'ws-launch', 'Create thread'); create.type = 'submit';
+    actions.append(cancel, create); form.append(label, input, actions); dialog.append(form); root.append(dialog);
+    form.onsubmit = event => { event.preventDefault(); if (!input.value.trim()) return; call('thread.create', {name:input.value.trim()}); dialog.close(); };
+    dialog.showModal(); input.focus();
+  }
+  function threadArchived(archived) { if (archived) showArchivedThreads = true; refresh(); }
+  function renderThreads() {
+    const list = document.getElementById('workspace-thread-list'); if (!list) return;
+    const threads = window.__libroThreads || [];
+    const signature = JSON.stringify([threads, showArchivedThreads, window.__libroActiveProject]);
+    if (list.dataset.signature === signature) return;
+    list.dataset.signature = signature; list.replaceChildren();
+    const appendThread = thread => {
+      const item = node('div', 'ws-project-item');
+      const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button'; row.title = thread.name; row.dataset.projectKey = thread.id; row.dataset.kind = 'thread';
+      row.setAttribute('aria-current', String(thread.id === window.__libroActiveProject));
+      const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
+      row.append(icon, node('span', '', thread.name));
+      row.onclick = () => { closeSettings(); if (innerWidth <= 760) { prefs.projects = false; save(); } call('project.switch', {name:thread.id}); };
+      const archive = button(thread.archived ? 'Restore thread' : 'Archive thread', thread.archived ? 'unarchive' : 'archive', () => call('thread.archive', {id:thread.id, archived:!thread.archived}));
+      archive.classList.add('ws-project-remove'); item.append(row, archive); list.append(item);
+    };
+    threads.filter(thread => !thread.archived).forEach(appendThread);
+    if (!threads.some(thread => !thread.archived)) {
+      const create = node('button', 'ws-sidebar-action', 'Create a thread'); create.type = 'button'; create.onclick = newThread; list.append(create);
+    }
+    const archived = threads.filter(thread => thread.archived);
+    if (archived.length) {
+      const toggle = node('button', 'ws-sidebar-action', 'Archived (' + archived.length + ')'); toggle.type = 'button'; toggle.setAttribute('aria-expanded', String(showArchivedThreads));
+      toggle.onclick = () => { showArchivedThreads = !showArchivedThreads; refresh(); }; list.append(toggle);
+      if (showArchivedThreads) archived.forEach(appendThread);
+    }
   }
   function renderProjects() {
     const list = document.getElementById('workspace-project-list'); if (!list) return;
@@ -392,7 +436,7 @@
       const state = projects.get(row.dataset.projectKey) || '';
       if (row.dataset.agentStatus === state) return;
       row.dataset.agentStatus = state;
-      row.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle_outline' : row.dataset.kind === 'worktree' ? 'account_tree' : 'folder_open';
+      row.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle_outline' : row.dataset.kind === 'worktree' ? 'account_tree' : row.dataset.kind === 'thread' ? 'chat_bubble_outline' : 'folder_open';
       const label = row.querySelector('span').textContent;
       row.setAttribute('aria-label', label + (state === 'working' ? ': agents working' : state === 'done' ? ': all agents done' : ''));
     });
@@ -435,6 +479,7 @@
     });
     renderToolRail();
     renderProjects();
+    renderThreads();
     renderProjectAgents();
     renderProjectShortcuts();
     renderProjectActivity();
@@ -548,6 +593,15 @@
     document.getElementById('tool-key-status').textContent = message;
     if (bindings) { toolKeys = bindings; updateToolHints(); }
   }
+  let lastCtrlA = 0;
+  function hideTools() {
+    const grid = activeGrid(); if (!grid) return;
+    maximized = '';
+    const state = dockState(grid);
+    frames(grid).forEach(frame => { if (frame.dataset.dock === 'right') state.hidden.add(frame.dataset.appId); });
+    state.bottom = false;
+    restoreAgentFocus(grid);
+  }
   window.addEventListener('keydown', event => {
     const input = event.target.closest?.('[data-tool-key]');
     if (input) {
@@ -565,6 +619,14 @@
       return;
     }
     if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open]')) return;
+    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
+      if (event.repeat) return;
+      const now = performance.now();
+      if (lastCtrlA && now - lastCtrlA < 450) {
+        lastCtrlA = 0; event.preventDefault(); event.stopImmediatePropagation(); hideTools(); return;
+      }
+      lastCtrlA = now;
+    } else if (!['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) lastCtrlA = 0;
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && /^[1-9]$/.test(event.key)) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) {
@@ -959,7 +1021,7 @@
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
   }
-  window.libroWorkspace = {newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;
