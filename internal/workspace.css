@@ -27,7 +27,7 @@ html.dark .ws-grid [data-terminal],html.dark .ws-grid .xterm,html.dark .ws-grid 
 .ws-sidebar-search span{flex:1}.ws-sidebar-search:hover{background:var(--ws-hover)}
 .ws-sidebar-search .material-icons-round,.ws-sidebar-action .material-icons-round{font-size:19px;flex-shrink:0;color:var(--ws-muted)}
 .ws-sidebar-tools>.ws-button .material-icons-round{font-size:18px;color:var(--ws-muted)}
-.ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;color:var(--ws-muted);font-size:12px;padding-left:10px;margin-top:6px}
+.ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;color:var(--ws-muted);font-size:24px;font-weight:700;padding-left:10px;margin-top:6px}
 .ws-project-list{flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--ws-line) transparent}
 .ws-project-item{position:relative;display:flex;align-items:center;margin-bottom:4px;border-radius:10px}
 .ws-project-row{display:flex;align-items:center;gap:10px;min-width:0;min-height:44px;flex:1;padding:11px 12px;border:0;background:transparent;border-radius:10px;color:var(--ws-muted);text-align:left;font:inherit}

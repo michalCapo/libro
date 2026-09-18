@@ -51,15 +51,12 @@ func renderWorkspaceTopBar(state *AppState, sid string) *r.Node {
 func renderWorkspaceSidebar(sid string) *r.Node {
 	return r.El("aside", "ws-sidebar").ID("workspace-projects").Attr("aria-label", "Projects").Render(
 		r.Div("ws-sidebar-tools").Render(
-			r.Button("ws-sidebar-search").Attr("aria-label", "Search commands").OnClick(r.JS("if(window.__libroOpenCommandPalette)__libroOpenCommandPalette()")).Render(
-				r.I("material-icons-round").Attr("aria-hidden", "true").Text("search"),
-				r.Span("").Text("Search"),
-			),
-			workspaceButton("Switch project or worktree", "folder", fmt.Sprintf("if(window.__libroOpenProjectDialogSearch){__libroOpenProjectDialogSearch()}else{__ws.call('project.dialog.open',{sid:%s})}", components.JSString(sid))),
-			workspaceButton("Add project", "create_new_folder", fmt.Sprintf("if(window.__libroOpenProjectDialogBrowse){__libroOpenProjectDialogBrowse()}else{__ws.call('project.dialog.open',{sid:%s})}", components.JSString(sid))),
-			workspaceButton("New agent session", "edit", "libroWorkspace.launcher('center')"),
+			workspaceButton("Toggle projects", "view_sidebar", "libroWorkspace.toggle('projects')"),
 		),
-		r.Div("ws-sidebar-heading").Render(r.Span("").Text("Projects")),
+		r.Div("ws-sidebar-heading").Render(
+			r.Span("").Text("Projects"),
+			workspaceButton("Add project", "create_new_folder", fmt.Sprintf("if(window.__libroOpenProjectDialogBrowse){__libroOpenProjectDialogBrowse()}else{__ws.call('project.dialog.open',{sid:%s})}", components.JSString(sid))),
+		),
 		r.Div("ws-navigation").Render(
 			r.Div("ws-project-list").ID("workspace-project-list"),
 			r.Div("ws-sidebar-heading").Render(r.Span("").Text("Threads"), workspaceButton("New thread", "add", "libroWorkspace.newThread()")),
@@ -104,7 +101,6 @@ func renderWorkspaceStrip(state *AppState, sid, placeholderID string) *r.Node {
 
 func renderWorkspaceTools() *r.Node {
 	return r.El("aside", "ws-tool-rail").Attr("aria-label", "Workspace tools").Render(
-		workspaceButton("Toggle projects", "view_sidebar", "libroWorkspace.toggle('projects')"),
 		r.Div("ws-tool-buttons").ID("workspace-tool-buttons"),
 		workspaceButton("More tools", "add", "libroWorkspace.launcher('right')"),
 		workspaceButton("Toggle bottom terminal (Ctrl+`)", "vertical_align_bottom", "libroWorkspace.bottom()"),
