@@ -377,3 +377,9 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 
 #url-popup-results{padding:6px;max-height:min(320px,45dvh);overflow-y:auto;overflow-x:hidden}
 #url-popup-results .ws-command-row{min-height:40px}
+
+.ws-thread-status{flex-shrink:0;margin-left:auto;font-size:10px;color:var(--ws-muted)}
+.ws-project-agent[data-agent-status=working] .material-icons-round{color:var(--ws-accent);animation:ws-agent-working 1s linear infinite}
+.ws-project-agent[data-agent-status=done] .material-icons-round,.ws-project-agent[data-agent-status=done] .ws-thread-status{color:#15803d}
+html.dark .ws-project-agent[data-agent-status=done] .material-icons-round,html.dark .ws-project-agent[data-agent-status=done] .ws-thread-status{color:#4ade80}
+@media(prefers-reduced-motion:reduce){.ws-project-agent[data-agent-status=working] .material-icons-round{animation:none}}

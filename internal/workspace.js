@@ -365,6 +365,22 @@
     for (const id of acknowledgedAgents) {
       if (statuses[id] && statuses[id] !== 'done') acknowledgedAgents.delete(id);
     }
+    document.querySelectorAll('.ws-project-agent').forEach(tab => {
+      const state = statuses[tab.dataset.agentId];
+      const status = state === 'working' ? 'Working' : state === 'done' ? 'Done' : '';
+      tab.dataset.agentStatus = status ? state : '';
+      tab.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle_outline' : 'chat_bubble_outline';
+      let badge = tab.querySelector('.ws-thread-status');
+      if (status && !badge) {
+        badge = node('small', 'ws-thread-status');
+        tab.append(badge);
+      }
+      if (badge) {
+        if (status) badge.textContent = status;
+        else badge.remove();
+      }
+      tab.setAttribute('aria-label', tab.querySelector('span').textContent + (status ? ': ' + status : ''));
+    });
     const projects = new Map();
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
       const agents = frames(grid).filter(frame => frame.dataset.dock === 'center');
