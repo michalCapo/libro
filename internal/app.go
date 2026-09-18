@@ -699,6 +699,13 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + projJS
 	})
 
+	registerAction(app, "project.close.check", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		state := sm.Get(sid)
+		return showCloseDialogJS([]ProjectApps{{Name: workspaceProjectLabel(state), Apps: state.Apps}},
+			"Close project?", "Close project", "project.close", sid)
+	})
+
 	// Close every panel and terminal in the active project.
 	registerAction(app, "project.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
@@ -1265,30 +1272,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 			return fmt.Sprintf(`__ws.call('app.close.all',{sid:%s});`, components.JSString(sid))
 		}
 
-		// Build tree HTML: project > apps
-		var html strings.Builder
-		for _, pa := range projectApps {
-			fmt.Fprintf(&html, `<div class="mb-2"><div class="flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-1"><span class="material-icons-round text-sm">folder</span>%s</div>`, pa.Name)
-			for _, a := range pa.Apps {
-				icon := "language"
-				label := a.Name
-				if a.Type == AppTypeTerminal {
-					icon = "terminal"
-					if label == "" {
-						label = a.Command
-					}
-				} else {
-					if label == "" {
-						label = a.URL
-					}
-				}
-				fmt.Fprintf(&html, `<div class="flex items-center gap-1.5 ml-5 py-0.5 text-xs text-gray-500 dark:text-zinc-500"><span class="material-icons-round text-xs">%s</span><span class="truncate">%s</span></div>`, icon, label)
-			}
-			html.WriteString(`</div>`)
-		}
-
-		return fmt.Sprintf(`(function(){var el=document.getElementById('close-dialog-apps');if(el)el.innerHTML=%s;var dlg=document.getElementById('%s');if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);if(dlg)dlg.classList.remove('hidden');var cb=document.getElementById('close-dialog-confirm');if(cb)cb.focus();})();`,
-			components.JSString(html.String()), CloseDialogID)
+		return showCloseDialogJS(projectApps, "Quit Libro?", "Quit", "app.close.all", sid)
 	})
 
 	// Finish cleanup before allowing the renderer to close the desktop window.

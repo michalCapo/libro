@@ -6,8 +6,8 @@ import (
 	r "github.com/michalCapo/g-sui/ui"
 )
 
-// CloseDialog renders the quit confirmation dialog (hidden by default).
-// It is populated dynamically when the user closes the desktop window.
+// CloseDialog renders the shared project-close and quit confirmation dialog.
+// Its app list and confirmation action are populated when opened.
 func CloseDialog(sid string) *r.Node {
 	return r.Div("ws-popup fixed inset-0 z-[70] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
 		ID(CloseDialogID).

@@ -320,26 +320,13 @@ test('close project asks for confirmation, uses saved binding and ignores repeat
   for (const binding of ['Ctrl+Shift+Q', 'Alt+Q']) {
     for (const repeat of [false, true]) {
       const calls = []
-      let confirm
       vm.runInNewContext('(function () {' + handler + '})()', {
         binding, toolKeys: { 'close-project': binding },
         event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
         call: action => calls.push(action),
         activeGrid: () => ({ dataset: { projectLabel: 'Libro' } }),
-        window: { __libroConfirmAction(title, body, onConfirm, focusConfirm) {
-          assert.equal(title, 'Close project?')
-          assert.match(body, /Libro/)
-          assert.equal(focusConfirm, true)
-          confirm = onConfirm
-        } },
       })
-      assert.deepEqual(calls, [])
-      if (repeat) assert.equal(confirm, undefined)
-      else {
-        assert.equal(typeof confirm, 'function')
-        confirm()
-        assert.deepEqual(calls, ['project.close'])
-      }
+      assert.deepEqual(calls, repeat ? [] : ['project.close.check'])
     }
   }
 })

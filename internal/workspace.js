@@ -716,7 +716,7 @@
       if (!event.repeat) {
         const grid = activeGrid();
         if (!grid) return;
-        window.__libroConfirmAction('Close project?', 'Close "' + grid.dataset.projectLabel + '"?\n\nAll apps and terminals in this project will close.\n\nEnter to confirm · Esc to cancel', () => call('project.close'), true);
+        call('project.close.check');
       }
       return;
     }
