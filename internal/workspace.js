@@ -167,7 +167,7 @@
     el.append(node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers. Agents start in your home folder.' : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.'));
     const actions = node('div', 'ws-agent-actions');
 
-    (center ? ['codex', 'pi', 'claude'] : zone === 'right' ? ['browser', 'lazyrepo', 'terminal'] : ['terminal']).forEach(id => {
+    (center ? window.__libroPlugins.filter(p => p.dock === 'center' && p.type === 'terminal' && !p.disabled && !p.removed).slice(0, 3).map(p => p.id) : zone === 'right' ? ['browser', 'lazyrepo', 'terminal'] : ['terminal']).forEach(id => {
       const plugin = window.__libroPlugins.find(p => p.id === id);
       if (!plugin || plugin.disabled || plugin.removed) return;
       const launch = node('button', 'ws-launch', plugin.name);
@@ -937,6 +937,7 @@
     call('settings.width', {width, tool});
   }
   let removedAgents = {};
+  let draggedAgentRow = null;
   function addAgentRow(plugin, command, toolRow = false) {
     const row = node('div', 'ws-settings-row ws-agent-command-row ws-agent-config-row');
     row.dataset.agentId = plugin.id; row.dataset.custom = String(!!plugin.custom);
@@ -953,6 +954,7 @@
       if (toolRow) { if (!window.__libroPlugins.some(p => p.id === plugin.id)) { row.remove(); return; } row.dataset.removed = 'true'; row.hidden = true; row.querySelectorAll('input').forEach(input => input.required = false); return; }
       if (window.__libroPlugins.some(p => p.id === plugin.id)) removedAgents[plugin.id] = true;
       row.remove();
+      updateAgentOrderButtons();
     });
     remove.hidden = checkbox.checked;
     checkbox.onchange = () => {
@@ -971,7 +973,63 @@
       label.append(auto, node('span', '', 'Autolaunch')); row.append(label);
     }
     row.prepend(toggle, name, input); row.append(remove); document.getElementById(toolRow ? 'tool-command-rows' : 'agent-command-rows').append(row);
+    if (!toolRow) {
+      const controls = node('div', 'ws-agent-order');
+      const handle = button('Drag to reorder agent', 'drag_indicator', () => {});
+      handle.classList.add('ws-agent-drag');
+      handle.draggable = true;
+      handle.ondragstart = event => {
+        draggedAgentRow = row;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', plugin.id);
+        row.classList.add('ws-agent-dragging');
+      };
+      handle.ondragend = () => {
+        draggedAgentRow = null;
+        row.classList.remove('ws-agent-dragging');
+        row.parentElement?.querySelectorAll('[data-agent-drop]').forEach(target => delete target.dataset.agentDrop);
+      };
+      row.ondragover = event => {
+        if (!draggedAgentRow || draggedAgentRow === row || draggedAgentRow.parentElement !== row.parentElement) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        row.parentElement.querySelectorAll('[data-agent-drop]').forEach(target => delete target.dataset.agentDrop);
+        const bounds = row.getBoundingClientRect();
+        row.dataset.agentDrop = event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
+      };
+      row.ondragleave = event => {
+        if (!row.contains(event.relatedTarget)) delete row.dataset.agentDrop;
+      };
+      row.ondrop = event => {
+        if (!draggedAgentRow || draggedAgentRow === row || draggedAgentRow.parentElement !== row.parentElement) return;
+        event.preventDefault();
+        const bounds = row.getBoundingClientRect();
+        if (event.clientY < bounds.top + bounds.height / 2) row.before(draggedAgentRow); else row.after(draggedAgentRow);
+        delete row.dataset.agentDrop;
+        updateAgentOrderButtons();
+      };
+      controls.append(handle);
+      [-1, 1].forEach(direction => {
+        const move = button(direction < 0 ? 'Move agent up' : 'Move agent down', direction < 0 ? 'arrow_upward' : 'arrow_downward', () => {
+          const sibling = direction < 0 ? row.previousElementSibling : row.nextElementSibling;
+          if (!sibling) return;
+          if (direction < 0) sibling.before(row); else sibling.after(row);
+          updateAgentOrderButtons();
+          move.focus();
+        });
+        move.dataset.agentMove = String(direction);
+        controls.append(move);
+      });
+      row.append(controls);
+      updateAgentOrderButtons();
+    }
     return row;
+  }
+  function updateAgentOrderButtons() {
+    const rows = [...document.getElementById('agent-command-rows').children];
+    rows.forEach((row, i) => row.querySelectorAll('[data-agent-move]').forEach(move => {
+      move.disabled = Number(move.dataset.agentMove) < 0 ? i === 0 : i === rows.length - 1;
+    }));
   }
   function addCustomTool() {
     addAgentRow({id:'custom-tool-' + crypto.randomUUID(), name:'', custom:true}, '', true).querySelector('[data-agent-name]').focus();
@@ -992,9 +1050,10 @@
     addAgentRow({id:'custom-' + crypto.randomUUID(), name:'', custom:true}, '').querySelector('input').focus();
   }
   function saveAgentCommand(form) {
-    const commands = {}, disabled = {}, custom = [], names = {};
+    const commands = {}, disabled = {}, custom = [], names = {}, order = [];
     form.querySelectorAll('[data-agent-id]').forEach(row => {
       const id = row.dataset.agentId, command = row.querySelector('[data-agent-command]').value;
+      order.push(id);
       names[id] = row.querySelector('[data-agent-name]').value.trim();
       commands[id] = command; disabled[id] = !row.querySelector('[data-agent-enabled]').checked;
       if (row.dataset.custom === 'true') custom.push({id, name:row.querySelector('[data-agent-name]').value.trim(), command, type:'terminal', dock:'center', custom:true});
@@ -1002,7 +1061,7 @@
     form.querySelector('[type=submit]').disabled = true;
     form.querySelector('[role=status]').textContent = 'Saving…';
     Object.keys(removedAgents).forEach(id => disabled[id] = true);
-    call('settings.agent-command', {commands, disabled, custom, names, removed:removedAgents, autolaunch:form.querySelector('[data-agent-autolaunch]:checked')?.closest('[data-agent-id]').dataset.agentId || ''});
+    call('settings.agent-command', {commands, disabled, custom, names, order, removed:removedAgents, autolaunch:form.querySelector('[data-agent-autolaunch]:checked')?.closest('[data-agent-id]').dataset.agentId || ''});
   }
   function agentCommandSaved(message, plugins) {
     const form = document.getElementById('agent-commands-form');

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -115,6 +116,18 @@ func plugins() []Plugin {
 		var custom []Plugin
 		if db.QueryRow(`SELECT value FROM settings WHERE key = 'custom_agents'`).Scan(&raw) == nil && json.Unmarshal([]byte(raw), &custom) == nil {
 			result = append(result, custom...)
+		}
+		var order []string
+		if db.QueryRow(`SELECT value FROM settings WHERE key = 'agent_order'`).Scan(&raw) == nil && json.Unmarshal([]byte(raw), &order) == nil {
+			rank := make(map[string]int, len(order))
+			for i, id := range order {
+				rank[id] = i + 1
+			}
+			// Unlisted plugins keep their existing order after the saved agents.
+			sort.SliceStable(result, func(i, j int) bool {
+				a, b := rank[result[i].ID], rank[result[j].ID]
+				return a != 0 && (b == 0 || a < b)
+			})
 		}
 		var autolaunch string
 		_ = db.QueryRow(`SELECT value FROM settings WHERE key = 'autolaunch_agent'`).Scan(&autolaunch)

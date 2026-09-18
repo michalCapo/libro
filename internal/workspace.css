@@ -365,10 +365,10 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 #libro-workspace[data-projects=false] .ws-project-shortcut{position:static}
 #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-shortcut)>.material-icons-round{display:none}
 
-#agent-command-rows .ws-agent-config-row{grid-template-columns:20px minmax(90px,1fr) minmax(0,3fr) auto auto}
+#agent-command-rows .ws-agent-config-row{grid-template-columns:20px minmax(90px,1fr) minmax(0,3fr) auto auto auto}
 .ws-agent-autolaunch{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ws-fg);white-space:nowrap}
 .ws-agent-autolaunch input{accent-color:var(--ws-accent)}
-@media(max-width:700px){#agent-command-rows .ws-agent-config-row{grid-template-columns:20px minmax(0,1fr) auto}#agent-command-rows [data-agent-command]{grid-column:2 / -1}#agent-command-rows .ws-agent-autolaunch{grid-column:2}#agent-command-rows .ws-button{grid-column:3;grid-row:1}}
+@media(max-width:700px){#agent-command-rows .ws-agent-config-row{grid-template-columns:20px minmax(0,1fr) auto}#agent-command-rows [data-agent-command]{grid-column:2}#agent-command-rows .ws-agent-autolaunch{grid-column:2}#agent-command-rows .ws-button{grid-column:3;grid-row:1}}
 
 .ws-project-agents{margin:0 4px 8px 21px;padding-left:9px;border-left:1px solid var(--ws-line);display:flex;flex-direction:column;gap:2px}
 .ws-project-agent{display:flex;align-items:center;gap:8px;width:100%;min-width:0;min-height:34px;padding:7px 8px;border:0;border-radius:7px;background:transparent;color:var(--ws-muted);text-align:left;font:inherit;font-size:12px;cursor:pointer}
@@ -395,3 +395,13 @@ html.dark .ws-project-agent[data-agent-status=done],html.dark .ws-project-agent[
 .ws-thread-row{padding-right:34px}
 .ws-thread-row .material-icons-round{font-size:18px}
 #libro-workspace[data-projects=false] #workspace-thread-list .ws-sidebar-action{display:none}
+
+.ws-agent-order{display:flex;gap:2px;grid-column:6}
+.ws-agent-order .ws-button:disabled{opacity:.3;cursor:default}
+@media(max-width:700px){#agent-command-rows .ws-agent-order{grid-column:3;grid-row:2}}
+
+.ws-agent-drag{cursor:grab}
+.ws-agent-drag:active{cursor:grabbing}
+.ws-agent-dragging{opacity:.45}
+#agent-command-rows [data-agent-drop=before]{box-shadow:inset 0 2px var(--ws-fg)}
+#agent-command-rows [data-agent-drop=after]{box-shadow:inset 0 -2px var(--ws-fg)}

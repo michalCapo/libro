@@ -99,10 +99,10 @@ func saveAgentConfig(commands map[string]string, disabled map[string]bool, custo
 	if len(removals) > 0 {
 		removed = removals[0]
 	}
-	return saveAgentSettings(commands, disabled, custom, names, removed, nil)
+	return saveAgentSettings(commands, disabled, custom, names, removed, nil, nil)
 }
 
-func saveAgentSettings(commands map[string]string, disabled map[string]bool, custom []Plugin, names map[string]string, removed map[string]bool, autolaunch *string) error {
+func saveAgentSettings(commands map[string]string, disabled map[string]bool, custom []Plugin, names map[string]string, removed map[string]bool, autolaunch *string, order []string) error {
 	agents := map[string]bool{}
 	for _, plugin := range plugins() {
 		if plugin.Dock == "center" && plugin.Type == AppTypeTerminal {
@@ -151,6 +151,13 @@ func saveAgentSettings(commands map[string]string, disabled map[string]bool, cus
 	}
 	if autolaunch != nil && *autolaunch != "" && (!agents[*autolaunch] || disabled[*autolaunch] || removed[*autolaunch]) {
 		return fmt.Errorf("autolaunch requires an enabled agent")
+	}
+	seen := map[string]bool{}
+	for _, id := range order {
+		if !agents[id] || removed[id] || seen[id] {
+			return fmt.Errorf("invalid agent order")
+		}
+		seen[id] = true
 	}
 	dbMu.Lock()
 	defer dbMu.Unlock()
@@ -215,6 +222,15 @@ func saveAgentSettings(commands map[string]string, disabled map[string]bool, cus
 			return err
 		}
 	}
+	if order != nil {
+		raw, err := json.Marshal(order)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO settings (key,value) VALUES ('agent_order',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, string(raw)); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
 }
 
@@ -261,7 +277,12 @@ func registerSettingsActions(app *r.App) {
 						if !ok {
 							err = fmt.Errorf("invalid autolaunch agent")
 						} else {
-							err = saveAgentSettings(commands, disabled, custom, names, removed, &autolaunch)
+							var order []string
+							raw, _ := json.Marshal(ctx.WsData()["order"])
+							err = json.Unmarshal(raw, &order)
+							if err == nil {
+								err = saveAgentSettings(commands, disabled, custom, names, removed, &autolaunch, order)
+							}
 						}
 					}
 				}
@@ -359,7 +380,7 @@ func renderWorkspaceSettings() *r.Node {
 			r.P("ws-settings-status").Text("Existing panels keep their current width."),
 			r.P("ws-settings-status").ID("workspace-settings-status").Attr("role", "status").Attr("aria-live", "polite"),
 			r.El("h2", "ws-shortcut-heading").Text("Agent commands"),
-			r.P("ws-settings-status").Text("CLI commands used to start agents in every project. Include any flags you need. Running sessions are unchanged. Autolaunch opens one enabled agent when you open a project with no agent panels. Leave all unchecked to choose manually."),
+			r.P("ws-settings-status").Text("CLI commands used to start agents in every project. Drag the handles or use the arrows to reorder agents, then save. The first three enabled agents appear on the welcome screen. Include any flags you need. Running sessions are unchanged. Autolaunch opens one enabled agent when you open a project with no agent panels. Leave all unchecked to choose manually."),
 			renderAgentCommands(),
 			renderToolSettings(),
 			renderToolKeybindings(),

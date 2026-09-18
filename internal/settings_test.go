@@ -173,7 +173,7 @@ func TestAgentAutolaunch(t *testing.T) {
 		t.Fatal("default should not autolaunch")
 	}
 	save := func(id string, disabled map[string]bool) error {
-		return saveAgentSettings(nil, disabled, nil, nil, nil, &id)
+		return saveAgentSettings(nil, disabled, nil, nil, nil, &id, nil)
 	}
 	for _, id := range []string{"browser", "missing"} {
 		if save(id, nil) == nil {
@@ -222,5 +222,53 @@ func TestAgentAutolaunch(t *testing.T) {
 	}
 	if projectAutolaunchJS(state, "test") != "" {
 		t.Fatal("clearing choice did not restore default")
+	}
+}
+
+func TestAgentOrderPersistence(t *testing.T) {
+	original := db
+	path := filepath.Join(t.TempDir(), "settings.db")
+	var err error
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); db = original })
+	createTables()
+	custom := Plugin{ID: "custom-first", Name: "First", Type: AppTypeTerminal, Dock: "center", Command: "first", Custom: true}
+	order := []string{"custom-first", "claude", "codex", "pi"}
+	if err := saveAgentSettings(nil, map[string]bool{"claude": true}, []Plugin{custom}, nil, nil, nil, order); err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range [][]string{{"codex", "codex"}, {"browser"}, {"missing"}} {
+		if saveAgentSettings(nil, nil, nil, nil, nil, nil, invalid) == nil {
+			t.Fatalf("accepted invalid order %v", invalid)
+		}
+	}
+	db.Close()
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var agents, enabled []string
+	for _, p := range plugins() {
+		if p.Dock == "center" && p.Type == AppTypeTerminal {
+			agents = append(agents, p.ID)
+			if !p.Disabled && !p.Removed {
+				enabled = append(enabled, p.ID)
+			}
+		}
+	}
+	if len(agents) < 5 || strings.Join(agents[:4], ",") != strings.Join(order, ",") {
+		t.Fatalf("saved order lost: %v", agents)
+	}
+	if strings.Join(enabled[:3], ",") != "custom-first,codex,pi" {
+		t.Fatalf("enabled order = %v", enabled)
+	}
+	if err := setAgentCommand("codex", "codex --help"); err != nil {
+		t.Fatal(err)
+	}
+	if plugins()[0].ID != "custom-first" {
+		t.Fatal("command update reset order")
 	}
 }
