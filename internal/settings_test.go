@@ -132,6 +132,7 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	}
 
 	tools := []Plugin{{ID: "nvim", Name: "Editor", Command: "nvim -u NONE", Dock: "right", Type: AppTypeTerminal}, {ID: "custom-tool-monitor", Name: "Monitor", Command: "top", Dock: "right", Type: AppTypeTerminal, Custom: true, Disabled: true}}
+	tools = append(tools, Plugin{ID: "custom-tool-docs", Name: "Docs", URL: " https://example.com/docs?q=go ", Dock: "right", Type: AppTypeURL, Custom: true})
 	if err := saveTools(tools); err != nil {
 		t.Fatal(err)
 	}
@@ -143,8 +144,11 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	foundEditor, foundCustom := false, false
+	foundEditor, foundCustom, foundWebsite := false, false, false
 	for _, p := range plugins() {
+		if p.ID == "custom-tool-docs" {
+			foundWebsite = p.Type == AppTypeURL && p.URL == "https://example.com/docs?q=go" && p.Command == "" && configurableTool(p)
+		}
 		if p.ID == "nvim" {
 			foundEditor = p.Name == "Editor" && p.Command == "nvim -u NONE"
 		}
@@ -152,7 +156,7 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 			foundCustom = p.Disabled && p.Custom && p.Command == "top"
 		}
 	}
-	if !foundEditor || !foundCustom {
+	if !foundEditor || !foundCustom || !foundWebsite {
 		t.Fatal("tool settings did not persist")
 	}
 
@@ -334,5 +338,19 @@ func TestDefaultThreadAgent(t *testing.T) {
 	}
 	if defaultThreadAgent() != "" {
 		t.Fatal("manual selection not saved")
+	}
+}
+
+func TestWebsiteToolValidation(t *testing.T) {
+	for _, address := range []string{"", "example.com", "https://", "javascript:alert(1)", "file:///tmp/test", "https://bad host"} {
+		err := saveTools([]Plugin{{ID: "custom-tool-website", Name: "Website", Type: AppTypeURL, Dock: "right", URL: address}})
+		if err == nil || !strings.Contains(err.Error(), "valid website URL") {
+			t.Errorf("URL %q: got %v", address, err)
+		}
+	}
+	for _, id := range []string{"browser", "files", "terminal", "codex"} {
+		if err := saveTools([]Plugin{{ID: id, Name: "Website", Type: AppTypeURL, Dock: "right", URL: "https://example.com"}}); err == nil {
+			t.Errorf("allowed replacing %s", id)
+		}
 	}
 }
