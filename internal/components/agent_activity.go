@@ -19,6 +19,7 @@ type agentActivity struct {
 	env             []string
 	osc             []byte
 	escape, inOSC   bool
+	hasThreadTitle  bool
 }
 
 func prepareAgentActivity(command string) (string, *agentActivity, error) {
@@ -54,7 +55,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 	switch kind {
 	case "claude":
 		hooks := map[string]any{}
-		for event, state := range map[string]string{"UserPromptSubmit": "working", "PreToolUse": "working", "Stop": "done", "StopFailure": "error", "SessionEnd": "idle"} {
+		for event, state := range map[string]string{"UserPromptSubmit": "working", "PreToolUse": "working", "Stop": "done", "StopFailure": "error", "SessionEnd": "idle", "SessionStart": "idle"} {
 			hooks[event] = []any{map[string]any{"hooks": []any{map[string]any{
 				"type": "command", "command": "printf '%s' " + shellQuote(state) + " > " + shellQuote(a.path), "timeout": 2,
 			}}}}
@@ -67,6 +68,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 		content = `import { writeFileSync } from 'node:fs';
 export default function (pi) {
   const status = value => { try { writeFileSync(` + string(pathJSON) + `, value); } catch {} };
+  pi.on('session_start', () => status('idle'));
   pi.on('agent_start', () => status('working'));
   pi.on('agent_end', event => { if (!event.willRetry) status('done'); });
   pi.on('session_shutdown', () => status('idle'));
@@ -173,7 +175,9 @@ func (s *TerminalSession) setAgentStatus(status string) {
 	if status == "done" && s.activity != nil && s.activity.kind == "codex" && !s.agentWorked {
 		status = "idle"
 	}
-	if status == "working" {
+	if status == "idle" {
+		s.agentWorked = false
+	} else if status == "working" {
 		s.agentWorked = true
 	}
 	if status == s.agentStatus {
@@ -199,7 +203,12 @@ func (a *agentActivity) output(data []byte, report func(string)) {
 					report("exited")
 				}
 				if a.kind == "codex" && (strings.HasPrefix(title, "0;") || strings.HasPrefix(title, "2;")) {
-					state, _, _ := strings.Cut(title[2:], " | ")
+					state, threadTitle, _ := strings.Cut(title[2:], " | ")
+					// /new drops the old thread title before the new session is ready.
+					if a.hasThreadTitle && threadTitle == "" {
+						report("idle")
+					}
+					a.hasThreadTitle = threadTitle != ""
 					switch state {
 					case "Working", "Thinking", "Waiting":
 						report("working")

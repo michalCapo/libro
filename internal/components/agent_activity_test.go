@@ -80,7 +80,7 @@ func TestClaudeActivityHooks(t *testing.T) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatal(err)
 	}
-	for _, step := range []struct{ event, want string }{{"UserPromptSubmit", "working"}, {"Stop", "done"}, {"StopFailure", "error"}, {"SessionEnd", "idle"}} {
+	for _, step := range []struct{ event, want string }{{"UserPromptSubmit", "working"}, {"Stop", "done"}, {"StopFailure", "error"}, {"SessionEnd", "idle"}, {"SessionStart", "idle"}} {
 		if output, err := exec.Command("sh", "-c", config.Hooks[step.event][0].Hooks[0].Command).CombinedOutput(); err != nil {
 			t.Fatalf("hook failed: %v: %s", err, output)
 		}
@@ -145,6 +145,7 @@ const check = expected => assert.equal(readFileSync(process.argv[2], 'utf8'), ex
 hooks.agent_start({}); check('working');
 hooks.agent_end({willRetry:true}); check('working');
 hooks.agent_end({willRetry:false}); check('done');
+hooks.session_start({reason:'new'}); check('idle');
 hooks.agent_start({}); check('working');
 hooks.session_shutdown({}); check('idle');`
 			} else {
@@ -162,6 +163,29 @@ await send('a','idle'); check('error');`
 			cmd := exec.Command("node", "--input-type=module", "-e", script, filepath.Join(activity.dir, kind+".mjs"), activity.path)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("lifecycle failed: %v: %s", err, output)
+			}
+		})
+	}
+}
+
+func TestCodexActivityNewSession(t *testing.T) {
+	for _, reset := range []string{"Starting", "Ready"} {
+		t.Run(reset, func(t *testing.T) {
+			s := &TerminalSession{activity: &agentActivity{kind: "codex"}}
+			for _, step := range []struct{ title, want string }{
+				{"Ready | old-thread", "idle"},
+				{"Working | old-thread", "working"},
+				{"Ready | old-thread", "done"},
+				{reset, "idle"},
+				{"Ready | new-thread", "idle"},
+				{"Ready | new-thread", "idle"},
+				{"Working | new-thread", "working"},
+				{"Ready | new-thread", "done"},
+			} {
+				s.activity.output([]byte("\x1b]2;"+step.title+"\x07"), s.setAgentStatus)
+				if s.agentStatus != step.want {
+					t.Fatalf("after %s: got %s, want %s", step.title, s.agentStatus, step.want)
+				}
 			}
 		})
 	}
