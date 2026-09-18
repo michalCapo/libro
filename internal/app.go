@@ -69,16 +69,6 @@ func actionResult(js string) r.Result {
 
 func registerAction(app *r.App, name string, handler func(*r.Context) string) {
 	r.RegisterAction[map[string]any](app, name, func(ctx *r.Context, _ map[string]any) (r.Result, error) {
-		state := sm.Get(extractSID(ctx))
-		if state.thread(state.ActiveProject) != nil {
-			switch name {
-			case "app.dock", "app.move.left", "app.move.right", "app.move.to.project",
-				"app.resize", "app.resize.max.toggle", "app.maximize.toggle", "app.resize.step",
-				"app.close", "app.close.current", "app.close.all", "app.close.check", "project.close",
-				"app.dialog.open", "app.browse.open", "plugin.launcher.open":
-				return actionResult(""), nil
-			}
-		}
 		return actionResult(handler(ctx)), nil
 	})
 }
@@ -502,10 +492,9 @@ func Run(assets embed.FS) {
 		command, _ := data["command"].(string)
 		threadState := sm.Get(sid)
 		if threadState.thread(threadState.ActiveProject) != nil {
-			if !threadState.canStartThreadAgent(Application{Type: AppType(appType), Command: command, PluginID: pluginID, Dock: dock}) {
+			if !threadState.canStartThreadApp(Application{Type: AppType(appType), Command: command, PluginID: pluginID, Dock: dock}) {
 				return ""
 			}
-			dock = "center"
 		}
 		width := defaultAppWidth(Application{Type: AppType(appType), Command: command, PluginID: pluginID})
 		if val, ok := data["width"].(string); ok && val != "" {

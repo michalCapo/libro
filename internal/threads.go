@@ -117,6 +117,17 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) stri
 	})
 }
 
-func (s *AppState) canStartThreadAgent(app Application) bool {
-	return len(s.Apps) == 0 && isAgentApp(app) && appDock(app) == "center"
+func (s *AppState) canStartThreadApp(app Application) bool {
+	if appDock(app) != "center" {
+		return true
+	}
+	if !isAgentApp(app) {
+		return false
+	}
+	for _, existing := range s.Apps {
+		if appDock(existing) == "center" {
+			return false
+		}
+	}
+	return true
 }

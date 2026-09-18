@@ -393,7 +393,7 @@ for (const overlay of [false, true]) test('clicking an agent preserves side-by-s
   const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = workspace.slice(workspace.indexOf("  root.addEventListener('pointerdown', event => {"), workspace.indexOf('  updateToolHints();', workspace.indexOf("  root.addEventListener('pointerdown', event => {")))
   const grid = { querySelector: () => overlay }
-  const agent = { dataset: { appId: 'agent', dock: 'center' }, parentElement: grid }
+  const agent = { dataset: { appId: 'agent', dock: 'center' }, parentElement: grid, querySelector: () => null }
   const browser = { dataset: { appId: 'browser', dock: 'right' } }
   const state = { hidden: new Set() }
   const window = { __libroSelectedApp: 'browser' }
@@ -408,12 +408,13 @@ for (const overlay of [false, true]) test('clicking an agent preserves side-by-s
   assert.deepEqual(calls, [['app.select', 0, false]])
 })
 
-test('new browser creates separate blank panels through the shared app lifecycle', () => {
+for (const thread of [false, true]) test('new browser creates separate blank panels with thread=' + thread, () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const launch = source.slice(source.indexOf('  function openPlugin('), source.indexOf('  function select('))
   const browser = source.slice(source.indexOf('  function newBrowser('), source.indexOf('  let toolKeys'))
   const calls = []
   vm.runInNewContext(launch + browser + ';newBrowser();newBrowser();', {
+    isThread: () => thread,
     window: { __libroPlugins: [{ id: 'browser', type: 'url', name: 'Browser', dock: 'right' }] },
     call: (action, data) => calls.push([action, JSON.parse(JSON.stringify(data))]),
   })
@@ -533,7 +534,7 @@ test('browser cycling runs at capture phase from terminals and other focused pan
 test('double Ctrl+A hides all tools and the bottom terminal without closing them', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('  let lastCtrlA'), source.indexOf("  window.addEventListener('keydown', event => {"))
-  const detection = source.slice(source.indexOf("    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a')"), source.indexOf("    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && /^[1-9]$/"))
+  const detection = source.slice(source.indexOf("    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a')"), source.indexOf("    const number = /^[1-9]$/"))
   const state = {hidden:new Set(), bottom:true}
   let now = 100, focused = 0
   const context = vm.createContext({
@@ -574,4 +575,84 @@ test('address popup reclaims native focus only for the workspace sender', () => 
   destroyed = true
   handler({ sender: host })
   assert.equal(focused, 1)
+})
+
+
+test('new thread shortcut uses the same action as the sidebar and ignores repeats', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const create = source.slice(source.indexOf('  function newThread()'), source.indexOf('  function threadArchived()'))
+  const handler = source.slice(source.indexOf("    if (binding && binding === toolKeys['new-thread'])"), source.indexOf("    if (binding && binding === toolKeys['new-agent'])"))
+  for (const binding of ['Ctrl+Shift+N', 'Alt+N']) for (const repeat of [false, true]) {
+    const calls = []
+    vm.runInNewContext(create + '(function(){' + handler + '})()', {
+      binding, toolKeys: { 'new-thread': binding },
+      event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
+      call(action) { calls.push(action) },
+    })
+    assert.deepEqual(calls, repeat ? [] : ['thread.create'])
+  }
+})
+
+test('thread title updates use the terminal session and do not rename from tools', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/components.go'), 'utf8')
+  const handler = source.slice(source.indexOf('term.onTitleChange(function(title)'), source.indexOf('term.onData(function(data)', source.indexOf('term.onTitleChange(function(title)')))
+  for (const dock of ['center', 'right', 'bottom']) {
+    let onTitle
+    const calls = []
+    const frame = { dataset: { dock }, closest: () => ({ dataset: { workspaceProject: 'thread:test' } }) }
+    const ws = { call(action, data) { calls.push([action, data.sid, data.id, data.name]) } }
+    vm.runInNewContext(handler, {
+      term: { onTitleChange(fn) { onTitle = fn } },
+      sid: 'session-7', appID: 'agent', window: { __ws: ws }, __ws: ws,
+      document: { getElementById: () => frame },
+    })
+    onTitle('Fix login')
+    assert.deepEqual(calls, dock === 'center' ? [['thread.rename', 'session-7', 'thread:test', 'Fix login']] : [])
+  }
+})
+
+
+test('thread numbers are independent, include empty threads, and skip archived threads', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const render = source.slice(source.indexOf('  function renderProjectShortcuts()'), source.indexOf('  let notificationAudio;'))
+  const rows = ['project', ...Array(11).fill('thread')].map((kind, i) => ({
+    dataset: { kind, projectKey: String(i) }, parentElement: { dataset: { archived: String(i === 2) } }, attributes: {}, badge: null,
+    querySelector() { return this.badge },
+    append(badge) { this.badge = badge; badge.remove = () => { this.badge = null } },
+    setAttribute(key, value) { this.attributes[key] = value },
+    removeAttribute(key) { delete this.attributes[key] },
+  }))
+  const context = vm.createContext({
+    document: { querySelectorAll: selector => selector === '.ws-project-row' ? rows : [{ dataset: { workspaceProject: '0' } }] },
+    frames: () => [{}], node: () => ({ setAttribute() {} }),
+  })
+  vm.runInContext(render + ';renderProjectShortcuts()', context)
+  assert.equal(rows[0].dataset.projectShortcut, '1')
+  assert.deepEqual(rows.slice(1).map(row => row.dataset.threadShortcut), ['1', '', '2', '3', '4', '5', '6', '7', '8', '9', ''])
+  assert.equal(rows[1].badge.textContent, '⇧1')
+  assert.equal(rows[1].attributes['aria-keyshortcuts'], 'Control+Shift+1')
+  rows[1].parentElement.dataset.archived = 'true'
+  vm.runInContext('renderProjectShortcuts()', context)
+  assert.equal(rows[1].badge, null)
+  assert.equal(rows[3].dataset.threadShortcut, '1')
+})
+
+test('Ctrl+Shift+digits selects threads and is reserved in embedded browsers', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('    const number = /^[1-9]$/'), source.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"))
+  for (const [key, code, number] of [['1', 'Digit1', '1'], ['!', 'Digit1', '1'], ['(', 'Digit9', '9']]) {
+    for (const repeat of [false, true]) {
+      let clicked = 0
+      vm.runInNewContext('(function(){' + handler + '})()', {
+        event: { key, code, ctrlKey: true, shiftKey: true, repeat, preventDefault() {}, stopImmediatePropagation() {} },
+        renderProjectShortcuts() {},
+        document: { querySelector(selector) {
+          assert.equal(selector, '.ws-project-row[data-thread-shortcut="' + number + '"]')
+          return { click() { clicked++ } }
+        } },
+      })
+      assert.equal(clicked, repeat ? 0 : 1)
+    }
+    assert.equal(vm.runInNewContext(matching + ';isWorkspaceShortcut(input)', { input: { key, code, control: true, shift: true } }), true)
+  }
 })

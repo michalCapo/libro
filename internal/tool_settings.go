@@ -5,11 +5,12 @@ import (
 	"fmt"
 	r "github.com/michalCapo/g-sui/ui"
 	"libro/internal/components"
+	"net/url"
 	"strings"
 )
 
 func configurableTool(p Plugin) bool {
-	return p.Dock == "right" && p.Type == AppTypeTerminal && p.ID != "terminal"
+	return p.Dock == "right" && (p.Type == AppTypeTerminal || p.Type == AppTypeURL) && p.ID != "terminal" && p.ID != "browser" && p.ID != "files"
 }
 
 func saveTools(list []Plugin) error {
@@ -24,8 +25,21 @@ func saveTools(list []Plugin) error {
 		p := &list[i]
 		p.Name = strings.TrimSpace(p.Name)
 		p.Command = strings.TrimSpace(p.Command)
-		if seen[p.ID] || !pluginIDPattern.MatchString(p.ID) || (!known[p.ID] && !strings.HasPrefix(p.ID, "custom-tool-")) || !configurableTool(*p) || p.Name == "" || p.Command == "" || strings.ContainsRune(p.Command, 0) || (p.Removed && !p.Disabled) {
-			return fmt.Errorf("each tool needs a unique ID, name and command; disable it before removing")
+		p.URL = strings.TrimSpace(p.URL)
+		if seen[p.ID] || !pluginIDPattern.MatchString(p.ID) || (!known[p.ID] && !strings.HasPrefix(p.ID, "custom-tool-")) || !configurableTool(*p) || p.Name == "" || (p.Removed && !p.Disabled) {
+			return fmt.Errorf("each tool needs a unique ID and name; disable it before removing")
+		}
+		if p.Type == AppTypeURL {
+			u, err := url.Parse(p.URL)
+			if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") {
+				return fmt.Errorf("%s needs a valid website URL starting with http:// or https://", p.Name)
+			}
+			p.Command = ""
+		} else {
+			if p.Command == "" || strings.ContainsRune(p.Command, 0) {
+				return fmt.Errorf("%s needs a command", p.Name)
+			}
+			p.URL = ""
 		}
 		seen[p.ID] = true
 	}
@@ -54,18 +68,18 @@ func registerToolSettings(app *r.App) {
 			return fmt.Sprintf("libroWorkspace.toolsSaved(null,%s);", components.JSString(err.Error()))
 		}
 		updated, _ := json.Marshal(plugins())
-		return fmt.Sprintf("libroWorkspace.toolsSaved(%s,'Saved. Commands apply to new sessions.');", updated)
+		return fmt.Sprintf("libroWorkspace.toolsSaved(%s,'Saved. Changes apply to new sessions.');", updated)
 	})
 }
 
 func renderToolSettings() *r.Node {
 	return r.El("section", "ws-tool-settings").Render(
 		r.El("h2", "ws-shortcut-heading").Text("Tools"),
-		r.P("ws-settings-status").Text("Configure Nvim, Git, Database, and custom CLI tools. Changes apply across projects to new sessions."),
+		r.P("ws-settings-status").Text("Configure Nvim, Git, Database, and custom CLI tools and websites. Changes apply across projects to new sessions."),
 		r.El("form", "").ID("tool-commands-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveTools(this)")).Render(
 			r.Div("ws-settings-group").Render(
 				r.Div("").ID("tool-command-rows"),
-				r.Div("ws-settings-row").Render(r.Button("ws-launch").Attr("type", "submit").Text("Save tools"), r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomTool()")).Text("Add custom tool")),
+				r.Div("ws-settings-row").Render(r.Button("ws-launch").Attr("type", "submit").Text("Save tools"), r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomTool()")).Text("Add custom tool"), r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomTool('url')")).Text("Add website")),
 			), r.P("ws-settings-status").Attr("role", "status"),
 		),
 	)

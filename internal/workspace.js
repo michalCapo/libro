@@ -74,7 +74,7 @@
   function frames(grid) { return [...grid.querySelectorAll(':scope > [data-app-id]')].sort((a, b) => Number(a.style.order) - Number(b.style.order)); }
   function isThread(grid = activeGrid()) { return grid?.dataset.thread === 'true'; }
   function openPlugin(id, dock, trigger) {
-    if (isThread() && (frames(activeGrid()).length || dock !== 'center')) return;
+    if (isThread() && dock === 'center' && frames(activeGrid()).some(frame => frame.dataset.dock === 'center')) return;
     const plugin = window.__libroPlugins.find(candidate => candidate.id === id);
     if (!plugin || plugin.disabled || plugin.removed || trigger?.disabled) return;
     if (trigger) {
@@ -119,7 +119,7 @@
     });
   }
   function launcher(dock) {
-    if (isThread() && (frames(activeGrid()).length || dock !== 'center')) return;
+    if (isThread() && dock === 'center' && frames(activeGrid()).some(frame => frame.dataset.dock === 'center')) return;
     if (dock === 'bottom') { bottom(); return; }
     let dialog = document.getElementById('workspace-plugin-dialog');
     if (dialog) dialog.remove();
@@ -308,16 +308,20 @@
   function renderProjectShortcuts() {
     const running = new Set([...document.querySelectorAll('[data-workspace-project]')]
       .filter(grid => frames(grid).length > 0).map(grid => grid.dataset.workspaceProject));
-    let index = 0;
+    let index = 0, threadIndex = 0;
     document.querySelectorAll('.ws-project-row').forEach(row => {
-      const number = row.dataset.kind !== 'thread' && running.has(row.dataset.projectKey) && index < 9 ? String(++index) : '';
-      row.dataset.projectShortcut = number;
+      const thread = row.dataset.kind === 'thread';
+      const number = thread
+        ? row.parentElement.dataset.archived !== 'true' && threadIndex < 9 ? String(++threadIndex) : ''
+        : running.has(row.dataset.projectKey) && index < 9 ? String(++index) : '';
+      row.dataset.projectShortcut = thread ? '' : number;
+      row.dataset.threadShortcut = thread ? number : '';
       let badge = row.querySelector('.ws-project-shortcut');
       if (!number) { badge?.remove(); row.removeAttribute('aria-keyshortcuts'); return; }
       if (!badge) { badge = node('kbd', 'ws-project-shortcut'); badge.setAttribute('aria-hidden', 'true'); row.append(badge); }
-      badge.textContent = number;
-      badge.title = 'Ctrl+' + number;
-      row.setAttribute('aria-keyshortcuts', 'Control+' + number);
+      badge.textContent = (thread ? '⇧' : '') + number;
+      badge.title = (thread ? 'Ctrl+Shift+' : 'Ctrl+') + number;
+      row.setAttribute('aria-keyshortcuts', (thread ? 'Control+Shift+' : 'Control+') + number);
     });
   }
   let notificationAudio;
@@ -575,10 +579,11 @@
   }
   function updateToolHints() {
     syncWorkspaceShortcuts();
-    document.querySelectorAll('.ws-tool-rail button').forEach(button => {
+    document.querySelectorAll('.ws-tool-rail button, .ws-sidebar button.ws-button').forEach(button => {
       const name = button.getAttribute('aria-label');
       const plugin = window.__libroPlugins.find(plugin => plugin.id === button.dataset.toolId);
       if (plugin) button.title = name + (toolKeys[plugin.id] ? ' (' + toolKeys[plugin.id] + ')' : '');
+      else if (name === 'New thread') button.title = name + (toolKeys['new-thread'] ? ' (' + toolKeys['new-thread'] + ')' : '');
       else if (name === 'Toggle projects') button.title = name + (toolKeys['toggle-projects'] ? ' (' + toolKeys['toggle-projects'] + ')' : '');
     });
   }
@@ -629,11 +634,12 @@
       }
       lastCtrlA = now;
     } else if (!['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) lastCtrlA = 0;
-    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && /^[1-9]$/.test(event.key)) {
+    const number = /^[1-9]$/.test(event.key) ? event.key : /^Digit[1-9]$/.test(event.code || '') ? event.code.slice(-1) : '';
+    if (event.ctrlKey && !event.metaKey && !event.altKey && number) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) {
         renderProjectShortcuts();
-        document.querySelector('.ws-project-row[data-project-shortcut="' + event.key + '"]')?.click();
+        document.querySelector('.ws-project-row[data-' + (event.shiftKey ? 'thread' : 'project') + '-shortcut="' + number + '"]')?.click();
       }
       return;
     }
@@ -680,6 +686,11 @@
     if (binding && (binding === toolKeys['previous-browser'] || binding === toolKeys['next-browser'])) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) navigateBrowser(binding === toolKeys['previous-browser'] ? -1 : 1);
+      return;
+    }
+    if (binding && binding === toolKeys['new-thread']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) newThread();
       return;
     }
     if (binding && binding === toolKeys['new-agent']) {
@@ -778,19 +789,6 @@
     if (state.bottom) select(terminal.dataset.appId); else restoreAgentFocus(grid);
   }
   function layoutDocks(grid, all, full) {
-    if (isThread(grid)) {
-      grid.style.gridTemplateColumns = 'minmax(0, 1fr)';
-      grid.style.gridTemplateRows = 'minmax(0, 1fr)';
-      all.forEach(frame => {
-        frame.dataset.dockVisible = 'true';
-        frame.style.width = '100%';
-        frame.style.gridArea = '1 / 1';
-      });
-      const placeholder = grid.querySelector(':scope > .ws-empty');
-      if (all.length) placeholder?.remove();
-      else if (!placeholder) grid.append(empty('center', grid));
-      return;
-    }
     const state = dockState(grid);
     const selected = all.find(frame => frame.dataset.appId === window.__libroSelectedApp);
     // Server-created panels must become visible before terminal hydration.
@@ -818,7 +816,7 @@
     if (selected?.dataset.dock === 'bottom') state.bottomID = selected.dataset.appId;
     const terminal = terminals.find(frame => frame.dataset.appId === state.bottomID) || terminals[0];
     const bottomVisible = terminal && state.bottom && !full;
-    const overlay = !full && right.length > 0 && center.reduce((sum, frame) => sum + width(frame), 0) + width(right[0]) > grid.clientWidth;
+    const overlay = !full && right.length > 0 && (center.length ? center.reduce((sum, frame) => sum + width(frame), 0) : 320) + width(right[0]) > grid.clientWidth;
     const visible = full ? [full] : [...center, ...right];
     const columns = (overlay ? center : visible).map(frame => full ? grid.clientWidth + 'px' : width(frame) + 'px');
     if (center.length === 1 && !full) columns[0] = 'minmax(' + width(center[0]) + 'px, 1fr)';
@@ -950,7 +948,7 @@
     document.getElementById('tool-key-status').textContent = '';
     document.getElementById('agent-command-rows').replaceChildren();
     document.getElementById('tool-command-rows').replaceChildren();
-    window.__libroPlugins.filter(p => p.dock === 'right' && p.type === 'terminal' && p.id !== 'terminal' && !p.removed).forEach(p => addAgentRow(p, p.command, true));
+    window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files'].includes(p.id) && !p.removed).forEach(p => addAgentRow(p, p.type === 'url' ? p.url : p.command, true));
     removedAgents = Object.fromEntries(window.__libroPlugins.filter(p => p.removed).map(p => [p.id, true]));
     window.__libroPlugins.filter(p => !p.removed && p.dock === 'center' && p.type === 'terminal').forEach(p => addAgentRow(p, commands[p.id] || p.command));
     document.querySelector('#agent-commands-form [role=status]').textContent = '';
@@ -977,11 +975,13 @@
   let draggedAgentRow = null;
   function addAgentRow(plugin, command, toolRow = false) {
     const row = node('div', 'ws-settings-row ws-agent-command-row ws-agent-config-row');
+    row.dataset.toolType = plugin.type || 'terminal';
     row.dataset.agentId = plugin.id; row.dataset.custom = String(!!plugin.custom);
     const name = node('input', 'ws-agent-command');
-    name.value = plugin.name; name.placeholder = 'Agent name'; name.required = true; name.setAttribute('aria-label', toolRow ? 'Tool name' : 'Agent name'); name.dataset.agentName = '';
+    name.value = plugin.name; name.placeholder = toolRow ? (plugin.type === 'url' ? 'Website name' : 'Tool name') : 'Agent name'; name.required = true; name.setAttribute('aria-label', toolRow ? 'Tool name' : 'Agent name'); name.dataset.agentName = '';
     const input = node('input', 'ws-agent-command'); input.id = 'agent-command-' + plugin.id; input.dataset.agentCommand = plugin.id;
     input.value = command || ''; input.placeholder = 'CLI command'; input.required = true; input.spellcheck = false; input.setAttribute('aria-label', plugin.name ? plugin.name + ' command' : 'Custom agent command');
+    if (toolRow && plugin.type === 'url') { input.type = 'url'; input.placeholder = 'https://example.com'; input.setAttribute('aria-label', 'Website URL'); }
     const toggle = node('label', 'ws-agent-enabled');
     const checkbox = node('input', ''); checkbox.type = 'checkbox'; checkbox.checked = !plugin.disabled; checkbox.dataset.agentEnabled = '';
     checkbox.setAttribute('aria-label', 'Enable ' + (plugin.name || 'custom agent'));
@@ -1068,12 +1068,12 @@
       move.disabled = Number(move.dataset.agentMove) < 0 ? i === 0 : i === rows.length - 1;
     }));
   }
-  function addCustomTool() {
-    addAgentRow({id:'custom-tool-' + crypto.randomUUID(), name:'', custom:true}, '', true).querySelector('[data-agent-name]').focus();
+  function addCustomTool(type = 'terminal') {
+    addAgentRow({id:'custom-tool-' + crypto.randomUUID(), name:'', custom:true, type}, '', true).querySelector('[data-agent-name]').focus();
   }
   function saveTools(form) {
     const tools = window.__libroPlugins.filter(p => p.dock === 'right' && p.removed);
-    form.querySelectorAll('[data-agent-id]').forEach(row => tools.push({id:row.dataset.agentId, name:row.querySelector('[data-agent-name]').value.trim(), command:row.querySelector('[data-agent-command]').value, type:'terminal', dock:'right', custom:row.dataset.custom === 'true', disabled:!row.querySelector('[data-agent-enabled]').checked, removed:row.dataset.removed === 'true'}));
+    form.querySelectorAll('[data-agent-id]').forEach(row => tools.push({id:row.dataset.agentId, name:row.querySelector('[data-agent-name]').value.trim(), [row.dataset.toolType === 'url' ? 'url' : 'command']:row.querySelector('[data-agent-command]').value, type:row.dataset.toolType, dock:'right', custom:row.dataset.custom === 'true', disabled:!row.querySelector('[data-agent-enabled]').checked, removed:row.dataset.removed === 'true'}));
     form.querySelector('[type=submit]').disabled = true;
     form.querySelector('[role=status]').textContent = 'Saving…';
     call('settings.tools', {tools});

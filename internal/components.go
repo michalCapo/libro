@@ -3434,7 +3434,7 @@ func terminalFrameSetupJS() string {
 						frame.dataset.taskTitle = task.slice(0, 240);
 						const grid = frame.closest('[data-workspace-project]');
 						const threadId = grid && grid.dataset.workspaceProject;
-						if (threadId && threadId.indexOf('thread:') === 0 && window.__ws) __ws.call('thread.rename', {id:threadId, name:task.slice(0, 240)});
+						if (threadId && threadId.indexOf('thread:') === 0 && window.__ws) __ws.call('thread.rename', {sid:sid, id:threadId, name:task.slice(0, 240)});
 					});
 					term.onData(function(data) {
 						data = stripTerminalFocusReports(data);

@@ -54,23 +54,30 @@ func TestStandaloneThreadPersistenceAndIsolation(t *testing.T) {
 	}
 }
 
-func TestThreadAllowsOnlyOneAgent(t *testing.T) {
+func TestThreadAllowsToolsAndOneAgent(t *testing.T) {
 	state := &AppState{}
 	agent := Application{Type: AppTypeTerminal, Command: "codex", PluginID: "codex"}
-	if !state.canStartThreadAgent(agent) {
-		t.Fatal("empty thread must accept an agent")
+	tools := []Application{
+		{Type: AppTypeURL, URL: "https://example.com", Dock: "right"},
+		{Type: AppTypeTerminal, PluginID: "terminal", Dock: "bottom"},
+		{Type: AppTypeURL, PluginID: "files", Dock: "right"},
 	}
-	for _, app := range []Application{
-		{Type: AppTypeURL, URL: "https://example.com"},
-		{Type: AppTypeTerminal, PluginID: "terminal"},
-		{Type: AppTypeTerminal, PluginID: "codex", Dock: "right"},
-	} {
-		if state.canStartThreadAgent(app) {
-			t.Fatal("thread accepted a tool panel")
+	for _, app := range tools {
+		if !state.canStartThreadApp(app) {
+			t.Fatal("thread rejected a tool panel")
 		}
+		state.Apps = append(state.Apps, app)
 	}
-	state.Apps = []Application{agent}
-	if state.canStartThreadAgent(agent) {
+	if !state.canStartThreadApp(agent) {
+		t.Fatal("tools must not prevent starting the thread agent")
+	}
+	state.Apps = append(state.Apps, agent)
+	if state.canStartThreadApp(agent) {
 		t.Fatal("thread accepted a second agent")
+	}
+	for _, app := range tools {
+		if !state.canStartThreadApp(app) {
+			t.Fatal("running agent must not prevent opening tools")
+		}
 	}
 }

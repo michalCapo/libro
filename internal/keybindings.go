@@ -29,6 +29,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"panel-size-max", "Toggle panel size to MAX", "Ctrl+M"},
 	{"project-picker", "Switch project", "Ctrl+P"},
 	{"new-agent", "New agent", "Ctrl+N"},
+	{"new-thread", "New thread", "Ctrl+Shift+N"},
 	{"previous-agent", "Previous panel", "Ctrl+H"},
 	{"next-agent", "Next panel", "Ctrl+L"},
 	{"toggle-projects", "Toggle project sidebar", "Ctrl+Shift+P"},
@@ -157,7 +158,7 @@ func renderToolKeybindings() *r.Node {
 	rows = append(rows, r.Div("ws-settings-row").Render(r.Button("ws-launch").Attr("type", "submit").Text("Save shortcuts"), r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.resetToolKeys()")).Text("Restore defaults")))
 	return r.El("form", "").ID("tool-key-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveToolKeys()")).Render(
 		r.El("h2", "ws-shortcut-heading").Text("Keyboard shortcuts"),
-		r.P("ws-settings-status").ID("tool-key-help").Text("Select a field and press Ctrl, Alt, or Meta with a letter, number, comma, period, brackets, = or -. Clear a field to disable its shortcut."),
+		r.P("ws-settings-status").ID("tool-key-help").Text("Select a field and press Ctrl, Alt, or Meta with a letter, number, comma, period, brackets, = or -. Clear a field to disable its shortcut. Ctrl+1–9 switches running projects. Ctrl+Shift+1–9 switches unarchived threads."),
 		r.Div("ws-settings-group").Render(rows...),
 		r.P("ws-settings-status").ID("tool-key-status").Attr("role", "status"),
 	)

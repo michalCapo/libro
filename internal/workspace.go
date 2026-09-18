@@ -92,15 +92,7 @@ func renderWorkspaceStrip(state *AppState, sid, placeholderID string) *r.Node {
 	projectLabel := workspaceProjectLabel(state)
 	children := []*r.Node{}
 	for i, app := range state.Apps {
-		if state.thread(state.ActiveProject) != nil {
-			children = append(children, r.Div("relative flex flex-col h-full overflow-hidden").
-				ID("frame-"+app.ID).Attr("data-app-id", app.ID).
-				Attr("data-app-name", workspaceAppName(app)).Attr("data-app-type", string(app.Type)).
-				Attr("data-dock", "center").Attr("data-plugin", pluginForApp(app).ID).
-				Render(renderAppContent(app, sid, app.ID == placeholderID, nil)))
-		} else {
-			children = append(children, renderAppFrameBase(app, i, i == state.SelectedIndex, sid, app.ID == placeholderID))
-		}
+		children = append(children, renderAppFrameBase(app, i, i == state.SelectedIndex, sid, app.ID == placeholderID))
 	}
 	return r.Div("ws-project").ID(projectMainID(state.ActiveProject)).Render(
 		r.Div("ws-grid").ID(stripID(state.ActiveProject)).Attr("data-workspace-project", state.ActiveProject).Attr("data-thread", fmt.Sprint(state.thread(state.ActiveProject) != nil)).Attr("data-project-label", projectLabel).Render(children...),
