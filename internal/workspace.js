@@ -478,6 +478,11 @@
     list.forEach(p => { const entry = button(p.name, icons[p.id] || 'terminal', () => tool(p.id)); entry.dataset.toolId = p.id; rail.append(entry); });
     updateToolHints();
   }
+  function restoreAgentFocus(grid) {
+    const agents = frames(grid).filter(frame => frame.dataset.dock === 'center');
+    const agent = agents.find(frame => frame.dataset.appId === dockState(grid).agent) || agents[0];
+    if (agent) select(agent.dataset.appId); else refresh();
+  }
   function tool(id) {
     const grid = activeGrid(); if (!grid) return;
     const state = dockState(grid);
@@ -486,7 +491,7 @@
       matches.find(frame => frame.dataset.appId === state.right) || matches[0];
     if (!existing) { openPlugin(id, 'right'); return; }
     if (existing.dataset.dockVisible === 'true' && existing.dataset.appId === window.__libroSelectedApp) {
-      state.hidden.add(existing.dataset.appId); refresh();
+      state.hidden.add(existing.dataset.appId); restoreAgentFocus(grid);
     } else select(existing.dataset.appId);
   }
   function newBrowser() { openPlugin('browser', 'right'); }
@@ -702,7 +707,7 @@
     const terminal = terminals.find(frame => frame.dataset.appId === state.bottomID) || terminals[0];
     if (!terminal) { openPlugin('terminal', 'bottom'); return; }
     state.bottom = !state.bottom || terminal.dataset.appId !== window.__libroSelectedApp;
-    if (state.bottom) select(terminal.dataset.appId); else refresh();
+    if (state.bottom) select(terminal.dataset.appId); else restoreAgentFocus(grid);
   }
   function layoutDocks(grid, all, full) {
     const state = dockState(grid);
@@ -771,7 +776,10 @@
           if (dock === 'center' && grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
             all.filter(frame => frame.dataset.dock === 'right').forEach(frame => state.hidden.add(frame.dataset.appId));
           }
-          if (dock === 'right' && shown === 'true') { state.hidden.add(id); refresh(); }
+          if (dock === 'right' && shown === 'true') {
+            state.hidden.add(id);
+            if (id === window.__libroSelectedApp) restoreAgentFocus(grid); else refresh();
+          }
           else select(id);
         };
         const sizes = node('div', 'ws-tool-sizes'); sizes.dataset.sizeBadges = '';

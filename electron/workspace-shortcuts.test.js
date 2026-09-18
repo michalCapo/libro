@@ -26,10 +26,40 @@ for (const plugin of [...toolIDs, 'custom-tool']) test(plugin + ' focuses an ope
       window: { __libroSelectedApp: selected },
       select(id) { state.hidden.delete(id); calls.push(['select', id]) },
       refresh() { calls.push(['refresh']) },
+      restoreAgentFocus() { calls.push(['restoreAgentFocus']) },
     })
     const hide = visible && selected === 'git'
     assert.equal(state.hidden.has('git'), hide)
-    assert.deepEqual(calls, hide ? [['refresh']] : [['select', 'git']])
+    assert.deepEqual(calls, hide ? [['restoreAgentFocus']] : [['select', 'git']])
+  }
+})
+
+test('hiding a tool restores actual focus to the last agent in the active project', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const select = source.slice(source.indexOf('  function select('), source.indexOf('  function launcher('))
+  const handlers = source.slice(source.indexOf('  function restoreAgentFocus('), source.indexOf('  function newBrowser('))
+  for (const remembered of ['agent-2', 'closed-agent', undefined]) for (const hasAgents of [true, false]) {
+    const grid = {}
+    const state = { agent: remembered, right: 'git', hidden: new Set() }
+    const panels = (hasAgents ? ['agent-1', 'agent-2'] : []).map(appId => ({
+      dataset: { appId, dock: 'center' }, parentElement: grid, querySelector: () => null,
+    }))
+    panels.push({ dataset: { appId: 'git', dock: 'right', plugin: 'lazyrepo', dockVisible: 'true' }, parentElement: grid })
+    const focused = [], calls = [], pending = []
+    const window = { __libroSelectedApp: 'git', __libroScrollToApp() {}, __libroFocusAppByID(id) { focused.push(id) } }
+    vm.runInNewContext(select + handlers + ';tool("lazyrepo")', {
+      window, keepBottomHidden: false, maximized: '', activeGrid: () => grid,
+      frames: () => panels, dockState: () => state,
+      document: { getElementById(id) { return id === 'workspace-settings' ? { hidden: true } : panels.find(p => 'frame-' + p.dataset.appId === id) } },
+      refresh() {}, call(action, data) { calls.push([action, data.index]) },
+      requestAnimationFrame(fn) { pending.push(fn) },
+    })
+    pending.forEach(fn => fn())
+    const expected = remembered === 'agent-2' ? 'agent-2' : 'agent-1'
+    assert.equal(state.hidden.has('git'), true)
+    assert.deepEqual(focused, hasAgents ? [expected] : [])
+    assert.equal(window.__libroSelectedApp, hasAgents ? expected : 'git')
+    assert.deepEqual(calls, hasAgents ? [['app.select', expected === 'agent-2' ? 1 : 0]] : [])
   }
 })
 
@@ -69,10 +99,11 @@ test('bottom terminal focuses before toggling closed', () => {
       window: { __libroSelectedApp: selected },
       select(id) { calls.push(['select', id]) },
       refresh() { calls.push(['refresh']) },
+      restoreAgentFocus() { calls.push(['restoreAgentFocus']) },
     })
     const hide = visible && selected === 'shell'
     assert.equal(state.bottom, !hide)
-    assert.deepEqual(calls, hide ? [['refresh']] : [['select', 'shell']])
+    assert.deepEqual(calls, hide ? [['restoreAgentFocus']] : [['select', 'shell']])
   }
 })
 
@@ -417,7 +448,7 @@ test('browser navigation wraps, includes hidden browsers, and skips other tools'
 
 test('Ctrl+B toggles the current browser when multiple browsers exist', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const handler = source.slice(source.indexOf('  function tool(id)'), source.indexOf('  function newBrowser'))
+  const handler = source.slice(source.indexOf('  function restoreAgentFocus('), source.indexOf('  function newBrowser'))
   const calls = []
   const state = { right: 'two', hidden: new Set() }
   vm.runInNewContext(handler + ";tool('browser')", {
