@@ -373,16 +373,6 @@ function setDevtoolsPanelVisible(appID, visible) {
 	if (!panel) return;
 	if (visible) panel.classList.remove('hidden');
 	else panel.classList.add('hidden');
-	var closeBtn = document.getElementById('devtools-close-' + appID);
-	if (closeBtn) {
-		if (visible) {
-			closeBtn.classList.remove('hidden');
-			closeBtn.classList.add('inline-flex');
-		} else {
-			closeBtn.classList.add('hidden');
-			closeBtn.classList.remove('inline-flex');
-		}
-	}
 	if (visible) startDevtoolsBoundsSync(appID);
 	else stopDevtoolsBoundsSync(appID);
 }
@@ -393,7 +383,7 @@ function isDevtoolsPanelVisible(appID) {
 }
 
 function devtoolsPanelBounds(appID) {
-	var panel = document.getElementById('devtools-panel-' + appID);
+	var panel = document.getElementById('devtools-host-' + appID);
 	if (!panel) return null;
 	var rect = panel.getBoundingClientRect();
 	if (!rect.width || !rect.height) return null;

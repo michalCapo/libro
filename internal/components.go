@@ -1201,28 +1201,25 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			Attr("data-browser-src", browserSrc).
 			Attr("loading", "lazy").
 			Attr("style", "display:none")
-		devtoolsCloseBtn := r.Button("hidden w-5 h-5 cursor-pointer pointer-events-auto items-center justify-center rounded-full bg-red-500 text-white shadow-sm ring-1 ring-red-600/50 hover:bg-red-600").
+		devtoolsCloseBtn := r.Button("inline-flex h-8 px-2 cursor-pointer items-center gap-1 rounded text-xs text-stone-600 hover:bg-stone-200 dark:text-stone-300 dark:hover:bg-zinc-800").
 			ID(fmt.Sprintf("devtools-close-%s", app.ID)).
+			Attr("type", "button").
 			Attr("title", "Close DevTools").
+			Attr("aria-label", "Close DevTools").
 			Attr("onclick", fmt.Sprintf("if(window.__libroCloseConsole)window.__libroCloseConsole('%s')", app.ID)).
-			Render(
-				r.Span("block w-full text-center text-[9px] leading-5 font-semibold").Text("x"),
-			)
-		devtoolsControls := r.Div("absolute bottom-3 right-3 z-50 flex items-center gap-2 pointer-events-none").
-			ID(fmt.Sprintf("devtools-wrap-%s", app.ID)).
-			Render(
-				devtoolsCloseBtn,
-			)
-		webviewWrapper := r.Div("relative flex-1 min-h-0").Render(
-			wv,
-			browserFallback,
-			devtoolsControls,
-		)
-		devtoolsPanel := r.Div("hidden border-t border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-zinc-900").
+			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("close"), r.Span("").Text("Close"))
+		webviewWrapper := r.Div("relative flex-1 min-h-0").Render(wv, browserFallback)
+		// Keep controls outside both native views so Electron cannot cover their hit targets.
+		devtoolsPanel := r.Div("hidden shrink-0 border-t border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-zinc-900").
 			ID(fmt.Sprintf("devtools-panel-%s", app.ID)).
 			Attr("style", "height:320px;min-height:160px;position:relative").
 			Render(
-				r.Div("w-full h-full").
+				r.Div("h-8 flex items-center justify-between px-2").Render(
+					r.Span("text-xs text-stone-600 dark:text-stone-300").Text("DevTools"),
+					devtoolsCloseBtn,
+				),
+				r.Div("w-full").
+					Attr("style", "height:calc(100% - 2rem)").
 					ID(fmt.Sprintf("devtools-host-%s", app.ID)),
 			)
 		fallbackNotice := r.Div("shrink-0 px-3 py-2 text-xs border-b border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-900").

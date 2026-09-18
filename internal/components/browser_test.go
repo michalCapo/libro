@@ -188,3 +188,37 @@ process.stdin.on('end', () => {
 		t.Fatalf("browser popup focus: %v\n%s", err, output)
 	}
 }
+
+func TestDevtoolsBoundsExcludeHeader(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	const harness = `
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+let script = '';
+process.stdin.on('data', data => script += data);
+process.stdin.on('end', () => {
+  const start = script.indexOf('function devtoolsPanelBounds(');
+  const end = script.indexOf('function sameDevtoolsBounds(', start);
+  const context = {
+    window: { libroElectron: { getZoomFactor: () => 1.5 } },
+    document: { getElementById(id) {
+      assert.equal(id, 'devtools-host-test', 'native view must exclude the close header');
+      return { getBoundingClientRect: () => ({ left: 20, top: 132, width: 600, height: 288 }) };
+    } },
+  };
+  vm.runInNewContext(script.slice(start, end), context);
+  const bounds = context.devtoolsPanelBounds('test');
+  assert.deepEqual(JSON.parse(JSON.stringify(bounds)), { x: 30, y: 198, width: 900, height: 432 });
+  context.document.getElementById = () => null;
+  assert.equal(context.devtoolsPanelBounds('test'), null);
+});
+`
+	cmd := exec.Command(node, "-e", harness)
+	cmd.Stdin = strings.NewReader(BrowserJS())
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("DevTools bounds failed: %v\n%s", err, output)
+	}
+}
