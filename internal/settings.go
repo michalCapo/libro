@@ -420,7 +420,7 @@ func renderWorkspaceSettings() *r.Node {
 				r.Div("ws-settings-row").Render(
 					r.Div("ws-settings-copy").Render(
 						r.El("label", "").Attr("for", "default-thread-agent").Text("Default agent"),
-						r.P("").ID("default-thread-agent-help").Text("Start this agent when opening a thread with no agent panels."),
+						r.P("").ID("default-thread-agent-help").Text("Start this agent in new threads."),
 					),
 					r.El("select", "ws-settings-select").ID("default-thread-agent").Attr("aria-describedby", "default-thread-agent-help").On("change", r.JS("libroWorkspace.saveThreadAgent(event.target.value)")),
 				),

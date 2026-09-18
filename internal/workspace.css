@@ -408,3 +408,7 @@ html.dark .ws-project-agent[data-agent-status=done],html.dark .ws-project-agent[
 .ws-agent-dragging{opacity:.45}
 #agent-command-rows [data-agent-drop=before]{box-shadow:inset 0 2px var(--ws-fg)}
 #agent-command-rows [data-agent-drop=after]{box-shadow:inset 0 -2px var(--ws-fg)}
+
+#libro-workspace[data-thread=true] .ws-tool-rail,
+#libro-workspace[data-thread=true] .ws-project-feature{display:none}
+.ws-grid[data-thread=true]>[data-app-id]{border:0!important;width:100%!important}

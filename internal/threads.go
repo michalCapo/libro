@@ -10,7 +10,7 @@ import (
 	r "github.com/michalCapo/g-sui/ui"
 )
 
-// Thread is a standalone workspace, independent of registered projects.
+// Thread is a single agent session, independent of registered projects.
 type Thread struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -115,4 +115,8 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) stri
 		// Archiving keeps the workspace alive and recoverable without interrupting commands.
 		return projectsJS(state) + fmt.Sprintf("if(window.libroWorkspace)libroWorkspace.threadArchived(%t);", archived)
 	})
+}
+
+func (s *AppState) canStartThreadAgent(app Application) bool {
+	return len(s.Apps) == 0 && isAgentApp(app) && appDock(app) == "center"
 }

@@ -35,7 +35,7 @@ func TestStandaloneThreadPersistenceAndIsolation(t *testing.T) {
 	if workspaceProjectLabel(state) != "Fix server" {
 		t.Fatal("thread label missing")
 	}
-	manager.AddApp(sid, "https://example.org", WidthMD, "Thread browser")
+	manager.AddTerminalApp(sid, "agent", "codex", 0, true, WidthFull, "Thread agent", "")
 	if !manager.SwitchProject(sid, "project") || len(state.Apps) != 1 || state.Apps[0].Name != "Project browser" {
 		t.Fatal("project panels lost")
 	}
@@ -46,10 +46,31 @@ func TestStandaloneThreadPersistenceAndIsolation(t *testing.T) {
 	if len(loaded.Threads) != 1 || !loaded.Threads[0].Archived {
 		t.Fatal("archive not persisted")
 	}
-	if !manager.SwitchProject(sid, "thread:test") || len(state.Apps) != 1 || state.Apps[0].Name != "Thread browser" {
-		t.Fatal("thread panels lost")
+	if !manager.SwitchProject(sid, "thread:test") || len(state.Apps) != 1 || state.Apps[0].Name != "Thread agent" {
+		t.Fatal("thread agent lost")
 	}
 	if manager.SwitchProject(sid, "thread:missing") {
 		t.Fatal("unknown thread accepted")
+	}
+}
+
+func TestThreadAllowsOnlyOneAgent(t *testing.T) {
+	state := &AppState{}
+	agent := Application{Type: AppTypeTerminal, Command: "codex", PluginID: "codex"}
+	if !state.canStartThreadAgent(agent) {
+		t.Fatal("empty thread must accept an agent")
+	}
+	for _, app := range []Application{
+		{Type: AppTypeURL, URL: "https://example.com"},
+		{Type: AppTypeTerminal, PluginID: "terminal"},
+		{Type: AppTypeTerminal, PluginID: "codex", Dock: "right"},
+	} {
+		if state.canStartThreadAgent(app) {
+			t.Fatal("thread accepted a tool panel")
+		}
+	}
+	state.Apps = []Application{agent}
+	if state.canStartThreadAgent(agent) {
+		t.Fatal("thread accepted a second agent")
 	}
 }

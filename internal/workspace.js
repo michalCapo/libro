@@ -72,7 +72,9 @@
   function save() { try { localStorage.setItem('libro.workspace', JSON.stringify(prefs)); } catch (_) {} }
   function activeGrid() { return [...document.querySelectorAll('[data-workspace-project]')].find(el => el.parentElement.style.display !== 'none'); }
   function frames(grid) { return [...grid.querySelectorAll(':scope > [data-app-id]')].sort((a, b) => Number(a.style.order) - Number(b.style.order)); }
+  function isThread(grid = activeGrid()) { return grid?.dataset.thread === 'true'; }
   function openPlugin(id, dock, trigger) {
+    if (isThread() && (frames(activeGrid()).length || dock !== 'center')) return;
     const plugin = window.__libroPlugins.find(candidate => candidate.id === id);
     if (!plugin || plugin.disabled || plugin.removed || trigger?.disabled) return;
     if (trigger) {
@@ -117,6 +119,7 @@
     });
   }
   function launcher(dock) {
+    if (isThread() && (frames(activeGrid()).length || dock !== 'center')) return;
     if (dock === 'bottom') { bottom(); return; }
     let dialog = document.getElementById('workspace-plugin-dialog');
     if (dialog) dialog.remove();
@@ -259,7 +262,7 @@
   }
   function renderProjectAgents() {
     const grids = new Map([...document.querySelectorAll('[data-workspace-project]')].map(grid => [grid.dataset.workspaceProject, grid]));
-    document.querySelectorAll('.ws-project-row').forEach(row => {
+    document.querySelectorAll('.ws-project-row:not([data-kind=thread])').forEach(row => {
       const grid = grids.get(row.dataset.projectKey);
       const agents = grid ? frames(grid).filter(frame => frame.dataset.dock === 'center') : [];
       let tree = row.parentElement.nextElementSibling;
@@ -307,7 +310,7 @@
       .filter(grid => frames(grid).length > 0).map(grid => grid.dataset.workspaceProject));
     let index = 0;
     document.querySelectorAll('.ws-project-row').forEach(row => {
-      const number = running.has(row.dataset.projectKey) && index < 9 ? String(++index) : '';
+      const number = row.dataset.kind !== 'thread' && running.has(row.dataset.projectKey) && index < 9 ? String(++index) : '';
       row.dataset.projectShortcut = number;
       let badge = row.querySelector('.ws-project-shortcut');
       if (!number) { badge?.remove(); row.removeAttribute('aria-keyshortcuts'); return; }
@@ -471,6 +474,7 @@
   function refresh() {
     observer.disconnect();
     root.dataset.projects = String(prefs.projects);
+    root.dataset.thread = String(isThread());
     document.querySelectorAll('.ws-sidebar-action, .ws-sidebar-search').forEach(button => {
       const label = button.getAttribute('aria-label') || button.textContent.trim().replace(/^(settings|apps|tune)\s*/, '');
       button.setAttribute('aria-label', label); button.title = label;
@@ -774,6 +778,19 @@
     if (state.bottom) select(terminal.dataset.appId); else restoreAgentFocus(grid);
   }
   function layoutDocks(grid, all, full) {
+    if (isThread(grid)) {
+      grid.style.gridTemplateColumns = 'minmax(0, 1fr)';
+      grid.style.gridTemplateRows = 'minmax(0, 1fr)';
+      all.forEach(frame => {
+        frame.dataset.dockVisible = 'true';
+        frame.style.width = '100%';
+        frame.style.gridArea = '1 / 1';
+      });
+      const placeholder = grid.querySelector(':scope > .ws-empty');
+      if (all.length) placeholder?.remove();
+      else if (!placeholder) grid.append(empty('center', grid));
+      return;
+    }
     const state = dockState(grid);
     const selected = all.find(frame => frame.dataset.appId === window.__libroSelectedApp);
     // Server-created panels must become visible before terminal hydration.

@@ -64,8 +64,8 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 		),
 		r.Div("ws-sidebar-footer").Render(
 			r.Button("ws-sidebar-action").OnClick(r.JS("libroWorkspace.settings()")).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("settings"), r.Span("").Text("Settings")),
-			r.Button("ws-sidebar-action").OnClick(r.JS("libroWorkspace.launcher()")).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("apps"), r.Span("").Text("Apps & plugins")),
-			r.Button("ws-sidebar-action").OnClick(r.JS("if(window.__libroOpenCommandPalette)__libroOpenCommandPalette()")).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("tune"), r.Span("").Text("Commands")),
+			r.Button("ws-sidebar-action ws-project-feature").OnClick(r.JS("libroWorkspace.launcher()")).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("apps"), r.Span("").Text("Apps & plugins")),
+			r.Button("ws-sidebar-action ws-project-feature").OnClick(r.JS("if(window.__libroOpenCommandPalette)__libroOpenCommandPalette()")).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("tune"), r.Span("").Text("Commands")),
 		),
 	)
 }
@@ -92,10 +92,18 @@ func renderWorkspaceStrip(state *AppState, sid, placeholderID string) *r.Node {
 	projectLabel := workspaceProjectLabel(state)
 	children := []*r.Node{}
 	for i, app := range state.Apps {
-		children = append(children, renderAppFrameBase(app, i, i == state.SelectedIndex, sid, app.ID == placeholderID))
+		if state.thread(state.ActiveProject) != nil {
+			children = append(children, r.Div("relative flex flex-col h-full overflow-hidden").
+				ID("frame-"+app.ID).Attr("data-app-id", app.ID).
+				Attr("data-app-name", workspaceAppName(app)).Attr("data-app-type", string(app.Type)).
+				Attr("data-dock", "center").Attr("data-plugin", pluginForApp(app).ID).
+				Render(renderAppContent(app, sid, app.ID == placeholderID, nil)))
+		} else {
+			children = append(children, renderAppFrameBase(app, i, i == state.SelectedIndex, sid, app.ID == placeholderID))
+		}
 	}
 	return r.Div("ws-project").ID(projectMainID(state.ActiveProject)).Render(
-		r.Div("ws-grid").ID(stripID(state.ActiveProject)).Attr("data-workspace-project", state.ActiveProject).Attr("data-project-label", projectLabel).Render(children...),
+		r.Div("ws-grid").ID(stripID(state.ActiveProject)).Attr("data-workspace-project", state.ActiveProject).Attr("data-thread", fmt.Sprint(state.thread(state.ActiveProject) != nil)).Attr("data-project-label", projectLabel).Render(children...),
 	).JS(centerSelectedJS(state))
 }
 
