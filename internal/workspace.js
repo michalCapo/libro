@@ -394,6 +394,15 @@
     if (changed) renderProjectActivity();
   }
   function acknowledgeProjectInteraction(event) {
+    const thread = event.target.closest?.('.ws-project-agent, [data-app-id]');
+    const id = thread?.dataset.agentId || thread?.dataset.appId;
+    if (id) {
+      if (window.__libroAgentStatuses?.[id] === 'done') {
+        acknowledgedAgents.add(id);
+        renderProjectActivity();
+      }
+      return;
+    }
     const row = event.target.closest?.('.ws-project-row');
     const project = event.target.closest?.('.ws-project');
     const grid = project?.querySelector('[data-workspace-project]');
@@ -407,10 +416,11 @@
   function renderProjectActivity() {
     const statuses = window.__libroAgentStatuses || {};
     for (const id of acknowledgedAgents) {
-      if (statuses[id] && statuses[id] !== 'done') acknowledgedAgents.delete(id);
+      if (statuses[id] !== 'done') acknowledgedAgents.delete(id);
     }
     document.querySelectorAll('.ws-project-agent').forEach(tab => {
-      const state = statuses[tab.dataset.agentId];
+      const id = tab.dataset.agentId;
+      const state = acknowledgedAgents.has(id) && statuses[id] === 'done' ? 'idle' : statuses[id];
       const status = state === 'working' ? 'Working' : state === 'done' ? 'Done' : '';
       tab.dataset.agentStatus = status ? state : '';
       tab.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle_outline' : 'chat_bubble_outline';

@@ -38,7 +38,8 @@ test('interaction acknowledges only its project and a new completion restores th
   assert.equal(rows[1].icon.textContent, 'account_tree')
 })
 
-test('each thread keeps its status after project acknowledgement and resets on a new turn', () => {
+test('thread interaction clears completion until a new turn completes', () => {
+  const listeners = {};
   const tabs = ['a', 'b', 'c'].map(id => ({
     dataset: { agentId: id }, icon: {}, badge: null,
     querySelector(selector) { return selector === 'i' ? this.icon : selector === 'span' ? { textContent: id } : this.badge },
@@ -47,20 +48,34 @@ test('each thread keeps its status after project acknowledgement and resets on a
   }))
   const context = vm.createContext({
     window: { __libroAgentStatuses: { a: 'working', b: 'done' }, addEventListener() {} },
-    document: { querySelectorAll(selector) { return selector === '.ws-project-agent' ? tabs : [] }, addEventListener() {} },
+    document: { querySelectorAll(selector) { return selector === '.ws-project-agent' ? tabs : [] }, addEventListener(type, fn) { listeners[type] = fn } },
     node: () => ({}),
   })
   vm.runInContext(source, context)
-  vm.runInContext("acknowledgedAgents.add('b'); renderProjectActivity()", context)
+  vm.runInContext('renderProjectActivity()', context)
   assert.equal(tabs[0].badge.textContent, 'Working')
   assert.equal(tabs[1].badge.textContent, 'Done')
   assert.equal(tabs[1].icon.textContent, 'check_circle_outline')
   assert.equal(tabs[1]['aria-label'], 'b: Done')
   assert.equal(tabs[2].badge, null)
+  for (const type of ['pointerdown', 'keydown', 'input', 'wheel']) {
+    listeners[type]({ type, target: { closest() { return tabs[1] } } })
+    vm.runInContext('renderProjectActivity()', context)
+    assert.equal(tabs[1].dataset.agentStatus, '')
+    assert.equal(tabs[1].badge, null)
+    assert.equal(tabs[1].icon.textContent, 'chat_bubble_outline')
+    assert.equal(tabs[1]['aria-label'], 'b')
+    assert.equal(tabs[0].badge.textContent, 'Working')
+  }
   context.window.__libroAgentStatuses.b = 'working'
   vm.runInContext('renderProjectActivity()', context)
   assert.equal(tabs[1].badge.textContent, 'Working')
   assert.equal(tabs[1].icon.textContent, 'sync')
+  context.window.__libroAgentStatuses.b = 'done'
+  vm.runInContext('renderProjectActivity()', context)
+  assert.equal(tabs[1].dataset.agentStatus, 'done')
+  assert.equal(tabs[1].badge.textContent, 'Done')
+  assert.equal(tabs[1].icon.textContent, 'check_circle_outline')
   delete context.window.__libroAgentStatuses.b
   vm.runInContext('renderProjectActivity()', context)
   assert.equal(tabs[1].badge, null)

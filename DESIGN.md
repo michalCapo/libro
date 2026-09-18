@@ -169,3 +169,7 @@ Use the frontmatter radii by role: small keycaps and size badges, gently rounded
 Settings is a workspace page reached from the sidebar. Grouped rows provide the global default panel widths for agent and tool panels (XS–2XL), initially MD (640px) and LG (960px). Changes save to SQLite and apply only to newly opened panels. The page also holds theme (Auto, Light, Dark), an agent-done notification sound, agent command management (edit, rename, disable, remove, custom agents, autolaunch), tool command management (edit, disable, remove, and add custom CLI tools), and remappable keyboard shortcuts.
 
 Panel toolbars fit within the workspace viewport while terminal content retains its fixed width. The close button comes before the title and appears on panel hover or button keyboard focus; it remains visible for touch input. Worktree rows use their dedicated switch action with project, path, and branch.
+
+### Thread activity
+
+Sidebar thread text and icons use the normal neutral color when idle, blue when working, and green when done, in both themes. Selection changes the row background, not its status color. Working threads show a spinning sync icon and Working label; done threads show a checkmark and Done label. Interacting with a completed thread clears its completion indicator and restores its normal text color and chat icon. Repeated done snapshots keep it idle until a new working turn starts. Project interaction acknowledges completed agents in that project.
