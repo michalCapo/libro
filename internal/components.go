@@ -3430,7 +3430,11 @@ func terminalFrameSetupJS() string {
 						const frame = document.getElementById('frame-' + appID);
 						if (!frame || frame.dataset.dock !== 'center') return;
 						const task = title.replace(/^(Working|Thinking|Waiting|Ready|Starting)(?:\s*[·|—-]\s*|$)/, '').trim();
-						if (task) frame.dataset.taskTitle = task.slice(0, 240);
+						if (!task) return;
+						frame.dataset.taskTitle = task.slice(0, 240);
+						const grid = frame.closest('[data-workspace-project]');
+						const threadId = grid && grid.dataset.workspaceProject;
+						if (threadId && threadId.indexOf('thread:') === 0 && window.__ws) __ws.call('thread.rename', {id:threadId, name:task.slice(0, 240)});
 					});
 					term.onData(function(data) {
 						data = stripTerminalFocusReports(data);

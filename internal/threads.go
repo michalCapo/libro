@@ -52,8 +52,11 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) stri
 		sid := extractSID(ctx)
 		name, _ := ctx.WsData()["name"].(string)
 		name = strings.TrimSpace(name)
-		if name == "" || len(name) > 200 {
+		if len(name) > 200 {
 			return r.Notify("error", "Enter a thread name (up to 200 characters)")
+		}
+		if name == "" {
+			name = "New thread"
 		}
 		var random [16]byte
 		if _, err := rand.Read(random[:]); err != nil {
@@ -68,6 +71,32 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) stri
 		sm.states[sid].Threads = append(sm.states[sid].Threads, thread)
 		sm.mu.Unlock()
 		return switchWorkspace(sid, thread.ID)
+	})
+	registerAction(app, "thread.rename", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		id, _ := data["id"].(string)
+		name, _ := data["name"].(string)
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return ""
+		}
+		if len(name) > 200 {
+			name = name[:200]
+		}
+		state := sm.Get(sid)
+		thread := state.thread(id)
+		// Agent titles arrive on every status change; skip unchanged names.
+		if thread == nil || thread.Name == name {
+			return ""
+		}
+		if _, err := db.Exec("UPDATE threads SET name = ? WHERE id = ?", name, id); err != nil {
+			return ""
+		}
+		sm.mu.Lock()
+		thread.Name = name
+		sm.mu.Unlock()
+		return projectsJS(state)
 	})
 	registerAction(app, "thread.archive", func(ctx *r.Context) string {
 		sid := extractSID(ctx)

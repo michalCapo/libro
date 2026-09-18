@@ -197,18 +197,7 @@
   }
   let showArchivedThreads = false;
   function newThread() {
-    let dialog = document.getElementById('workspace-thread-dialog');
-    if (dialog) dialog.remove();
-    dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-thread-dialog'; dialog.setAttribute('aria-label', 'New thread');
-    const form = node('form', 'ws-thread-form');
-    const label = node('label', '', 'Thread name'); label.htmlFor = 'thread-name';
-    const input = node('input', 'ws-agent-command'); input.id = 'thread-name'; input.required = true; input.maxLength = 200; input.placeholder = 'Explore an idea or fix a server';
-    const actions = node('div', 'ws-agent-actions');
-    const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
-    const create = node('button', 'ws-launch', 'Create thread'); create.type = 'submit';
-    actions.append(cancel, create); form.append(label, input, actions); dialog.append(form); root.append(dialog);
-    form.onsubmit = event => { event.preventDefault(); if (!input.value.trim()) return; call('thread.create', {name:input.value.trim()}); dialog.close(); };
-    dialog.showModal(); input.focus();
+    call('thread.create', {});
   }
   function threadArchived(archived) { if (archived) showArchivedThreads = true; refresh(); }
   function renderThreads() {
@@ -229,11 +218,11 @@
     };
     threads.filter(thread => !thread.archived).forEach(appendThread);
     if (!threads.some(thread => !thread.archived)) {
-      const create = node('button', 'ws-sidebar-action', 'Create a thread'); create.type = 'button'; create.onclick = newThread; list.append(create);
+      list.append(node('div', 'ws-no-threads', 'No threads to show'));
     }
     const archived = threads.filter(thread => thread.archived);
     if (archived.length) {
-      const toggle = node('button', 'ws-sidebar-action', 'Archived (' + archived.length + ')'); toggle.type = 'button'; toggle.setAttribute('aria-expanded', String(showArchivedThreads));
+      const toggle = node('button', 'ws-archived-toggle', 'Archived (' + archived.length + ')'); toggle.type = 'button'; toggle.setAttribute('aria-expanded', String(showArchivedThreads));
       toggle.onclick = () => { showArchivedThreads = !showArchivedThreads; refresh(); }; list.append(toggle);
       if (showArchivedThreads) archived.forEach(appendThread);
     }
