@@ -133,8 +133,24 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 
 	tools := []Plugin{{ID: "nvim", Name: "Editor", Command: "nvim -u NONE", Dock: "right", Type: AppTypeTerminal}, {ID: "custom-tool-monitor", Name: "Monitor", Command: "top", Dock: "right", Type: AppTypeTerminal, Custom: true, Disabled: true}}
 	tools = append(tools, Plugin{ID: "custom-tool-docs", Name: "Docs", URL: " https://example.com/docs?q=go ", Dock: "right", Type: AppTypeURL, Custom: true})
-	if err := saveTools(tools); err != nil {
+	keys = toolKeybindings()
+	keys["custom-tool-monitor"] = "Ctrl+Alt+M"
+	keys["custom-tool-docs"] = "Ctrl+Alt+D"
+	if err := saveTools(tools, keys); err != nil {
 		t.Fatal(err)
+	}
+	if got := toolKeybindings(); got["custom-tool-docs"] != "Ctrl+Alt+D" || got["nvim"] != keys["nvim"] {
+		t.Fatal("tool shortcuts did not persist")
+	}
+	keys["custom-tool-docs"] = keys["terminal"]
+	tools[0].Name = "Should not save"
+	if err := saveTools(tools, keys); err == nil {
+		t.Fatal("accepted duplicate tool shortcut")
+	}
+	for _, p := range plugins() {
+		if p.ID == "nvim" && p.Name == "Should not save" {
+			t.Fatal("saved tool despite invalid shortcut")
+		}
 	}
 	if err := saveTools([]Plugin{{ID: "codex", Name: "Bad", Command: "bad", Dock: "right", Type: AppTypeTerminal}}); err == nil {
 		t.Fatal("allowed tool to replace agent")

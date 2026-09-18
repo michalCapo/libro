@@ -22,3 +22,21 @@ func TestToolShortcutValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestCustomToolShortcuts(t *testing.T) {
+	keys := defaultToolKeybindings()
+	keys["custom-tool-docs"] = "Alt+D"
+	if err := validateToolKeybindings(keys); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"Ctrl+T", "Ctrl+1", "Ctrl+Shift+9", "Shift+D"} {
+		keys["custom-tool-docs"] = key
+		if validateToolKeybindings(keys) == nil {
+			t.Fatalf("accepted %s", key)
+		}
+	}
+	keys["custom-tool-docs"] = ""
+	if err := validateToolKeybindings(keys); err != nil {
+		t.Fatal(err)
+	}
+}

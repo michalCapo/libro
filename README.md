@@ -16,7 +16,7 @@ Tools and agents use a small local plugin manifest. See [Creating plugins](docs/
 - Saves projects, panel defaults, agent and tool configuration, shortcuts, and project start commands in SQLite.
 - Integrates Git worktrees into the project picker.
 - Tracks agent state: project icons spin while any agent works and turn green when all agents finish.
-- Remappable shortcuts for every tool in **Settings → Keyboard shortcuts**.
+- Remappable tool shortcuts in **Settings → Tools** and workspace shortcuts in **Settings → Keyboard shortcuts**.
 
 ## Install
 
@@ -125,11 +125,11 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - **Panels**: default agent and tool panel widths for newly opened panels.
 - **Agent commands**: edit launch commands, rename agents, disable or remove them from the launcher, and add custom agents. One enabled agent can be set to autolaunch when a project opens with no agent panels; leave all unchecked to choose manually. Running sessions are unchanged.
 - **Tools**: edit commands for Nvim, Git, and Database; disable or remove tools; and add custom CLI tools. Changes apply to new sessions.
-- **Keyboard shortcuts**: remap every tool shortcut and restore defaults.
+- **Keyboard shortcuts**: remap workspace shortcuts and restore defaults.
 
 ## Keyboard Shortcuts
 
-Tool shortcuts are remappable in **Settings → Keyboard shortcuts**. Use Ctrl, Alt, or Meta with a letter, number, `[`, `]`, `,`, `.`, `=`, or `-`.
+Nvim, Git, Database, custom tool, and website shortcuts are remappable in **Settings → Tools**. Use Ctrl, Alt, or Meta with a letter, number, `[`, `]`, `,`, `.`, `=`, or `-`.
 
 ### Tools
 

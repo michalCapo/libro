@@ -39,6 +39,8 @@ var toolKeys = []struct{ ID, Name, Key string }{
 }
 var shortcutPattern = regexp.MustCompile(`^(Ctrl\+)?(Alt\+)?(Shift\+)?(Meta\+)?[A-Z0-9=,.\[\]\-]$`)
 
+var reservedNavigationShortcut = regexp.MustCompile(`^Ctrl\+(Shift\+)?[1-9]$`)
+
 func defaultToolKeybindings() map[string]string {
 	result := map[string]string{}
 	for _, tool := range toolKeys {
@@ -48,20 +50,31 @@ func defaultToolKeybindings() map[string]string {
 }
 
 func validateToolKeybindings(bindings map[string]string) error {
-	if len(bindings) != len(toolKeys) {
+	if len(bindings) < len(toolKeys) {
 		return fmt.Errorf("provide a shortcut for each tool")
 	}
 	used := map[string]bool{}
 	for _, tool := range toolKeys {
-		key, ok := bindings[tool.ID]
+		_, ok := bindings[tool.ID]
 		if !ok {
 			return fmt.Errorf("missing shortcut for %s", tool.Name)
+		}
+	}
+	defaults := defaultToolKeybindings()
+	for _, plugin := range installedPlugins {
+		if configurableTool(plugin) {
+			defaults[plugin.ID] = ""
+		}
+	}
+	for id, key := range bindings {
+		if _, known := defaults[id]; !known && (!strings.HasPrefix(id, "custom-tool-") || !pluginIDPattern.MatchString(id)) {
+			return fmt.Errorf("unknown shortcut target %s", id)
 		}
 		if key == "" {
 			continue
 		}
-		if key == "Ctrl+A" {
-			return fmt.Errorf("%s is reserved for panel actions", key)
+		if key == "Ctrl+A" || reservedNavigationShortcut.MatchString(key) {
+			return fmt.Errorf("%s is reserved for workspace navigation", key)
 		}
 		if !shortcutPattern.MatchString(key) || (!strings.Contains(key, "Ctrl+") && !strings.Contains(key, "Alt+") && !strings.Contains(key, "Meta+")) {
 			return fmt.Errorf("use Ctrl, Alt, or Meta with a letter, number, comma, period, brackets, = or -")
@@ -148,6 +161,9 @@ func registerKeybindingActions(app *r.App) {
 func renderToolKeybindings() *r.Node {
 	rows := []*r.Node{}
 	for _, tool := range toolKeys {
+		if tool.ID == "nvim" || tool.ID == "lazyrepo" || tool.ID == "lazydata" {
+			continue
+		}
 		id := "tool-key-" + tool.ID
 		rows = append(rows, r.Div("ws-settings-row ws-agent-command-row").Render(
 			r.El("label", "").Attr("for", id).Text(tool.Name),

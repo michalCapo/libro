@@ -588,13 +588,13 @@
     });
   }
   function saveToolKeys() {
-    const bindings = {};
-    document.querySelectorAll('[data-tool-key]').forEach(input => bindings[input.dataset.toolKey] = input.value);
+    const bindings = {...toolKeys};
+    document.querySelectorAll('#tool-key-form [data-tool-key]').forEach(input => bindings[input.dataset.toolKey] = input.value);
     document.querySelector('#tool-key-form [type=submit]').disabled = true;
     document.getElementById('tool-key-status').textContent = 'Saving…';
     call('settings.tool-keys', {bindings});
   }
-  function resetToolKeys() { fillToolKeys(window.__libroDefaultToolKeys); }
+  function resetToolKeys() { document.querySelectorAll('#tool-key-form [data-tool-key]').forEach(input => input.value = window.__libroDefaultToolKeys[input.dataset.toolKey] || ''); }
   function toolKeysSaved(bindings, message) {
     document.querySelector('#tool-key-form [type=submit]').disabled = false;
     document.getElementById('tool-key-status').textContent = message;
@@ -1010,6 +1010,16 @@
       label.append(auto, node('span', '', 'Autolaunch')); row.append(label);
     }
     row.prepend(toggle, name, input); row.append(remove); document.getElementById(toolRow ? 'tool-command-rows' : 'agent-command-rows').append(row);
+    if (toolRow) {
+      const field = node('div', 'ws-tool-shortcut');
+      const key = node('input', 'ws-agent-command');
+      key.dataset.toolKey = plugin.id; key.readOnly = true; key.placeholder = 'Press shortcut';
+      key.value = toolKeys[plugin.id] || '';
+      key.setAttribute('aria-label', (plugin.name || 'Custom tool') + ' shortcut');
+      key.setAttribute('aria-describedby', 'tool-shortcut-help');
+      field.append(key, button('Clear shortcut', 'close', () => { key.value = ''; key.focus(); }));
+      row.insertBefore(field, remove);
+    }
     if (!toolRow) {
       const controls = node('div', 'ws-agent-order');
       const handle = button('Drag to reorder agent', 'drag_indicator', () => {});
@@ -1076,12 +1086,14 @@
     form.querySelectorAll('[data-agent-id]').forEach(row => tools.push({id:row.dataset.agentId, name:row.querySelector('[data-agent-name]').value.trim(), [row.dataset.toolType === 'url' ? 'url' : 'command']:row.querySelector('[data-agent-command]').value, type:row.dataset.toolType, dock:'right', custom:row.dataset.custom === 'true', disabled:!row.querySelector('[data-agent-enabled]').checked, removed:row.dataset.removed === 'true'}));
     form.querySelector('[type=submit]').disabled = true;
     form.querySelector('[role=status]').textContent = 'Saving…';
-    call('settings.tools', {tools});
+    const bindings = {...toolKeys};
+    form.querySelectorAll('[data-tool-key]').forEach(input => bindings[input.dataset.toolKey] = input.closest('[data-agent-id]').dataset.removed === 'true' ? '' : input.value);
+    call('settings.tools', {tools, bindings});
   }
-  function toolsSaved(plugins, message) {
+  function toolsSaved(plugins, message, bindings) {
     const form = document.getElementById('tool-commands-form');
     form.querySelector('[type=submit]').disabled = false; form.querySelector('[role=status]').textContent = message;
-    if (plugins) { window.__libroPlugins = plugins; refresh(); }
+    if (plugins) { window.__libroPlugins = plugins; if (bindings) { toolKeys = bindings; updateToolHints(); } refresh(); }
   }
   function addCustomAgent() {
     addAgentRow({id:'custom-' + crypto.randomUUID(), name:'', custom:true}, '').querySelector('input').focus();

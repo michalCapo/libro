@@ -13,7 +13,7 @@ func configurableTool(p Plugin) bool {
 	return p.Dock == "right" && (p.Type == AppTypeTerminal || p.Type == AppTypeURL) && p.ID != "terminal" && p.ID != "browser" && p.ID != "files"
 }
 
-func saveTools(list []Plugin) error {
+func saveTools(list []Plugin, shortcuts ...map[string]string) error {
 	known := map[string]bool{}
 	for _, p := range plugins() {
 		if configurableTool(p) {
@@ -43,6 +43,13 @@ func saveTools(list []Plugin) error {
 		}
 		seen[p.ID] = true
 	}
+	var keys []byte
+	if len(shortcuts) > 0 {
+		if err := validateToolKeybindings(shortcuts[0]); err != nil {
+			return err
+		}
+		keys, _ = json.Marshal(shortcuts[0])
+	}
 	raw, err := json.Marshal(list)
 	if err != nil {
 		return err
@@ -52,8 +59,21 @@ func saveTools(list []Plugin) error {
 	if db == nil {
 		return fmt.Errorf("settings database is unavailable")
 	}
-	_, err = db.Exec(`INSERT INTO settings (key,value) VALUES ('tool_configs',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, string(raw))
-	return err
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.Exec(`INSERT INTO settings (key,value) VALUES ('tool_configs',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, string(raw))
+	if err != nil {
+		return err
+	}
+	if keys != nil {
+		if _, err = tx.Exec(`INSERT INTO settings (key,value) VALUES ('tool_keybindings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, string(keys)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func registerToolSettings(app *r.App) {
@@ -62,13 +82,19 @@ func registerToolSettings(app *r.App) {
 		var list []Plugin
 		err := json.Unmarshal(raw, &list)
 		if err == nil {
-			err = saveTools(list)
+			keyJSON, _ := json.Marshal(ctx.WsData()["bindings"])
+			var bindings map[string]string
+			err = json.Unmarshal(keyJSON, &bindings)
+			if err == nil {
+				err = saveTools(list, bindings)
+			}
 		}
 		if err != nil {
 			return fmt.Sprintf("libroWorkspace.toolsSaved(null,%s);", components.JSString(err.Error()))
 		}
 		updated, _ := json.Marshal(plugins())
-		return fmt.Sprintf("libroWorkspace.toolsSaved(%s,'Saved. Changes apply to new sessions.');", updated)
+		keys, _ := json.Marshal(toolKeybindings())
+		return fmt.Sprintf("libroWorkspace.toolsSaved(%s,'Saved. Shortcuts are active now. Other changes apply to new sessions.',%s);", updated, keys)
 	})
 }
 
@@ -76,6 +102,7 @@ func renderToolSettings() *r.Node {
 	return r.El("section", "ws-tool-settings").Render(
 		r.El("h2", "ws-shortcut-heading").Text("Tools"),
 		r.P("ws-settings-status").Text("Configure Nvim, Git, Database, and custom CLI tools and websites. Changes apply across projects to new sessions."),
+		r.P("ws-settings-status").ID("tool-shortcut-help").Text("Select a shortcut field and press Ctrl, Alt, or Meta with a letter, number, comma, period, brackets, = or -. Clear it to disable the shortcut."),
 		r.El("form", "").ID("tool-commands-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveTools(this)")).Render(
 			r.Div("ws-settings-group").Render(
 				r.Div("").ID("tool-command-rows"),
