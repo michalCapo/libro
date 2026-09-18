@@ -234,6 +234,37 @@ func saveAgentSettings(commands map[string]string, disabled map[string]bool, cus
 	return tx.Commit()
 }
 
+func defaultThreadAgent() string {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	var id string
+	if db != nil {
+		_ = db.QueryRow(`SELECT value FROM settings WHERE key = 'default_thread_agent'`).Scan(&id)
+	}
+	return id
+}
+
+func setDefaultThreadAgent(id string) error {
+	if id != "" {
+		valid := false
+		for _, plugin := range plugins() {
+			if plugin.ID == id && plugin.Dock == "center" && plugin.Type == AppTypeTerminal && !plugin.Disabled && !plugin.Removed {
+				valid = true
+			}
+		}
+		if !valid {
+			return fmt.Errorf("choose an enabled agent")
+		}
+	}
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	if db == nil {
+		return fmt.Errorf("settings database is unavailable")
+	}
+	_, err := db.Exec(`INSERT INTO settings (key,value) VALUES ('default_thread_agent',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, id)
+	return err
+}
+
 func renderAgentCommands() *r.Node {
 	return r.El("form", "").ID("agent-commands-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveAgentCommand(this)")).Render(
 		r.Div("ws-settings-group").Render(
@@ -248,6 +279,11 @@ func renderAgentCommands() *r.Node {
 }
 
 func registerSettingsActions(app *r.App) {
+	registerAction(app, "settings.thread-agent", func(ctx *r.Context) string {
+		id, ok := ctx.WsData()["agent"].(string)
+		saved := ok && setDefaultThreadAgent(id) == nil
+		return fmt.Sprintf("libroWorkspace.threadAgentSaved(%t,%s);", saved, components.JSString(defaultThreadAgent()))
+	})
 	registerKeybindingActions(app)
 	registerProjectCommandActions(app)
 	registerToolSettings(app)
@@ -305,7 +341,7 @@ func registerSettingsActions(app *r.App) {
 		encoded, _ := json.Marshal(commands)
 		keys, _ := json.Marshal(toolKeybindings())
 		list, _ := json.Marshal(plugins())
-		return fmt.Sprintf("window.__libroPlugins=%s;libroWorkspace.showSettings(%s,%s,%s,%s);", list, components.JSString(string(DBDefaultPanelWidth())), encoded, keys, components.JSString(string(DBDefaultToolPanelWidth())))
+		return fmt.Sprintf("window.__libroPlugins=%s;libroWorkspace.showSettings(%s,%s,%s,%s,%s);", list, components.JSString(string(DBDefaultPanelWidth())), encoded, keys, components.JSString(string(DBDefaultToolPanelWidth())), components.JSString(defaultThreadAgent()))
 	})
 	registerAction(app, "settings.width", func(ctx *r.Context) string {
 		value, _ := ctx.WsData()["width"].(string)
@@ -379,6 +415,17 @@ func renderWorkspaceSettings() *r.Node {
 			),
 			r.P("ws-settings-status").Text("Existing panels keep their current width."),
 			r.P("ws-settings-status").ID("workspace-settings-status").Attr("role", "status").Attr("aria-live", "polite"),
+			r.El("h2", "ws-shortcut-heading").Text("Threads"),
+			r.Div("ws-settings-group").Render(
+				r.Div("ws-settings-row").Render(
+					r.Div("ws-settings-copy").Render(
+						r.El("label", "").Attr("for", "default-thread-agent").Text("Default agent"),
+						r.P("").ID("default-thread-agent-help").Text("Start this agent when opening a thread with no agent panels."),
+					),
+					r.El("select", "ws-settings-select").ID("default-thread-agent").Attr("aria-describedby", "default-thread-agent-help").On("change", r.JS("libroWorkspace.saveThreadAgent(event.target.value)")),
+				),
+			),
+			r.P("ws-settings-status").ID("default-thread-agent-status").Attr("role", "status"),
 			r.El("h2", "ws-shortcut-heading").Text("Agent commands"),
 			r.P("ws-settings-status").Text("CLI commands used to start agents in every project. Drag the handles or use the arrows to reorder agents, then save. The first three enabled agents appear on the welcome screen. Include any flags you need. Running sessions are unchanged. Autolaunch opens one enabled agent when you open a project with no agent panels. Leave all unchecked to choose manually."),
 			renderAgentCommands(),

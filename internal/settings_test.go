@@ -272,3 +272,67 @@ func TestAgentOrderPersistence(t *testing.T) {
 		t.Fatal("command update reset order")
 	}
 }
+
+func TestDefaultThreadAgent(t *testing.T) {
+	original := db
+	path := filepath.Join(t.TempDir(), "settings.db")
+	var err error
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); db = original })
+	createTables()
+	state := &AppState{ActiveProject: "thread:test", Threads: []Thread{{ID: "thread:test"}}}
+	if defaultThreadAgent() != "" {
+		t.Fatal("expected manual selection by default")
+	}
+	for _, id := range []string{"missing", "browser"} {
+		if setDefaultThreadAgent(id) == nil {
+			t.Fatalf("accepted %s", id)
+		}
+	}
+	projectAgent := "pi"
+	if err := saveAgentSettings(nil, nil, nil, nil, nil, &projectAgent, nil); err != nil {
+		t.Fatal(err)
+	}
+	if projectAutolaunchJS(state, "test") != "" {
+		t.Fatal("thread used project preference")
+	}
+	if err := setDefaultThreadAgent("codex"); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := projectAutolaunchJS(state, "test"); !strings.Contains(got, `"plugin":"codex"`) {
+		t.Fatalf("thread preference not persisted: %s", got)
+	}
+	state.ActiveProject = "project"
+	if got := projectAutolaunchJS(state, "test"); !strings.Contains(got, `"plugin":"pi"`) {
+		t.Fatalf("project preference changed: %s", got)
+	}
+	state.ActiveProject = "thread:test"
+	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "pi", Dock: "center"}}
+	if projectAutolaunchJS(state, "test") != "" {
+		t.Fatal("duplicate agent launched")
+	}
+	state.Apps = nil
+	if err := saveAgentConfig(map[string]string{"codex": "codex"}, map[string]bool{"codex": true}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if setDefaultThreadAgent("codex") == nil {
+		t.Fatal("accepted disabled agent")
+	}
+	if projectAutolaunchJS(state, "test") != "" {
+		t.Fatal("launched disabled agent")
+	}
+	if err := setDefaultThreadAgent(""); err != nil {
+		t.Fatal(err)
+	}
+	if defaultThreadAgent() != "" {
+		t.Fatal("manual selection not saved")
+	}
+}

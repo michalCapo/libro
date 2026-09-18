@@ -903,7 +903,28 @@
       status.textContent = 'Could not save theme. Please try again.';
     }
   }
-  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg') {
+  let savedThreadAgent = '';
+  function fillThreadAgents() {
+    const select = document.getElementById('default-thread-agent');
+    select.replaceChildren(new Option('Choose manually', ''));
+    (window.__libroPlugins || []).filter(p => p.dock === 'center' && p.type === 'terminal' && !p.disabled && !p.removed).forEach(p => select.add(new Option(p.name, p.id)));
+    select.value = [...select.options].some(option => option.value === savedThreadAgent) ? savedThreadAgent : '';
+  }
+  function saveThreadAgent(agent) {
+    document.getElementById('default-thread-agent').disabled = true;
+    document.getElementById('default-thread-agent-status').textContent = 'Saving…';
+    call('settings.thread-agent', {agent});
+  }
+  function threadAgentSaved(ok, agent) {
+    savedThreadAgent = agent;
+    fillThreadAgents();
+    document.getElementById('default-thread-agent').disabled = false;
+    document.getElementById('default-thread-agent-status').textContent = ok ? 'Saved.' : 'Could not save. Choose an enabled agent and try again.';
+  }
+  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '') {
+    savedThreadAgent = threadAgent;
+    fillThreadAgents();
+    document.getElementById('default-thread-agent-status').textContent = '';
     document.getElementById('notification-sound').value = prefs.notificationSound === false ? 'off' : 'on';
     document.getElementById('notification-sound-status').textContent = '';
     document.getElementById('workspace-theme').value = themePreference();
@@ -1068,6 +1089,7 @@
     form.querySelector('[role=status]').textContent = message;
     if (plugins) {
       window.__libroPlugins = plugins;
+      fillThreadAgents();
       document.querySelectorAll('.ws-grid > .ws-empty').forEach(el => el.remove());
       refresh();
     }
@@ -1082,7 +1104,7 @@
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
   }
-  window.libroWorkspace = {newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;

@@ -103,8 +103,13 @@ func projectAutolaunchJS(state *AppState, sid string) string {
 			return ""
 		}
 	}
+	threadAgent := defaultThreadAgent()
 	for _, plugin := range plugins() {
-		if !plugin.Autolaunch || plugin.Disabled || plugin.Removed || plugin.Dock != "center" || plugin.Type != AppTypeTerminal {
+		autolaunch := plugin.Autolaunch
+		if state.thread(state.ActiveProject) != nil {
+			autolaunch = plugin.ID == threadAgent
+		}
+		if !autolaunch || plugin.Disabled || plugin.Removed || plugin.Dock != "center" || plugin.Type != AppTypeTerminal {
 			continue
 		}
 		payload, _ := json.Marshal(sidData(sid, "type", string(plugin.Type), "plugin", plugin.ID, "name", plugin.Name, "dock", "center", "writable", true, "autolaunchProject", state.ActiveProject))
