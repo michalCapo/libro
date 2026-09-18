@@ -592,6 +592,11 @@ async function flushLibroSessionData() {
   }
 }
 
+ipcMain.handle('libro-focus-workspace', (event) => {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) return
+  mainWindow.webContents.focus()
+})
+
 async function quitApp() {
   if (isQuitting) return
   isQuitting = true

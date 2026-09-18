@@ -11,6 +11,7 @@ func urlPopupJS(_ string) string {
   var results=document.getElementById('url-popup-results');
   var historyKey='libro.browser.history';
   var matches=[], selected=-1;
+  var focusRequest=0;
   function history(){
     try {
       var entries=JSON.parse(localStorage.getItem(historyKey)||'[]');
@@ -66,6 +67,14 @@ func urlPopupJS(_ string) string {
     filter();
     dialog.classList.remove('hidden');
     input.focus();input.select();
+    // DOM focus alone does not transfer native keyboard focus from an Electron guest.
+    var request=++focusRequest;
+    if(window.libroElectron&&window.libroElectron.focusWorkspace){
+      window.libroElectron.focusWorkspace().then(function(){
+        if(request!==focusRequest||dialog.classList.contains('hidden'))return;
+        input.focus();
+      }).catch(function(){});
+    }
   }
   input.addEventListener('keydown',function(event){
     if(event.key==='ArrowDown'||event.key==='ArrowUp'){

@@ -543,3 +543,21 @@ test('double Ctrl+A hides all tools and the bottom terminal without closing them
   vm.runInContext('press()', context)
   assert.equal(focused, 1)
 })
+
+test('address popup reclaims native focus only for the workspace sender', () => {
+  const source = main.slice(main.indexOf("ipcMain.handle('libro-focus-workspace'"), main.indexOf('async function quitApp()'))
+  let handler, focused = 0, destroyed = false
+  const host = { focus() { focused++ } }
+  const context = {
+    ipcMain: { handle(channel, fn) { assert.equal(channel, 'libro-focus-workspace'); handler = fn } },
+    mainWindow: { isDestroyed: () => destroyed, webContents: host },
+  }
+  vm.runInNewContext(source, context)
+  handler({ sender: {} })
+  assert.equal(focused, 0)
+  handler({ sender: host })
+  assert.equal(focused, 1)
+  destroyed = true
+  handler({ sender: host })
+  assert.equal(focused, 1)
+})
