@@ -27,7 +27,7 @@ html.dark .ws-grid [data-terminal],html.dark .ws-grid .xterm,html.dark .ws-grid 
 .ws-sidebar-search span{flex:1}.ws-sidebar-search:hover{background:var(--ws-hover)}
 .ws-sidebar-search .material-icons-round,.ws-sidebar-action .material-icons-round{font-size:19px;flex-shrink:0;color:var(--ws-muted)}
 .ws-sidebar-tools>.ws-button .material-icons-round{font-size:18px;color:var(--ws-muted)}
-.ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;color:#000;font-size:18px;font-weight:600;min-height:30px;box-sizing:content-box;padding:0 2px 8px;margin-top:6px;border-bottom:1px solid #000}
+.ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;color:#000;font-size:18px;font-weight:600;min-height:30px;box-sizing:content-box;padding:8px 2px 0;margin-top:6px;border-top:1px solid #000}
 html.dark .ws-sidebar-heading{color:var(--ws-fg)}
 .ws-no-threads{color:var(--ws-muted);font-size:13px;padding:6px 2px}
 .ws-project-list{flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--ws-line) transparent}
@@ -183,7 +183,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 #libro-workspace[data-projects=false] .ws-no-threads,
 #libro-workspace[data-projects=false] #workspace-thread-list [data-archived=true],
 #libro-workspace[data-projects=false] .ws-project-remove,#libro-workspace[data-projects=false] .ws-project-settings{display:none}
-#libro-workspace[data-projects=false] .ws-sidebar-heading{justify-content:center;min-height:36px;padding:0 0 8px;font-size:0;line-height:0}
+#libro-workspace[data-projects=false] .ws-sidebar-heading{justify-content:center;min-height:36px;padding:8px 0 0;font-size:0;line-height:0}
 #libro-workspace[data-projects=false] .ws-project-item{margin-bottom:8px}
 #libro-workspace[data-projects=false] .ws-sidebar-footer{display:flex;flex-direction:column;gap:8px}
 #libro-workspace[data-projects=false] .ws-project-list{scrollbar-width:none}

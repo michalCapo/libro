@@ -830,7 +830,7 @@
     else if (!placeholder) grid.append(empty('center', grid));
     let tabs = grid.parentElement.querySelector('.ws-tool-tabs');
     if (!tabs) { tabs = node('div', 'ws-tool-tabs'); tabs.setAttribute('aria-label', 'Agents and tools'); grid.before(tabs); }
-    const signature = [...center, ...all.filter(frame => frame.dataset.dock === 'right'), ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, frame.dataset.appName, frame.dataset.dock === 'center' ? frame.dataset.selected : frame.dataset.dockVisible, frame.querySelector('[data-size-trigger]')?.textContent || 'MD', frame.dataset.dock]);
+    const signature = [...center, ...all.filter(frame => frame.dataset.dock === 'right'), ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, frame.dataset.appName, frame.dataset.selected, frame.querySelector('[data-size-trigger]')?.textContent || 'MD', frame.dataset.dock]);
     if (tabs.dataset.signature !== JSON.stringify(signature)) {
       tabs.dataset.signature = JSON.stringify(signature); tabs.replaceChildren();
       signature.forEach(([id, name, shown, size, dock]) => {
@@ -1126,6 +1126,11 @@
   window.addEventListener('resize', schedule);
   root.addEventListener('pointerdown', event => {
     const frame = event.target.closest('[data-app-id]');
+    if (frame?.querySelector('[data-terminal-app]') && !event.target.closest('[data-app-toolbar], button, a, input, select, [contenteditable=true]')) {
+      requestAnimationFrame(() => {
+        if (window.__libroSelectedApp === frame.dataset.appId) window.__libroFocusTerminalFrame?.(frame.dataset.appId);
+      });
+    }
     if (frame?.dataset.dock === 'center' && frame.parentElement.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
       const grid = frame.parentElement;
       const state = dockState(grid);
