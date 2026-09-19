@@ -93,6 +93,31 @@ func (b *responseBuilder) Replace(id string, node *r.Node) *responseBuilder {
 
 func (b *responseBuilder) Build() string { return strings.Join(b.parts, "") }
 
+// Closing a thread's agent archives the thread and closes its tools as well.
+func closeWorkspaceApp(sid, appID string) string {
+	apps, err := sm.CloseThreadAgent(sid, appID)
+	if err != nil {
+		return r.Notify("error", "Could not archive thread")
+	}
+	if apps == nil {
+		if removed := sm.RemoveAppByID(sid, appID); removed != nil {
+			apps = []Application{*removed}
+		}
+	}
+	js := closeDevtoolsForAppsJS(apps)
+	for _, app := range apps {
+		if app.Type == AppTypeTerminal {
+			tm.Stop(app.ID)
+		}
+		js += removeAppJS(app.ID)
+	}
+	if len(apps) == 0 {
+		js = removeAppJS(appID)
+	}
+	state := sm.Get(sid)
+	return js + navigateJS(state, sid) + renderTopBar(state, sid).ToJSReplace(TopBarID) + projectsJS(state)
+}
+
 // Autolaunch uses app.start so command validation and terminal lifecycle stay shared.
 func projectAutolaunchJS(state *AppState, sid string) string {
 	if state.ActiveProject == "" {
@@ -549,6 +574,10 @@ func Run(assets embed.FS) {
 			appID := sm.NextAppID()
 			sm.InsertTerminalPlaceholder(sid, appID, width, command, writable, name, iconURL, insertIdx)
 			sm.SetAppPlugin(sid, appID, pluginID, dock)
+			resizeAgentsJS := ""
+			for _, resized := range sm.SizeNewAgent(sid, appID, DBDefaultPanelWidth()) {
+				resizeAgentsJS += resizeJS(nil, resized.Width, resized.ID)
+			}
 
 			state := sm.Get(sid)
 			newApp := &state.Apps[state.SelectedIndex]
@@ -558,7 +587,7 @@ func Run(assets embed.FS) {
 			hydrateJS := hydrateAppAfterScrollJS(newApp.ID, sidData(sid, "id", newApp.ID))
 			if hadApps > 0 {
 				frame := renderAppFramePlaceholder(*newApp, state.SelectedIndex, true, sid)
-				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
+				return resizeAgentsJS + insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
 			}
 
 			return renderMainAreaWithPlaceholder(state, sid, newApp.ID).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS + navigateJS(state, sid) + hydrateJS
@@ -681,22 +710,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 			return ""
 		}
 
-		removed := sm.RemoveAppByID(sid, appID)
-
-		// Clean up associated processes
-		if removed != nil {
-			if removed.Type == AppTypeTerminal {
-				tm.Stop(removed.ID)
-			}
-		}
-
-		state := sm.Get(sid)
-		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
-		projJS := projectsJS(state)
-
-		// Remove the clicked frame even if its server state was lost on restart.
-		// The workspace observer restores the empty state when no panels remain.
-		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + projJS
+		return closeWorkspaceApp(sid, appID)
 	})
 
 	registerAction(app, "project.close.check", func(ctx *r.Context) string {
@@ -734,17 +748,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 		}
 		appID := state.Apps[state.SelectedIndex].ID
 
-		removed := sm.RemoveAppByID(sid, appID)
-		if removed != nil {
-			if removed.Type == AppTypeTerminal {
-				tm.Stop(removed.ID)
-			}
-		}
-
-		state = sm.Get(sid)
-		topBarJS := renderTopBar(state, sid).ToJSReplace(TopBarID)
-		projJS := projectsJS(state)
-		return removeAppJS(appID) + navigateJS(state, sid) + topBarJS + projJS
+		return closeWorkspaceApp(sid, appID)
 	})
 
 	// Emergency restart for a terminal app's native PTY session.

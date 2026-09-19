@@ -131,3 +131,32 @@ func (s *AppState) canStartThreadApp(app Application) bool {
 	}
 	return true
 }
+
+// CloseThreadAgent persists the archive before clearing the active thread.
+// A nil result leaves normal panel closing to the caller.
+func (sm *StateManager) CloseThreadAgent(sid, appID string) ([]Application, error) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	state := sm.states[sid]
+	if state == nil {
+		return nil, nil
+	}
+	thread := state.thread(state.ActiveProject)
+	if thread == nil {
+		return nil, nil
+	}
+	for _, app := range state.Apps {
+		if app.ID != appID || appDock(app) != "center" {
+			continue
+		}
+		if _, err := db.Exec("UPDATE threads SET archived = 1 WHERE id = ?", thread.ID); err != nil {
+			return nil, err
+		}
+		thread.Archived = true
+		apps := state.Apps
+		state.Apps = nil
+		state.SelectedIndex = 0
+		return apps, nil
+	}
+	return nil, nil
+}

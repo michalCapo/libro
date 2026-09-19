@@ -79,3 +79,33 @@ func TestCloseProjectOnlyClearsActiveProject(t *testing.T) {
 		t.Fatal("missing session returned panels")
 	}
 }
+
+func TestNewAgentSizing(t *testing.T) {
+	manager := NewStateManager()
+	state := &AppState{Apps: []Application{{ID: "tool", Type: AppTypeURL, Dock: "right", Width: WidthLG}}}
+	manager.states["test"] = state
+	add := func(id string) {
+		manager.InsertTerminalPlaceholder("test", id, WidthSM, "codex", true, "Agent", "", -1)
+		manager.SetAppPlugin("test", id, "codex", "center")
+	}
+	add("first")
+	manager.SizeNewAgent("test", "first", WidthSM)
+	if state.Apps[1].Width != WidthFull || state.Apps[0].Width != WidthLG {
+		t.Fatal("first agent should be MAX without resizing tools")
+	}
+	add("second")
+	resized := manager.SizeNewAgent("test", "second", WidthSM)
+	if len(resized) != 1 || resized[0].ID != "first" || state.Apps[1].Width != WidthSM || state.Apps[2].Width != WidthSM {
+		t.Fatal("second agent should restore the first to the configured default")
+	}
+	manager.SetAppWidthByID("test", "first", WidthXL)
+	add("third")
+	manager.SizeNewAgent("test", "third", WidthSM)
+	if state.Apps[1].Width != WidthXL || state.Apps[3].Width != WidthSM {
+		t.Fatal("later agents should preserve existing sizes")
+	}
+	manager.SizeNewAgent("test", "tool", WidthSM)
+	if state.Apps[0].Width != WidthLG {
+		t.Fatal("tool width changed")
+	}
+}

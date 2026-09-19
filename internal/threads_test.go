@@ -81,3 +81,68 @@ func TestThreadAllowsToolsAndOneAgent(t *testing.T) {
 		}
 	}
 }
+
+func TestCloseThreadAgentArchivesAndClosesTools(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "threads.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); db = original })
+	createTables()
+	if _, err := db.Exec("INSERT INTO threads (id, name) VALUES ('thread:test', 'Test')"); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewStateManager()
+	state := &AppState{
+		ActiveProject: "thread:test",
+		Threads:       []Thread{{ID: "thread:test", Name: "Test"}},
+		Apps: []Application{
+			{ID: "agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"},
+			{ID: "browser", Type: AppTypeURL, Dock: "right"},
+			{ID: "shell", Type: AppTypeTerminal, Dock: "bottom"},
+		},
+		snapshots: map[string]*projectSnapshot{"other": {Apps: []Application{{ID: "other-agent"}}}},
+	}
+	manager.states["test"] = state
+	for _, id := range []string{"browser", "shell", "missing"} {
+		apps, err := manager.CloseThreadAgent("test", id)
+		if err != nil || apps != nil || state.Threads[0].Archived || len(state.Apps) != 3 {
+			t.Fatalf("closing %s affected thread: %v", id, err)
+		}
+	}
+	apps, err := manager.CloseThreadAgent("test", "agent")
+	if err != nil || len(apps) != 3 || len(state.Apps) != 0 || !state.Threads[0].Archived {
+		t.Fatalf("thread not closed and archived: %v", err)
+	}
+	if len(state.snapshots["other"].Apps) != 1 {
+		t.Fatal("another workspace was closed")
+	}
+	if threads := loadThreads(); len(threads) != 1 || !threads[0].Archived {
+		t.Fatal("archive was not persisted")
+	}
+}
+
+func TestCloseThreadAgentPreservesPanelsOnArchiveFailure(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "missing-schema.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); db = original })
+	manager := NewStateManager()
+	state := &AppState{
+		ActiveProject: "thread:test",
+		Threads:       []Thread{{ID: "thread:test"}},
+		Apps:          []Application{{ID: "agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"}},
+	}
+	manager.states["test"] = state
+	if _, err := manager.CloseThreadAgent("test", "agent"); err == nil {
+		t.Fatal("expected archive failure")
+	}
+	if state.Threads[0].Archived || len(state.Apps) != 1 {
+		t.Fatal("archive failure changed the workspace")
+	}
+}

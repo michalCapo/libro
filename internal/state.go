@@ -586,6 +586,42 @@ func applyAppWidth(app *Application, width Width) {
 	app.PreviousWidth = ""
 }
 
+// SizeNewAgent expands the first center agent and restores its default width
+// when a second agent joins it. Tool panels do not affect this decision.
+func (sm *StateManager) SizeNewAgent(sessionID, appID string, defaultWidth Width) []Application {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	state := sm.states[sessionID]
+	if state == nil {
+		return nil
+	}
+	var agents []*Application
+	var added *Application
+	for i := range state.Apps {
+		app := &state.Apps[i]
+		if appDock(*app) == "center" {
+			agents = append(agents, app)
+			if app.ID == appID {
+				added = app
+			}
+		}
+	}
+	if added == nil {
+		return nil
+	}
+	if len(agents) == 1 {
+		applyAppWidth(added, WidthFull)
+	} else if len(agents) == 2 {
+		for _, agent := range agents {
+			if agent != added && agent.Width == WidthFull {
+				applyAppWidth(agent, defaultWidth)
+				return []Application{*agent}
+			}
+		}
+	}
+	return nil
+}
+
 // SetAppWidthByID sets the width of an app by its ID and returns the app's current index
 func (sm *StateManager) SetAppWidthByID(sessionID, appID string, width Width) int {
 	sm.mu.Lock()
