@@ -50,9 +50,6 @@ func renderWorkspaceTopBar(state *AppState, sid string) *r.Node {
 
 func renderWorkspaceSidebar(sid string) *r.Node {
 	return r.El("aside", "ws-sidebar").ID("workspace-projects").Attr("aria-label", "Projects").Render(
-		r.Div("ws-sidebar-tools").Render(
-			workspaceButton("Toggle projects", "view_sidebar", "libroWorkspace.toggle('projects')"),
-		),
 		r.Div("ws-navigation").Render(
 			r.Div("ws-sidebar-heading").Render(
 				r.Span("").Text("Projects"),
@@ -101,6 +98,7 @@ func renderWorkspaceStrip(state *AppState, sid, placeholderID string) *r.Node {
 
 func renderWorkspaceTools() *r.Node {
 	return r.El("aside", "ws-tool-rail").Attr("aria-label", "Workspace tools").Render(
+		workspaceButton("Toggle projects", "view_sidebar", "libroWorkspace.toggle('projects')"),
 		r.Div("ws-tool-buttons").ID("workspace-tool-buttons"),
 		workspaceButton("More tools", "add", "libroWorkspace.launcher('right')"),
 		workspaceButton("Toggle bottom terminal (Ctrl+`)", "vertical_align_bottom", "libroWorkspace.bottom()"),

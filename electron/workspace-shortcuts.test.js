@@ -263,17 +263,39 @@ test('a hidden bottom shell exiting keeps the visible project command open', () 
 test('panel size shortcuts use saved bindings and ignore key repeat', () => {
   const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = workspace.slice(workspace.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"), workspace.indexOf("    if (binding && binding === toolKeys['toggle-projects'])"))
-  for (const [binding, delta] of [['Ctrl+,', 1], ['Ctrl+.', -1], ['Alt+S', -1]]) {
+  for (const [binding, delta] of [['Ctrl+,', 1], ['Ctrl+Shift+.', -1], ['Alt+S', -1]]) {
     for (const repeat of [false, true]) {
       const calls = []
       vm.runInNewContext('(function () {' + handler + '})()', {
         binding, sid: 'session',
-        toolKeys: { 'panel-size-down': binding === 'Alt+S' ? binding : 'Ctrl+.', 'panel-size-up': 'Ctrl+,' },
+        toolKeys: { 'panel-size-down': binding === 'Alt+S' ? binding : 'Ctrl+Shift+.', 'panel-size-up': 'Ctrl+,' },
         window: { __libroResizeSelectedAppStep: (...args) => calls.push(args) },
         event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
       })
       assert.deepEqual(calls, repeat ? [] : [[delta, 'session']])
     }
+  }
+})
+
+test('settings shortcut opens and closes settings and ignores key repeat', () => {
+  const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const settingsHandlerStart = workspace.indexOf("    if (binding && binding === toolKeys['settings'])")
+  const settingsHandler = workspace.slice(settingsHandlerStart, workspace.indexOf("    if (!document.getElementById('workspace-settings').hidden", settingsHandlerStart))
+  const settingsFunction = workspace.slice(workspace.indexOf('  let settingsFocus;'), workspace.indexOf('  function themePreference()'))
+  for (const hidden of [true, false]) for (const repeat of [false, true]) {
+    const calls = []
+    const page = { hidden }
+    const document = {
+      activeElement: {},
+      getElementById: () => page,
+      querySelector: () => null,
+    }
+    vm.runInNewContext(settingsFunction + '\n(function () {' + settingsHandler + '})()', {
+      binding: 'Ctrl+.', toolKeys: { settings: 'Ctrl+.' }, document,
+      event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
+      closeSettings: () => calls.push('close'), call: action => calls.push(action),
+    })
+    assert.deepEqual(calls, repeat ? [] : [hidden ? 'settings.open' : 'close'])
   }
 })
 

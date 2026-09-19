@@ -21,12 +21,9 @@ html.dark{--ws-bg:#1c1c1f;--ws-chrome:#222225;--ws-raised:#2b2b30;--ws-line:#333
 html.dark .ws-grid [data-terminal],html.dark .ws-grid .xterm,html.dark .ws-grid .xterm-viewport{background:#1e1e1e!important}
 .ws-body{display:flex;flex:1;min-height:0;overflow:hidden}
 .ws-sidebar{width:var(--ws-projects);flex-shrink:0;background:var(--ws-chrome);border-right:1px solid var(--ws-line);display:flex;flex-direction:column;padding:4px 6px 6px;gap:14px;overflow:hidden}
-.ws-sidebar-tools{display:flex;align-items:center;gap:4px;min-height:38px}
-.ws-sidebar-tools>.ws-button{width:32px;height:32px;border-radius:7px}
 .ws-sidebar-search{display:flex;align-items:center;gap:10px;min-width:0;min-height:36px;flex:1;padding:6px 8px;color:var(--ws-muted);background:transparent;border:0;border-radius:8px;text-align:left;font:inherit}
 .ws-sidebar-search span{flex:1}.ws-sidebar-search:hover{background:var(--ws-hover)}
 .ws-sidebar-search .material-icons-round,.ws-sidebar-action .material-icons-round{font-size:19px;flex-shrink:0;color:var(--ws-muted)}
-.ws-sidebar-tools>.ws-button .material-icons-round{font-size:18px;color:var(--ws-muted)}
 .ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;color:var(--ws-fg);font-size:18px;font-weight:600;min-height:30px;box-sizing:content-box;padding:8px 2px 0;margin-top:6px;border-top:1px solid var(--ws-line)}
 html.dark .ws-sidebar-heading{color:var(--ws-fg)}
 #libro-workspace[data-projects=true] .ws-sidebar-heading{border-top:0}
@@ -175,8 +172,6 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-shortcut-row>span{min-width:0;overflow-wrap:anywhere}
 .ws-shortcut-row kbd{flex-shrink:0;white-space:nowrap;font:11px/18px ui-monospace,monospace;color:var(--ws-muted);background:var(--ws-bg);border:1px solid var(--ws-line);border-radius:4px;padding:2px 7px}
 #libro-workspace[data-projects=false] .ws-sidebar{display:flex;width:var(--ws-rail-width);padding:8px;position:static;box-shadow:none;gap:12px}
-#libro-workspace[data-projects=false] .ws-sidebar-tools{flex-direction:column;gap:8px}
-#libro-workspace[data-projects=false] .ws-sidebar-tools>.ws-button,
 #libro-workspace[data-projects=false] .ws-sidebar-heading>.ws-button,
 #libro-workspace[data-projects=false] .ws-sidebar-search,
 #libro-workspace[data-projects=false] .ws-sidebar-action,

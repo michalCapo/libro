@@ -24,9 +24,10 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"close-project", "Close project", "Ctrl+Shift+Q"},
 	{"run-project", "Start / restart project", "Ctrl+Shift+R"},
 	{"stop-project", "Stop project command", "Ctrl+Shift+T"},
-	{"panel-size-down", "Decrease panel size", "Ctrl+."},
+	{"panel-size-down", "Decrease panel size", "Ctrl+Shift+."},
 	{"panel-size-up", "Increase panel size", "Ctrl+,"},
 	{"panel-size-max", "Toggle panel size to MAX", "Ctrl+M"},
+	{"settings", "Settings", "Ctrl+."},
 	{"project-picker", "Switch project", "Ctrl+P"},
 	{"new-agent", "New agent", "Ctrl+N"},
 	{"new-thread", "New thread", "Ctrl+Shift+N"},
@@ -103,6 +104,16 @@ func toolKeybindings() map[string]string {
 						break
 					}
 				}
+			}
+			if _, exists := saved["settings"]; !exists && saved["panel-size-down"] == "Ctrl+." {
+				replacement := "Ctrl+Shift+."
+				for id, key := range saved {
+					if id != "panel-size-down" && key == replacement {
+						replacement = ""
+						break
+					}
+				}
+				saved["panel-size-down"] = replacement
 			}
 			for _, shortcut := range toolKeys {
 				if _, exists := saved[shortcut.ID]; exists {

@@ -641,6 +641,11 @@
       if (!event.repeat) zoom(zoomAction);
       return;
     }
+    if (binding && binding === toolKeys['settings']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat && (!document.getElementById('workspace-settings').hidden || !document.querySelector('dialog[open], #libro-confirm-popover'))) settings();
+      return;
+    }
     if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open], #libro-confirm-popover')) return;
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
       if (event.repeat) return;

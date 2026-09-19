@@ -103,11 +103,12 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 | `Ctrl + G` | Git |
 | `Ctrl + D` | Database |
 | `Ctrl + Q` | Close the selected panel |
-| `Ctrl + ,` / `Ctrl + .` | Bigger / smaller panel |
+| `Ctrl + ,` / `Ctrl + Shift + .` | Bigger / smaller panel |
 | `Ctrl + M` | Full width on or off |
 | `Ctrl + H` / `Ctrl + L` | Previous / next panel |
 | `` Ctrl + ` `` | Bottom terminal |
 | `Ctrl + ;` | Search all commands |
+| `Ctrl + .` | Settings |
 | `Ctrl + =` / `Ctrl + -` / `Ctrl + 0` | Zoom in / out / reset |
 
 Every shortcut can be changed in **Settings → Keyboard shortcuts**.
