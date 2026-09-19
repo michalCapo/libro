@@ -24,7 +24,7 @@ html.dark .ws-grid [data-terminal],html.dark .ws-grid .xterm,html.dark .ws-grid 
 .ws-sidebar-search{display:flex;align-items:center;gap:10px;min-width:0;min-height:36px;flex:1;padding:6px 8px;color:var(--ws-muted);background:transparent;border:0;border-radius:8px;text-align:left;font:inherit}
 .ws-sidebar-search span{flex:1}.ws-sidebar-search:hover{background:var(--ws-hover)}
 .ws-sidebar-search .material-icons-round,.ws-sidebar-action .material-icons-round{font-size:19px;flex-shrink:0;color:var(--ws-muted)}
-.ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;color:var(--ws-fg);font-size:18px;font-weight:600;min-height:30px;box-sizing:content-box;padding:8px 2px 0;margin-top:6px;border-top:1px solid var(--ws-line)}
+.ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;color:var(--ws-fg);font-size:18px;font-weight:600;min-height:30px;box-sizing:content-box;padding:8px 2px 0 12px;margin-top:6px;border-top:1px solid var(--ws-line)}
 html.dark .ws-sidebar-heading{color:var(--ws-fg)}
 #libro-workspace[data-projects=true] .ws-sidebar-heading{border-top:0}
 .ws-no-threads{color:var(--ws-muted);font-size:13px;padding:6px 2px}
