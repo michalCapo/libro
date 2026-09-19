@@ -750,6 +750,13 @@ function createWindow() {
     ensureDevtoolsOverlay(targetId, bounds)
   })
 
+  ipcMain.handle('libro-capture-page-area', async (event, targetId, area) => {
+    if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error('Invalid sender')
+    const target = withWebContents(targetId)
+    if (!target || target.hostWebContents !== event.sender) throw new Error('Invalid browser')
+    return require('./page-area').capturePageArea(target, area, app.getPath('temp'))
+  })
+
   ipcMain.on('libro-copy-clipboard', (event, text) => {
     if (text) {
       clipboard.writeText(text).catch((err) => {

@@ -163,7 +163,7 @@ var browserShortcutsScript = '(' + function(){
 		var title = document.createElement('span'); title.textContent = payload && payload.kind === 'area' ? 'Describe this page area' : 'Describe this element';
 		var close = document.createElement('button'); close.type = 'button'; close.className = 'close'; close.textContent = '×'; close.setAttribute('aria-label', 'Close prompt');
 		var summary = document.createElement('div'); summary.className = 'summary';
-		if (payload && payload.kind === 'area') summary.textContent = 'Selected rectangle';
+		if (payload && payload.kind === 'area') summary.textContent = 'Selected rectangle · Screenshot attached';
 		else if (payload && payload.element) summary.textContent = 'Selected ' + String(payload.element.tag || 'element').toLowerCase() + (payload.element.text ? ': ' + String(payload.element.text).slice(0, 90) : '');
 		else summary.textContent = appURL || 'Selected page element';
 		var input = document.createElement('input'); input.type = 'text'; input.placeholder = 'What should the agent do with this?'; input.setAttribute('aria-label', 'Page tool prompt'); input.autocomplete = 'off';
@@ -196,7 +196,7 @@ var browserShortcutsScript = '(' + function(){
 			event.preventDefault();
 			var request = String(input.value || '').trim();
 			if (!request) { input.focus(); return; }
-			pageToolMessage('selection', {kind: payload && payload.kind || 'element', url: appURL || window.location.href, request: request, element: payload && payload.element || null, area: payload && payload.area || null});
+			pageToolMessage('selection', {kind: payload && payload.kind || 'element', url: appURL || window.location.href, request: request, element: payload && payload.element || null, area: payload && payload.area || null, screenshot: payload && payload.screenshot || ''});
 		};
 		window.__libroPageToolResult = function(sent) {
 			if (sent) pageToolPromptClose();
@@ -211,6 +211,7 @@ var browserShortcutsScript = '(' + function(){
 		requestAnimationFrame(position);
 		input.focus();
 	}
+	window.__libroPageToolPromptOpen = pageToolPromptOpen;
 	function pageToolStop(mode) {
 		pageToolMode = '';
 		pageToolStart = null;
@@ -288,7 +289,10 @@ var browserShortcutsScript = '(' + function(){
 		var data = pageToolAreaData(rect);
 		try { if (event.target.releasePointerCapture) event.target.releasePointerCapture(event.pointerId); } catch (err) {}
 		pageToolStop('area');
-		pageToolPromptOpen({kind: 'area', url: window.location.href, area: data}, window.location.href);
+		pageToolPromptClose();
+		requestAnimationFrame(function() { requestAnimationFrame(function() {
+			pageToolMessage('capture-area', {kind: 'area', url: window.location.href, area: data});
+		}); });
 	}
 	if (!pageToolListenersBound) {
 		pageToolListenersBound = true;
@@ -564,10 +568,11 @@ function pageToolContext(payload, appID) {
 			lines.push('[' + (index + 1) + '] ' + (el.tag || '') + ' ' + (el.selector || '') + (el.text ? ' — ' + el.text : '') + (el.html ? '\n' + el.html : ''));
 		});
 	}
+	if (payload && payload.screenshot) lines.push('Selected-area screenshot: ' + JSON.stringify(payload.screenshot), 'Open this image and use it with the user request and page URL.');
 	return lines.join('\n');
 }
 
-function receivePageToolMessage(appID, kind, rawPayload) {
+async function receivePageToolMessage(appID, kind, rawPayload) {
 	if (!appID) return;
 	var payload = {};
 	try { payload = JSON.parse(rawPayload || '{}') || {}; } catch (err) { return; }
@@ -579,10 +584,22 @@ function receivePageToolMessage(appID, kind, rawPayload) {
 		pageToolButtonState(appID, payload.mode || '');
 		return;
 	}
+	if (kind === 'capture-area') {
+		var guest = pageToolWebview(appID);
+		try {
+			if (!guest || !window.libroElectron || !window.libroElectron.capturePageArea) throw new Error('Open Libro desktop to capture page areas.');
+			payload.screenshot = await window.libroElectron.capturePageArea(guest.getWebContentsId(), payload.area);
+			await guest.executeJavaScript('window.__libroPageToolPromptOpen(' + JSON.stringify(payload) + ', ' + JSON.stringify(payload.url) + ')');
+		} catch (err) {
+			if (window.__libroShowToast) window.__libroShowToast('Screenshot failed', 'Select the area again in Libro desktop.', 2400);
+		}
+		return;
+	}
 	if (kind === 'selection') {
 		pageToolButtonState(appID, '');
 		var request = String(payload.request || '').trim();
 		if (!request) return;
+		if (payload.kind === 'area' && !payload.screenshot) return;
 		var targetLabel = payload.kind === 'area' ? 'Page area annotation' : 'HTML element annotation';
 		var prompt = '\n\n--- BEGIN ' + targetLabel + ' ---\nUser request: ' + request + '\n\n' + pageToolContext(payload, appID) + '\n--- END ' + targetLabel + ' ---\n\n';
 		var sent = window.__libroSendPageToolPrompt && window.__libroSendPageToolPrompt(prompt, !!window.__libroPageToolsAutoExecute);

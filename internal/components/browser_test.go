@@ -222,3 +222,44 @@ process.stdin.on('end', () => {
 		t.Fatalf("DevTools bounds failed: %v\n%s", err, output)
 	}
 }
+
+func TestPageAreaScreenshotPrompt(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	const harness = `
+const assert = require('node:assert/strict'), vm = require('node:vm');
+let script = '';
+process.stdin.on('data', data => script += data);
+process.stdin.on('end', async () => {
+  let opened, sent, toast;
+  const guest = { getWebContentsId: () => 7, executeJavaScript: async js => { opened = js; } };
+  const context = {
+    window: {
+      libroElectron: { capturePageArea: async (id, area) => { assert.equal(id, 7); assert.equal(area.width, 80); return '/tmp/selection.png'; } },
+      __libroSendPageToolPrompt: prompt => { sent = prompt; return true; },
+      __libroShowToast: title => { toast = title; },
+    },
+    document: {}, pageToolWebview: () => guest, pageToolButtonState() {},
+  };
+  vm.runInNewContext(script.slice(script.indexOf('function pageToolURL('), script.indexOf('function currentAppWidth(')), context);
+  const payload = { kind: 'area', url: 'http://localhost:3000/payments', area: { x: 10, y: 20, width: 80, height: 40 } };
+  await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(payload));
+  assert.ok(opened.includes('/tmp/selection.png'));
+  assert.equal(sent, undefined);
+  payload.screenshot = '/tmp/selection.png'; payload.request = 'Move the button';
+  await context.receivePageToolMessage('app', 'selection', JSON.stringify(payload));
+  for (const text of [payload.url, payload.request, payload.screenshot]) assert.ok(sent.includes(text));
+  opened = undefined;
+  context.window.libroElectron.capturePageArea = async () => { throw new Error('failed'); };
+  await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(payload));
+  assert.equal(opened, undefined);
+  assert.equal(toast, 'Screenshot failed');
+}).on('error', error => { throw error; });`
+	cmd := exec.Command(node, "-e", harness)
+	cmd.Stdin = strings.NewReader(BrowserJS())
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("page area screenshot failed: %v\n%s", err, output)
+	}
+}

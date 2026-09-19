@@ -4,6 +4,9 @@ const { ipcRenderer, contextBridge, webFrame } = require('electron')
 
 // Expose IPC methods to the renderer page for close confirmation flow
 contextBridge.exposeInMainWorld('libroElectron', {
+  capturePageArea: function (webContentsId, area) {
+    return ipcRenderer.invoke('libro-capture-page-area', webContentsId, area)
+  },
   focusWorkspace: function () {
     return ipcRenderer.invoke('libro-focus-workspace')
   },
