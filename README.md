@@ -48,6 +48,7 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 
 ![Tools in Settings: named tools with their commands and shortcuts](demo/tools-settings.png)
 - The terminal at the bottom runs your project's start command. Start it again with `Ctrl + Shift + R`, stop it with `Ctrl + Shift + T`.
+- In Files, press `Backspace` to go up one folder.
 
 ### Projects
 
@@ -62,6 +63,7 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 
 - Open a browser panel with `Ctrl + B`, or a new separate one with `Ctrl + Shift + B`.
 - Browse with the keyboard: `o` opens a page, `r` reloads, `j` and `k` scroll, `i` lets you type in a page, `Esc` goes back.
+- Ask the agent about part of a page: press `a` and click an element, or `d` and draw a box around it. Type a short note and it is pasted into the agent, together with that part of the page.
 
 ![Browser panel open next to other tools](demo/browser-panel.png)
 
@@ -70,6 +72,8 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 - Light, dark, or follow your system theme.
 - Play a sound when an assistant finishes.
 - Set the default panel size for new panels.
+- Choose one agent to start on its own when you open a project that has no agents open.
+- Choose if browser prompts run right away, or are only pasted in.
 - Change how assistants and tools start, rename them, add your own.
 - Change any keyboard shortcut and restore the defaults anytime.
 
