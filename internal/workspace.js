@@ -23,6 +23,26 @@
     const el = node('button', 'ws-button'); el.type = 'button'; el.title = label; el.setAttribute('aria-label', label);
     const glyph = node('i', 'material-icons-round', icon); glyph.setAttribute('aria-hidden', 'true'); el.append(glyph); el.onclick = action; return el;
   };
+  document.addEventListener('click', event => {
+    const trigger = event.target.closest('[data-browser-menu-trigger]');
+    if (!trigger) return;
+    event.preventDefault();
+    const menu = document.getElementById(trigger.getAttribute('popovertarget'));
+    if (!menu.togglePopover()) return;
+    const rect = trigger.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(rect.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8)) + 'px';
+    menu.style.top = Math.max(8, Math.min(rect.bottom + 4, innerHeight - menu.offsetHeight - 8)) + 'px';
+    menu.querySelector('button')?.focus();
+  });
+  document.addEventListener('keydown', event => {
+    const menu = event.target.closest('.ws-browser-menu');
+    if (!menu || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const items = [...menu.querySelectorAll('button')];
+    const current = items.indexOf(document.activeElement);
+    const index = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    items[index]?.focus();
+  });
   let sizePicker = null;
   let sizePickerTimer;
   function closeSizePicker() {

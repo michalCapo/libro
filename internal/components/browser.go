@@ -133,9 +133,16 @@ var browserShortcutsScript = '(' + function(){
 	function pageToolPromptOpen(payload, appURL) {
 		pageToolPromptClose();
 		var panel = document.createElement('div');
+		panel.setAttribute('popover', 'manual');
 		panel.setAttribute('role', 'dialog');
 		panel.setAttribute('aria-label', payload && payload.kind === 'area' ? 'Describe selected page area' : 'Describe selected page element');
 		panel.style.position = 'fixed';
+		panel.style.inset = 'auto';
+		panel.style.margin = '0';
+		panel.style.padding = '0';
+		panel.style.border = '0';
+		panel.style.background = 'transparent';
+		panel.style.overflow = 'visible';
 		panel.style.zIndex = '2147483647';
 		panel.style.boxSizing = 'border-box';
 		panel.style.width = 'min(380px, calc(100vw - 24px))';
@@ -170,7 +177,12 @@ var browserShortcutsScript = '(' + function(){
 		var actions = document.createElement('div'); actions.className = 'actions';
 		var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'action'; cancel.textContent = 'Cancel';
 		var send = document.createElement('button'); send.type = 'button'; send.className = 'action primary'; send.textContent = 'Send to agent';
-		header.append(title, close); actions.append(cancel, send); card.append(header, summary, input, actions); root.appendChild(card); document.documentElement.appendChild(panel);
+		header.append(title, close); actions.append(cancel, send); card.append(header, summary, input, actions); root.appendChild(card);
+		// Popovers paint above page dialogs. Keep the prompt inside the active
+		// modal as well, so the browser does not make its input inert.
+		var modals = document.querySelectorAll('dialog:modal');
+		(modals[modals.length - 1] || document.documentElement).appendChild(panel);
+		panel.showPopover();
 		pageToolPrompt = panel;
 		var anchor = pageToolPromptAnchor(payload);
 		function position() {

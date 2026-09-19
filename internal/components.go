@@ -997,44 +997,36 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			OnClick(r.JS(fmt.Sprintf(`var inp=document.getElementById('%s');if(inp){navigator.clipboard.writeText(inp.value);var btn=event.currentTarget;btn.style.color='rgb(20,184,166)';setTimeout(function(){btn.style.color='';},800);}`, urlInputID)))
 		copyBtn.Render(r.I("material-icons-round text-sm").Text("content_copy"))
 
-		// Reload button
-		reloadBtn := r.Button(btnCls).
-			Attr("title", "Reload").
-			OnClick(r.JS(fmt.Sprintf(`window.__libroWvReload('%s')`, app.ID)))
-		reloadBtn.Render(r.I("material-icons-round text-sm").Text("refresh"))
-
 		consoleBtn := r.Button(btnCls).
 			Attr("title", "Open browser console").Attr("aria-label", "Open browser console").
 			OnClick(r.JS(fmt.Sprintf(`if(window.__libroOpenConsole)window.__libroOpenConsole(%s)`, components.JSString(app.ID)))).
 			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("code"))
 
-		annotateBtn := r.Button(btnCls+" ws-page-tool").
-			Attr("data-page-tool", "annotate").Attr("aria-pressed", "false").
-			Attr("title", "Annotate element (A)").Attr("aria-label", "Annotate element (A)").
-			OnClick(r.JS(fmt.Sprintf(`if(window.__libroTogglePageTool)window.__libroTogglePageTool(%s,'annotate')`, components.JSString(app.ID)))).
-			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("edit_note"))
-
-		areaBtn := r.Button(btnCls+" ws-page-tool").
-			Attr("data-page-tool", "area").Attr("aria-pressed", "false").
-			Attr("title", "Select page area (D)").Attr("aria-label", "Select page area (D)").
-			OnClick(r.JS(fmt.Sprintf(`if(window.__libroTogglePageTool)window.__libroTogglePageTool(%s,'area')`, components.JSString(app.ID)))).
-			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("crop_free"))
-
-		zoomButtons := r.Div("flex items-center gap-0.5 shrink-0").
-			Attr("role", "group").Attr("aria-label", "Browser zoom")
-		for _, zoom := range []struct {
-			label, icon string
-			step        int
+		menuID := "browser-actions-" + app.ID
+		menu := r.Div("ws-browser-menu").ID(menuID).Attr("popover", "auto").
+			Attr("role", "group").Attr("aria-label", "Browser actions")
+		for _, action := range []struct {
+			label, shortcut, script, mode string
 		}{
-			{"Zoom out", "remove", -1},
-			{"Reset zoom to 100%", "restart_alt", 0},
-			{"Zoom in", "add", 1},
+			{"Reload", "R", fmt.Sprintf(`window.__libroWvReload(%s)`, components.JSString(app.ID)), ""},
+			{"Annotate element", "A", fmt.Sprintf(`window.__libroTogglePageTool(%s,'annotate')`, components.JSString(app.ID)), "annotate"},
+			{"Select page area", "D", fmt.Sprintf(`window.__libroTogglePageTool(%s,'area')`, components.JSString(app.ID)), "area"},
+			{"Zoom out", "", fmt.Sprintf(`window.__libroWvZoom(%s,-1)`, components.JSString(app.ID)), ""},
+			{"Reset zoom to 100%", "", fmt.Sprintf(`window.__libroWvZoom(%s,0)`, components.JSString(app.ID)), ""},
+			{"Zoom in", "", fmt.Sprintf(`window.__libroWvZoom(%s,1)`, components.JSString(app.ID)), ""},
 		} {
-			zoomButtons.Render(r.Button(btnCls).
-				Attr("title", zoom.label).Attr("aria-label", zoom.label).
-				Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text(zoom.icon)).
-				OnClick(r.JS(fmt.Sprintf(`window.__libroWvZoom(%s,%d)`, components.JSString(app.ID), zoom.step))))
+			item := r.Button("ws-browser-menu-item").Attr("type", "button").
+				OnClick(r.JS(`this.closest('[popover]').hidePopover();`+action.script)).
+				Render(r.Span("").Text(action.label), r.Span("ws-browser-menu-key").Text(action.shortcut))
+			if action.mode != "" {
+				item.Attr("data-page-tool", action.mode).Attr("aria-pressed", "false")
+			}
+			menu.Render(item)
 		}
+		moreBtn := r.Button(btnCls).Attr("type", "button").
+			Attr("title", "Browser actions").Attr("aria-label", "Browser actions").
+			Attr("popovertarget", menuID).Attr("data-browser-menu-trigger", "").
+			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("more_horiz"))
 
 		// URL input — on Enter, navigate webview and update server state
 		urlInputCls := "flex-1 min-w-0 rounded-sm text-[11px] font-mono outline-none px-2 h-6"
@@ -1052,24 +1044,8 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			Attr("aria-label", "Browser address").
 			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();if(window.__libroNavigateAddress(%s,event.target.value))event.target.blur();}`, components.JSString(app.ID))))
 
-		// Site icon in badge
-		globeBadgeCls := "inline-flex items-center justify-center w-6 h-6 rounded shrink-0"
-		globeIconCls := "material-icons-round text-sm leading-none"
-		if selected {
-			globeBadgeCls += " bg-white"
-			globeIconCls += " text-black"
-		} else {
-			globeBadgeCls += " bg-gray-800 dark:bg-zinc-900"
-			globeIconCls += " text-white"
-		}
-		globeIcon := r.I(globeIconCls).Text("language")
-		if fav := faviconURL(app.URL, 16); fav != "" {
-			globeIcon = r.Img("w-4 h-4 rounded-sm").Attr("src", fav)
-		}
-		globe := r.Div(globeBadgeCls).Render(globeIcon)
-
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
-			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn, consoleBtn, annotateBtn, areaBtn, zoomButtons)
+			Render(backBtn, forwardBtn, urlInput, copyBtn, consoleBtn, moreBtn, menu)
 	} else if app.Type == AppTypeTerminal {
 		labelText := workspaceAppName(app)
 
