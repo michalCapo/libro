@@ -1,6 +1,6 @@
 # Libro
 
-Libro is a desktop app for working with AI coding assistants. Run Codex, Claude, Pi, or OpenCode side by side in one window, with a browser, your files, and terminals right next to them.
+Libro is a desktop app for working with AI coding assistants. Run Codex, Claude, Pi, OpenCode, or any other agent side by side in one window, with a browser, your files, and terminals right next to them.
 
 Think of it as one desk for all your AI helpers. Each one gets its own panel, and you can see them all at once.
 
@@ -35,13 +35,18 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 ### AI assistants
 
 - Open one or more assistants, side by side. All of them stay visible.
+- Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
+
+![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
 - Choose the width of each panel, from small to full width. Press `Ctrl + M` to make a panel full width and back.
 - Hidden panels keep running. Switch away and come back without losing anything.
 
 ### Tools
 
-- Open the tool you need next to your assistants: Terminal, Browser, Files, Nvim, Git, or Database.
-- Add your own tools or favorite websites.
+- Open the tool you need next to your assistants: Terminal, Browser, Files, Nvim, Git, Database, or any tool of your own.
+- Use whatever tool you like. Name it, add its command or web address, and it shows up next to the built-in tools.
+
+![Tools in Settings: named tools with their commands and shortcuts](demo/tools-settings.png)
 - The terminal at the bottom runs your project's start command. Start it again with `Ctrl + Shift + R`, stop it with `Ctrl + Shift + T`.
 
 ### Projects
