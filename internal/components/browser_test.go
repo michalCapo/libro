@@ -254,9 +254,28 @@ process.stdin.on('end', async () => {
   await context.receivePageToolMessage('app', 'selection', JSON.stringify(payload));
   for (const text of [payload.url, payload.request, payload.screenshot]) assert.ok(sent.includes(text));
   for (const text of ['unwanted', 'Elements intersecting', 'Viewport coordinates', 'Page coordinates']) assert.ok(!sent.includes(text));
+  const elementPayload = {
+    kind: 'element', url: payload.url, request: 'Move this element',
+    element: { selector: 'main > button.save', tag: 'button', id: 'unwanted-id', classes: 'unwanted-class',
+      text: 'unwanted text', html: '<button>unwanted HTML</button>', attributes: {title: 'unwanted attribute'},
+      viewportRect: {x: 10, y: 20, width: 80, height: 40} },
+  };
+  sent = undefined;
+  await context.receivePageToolMessage('app', 'selection', JSON.stringify(elementPayload));
+  assert.equal(sent, undefined, 'element selection requires its screenshot');
+  await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(elementPayload));
+  assert.ok(opened.includes('/tmp/selection.png'));
+  assert.ok(opened.includes(elementPayload.element.selector));
+  elementPayload.screenshot = '/tmp/selection.png';
+  await context.receivePageToolMessage('app', 'selection', JSON.stringify(elementPayload));
+  for (const text of [elementPayload.url, elementPayload.request, elementPayload.element.selector, elementPayload.screenshot]) assert.ok(sent.includes(text));
+  for (const text of ['unwanted', 'Outer HTML', 'Attributes:', 'Viewport rectangle', '- Tag:', '- ID:', '- Classes:']) assert.ok(!sent.includes(text));
   opened = undefined;
   context.window.libroElectron.capturePageArea = async () => { throw new Error('failed'); };
   await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(payload));
+  assert.equal(opened, undefined);
+  assert.equal(toast, 'Screenshot failed');
+  await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(elementPayload));
   assert.equal(opened, undefined);
   assert.equal(toast, 'Screenshot failed');
 }).on('error', error => { throw error; });`

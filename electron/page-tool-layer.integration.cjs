@@ -37,6 +37,25 @@ app.whenReady().then(async () => {
       })()`);
       for (const [key,value] of Object.entries(result)) assert.equal(value,true,`${modal}: ${key}`);
     }
-    console.log('PASS: drag outline and prompt work on normal pages and above modals');
+    const selection = await win.webContents.executeJavaScript(`new Promise(resolve => {
+      const originalLog = console.log;
+      console.log = function(message) {
+        if (typeof message === 'string' && message.startsWith('__libro:page-tool:capture-area:')) {
+          console.log = originalLog;
+          resolve({payload:JSON.parse(message.slice('__libro:page-tool:capture-area:'.length)),
+            clean:!document.querySelector('[popover]')});
+        } else originalLog.apply(console, arguments);
+      };
+      const button = document.querySelector('button');
+      window.__libroSetPageToolMode('annotate');
+      button.dispatchEvent(new PointerEvent('pointerover', {bubbles:true}));
+      button.click();
+    })`);
+    assert.equal(selection.clean, true, 'capture must happen after outline and prompt removal');
+    assert.equal(selection.payload.kind, 'element');
+    assert.ok(selection.payload.element.selector.endsWith('button'));
+    assert.deepEqual(Object.keys(selection.payload.element).sort(), ['selector','viewportRect']);
+    assert.ok(selection.payload.element.viewportRect.width > 0);
+    console.log('PASS: drag outline, prompt layers, and clean element capture payload');
   } finally { win.destroy(); app.quit(); }
 }).catch(error => {console.error(error);app.exit(1)});

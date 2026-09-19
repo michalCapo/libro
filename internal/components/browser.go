@@ -72,30 +72,11 @@ var browserShortcutsScript = '(' + function(){
 		}
 		return parts.join(' > ');
 	}
-	function pageToolText(el, limit) {
-		var text = el && (el.innerText || el.textContent) || '';
-		return String(text).replace(/\s+/g, ' ').trim().slice(0, limit || 500);
-	}
-	function pageToolAttributes(el) {
-		var attrs = {};
-		if (!el || !el.attributes) return attrs;
-		for (var i = 0; i < el.attributes.length && i < 30; i++) {
-			var attr = el.attributes[i];
-			attrs[attr.name] = String(attr.value).slice(0, 300);
-		}
-		return attrs;
-	}
 	function pageToolElementData(el) {
 		if (!el || el.nodeType !== 1) return null;
 		var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
 		return {
-			tag: (el.tagName || '').toLowerCase(),
 			selector: pageToolSelector(el),
-			id: el.id || '',
-			classes: typeof el.className === 'string' ? el.className.slice(0, 500) : '',
-			text: pageToolText(el),
-			attributes: pageToolAttributes(el),
-			html: el.outerHTML ? el.outerHTML.slice(0, 2400) : '',
 			viewportRect: rect ? {x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height)} : null
 		};
 	}
@@ -159,7 +140,7 @@ var browserShortcutsScript = '(' + function(){
 		var close = document.createElement('button'); close.type = 'button'; close.className = 'close'; close.textContent = '×'; close.setAttribute('aria-label', 'Close prompt');
 		var summary = document.createElement('div'); summary.className = 'summary';
 		if (payload && payload.kind === 'area') summary.textContent = 'Selected rectangle · Screenshot attached';
-		else if (payload && payload.element) summary.textContent = 'Selected ' + String(payload.element.tag || 'element').toLowerCase() + (payload.element.text ? ': ' + String(payload.element.text).slice(0, 90) : '');
+		else if (payload && payload.element) summary.textContent = 'Selected ' + (payload.element.selector || 'element') + (payload.screenshot ? ' · Screenshot attached' : '');
 		else summary.textContent = appURL || 'Selected page element';
 		var input = document.createElement('input'); input.type = 'text'; input.placeholder = 'What should the agent do with this?'; input.setAttribute('aria-label', 'Page tool prompt'); input.autocomplete = 'off';
 		var actions = document.createElement('div'); actions.className = 'actions';
@@ -251,7 +232,10 @@ var browserShortcutsScript = '(' + function(){
 		event.preventDefault(); event.stopPropagation();
 		var data = pageToolElementData(el);
 		pageToolStop('annotate');
-		pageToolPromptOpen({kind: 'element', url: window.location.href, element: data}, window.location.href);
+		pageToolPromptClose();
+		requestAnimationFrame(function() { requestAnimationFrame(function() {
+			pageToolMessage('capture-area', {kind: 'element', url: window.location.href, element: data});
+		}); });
 	}
 	function pageToolPointerDown(event) {
 		if (pageToolMode !== 'area' || event.button !== 0) return;
@@ -547,16 +531,9 @@ function pageToolContext(payload, appID) {
 		'Page URL: ' + url
 	];
 	if (payload && payload.kind === 'element' && payload.element) {
-		var el = payload.element;
-		lines.push('Target element:', '- Tag: ' + (el.tag || ''), '- Selector: ' + (el.selector || '(none)'));
-		if (el.id) lines.push('- ID: ' + el.id);
-		if (el.classes) lines.push('- Classes: ' + el.classes);
-		if (el.text) lines.push('- Visible text: ' + el.text);
-		if (el.viewportRect) lines.push('- Viewport rectangle: x=' + el.viewportRect.x + ', y=' + el.viewportRect.y + ', width=' + el.viewportRect.width + ', height=' + el.viewportRect.height);
-		if (el.attributes) lines.push('- Attributes: ' + JSON.stringify(el.attributes));
-		if (el.html) lines.push('- Outer HTML:\n' + el.html);
+		lines.push('Target element path: ' + (payload.element.selector || '(none)'));
 	}
-	if (payload && payload.screenshot) lines.push('Selected-area screenshot: ' + JSON.stringify(payload.screenshot), 'Open this image and use it with the user request and page URL.');
+	if (payload && payload.screenshot) lines.push((payload.kind === 'element' ? 'Selected-element screenshot: ' : 'Selected-area screenshot: ') + JSON.stringify(payload.screenshot), 'Open this image and use it with the user request and page URL.');
 	return lines.join('\n');
 }
 
@@ -576,10 +553,11 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 		var guest = pageToolWebview(appID);
 		try {
 			if (!guest || !window.libroElectron || !window.libroElectron.capturePageArea) throw new Error('Open Libro desktop to capture page areas.');
-			payload.screenshot = await window.libroElectron.capturePageArea(guest.getWebContentsId(), payload.area);
+			var rect = payload.kind === 'element' ? payload.element && payload.element.viewportRect : payload.area;
+			payload.screenshot = await window.libroElectron.capturePageArea(guest.getWebContentsId(), rect);
 			await guest.executeJavaScript('window.__libroPageToolPromptOpen(' + JSON.stringify(payload) + ', ' + JSON.stringify(payload.url) + ')');
 		} catch (err) {
-			if (window.__libroShowToast) window.__libroShowToast('Screenshot failed', 'Select the area again in Libro desktop.', 2400);
+			if (window.__libroShowToast) window.__libroShowToast('Screenshot failed', 'Select the element or area again in Libro desktop.', 2400);
 		}
 		return;
 	}
@@ -587,7 +565,7 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 		pageToolButtonState(appID, '');
 		var request = String(payload.request || '').trim();
 		if (!request) return;
-		if (payload.kind === 'area' && !payload.screenshot) return;
+		if ((payload.kind === 'area' || payload.kind === 'element') && !payload.screenshot) return;
 		var targetLabel = payload.kind === 'area' ? 'Page area annotation' : 'HTML element annotation';
 		var prompt = '\n\n--- BEGIN ' + targetLabel + ' ---\nUser request: ' + request + '\n\n' + pageToolContext(payload, appID) + '\n--- END ' + targetLabel + ' ---\n\n';
 		var sent = window.__libroSendPageToolPrompt && window.__libroSendPageToolPrompt(prompt, !!window.__libroPageToolsAutoExecute);
