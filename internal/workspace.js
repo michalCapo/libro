@@ -948,7 +948,7 @@
     document.getElementById('agent-command-rows').replaceChildren();
     document.getElementById('tool-command-rows').replaceChildren();
     window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files'].includes(p.id) && !p.removed).forEach(p => addAgentRow(p, p.type === 'url' ? p.url : p.command, true));
-    removedAgents = Object.fromEntries(window.__libroPlugins.filter(p => p.removed).map(p => [p.id, true]));
+    removedAgents = Object.fromEntries(window.__libroPlugins.filter(p => p.removed && p.dock === 'center' && p.type === 'terminal').map(p => [p.id, true]));
     window.__libroPlugins.filter(p => !p.removed && p.dock === 'center' && p.type === 'terminal').forEach(p => addAgentRow(p, commands[p.id] || p.command));
     document.querySelector('#agent-commands-form [role=status]').textContent = '';
     savedWidth = width;
