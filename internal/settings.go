@@ -472,8 +472,18 @@ func renderWorkspaceSettings() *r.Node {
 				),
 			),
 			r.P("ws-settings-status").ID("default-thread-agent-status").Attr("role", "status"),
+			r.El("h2", "ws-shortcut-heading").Text("Autolaunch"),
+			r.Div("ws-settings-group").Render(
+				r.Div("ws-settings-row").Render(
+					r.Div("ws-settings-copy").Render(
+						r.El("label", "").Attr("for", "autolaunch-agent").Text("Autolaunch agent"),
+						r.P("").ID("autolaunch-agent-help").Text("Start this agent when you open a project with no agent panels. Choose Off to start manually. Apply with Save agents below."),
+					),
+					r.El("select", "ws-settings-select").ID("autolaunch-agent").Attr("form", "agent-commands-form").Attr("aria-describedby", "autolaunch-agent-help"),
+				),
+			),
 			r.El("h2", "ws-shortcut-heading").Text("Agent commands"),
-			r.P("ws-settings-status").Text("CLI commands used to start agents in every project. Drag the handles or use the arrows to reorder agents, then save. The first three enabled agents appear on the welcome screen. Include any flags you need. Running sessions are unchanged. Autolaunch opens one enabled agent when you open a project with no agent panels. Leave all unchecked to choose manually."),
+			r.P("ws-settings-status").Text("CLI commands used to start agents in every project. Drag the handles or use the arrows to reorder agents, then save. The first three enabled agents appear on the welcome screen. Include any flags you need. Running sessions are unchanged."),
 			renderAgentCommands(),
 			renderToolSettings(),
 			renderToolKeybindings(),

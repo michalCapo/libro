@@ -379,10 +379,8 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 #libro-workspace[data-projects=false] .ws-project-shortcut{position:static}
 #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-shortcut)>.material-icons-round{display:none}
 
-#agent-command-rows .ws-agent-config-row{grid-template-columns:20px minmax(90px,1fr) minmax(0,3fr) auto auto auto}
-.ws-agent-autolaunch{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ws-fg);white-space:nowrap}
-.ws-agent-autolaunch input{accent-color:var(--ws-accent)}
-@media(max-width:700px){#agent-command-rows .ws-agent-config-row{grid-template-columns:20px minmax(0,1fr) auto}#agent-command-rows [data-agent-command]{grid-column:2}#agent-command-rows .ws-agent-autolaunch{grid-column:2}#agent-command-rows .ws-button{grid-column:3;grid-row:1}}
+#agent-command-rows .ws-agent-config-row{grid-template-columns:20px minmax(90px,1fr) minmax(0,3fr) auto auto}
+@media(max-width:700px){#agent-command-rows .ws-agent-config-row{grid-template-columns:20px minmax(0,1fr) auto}#agent-command-rows [data-agent-command]{grid-column:2}#agent-command-rows .ws-button{grid-column:3;grid-row:1}}
 
 .ws-project-item:has(+ .ws-project-agents){margin-bottom:1px;background:var(--ws-raised);border-radius:10px 10px 0 0}
 .ws-project-item:has(+ .ws-project-agents) .ws-project-row{background:transparent;border-radius:10px 10px 0 0}

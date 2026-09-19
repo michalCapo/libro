@@ -988,6 +988,8 @@
     window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files'].includes(p.id) && !p.removed).forEach(p => addAgentRow(p, p.type === 'url' ? p.url : p.command, true));
     removedAgents = Object.fromEntries(window.__libroPlugins.filter(p => p.removed && p.dock === 'center' && p.type === 'terminal').map(p => [p.id, true]));
     window.__libroPlugins.filter(p => !p.removed && p.dock === 'center' && p.type === 'terminal').forEach(p => addAgentRow(p, commands[p.id] || p.command));
+    fillAutolaunchAgents();
+    document.getElementById('autolaunch-agent').value = window.__libroPlugins.find(p => p.autolaunch && !p.disabled && !p.removed)?.id || '';
     document.querySelector('#agent-commands-form [role=status]').textContent = '';
     savedWidth = width;
     savedToolWidth = toolWidth;
@@ -1033,19 +1035,9 @@
     remove.hidden = checkbox.checked;
     checkbox.onchange = () => {
       remove.hidden = checkbox.checked;
-      const auto = row.querySelector('[data-agent-autolaunch]');
-      if (auto) { auto.disabled = !checkbox.checked; if (!checkbox.checked) auto.checked = false; }
+      if (!toolRow) fillAutolaunchAgents();
     };
-    if (!toolRow) {
-      const label = node('label', 'ws-agent-autolaunch');
-      const auto = node('input', ''); auto.type = 'checkbox'; auto.dataset.agentAutolaunch = '';
-      auto.checked = !!plugin.autolaunch && !plugin.disabled; auto.disabled = !checkbox.checked;
-      auto.setAttribute('aria-label', 'Autolaunch ' + (plugin.name || 'custom agent'));
-      auto.onchange = () => {
-        if (auto.checked) document.querySelectorAll('[data-agent-autolaunch]').forEach(other => { if (other !== auto) other.checked = false; });
-      };
-      label.append(auto, node('span', '', 'Autolaunch')); row.append(label);
-    }
+    if (!toolRow) name.oninput = fillAutolaunchAgents;
     row.prepend(toggle, name, input); row.append(remove); document.getElementById(toolRow ? 'tool-command-rows' : 'agent-command-rows').append(row);
     if (toolRow) {
       const field = node('div', 'ws-tool-shortcut');
@@ -1109,7 +1101,19 @@
     }
     return row;
   }
+  function fillAutolaunchAgents() {
+    const select = document.getElementById('autolaunch-agent');
+    const selected = select.value;
+    select.replaceChildren(new Option('Off', ''));
+    document.querySelectorAll('#agent-command-rows [data-agent-id]').forEach(row => {
+      if (row.querySelector('[data-agent-enabled]').checked) {
+        select.add(new Option(row.querySelector('[data-agent-name]').value.trim() || 'Custom agent', row.dataset.agentId));
+      }
+    });
+    select.value = [...select.options].some(option => option.value === selected) ? selected : '';
+  }
   function updateAgentOrderButtons() {
+    fillAutolaunchAgents();
     const rows = [...document.getElementById('agent-command-rows').children];
     rows.forEach((row, i) => row.querySelectorAll('[data-agent-move]').forEach(move => {
       move.disabled = Number(move.dataset.agentMove) < 0 ? i === 0 : i === rows.length - 1;
@@ -1155,7 +1159,7 @@
     form.querySelector('[type=submit]').disabled = true;
     form.querySelector('[role=status]').textContent = 'Saving…';
     Object.keys(removedAgents).forEach(id => disabled[id] = true);
-    call('settings.agent-command', {commands, disabled, custom, names, order, removed:removedAgents, autolaunch:form.querySelector('[data-agent-autolaunch]:checked')?.closest('[data-agent-id]').dataset.agentId || ''});
+    call('settings.agent-command', {commands, disabled, custom, names, order, removed:removedAgents, autolaunch:document.getElementById('autolaunch-agent').value});
   }
   function agentCommandSaved(message, plugins) {
     const form = document.getElementById('agent-commands-form');
