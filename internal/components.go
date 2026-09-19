@@ -3128,8 +3128,7 @@ func terminalFrameSetupJS() string {
 				return assetPromise;
 			}
 
-			function termTheme() {
-				var dark = document.documentElement.classList.contains('dark');
+			function termTheme(dark) {
 				return dark ? {
 					background: '#1e1e1e', foreground: '#d4d4d4', cursor: '#d4d4d4', selectionBackground: '#264f78'
 				} : {
@@ -3329,13 +3328,14 @@ func terminalFrameSetupJS() string {
 						if (configuredScrollback >= 100 && configuredScrollback <= 50000) scrollback = configuredScrollback;
 						cursorBlink = !!(window.localStorage && window.localStorage.getItem('libro.terminal.cursorBlink') === '1');
 					} catch (err) {}
+					var initialDark = document.documentElement.classList.contains('dark');
 					var term = new Term({
 						allowProposedApi: true,
 						fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
 						fontSize: 15,
 						lineHeight: 1.12,
 						cursorBlink: cursorBlink,
-						theme: termTheme(),
+						theme: termTheme(initialDark),
 						scrollback: scrollback,
 						smoothScrollDuration: 0
 					});
@@ -3365,8 +3365,9 @@ func terminalFrameSetupJS() string {
 						});
 					}
 					el.addEventListener('copy', function(ev) { copyTerminalSelection(term, ev); });
-					var controller = { term: term, fit: fit, webgl: webgl, ws: null, closed: false, reconnectTimer: null, attempts: 0, lastCols: 0, lastRows: 0, lastFitWidth: 0, lastFitHeight: 0, fitTimer: null, fitFrame: null, pendingFitForce: false, lastFocusAt: 0 };
+					var controller = { initialDark: initialDark, term: term, fit: fit, webgl: webgl, ws: null, closed: false, reconnectTimer: null, attempts: 0, lastCols: 0, lastRows: 0, lastFitWidth: 0, lastFitHeight: 0, fitTimer: null, fitFrame: null, pendingFitForce: false, lastFocusAt: 0 };
 					terminals.set(el, controller);
+					applyTerminalTheme(controller);
 
 					function connect() {
 						if (controller.closed || !el.isConnected) return;
@@ -3531,8 +3532,18 @@ func terminalFrameSetupJS() string {
 				return true;
 			};
 
+			function applyTerminalTheme(controller) {
+				// TUIs cache OSC colors and emit explicit RGB backgrounds. Changing
+				// only xterm defaults mixes two palettes (including in scrollback).
+				// Keep the palette advertised to the process stable and transform
+				// the entire surface, for both DOM and WebGL renderers.
+				var dark = document.documentElement.classList.contains('dark');
+				var surface = controller.term.element;
+				if (surface) surface.style.filter = dark === controller.initialDark ? '' : 'invert(1) hue-rotate(180deg)';
+			}
+
 			window.__libroRefreshTerminalThemes = function() {
-				terminals.forEach(function(controller) { try { controller.term.options.theme = termTheme(); } catch (err) {} });
+				terminals.forEach(applyTerminalTheme);
 			};
 
 			function scan(root) {

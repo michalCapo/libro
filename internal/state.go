@@ -586,13 +586,13 @@ func applyAppWidth(app *Application, width Width) {
 	app.PreviousWidth = ""
 }
 
-// SizeNewAgent expands the first center agent and restores its default width
-// when a second agent joins it. Tool panels do not affect this decision.
+// SizeNewAgent expands the first thread agent and restores its default width
+// when a second agent joins it. Project agents keep their configured widths.
 func (sm *StateManager) SizeNewAgent(sessionID, appID string, defaultWidth Width) []Application {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	state := sm.states[sessionID]
-	if state == nil {
+	if state == nil || state.thread(state.ActiveProject) == nil {
 		return nil
 	}
 	var agents []*Application
