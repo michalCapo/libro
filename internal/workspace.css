@@ -214,6 +214,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-settings-header h1{font-size:16px;font-weight:500;margin:0}
 .ws-settings-content{box-sizing:border-box;width:100%;max-width:960px;margin:32px auto;padding:0 32px}
 .ws-settings-group{border:1px solid var(--ws-line);border-radius:16px;background:var(--ws-bg);overflow:hidden}
+.ws-settings-group + .ws-shortcut-heading{margin-top:32px}
 .ws-settings-row{display:flex;align-items:center;justify-content:space-between;gap:32px;padding:20px}
 .ws-settings-actions{display:flex;flex-wrap:wrap;gap:8px}
 .ws-settings-copy{min-width:0}.ws-settings-copy label{font-size:15px;font-weight:500}.ws-settings-copy p{color:var(--ws-muted);font-size:14px;line-height:1.6;margin:6px 0 0;max-width:62ch}

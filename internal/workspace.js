@@ -224,7 +224,7 @@
   function threadArchived() { refresh(); }
   function renderThreads() {
     const list = document.getElementById('workspace-thread-list'); if (!list) return;
-    const threads = window.__libroThreads || [];
+    const threads = (window.__libroThreads || []).slice().reverse();
     const signature = JSON.stringify([threads, window.__libroActiveProject]);
     if (list.dataset.signature === signature) return;
     list.dataset.signature = signature; list.replaceChildren();
