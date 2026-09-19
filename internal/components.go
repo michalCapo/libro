@@ -667,7 +667,12 @@ func uxHardenJS() string {
 			var isVisible=visible(el);
 			if(isVisible&&!wasVisible){
 				lastFocus[el.id]=document.activeElement;
-				setTimeout(function(){var p=panelFor(el);var nodes=focusables(p);(nodes[0]||p||el).focus();},30);
+				setTimeout(function(){
+					if(!visible(el))return;
+					var p=panelFor(el);var nodes=focusables(p);
+					var preferred=nodes.find(function(node){return node.hasAttribute('autofocus');});
+					(preferred||nodes[0]||p||el).focus();
+				},30);
 			}else if(!isVisible&&wasVisible){
 				var prev=lastFocus[el.id];
 				if(prev&&prev.focus)try{prev.focus({preventScroll:true});}catch(e){try{prev.focus();}catch(e2){}}
@@ -678,7 +683,7 @@ func uxHardenJS() string {
 	}
 	dialogIDs.forEach(function(id){watch(document.getElementById(id));});
 
-	window.__libroConfirmAction=function(title,body,onConfirm,focusConfirm){
+	window.__libroConfirmAction=function(title,body,onConfirm){
 		var old=document.getElementById('libro-confirm-popover');
 		if(old)old.remove();
 		var wrap=document.createElement('div');
@@ -697,7 +702,7 @@ func uxHardenJS() string {
 		wrap.addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDefault();close();}});
 		cancel.onclick=close;
 		confirm.onclick=function(){close();if(typeof onConfirm==='function')onConfirm();};
-		setTimeout(function(){(focusConfirm?confirm:cancel).focus();},0);
+		confirm.focus();
 	};
 })();
 `, ProjectDialogID, ShortcutsDialogID, CloseDialogID, CommandPopupID, MoveProjectPopupID, WorktreeCreatePopupID)

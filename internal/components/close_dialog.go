@@ -31,7 +31,7 @@ func CloseDialog(sid string) *r.Node {
 								Text("Cancel").
 								Attr("onclick", HideJS(CloseDialogID)),
 							r.Button("ws-close-button ws-close-quit").Attr("type", "button").
-								ID("close-dialog-confirm").
+								ID("close-dialog-confirm").Attr("autofocus", "").
 								Text("Quit").
 								Attr("onclick", fmt.Sprintf("__ws.call('app.close.all',{sid:'%s'});", sid)),
 						),
