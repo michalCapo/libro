@@ -326,7 +326,7 @@ func registerSettingsActions(app *r.App) {
 		}
 		message := "Saved. Applies to new sessions."
 		if err != nil {
-			message = "Could not save. Enter a valid command for each agent and try again."
+			message = "Could not save: " + err.Error()
 		}
 		list, _ := json.Marshal(plugins())
 		return fmt.Sprintf("libroWorkspace.agentCommandSaved(%s,%s);", components.JSString(message), list)

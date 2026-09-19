@@ -178,6 +178,39 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 
 }
 
+func TestSaveNewAgentWithQuotedCommand(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "settings.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); db = original })
+	createTables()
+	custom := Plugin{
+		ID: "custom-12345678-1234-4234-8234-123456789abc", Name: "luna",
+		Command: `codex -m gpt-5.6-luna -c 'model_reasoning_effort="xhigh"'`,
+		Type: AppTypeTerminal, Dock: "center", Custom: true,
+	}
+	autolaunch := ""
+	if err := saveAgentSettings(
+		map[string]string{custom.ID: custom.Command}, map[string]bool{custom.ID: false},
+		[]Plugin{custom}, map[string]string{custom.ID: custom.Name}, map[string]bool{},
+		&autolaunch, []string{custom.ID},
+	); err != nil {
+		t.Fatal(err)
+	}
+	for _, plugin := range plugins() {
+		if plugin.ID == custom.ID {
+			if plugin.Name != "luna" || plugin.Disabled || !plugin.Custom || agentCommand(plugin) != custom.Command {
+				t.Fatalf("new agent changed: %+v", plugin)
+			}
+			return
+		}
+	}
+	t.Fatal("new agent was not saved")
+}
+
 func TestAgentAutolaunch(t *testing.T) {
 	original := db
 	var err error
