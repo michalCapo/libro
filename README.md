@@ -56,10 +56,14 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 - Each project remembers its own open panels.
 - Running assistants are listed under their project in the sidebar. Click one to jump straight to it.
 
+![Project sidebar: projects with their running assistants listed underneath](demo/projects-sidebar.png)
+
 ### Browser
 
 - Open a browser panel with `Ctrl + B`, or a new separate one with `Ctrl + Shift + B`.
 - Browse with the keyboard: `o` opens a page, `r` reloads, `j` and `k` scroll, `i` lets you type in a page, `Esc` goes back.
+
+![Browser panel open next to other tools](demo/browser-panel.png)
 
 ### Settings
 
@@ -68,6 +72,8 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 - Set the default panel size for new panels.
 - Change how assistants and tools start, rename them, add your own.
 - Change any keyboard shortcut and restore the defaults anytime.
+
+![Settings page: theme and notification options](demo/settings.png)
 
 ## Keyboard Shortcuts
 
