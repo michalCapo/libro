@@ -117,7 +117,28 @@
       if (window.__libroFocusAppByID) window.__libroFocusAppByID(id);
     });
   }
-  function launcher(dock) {
+  window.__libroEnsurePageToolAgent = function(browserID, mode) {
+    const browser = document.getElementById('frame-' + browserID);
+    const grid = browser?.parentElement;
+    if (!grid) return false;
+    const agents = frames(grid).filter(frame => frame.dataset.dock === 'center' && frame.querySelector('[data-terminal-app]'));
+    const agent = agents.find(frame => frame.dataset.appId === dockState(grid).agent) || agents[0];
+    if (agent) { window.__libroActiveAgentID = agent.dataset.appId; return true; }
+    launcher('center', () => {
+      let attempts = 0;
+      const resume = setInterval(() => {
+        if (!browser.isConnected || activeGrid() !== grid || ++attempts > 150) { clearInterval(resume); return; }
+        const agent = frames(grid).find(frame => frame.dataset.dock === 'center' && frame.querySelector('[data-terminal-app]'));
+        if (!agent) return;
+        clearInterval(resume);
+        window.__libroActiveAgentID = agent.dataset.appId;
+        select(browserID);
+        window.__libroTogglePageTool?.(browserID, mode);
+      }, 200);
+    });
+    return false;
+  };
+  function launcher(dock, onLaunch) {
     if (isThread() && dock === 'center' && frames(activeGrid()).some(frame => frame.dataset.dock === 'center')) return;
     if (dock === 'bottom') { bottom(); return; }
     let dialog = document.getElementById('workspace-plugin-dialog');
@@ -136,7 +157,7 @@
     const entries = node('div', 'ws-plugin-list');
     list.forEach(plugin => {
       const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; const icon = node('i', 'material-icons-round', plugin.type === 'url' ? 'language' : 'terminal'); icon.setAttribute('aria-hidden', 'true'); const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', plugin.name), node('small', '', plugin.description || plugin.command || 'Browser app')); entry.append(icon, copy); applyToolIcon(entry, plugin);
-      entry.onclick = () => { dialog.close(); openPlugin(plugin.id, dock, entry); }; entries.append(entry);
+      entry.onclick = () => { dialog.close(); openPlugin(plugin.id, dock, entry); onLaunch?.(); }; entries.append(entry);
     });
     dialog.append(entries);
     let active = 0;
@@ -219,14 +240,10 @@
       archive.classList.add('ws-project-remove'); item.append(row, archive); list.append(item);
     };
     threads.filter(thread => !thread.archived).forEach(appendThread);
-    if (!threads.some(thread => !thread.archived)) {
+    if (!threads.length) {
       list.append(node('div', 'ws-no-threads', 'No threads to show'));
     }
-    const archived = threads.filter(thread => thread.archived);
-    if (archived.length) {
-      list.append(node('div', 'ws-sidebar-heading ws-archived-heading', 'Archived'));
-      archived.forEach(appendThread);
-    }
+    threads.filter(thread => thread.archived).forEach(appendThread);
   }
   function renderProjects() {
     const list = document.getElementById('workspace-project-list'); if (!list) return;
@@ -810,6 +827,10 @@
     const width = frame => frame.style.width.endsWith('%') ? grid.clientWidth : parseFloat(frame.style.width) || frame.offsetWidth;
     const center = all.filter(frame => frame.dataset.dock === 'center');
     const tools = all.filter(frame => frame.dataset.dock === 'right' && !state.hidden.has(frame.dataset.appId));
+    if (grid.parentElement && grid.parentElement.style.display !== 'none' && grid.parentElement.getAttribute('aria-hidden') !== 'true') {
+      const rememberedAgent = center.find(frame => frame.dataset.appId === state.agent) || center[0];
+      window.__libroActiveAgentID = rememberedAgent?.dataset.appId || '';
+    }
     const right = [tools.find(frame => frame.dataset.appId === state.right) || tools.at(-1)].filter(Boolean);
     const terminals = all.filter(frame => frame.dataset.dock === 'bottom');
     if (selected?.dataset.dock === 'bottom') state.bottomID = selected.dataset.appId;
@@ -935,12 +956,29 @@
     document.getElementById('default-thread-agent').disabled = false;
     document.getElementById('default-thread-agent-status').textContent = ok ? 'Saved.' : 'Could not save. Choose an enabled agent and try again.';
   }
-  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '') {
+  function savePageTools(enabled) {
+    const select = document.getElementById('page-tools-autoexecute');
+    const status = document.getElementById('page-tools-autoexecute-status');
+    if (select) select.disabled = true;
+    if (status) status.textContent = 'Saving…';
+    call('settings.page-tools', {autoexecute: !!enabled});
+  }
+  function pageToolsSaved(ok, enabled) {
+    window.__libroPageToolsAutoExecute = !!enabled;
+    const select = document.getElementById('page-tools-autoexecute');
+    const status = document.getElementById('page-tools-autoexecute-status');
+    if (select) { select.disabled = false; select.value = enabled ? 'on' : 'off'; }
+    if (status) status.textContent = ok ? 'Saved.' : 'Could not save. Try again.';
+  }
+  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '', pageToolsAutoExecute = false) {
+    window.__libroPageToolsAutoExecute = !!pageToolsAutoExecute;
     savedThreadAgent = threadAgent;
     fillThreadAgents();
     document.getElementById('default-thread-agent-status').textContent = '';
     document.getElementById('notification-sound').value = prefs.notificationSound === false ? 'off' : 'on';
     document.getElementById('notification-sound-status').textContent = '';
+    document.getElementById('page-tools-autoexecute').value = pageToolsAutoExecute ? 'on' : 'off';
+    document.getElementById('page-tools-autoexecute-status').textContent = '';
     document.getElementById('workspace-theme').value = themePreference();
     document.getElementById('workspace-theme-status').textContent = '';
     toolKeys = bindings; fillToolKeys(bindings); updateToolHints();
@@ -1140,7 +1178,7 @@
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
   }
-  window.libroWorkspace = {saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;

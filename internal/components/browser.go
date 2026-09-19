@@ -3,7 +3,7 @@ package components
 // BrowserJS returns the JavaScript that manages Electron webview elements.
 // It initializes webview tags, handles navigation events, and provides
 // back/forward/reload/navigate functions via the webview DOM API.
-// It also injects browser-mode scrolling, address, reload, and viewport shortcuts.
+// It also injects browser-mode scrolling, page tools, address, reload, and viewport shortcuts.
 func BrowserJS() string {
 	return browserScript
 }
@@ -19,6 +19,287 @@ var initialized = {};
 var browserShortcutsScript = '(' + function(){
 	if(window.__libroBrowserShortcuts) return;
 	window.__libroBrowserShortcuts = true;
+	var pageToolMode = '';
+	var pageToolHighlight = null;
+	var pageToolOverlay = null;
+	var pageToolStart = null;
+	var pageToolPrompt = null;
+	var pageToolListenersBound = false;
+
+	function pageToolMessage(kind, payload) {
+		try { console.log('__libro:page-tool:' + kind + ':' + JSON.stringify(payload)); } catch (err) {}
+	}
+	function removePageToolHighlight() {
+		if (pageToolHighlight && pageToolHighlight.parentNode) pageToolHighlight.parentNode.removeChild(pageToolHighlight);
+		pageToolHighlight = null;
+	}
+	function pageToolRect(rect, className) {
+		if (!rect) return;
+		if (!pageToolHighlight) {
+			pageToolHighlight = document.createElement('div');
+			pageToolHighlight.setAttribute('aria-hidden', 'true');
+			pageToolHighlight.style.position = 'fixed';
+			pageToolHighlight.style.pointerEvents = 'none';
+			pageToolHighlight.style.zIndex = '2147483647';
+			pageToolHighlight.style.boxSizing = 'border-box';
+			document.documentElement.appendChild(pageToolHighlight);
+		}
+		pageToolHighlight.className = className || '';
+		pageToolHighlight.style.left = Math.max(0, rect.left) + 'px';
+		pageToolHighlight.style.top = Math.max(0, rect.top) + 'px';
+		pageToolHighlight.style.width = Math.max(0, rect.width) + 'px';
+		pageToolHighlight.style.height = Math.max(0, rect.height) + 'px';
+		pageToolHighlight.style.border = '2px solid #2563eb';
+		pageToolHighlight.style.background = 'rgba(37,99,235,.10)';
+		pageToolHighlight.style.boxShadow = '0 0 0 1px rgba(255,255,255,.8), 0 2px 12px rgba(37,99,235,.18)';
+	}
+	function pageToolSelector(el) {
+		if (!el || !el.tagName) return '';
+		var parts = [];
+		while (el && el.nodeType === 1 && parts.length < 6) {
+			var part = el.tagName.toLowerCase();
+			if (el.id) part += '#' + String(el.id).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+			else if (el.classList && el.classList.length) part += '.' + Array.prototype.slice.call(el.classList).filter(function(name) { return /^[a-zA-Z0-9_-]+$/.test(name); }).slice(0, 2).join('.');
+			parts.unshift(part);
+			el = el.parentElement;
+		}
+		return parts.join(' > ');
+	}
+	function pageToolText(el, limit) {
+		var text = el && (el.innerText || el.textContent) || '';
+		return String(text).replace(/\s+/g, ' ').trim().slice(0, limit || 500);
+	}
+	function pageToolAttributes(el) {
+		var attrs = {};
+		if (!el || !el.attributes) return attrs;
+		for (var i = 0; i < el.attributes.length && i < 30; i++) {
+			var attr = el.attributes[i];
+			attrs[attr.name] = String(attr.value).slice(0, 300);
+		}
+		return attrs;
+	}
+	function pageToolElementData(el) {
+		if (!el || el.nodeType !== 1) return null;
+		var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+		return {
+			tag: (el.tagName || '').toLowerCase(),
+			selector: pageToolSelector(el),
+			id: el.id || '',
+			classes: typeof el.className === 'string' ? el.className.slice(0, 500) : '',
+			text: pageToolText(el),
+			attributes: pageToolAttributes(el),
+			html: el.outerHTML ? el.outerHTML.slice(0, 2400) : '',
+			viewportRect: rect ? {x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height)} : null
+		};
+	}
+	function pageToolElementsInRect(rect) {
+		var seen = [];
+		var elements = document.querySelectorAll ? document.querySelectorAll('body *') : [];
+		for (var i = 0; i < elements.length && seen.length < 20; i++) {
+			var el = elements[i];
+			if (el === pageToolHighlight || (pageToolOverlay && pageToolOverlay.contains(el))) continue;
+			var box;
+			try { box = el.getBoundingClientRect(); } catch (err) { continue; }
+			if (!box || box.width <= 0 || box.height <= 0) continue;
+			if (box.right >= rect.left && box.left <= rect.right && box.bottom >= rect.top && box.top <= rect.bottom) {
+				var data = pageToolElementData(el);
+				if (data && data.text || data && data.tag) seen.push(data);
+			}
+		}
+		return seen;
+	}
+	function pageToolAreaData(rect) {
+		return {
+			x: Math.round(rect.left), y: Math.round(rect.top),
+			width: Math.round(rect.width), height: Math.round(rect.height),
+			pageX: Math.round(rect.left + window.scrollX), pageY: Math.round(rect.top + window.scrollY),
+			text: pageToolText(document.elementFromPoint(Math.max(0, rect.left + rect.width / 2), Math.max(0, rect.top + rect.height / 2)), 800),
+			elements: pageToolElementsInRect(rect)
+		};
+	}
+	function pageToolPromptClose() {
+		if (pageToolPrompt && pageToolPrompt.parentNode) pageToolPrompt.parentNode.removeChild(pageToolPrompt);
+		pageToolPrompt = null;
+	}
+	function pageToolPromptAnchor(payload) {
+		var rect = payload && payload.kind === 'element' && payload.element ? payload.element.viewportRect : payload && payload.area;
+		if (!rect) return {left: window.innerWidth / 2, top: window.innerHeight / 2, right: window.innerWidth / 2, bottom: window.innerHeight / 2};
+		var left = Number(rect.x) || 0;
+		var top = Number(rect.y) || 0;
+		var width = Math.max(0, Number(rect.width) || 0);
+		var height = Math.max(0, Number(rect.height) || 0);
+		return {left:left, top:top, right:left + width, bottom:top + height};
+	}
+	function pageToolPromptOpen(payload, appURL) {
+		pageToolPromptClose();
+		var panel = document.createElement('div');
+		panel.setAttribute('role', 'dialog');
+		panel.setAttribute('aria-label', payload && payload.kind === 'area' ? 'Describe selected page area' : 'Describe selected page element');
+		panel.style.position = 'fixed';
+		panel.style.zIndex = '2147483647';
+		panel.style.boxSizing = 'border-box';
+		panel.style.width = 'min(380px, calc(100vw - 24px))';
+		panel.style.maxWidth = 'calc(100vw - 24px)';
+		panel.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+		panel.style.fontSize = '13px';
+		panel.style.lineHeight = '1.4';
+		var root = panel.attachShadow ? panel.attachShadow({mode:'open'}) : panel;
+		var style = document.createElement('style');
+		style.textContent = '.card{box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#1f2937;box-shadow:0 8px 28px rgba(15,23,42,.24)}' +
+			'.header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;font-weight:600}' +
+			'.close{width:26px;height:26px;padding:0;border:0;border-radius:6px;background:transparent;color:#64748b;font-size:20px;line-height:1;cursor:pointer}' +
+			'.close:hover{background:#f1f5f9;color:#1f2937}' +
+			'.summary{margin-bottom:8px;color:#64748b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+			'input[type=text]{display:block;box-sizing:border-box;width:100%;height:40px;margin:0;padding:9px 10px;border:1px solid #94a3b8;border-radius:7px;background:#fff;color:#1f2937;font:inherit;line-height:1.45;outline:none}' +
+			'input[type=text]:focus{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18)}' +
+			'.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:9px}' +
+			'button.action{padding:7px 11px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#334155;font:inherit;cursor:pointer}' +
+			'button.action.primary{border-color:#2563eb;background:#2563eb;color:#fff}' +
+			'button.action:hover{filter:brightness(.97)}' +
+			'@media (prefers-color-scheme: dark){.card{border-color:#4b5563;background:#202124;color:#f8fafc;box-shadow:0 8px 28px rgba(0,0,0,.5)}.close{color:#cbd5e1}.close:hover{background:#374151;color:#fff}.summary{color:#cbd5e1}input[type=text]{border-color:#64748b;background:#111827;color:#f8fafc}button.action{border-color:#64748b;background:#374151;color:#f8fafc}}';
+		root.appendChild(style);
+		var card = document.createElement('div'); card.className = 'card';
+		var header = document.createElement('div'); header.className = 'header';
+		var title = document.createElement('span'); title.textContent = payload && payload.kind === 'area' ? 'Describe this page area' : 'Describe this element';
+		var close = document.createElement('button'); close.type = 'button'; close.className = 'close'; close.textContent = '×'; close.setAttribute('aria-label', 'Close prompt');
+		var summary = document.createElement('div'); summary.className = 'summary';
+		if (payload && payload.kind === 'area') summary.textContent = 'Selected rectangle';
+		else if (payload && payload.element) summary.textContent = 'Selected ' + String(payload.element.tag || 'element').toLowerCase() + (payload.element.text ? ': ' + String(payload.element.text).slice(0, 90) : '');
+		else summary.textContent = appURL || 'Selected page element';
+		var input = document.createElement('input'); input.type = 'text'; input.placeholder = 'What should the agent do with this?'; input.setAttribute('aria-label', 'Page tool prompt'); input.autocomplete = 'off';
+		var actions = document.createElement('div'); actions.className = 'actions';
+		var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'action'; cancel.textContent = 'Cancel';
+		var send = document.createElement('button'); send.type = 'button'; send.className = 'action primary'; send.textContent = 'Send to agent';
+		header.append(title, close); actions.append(cancel, send); card.append(header, summary, input, actions); root.appendChild(card); document.documentElement.appendChild(panel);
+		pageToolPrompt = panel;
+		var anchor = pageToolPromptAnchor(payload);
+		function position() {
+			if (!panel.parentNode) return;
+			var box = panel.getBoundingClientRect();
+			var margin = 12;
+			var left = Math.max(margin, Math.min(anchor.left, window.innerWidth - box.width - margin));
+			var below = anchor.bottom + 10;
+			var above = anchor.top - box.height - 10;
+			var top = below;
+			if (below + box.height > window.innerHeight - margin && above >= margin) top = above;
+			top = Math.max(margin, Math.min(top, window.innerHeight - box.height - margin));
+			panel.style.left = Math.round(left) + 'px';
+			panel.style.top = Math.round(top) + 'px';
+		}
+		function stopEvent(event) { event.stopPropagation(); }
+		panel.addEventListener('pointerdown', stopEvent);
+		panel.addEventListener('click', stopEvent);
+		panel.addEventListener('keydown', function(event) { if (event.key === 'Escape') { event.preventDefault(); pageToolPromptClose(); } });
+		close.onclick = function() { pageToolPromptClose(); };
+		cancel.onclick = function() { pageToolPromptClose(); };
+		send.onclick = function(event) {
+			event.preventDefault();
+			var request = String(input.value || '').trim();
+			if (!request) { input.focus(); return; }
+			pageToolMessage('selection', {kind: payload && payload.kind || 'element', url: appURL || window.location.href, request: request, element: payload && payload.element || null, area: payload && payload.area || null});
+		};
+		window.__libroPageToolResult = function(sent) {
+			if (sent) pageToolPromptClose();
+			else { summary.textContent = 'Agent is not ready. Your prompt is saved here; try again.'; input.focus(); }
+		};
+		input.addEventListener('keydown', function(event) {
+			if (event.key !== 'Enter' || event.isComposing) return;
+			event.preventDefault();
+			send.click();
+		});
+		position();
+		requestAnimationFrame(position);
+		input.focus();
+	}
+	function pageToolStop(mode) {
+		pageToolMode = '';
+		pageToolStart = null;
+		removePageToolHighlight();
+		if (pageToolOverlay && pageToolOverlay.parentNode) pageToolOverlay.parentNode.removeChild(pageToolOverlay);
+		pageToolOverlay = null;
+		document.documentElement.style.cursor = '';
+		pageToolMessage('mode', {mode: '', previous: mode || ''});
+	}
+	function pageToolSetMode(mode) {
+		if (mode !== 'annotate' && mode !== 'area') mode = '';
+		if (pageToolMode === mode) { pageToolStop(mode); return; }
+		if (pageToolMode) pageToolStop(pageToolMode);
+		pageToolMode = mode;
+		if (mode) {
+			document.documentElement.style.cursor = 'crosshair';
+			pageToolMessage('mode', {mode: mode});
+		}
+	}
+	window.__libroSetPageToolMode = pageToolSetMode;
+	window.__libroGetPageToolMode = function() { return pageToolMode; };
+	function pageToolPointerOver(event) {
+		if (pageToolMode !== 'annotate') return;
+		var el = event.target && event.target.nodeType === 1 ? event.target : event.target && event.target.parentElement;
+		if (!el || el === pageToolHighlight || (pageToolOverlay && pageToolOverlay.contains(el))) return;
+		try { pageToolRect(el.getBoundingClientRect(), 'libro-page-tool-highlight'); } catch (err) {}
+	}
+	function pageToolPointerOut(event) {
+		if (pageToolMode !== 'annotate') return;
+		if (event.relatedTarget && event.relatedTarget.nodeType === 1) return;
+		removePageToolHighlight();
+	}
+	function pageToolClick(event) {
+		if (pageToolMode !== 'annotate') return;
+		var el = event.target && event.target.nodeType === 1 ? event.target : event.target && event.target.parentElement;
+		if (!el || el === pageToolHighlight || (pageToolOverlay && pageToolOverlay.contains(el))) return;
+		event.preventDefault(); event.stopPropagation();
+		var data = pageToolElementData(el);
+		pageToolStop('annotate');
+		pageToolPromptOpen({kind: 'element', url: window.location.href, element: data}, window.location.href);
+	}
+	function pageToolPointerDown(event) {
+		if (pageToolMode !== 'area' || event.button !== 0) return;
+		if (pageToolOverlay && pageToolOverlay.contains(event.target)) return;
+		event.preventDefault(); event.stopPropagation();
+		pageToolStart = {x: event.clientX, y: event.clientY};
+		try { if (event.target.setPointerCapture) event.target.setPointerCapture(event.pointerId); } catch (err) {}
+		if (!pageToolOverlay) {
+			pageToolOverlay = document.createElement('div');
+			pageToolOverlay.setAttribute('aria-hidden', 'true');
+			pageToolOverlay.style.position = 'fixed';
+			pageToolOverlay.style.inset = '0';
+			pageToolOverlay.style.zIndex = '2147483646';
+			pageToolOverlay.style.cursor = 'crosshair';
+			pageToolOverlay.style.background = 'rgba(37,99,235,.035)';
+			pageToolOverlay.style.pointerEvents = 'none';
+			document.documentElement.appendChild(pageToolOverlay);
+		}
+		pageToolRect({left:event.clientX, top:event.clientY, right:event.clientX, bottom:event.clientY, width:0, height:0}, 'libro-page-tool-area');
+	}
+	function pageToolPointerMove(event) {
+		if (pageToolMode !== 'area' || !pageToolStart) return;
+		event.preventDefault();
+		var left = Math.min(pageToolStart.x, event.clientX), top = Math.min(pageToolStart.y, event.clientY);
+		var right = Math.max(pageToolStart.x, event.clientX), bottom = Math.max(pageToolStart.y, event.clientY);
+		pageToolRect({left:left, top:top, right:right, bottom:bottom, width:right-left, height:bottom-top}, 'libro-page-tool-area');
+	}
+	function pageToolPointerUp(event) {
+		if (pageToolMode !== 'area' || !pageToolStart) return;
+		event.preventDefault(); event.stopPropagation();
+		var left = Math.min(pageToolStart.x, event.clientX), top = Math.min(pageToolStart.y, event.clientY);
+		var right = Math.max(pageToolStart.x, event.clientX), bottom = Math.max(pageToolStart.y, event.clientY);
+		var rect = {left:left, top:top, right:right, bottom:bottom, width:right-left, height:bottom-top};
+		if (rect.width < 6 || rect.height < 6) { pageToolStart = null; return; }
+		var data = pageToolAreaData(rect);
+		try { if (event.target.releasePointerCapture) event.target.releasePointerCapture(event.pointerId); } catch (err) {}
+		pageToolStop('area');
+		pageToolPromptOpen({kind: 'area', url: window.location.href, area: data}, window.location.href);
+	}
+	if (!pageToolListenersBound) {
+		pageToolListenersBound = true;
+		document.addEventListener('pointerover', pageToolPointerOver, true);
+		document.addEventListener('pointerout', pageToolPointerOut, true);
+		document.addEventListener('click', pageToolClick, true);
+		document.addEventListener('pointerdown', pageToolPointerDown, true);
+		document.addEventListener('pointermove', pageToolPointerMove, true);
+		document.addEventListener('pointerup', pageToolPointerUp, true);
+		document.addEventListener('pointercancel', pageToolPointerUp, true);
+	}
 	function elementRole(el) {
 		if (!el || !el.getAttribute) return '';
 		return (el.getAttribute('role') || '').toLowerCase();
@@ -81,6 +362,12 @@ var browserShortcutsScript = '(' + function(){
 		if(ae) return;
 		var handled = true;
 		switch(e.key) {
+			case 'a': pageToolMessage('activate', {mode:'annotate'}); break;
+			case 'd': pageToolMessage('activate', {mode:'area'}); break;
+			case 'Escape':
+				if (pageToolMode) pageToolStop(pageToolMode);
+				else handled = false;
+				break;
 			case 'g': window.scrollTo({top: 0, behavior: 'smooth'}); break;
 			case 'G': window.scrollTo({top: document.documentElement.scrollHeight, behavior: 'smooth'}); break;
 			case 'j': window.scrollBy({top: 800, behavior: 'smooth'}); break;
@@ -131,6 +418,7 @@ window.__libroCloseConsole = function(appID) {
 var devtoolsPanelObservers = {};
 var devtoolsPanelSyncers = {};
 var browserModeState = {}; // appID -> 'normal' | 'insert'
+var pageToolState = {}; // appID -> '' | 'annotate' | 'area'
 var mobileViewState = {}; // appID -> {mode, orientation, previousFrameStyle, previousContentStyle, previousWidth}
 var mobileViewportOrientation = {}; // appID -> last sm/md/xl orientation until browser instance closes
 var mobileSizes = {
@@ -198,6 +486,113 @@ window.__libroGetBrowserMode = function(appID) {
 };
 
 window.__libroApplyBrowserMode = applyBrowserMode;
+
+function pageToolButtonState(appID, mode) {
+	pageToolState[appID] = mode || '';
+	var frame = document.querySelector('[data-app-id="' + appID + '"]');
+	if (!frame) return;
+	frame.querySelectorAll('[data-page-tool]').forEach(function(button) {
+		var active = (button.getAttribute('data-page-tool') || '') === (mode || '');
+		button.setAttribute('data-active', String(active));
+		button.setAttribute('aria-pressed', String(active));
+	});
+}
+
+function pageToolWebview(appID) {
+	return window.__libroWebviews[appID] || document.querySelector('iframe[data-browser-iframe-app="' + appID + '"]');
+}
+
+function executePageToolMode(appID, mode) {
+	var wv = pageToolWebview(appID);
+	if (!wv) return;
+	var js = 'if(window.__libroSetPageToolMode)window.__libroSetPageToolMode(' + JSON.stringify(mode || '') + ');';
+	if (wv.executeJavaScript) {
+		whenReady(appID, function() { try { wv.executeJavaScript(js); } catch (err) {} });
+		return;
+	}
+	try {
+		if (wv.contentWindow && wv.contentWindow.eval) wv.contentWindow.eval(js);
+	} catch (err) {}
+}
+
+window.__libroTogglePageTool = function(appID, mode) {
+	appID = appID || window.__libroSelectedApp || '';
+	if (!appID || !mode) return;
+	var next = pageToolState[appID] === mode ? '' : mode;
+	if (next && window.__libroEnsurePageToolAgent && !window.__libroEnsurePageToolAgent(appID, mode)) return;
+	pageToolButtonState(appID, next);
+	executePageToolMode(appID, next);
+	var label = next === 'annotate' ? 'Annotate mode' : next === 'area' ? 'Area select mode' : 'Page tool off';
+	var hint = next === 'annotate' ? 'Hover and click an element' : next === 'area' ? 'Drag a rectangle over the page' : 'Ready';
+	if (window.__libroShowToast) window.__libroShowToast(label, hint, 1200);
+};
+
+
+function pageToolURL(appID, payload) {
+	var url = payload && payload.url ? String(payload.url) : '';
+	if (url) return url;
+	var input = document.getElementById('urlinput-' + appID);
+	return input ? String(input.value || '') : '';
+}
+
+function pageToolContext(payload, appID) {
+	var url = pageToolURL(appID, payload);
+	var lines = [
+		'Please make the requested change to the page element or region below.',
+		'',
+		'Page URL: ' + url
+	];
+	if (payload && payload.kind === 'element' && payload.element) {
+		var el = payload.element;
+		lines.push('Target element:', '- Tag: ' + (el.tag || ''), '- Selector: ' + (el.selector || '(none)'));
+		if (el.id) lines.push('- ID: ' + el.id);
+		if (el.classes) lines.push('- Classes: ' + el.classes);
+		if (el.text) lines.push('- Visible text: ' + el.text);
+		if (el.viewportRect) lines.push('- Viewport rectangle: x=' + el.viewportRect.x + ', y=' + el.viewportRect.y + ', width=' + el.viewportRect.width + ', height=' + el.viewportRect.height);
+		if (el.attributes) lines.push('- Attributes: ' + JSON.stringify(el.attributes));
+		if (el.html) lines.push('- Outer HTML:\n' + el.html);
+	} else if (payload && payload.kind === 'area' && payload.area) {
+		var area = payload.area;
+		lines.push(
+			'Selected rectangle:',
+			'- Viewport coordinates: x=' + area.x + ', y=' + area.y + ', width=' + area.width + ', height=' + area.height,
+			'- Page coordinates: x=' + area.pageX + ', y=' + area.pageY,
+			'- Text at center: ' + (area.text || '(none)'),
+			'Elements intersecting the rectangle:'
+		);
+		(area.elements || []).slice(0, 20).forEach(function(el, index) {
+			lines.push('[' + (index + 1) + '] ' + (el.tag || '') + ' ' + (el.selector || '') + (el.text ? ' — ' + el.text : '') + (el.html ? '\n' + el.html : ''));
+		});
+	}
+	return lines.join('\n');
+}
+
+function receivePageToolMessage(appID, kind, rawPayload) {
+	if (!appID) return;
+	var payload = {};
+	try { payload = JSON.parse(rawPayload || '{}') || {}; } catch (err) { return; }
+	if (kind === 'activate') {
+		if (payload.mode === 'annotate' || payload.mode === 'area') window.__libroTogglePageTool(appID, payload.mode);
+		return;
+	}
+	if (kind === 'mode') {
+		pageToolButtonState(appID, payload.mode || '');
+		return;
+	}
+	if (kind === 'selection') {
+		pageToolButtonState(appID, '');
+		var request = String(payload.request || '').trim();
+		if (!request) return;
+		var targetLabel = payload.kind === 'area' ? 'Page area annotation' : 'HTML element annotation';
+		var prompt = '\n\n--- BEGIN ' + targetLabel + ' ---\nUser request: ' + request + '\n\n' + pageToolContext(payload, appID) + '\n--- END ' + targetLabel + ' ---\n\n';
+		var sent = window.__libroSendPageToolPrompt && window.__libroSendPageToolPrompt(prompt, !!window.__libroPageToolsAutoExecute);
+		var wv = pageToolWebview(appID);
+		if (wv && wv.executeJavaScript) wv.executeJavaScript('window.__libroPageToolResult && window.__libroPageToolResult(' + !!sent + ')').catch(function() {});
+		if (window.__libroShowToast) {
+			window.__libroShowToast(sent ? (window.__libroPageToolsAutoExecute ? 'Prompt sent to agent' : 'Prompt pasted to agent') : 'No active agent panel', sent ? '' : 'Start or select an agent and try again.', 1600);
+		}
+	}
+}
 
 function currentAppWidth(appID) {
 	var frame = document.querySelector('[data-app-id="' + appID + '"]');
@@ -560,6 +955,7 @@ function bindWebviewEvents(wv) {
 		if (e.url && !e.url.startsWith('data:')) __ws.call('app.url.set', {sid:wv.getAttribute('data-sid'), id:appID, url:e.url, observed:true});
 		// Full-page navigation discards page JS — reset to normal mode
 		applyBrowserMode(appID, 'normal');
+		pageToolButtonState(appID, '');
 	});
 	wv.addEventListener('did-navigate-in-page', function(e) {
 		if (!e.isMainFrame) return;
@@ -583,7 +979,11 @@ function bindWebviewEvents(wv) {
 		var appID = currentAppID(wv);
 		if (!appID) return;
 		var msg = e.message;
-		if (msg === '__libro:urlpopup') { if (window.__libroOpenURLPopup) window.__libroOpenURLPopup(); }
+		if (msg && msg.indexOf('__libro:page-tool:') === 0) {
+			var separator = msg.indexOf(':', '__libro:page-tool:'.length);
+			receivePageToolMessage(appID, msg.slice('__libro:page-tool:'.length, separator), msg.slice(separator + 1));
+		}
+		else if (msg === '__libro:urlpopup') { if (window.__libroOpenURLPopup) window.__libroOpenURLPopup(); }
 		else if (msg === '__libro:reload') { if (window.__libroWvReload) window.__libroWvReload(appID); }
 		else if (msg === '__libro:mobile' || msg === '__libro:viewport') { if (window.__libroToggleSelectedBrowserMobile) window.__libroToggleSelectedBrowserMobile(appID); }
 		else if (msg === '__libro:viewportrotate') { if (window.__libroRotateSelectedBrowserViewport) window.__libroRotateSelectedBrowserViewport(appID); }
@@ -668,6 +1068,7 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 						delete ready[id];
 						delete queued[id];
 						delete browserModeState[id];
+						delete pageToolState[id];
 						delete mobileViewState[id];
 						delete mobileViewportOrientation[id];
 					}
@@ -687,6 +1088,7 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 					delete ready[id];
 					delete queued[id];
 					delete browserModeState[id];
+					delete pageToolState[id];
 					delete mobileViewState[id];
 					delete mobileViewportOrientation[id];
 				}

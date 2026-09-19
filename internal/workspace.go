@@ -19,7 +19,7 @@ func workspaceJS(sid string) string {
 	list, _ := json.Marshal(plugins())
 	keys, _ := json.Marshal(toolKeybindings())
 	defaults, _ := json.Marshal(defaultToolKeybindings())
-	return "window.__libroToolKeys=" + string(keys) + ";window.__libroDefaultToolKeys=" + string(defaults) + ";" + fmt.Sprintf("window.__libroWorkspaceSID=%s;window.__libroPlugins=%s;var wsStyle=document.createElement('style');wsStyle.textContent=%s;document.head.appendChild(wsStyle);", components.JSString(sid), list, components.JSString(string(css))) + string(filesJS) + string(js)
+	return "window.__libroToolKeys=" + string(keys) + ";window.__libroDefaultToolKeys=" + string(defaults) + ";window.__libroPageToolsAutoExecute=" + fmt.Sprint(browserPageToolsAutoExecute()) + ";" + fmt.Sprintf("window.__libroWorkspaceSID=%s;window.__libroPlugins=%s;var wsStyle=document.createElement('style');wsStyle.textContent=%s;document.head.appendChild(wsStyle);", components.JSString(sid), list, components.JSString(string(css))) + string(filesJS) + string(js)
 }
 
 func workspaceAppName(app Application) string {
@@ -53,11 +53,11 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 		r.Div("ws-sidebar-tools").Render(
 			workspaceButton("Toggle projects", "view_sidebar", "libroWorkspace.toggle('projects')"),
 		),
-		r.Div("ws-sidebar-heading").Render(
-			r.Span("").Text("Projects"),
-			workspaceButton("Add project", "add", fmt.Sprintf("if(window.__libroOpenProjectDialogBrowse){__libroOpenProjectDialogBrowse()}else{__ws.call('project.dialog.open',{sid:%s})}", components.JSString(sid))),
-		),
 		r.Div("ws-navigation").Render(
+			r.Div("ws-sidebar-heading").Render(
+				r.Span("").Text("Projects"),
+				workspaceButton("Add project", "add", fmt.Sprintf("if(window.__libroOpenProjectDialogBrowse){__libroOpenProjectDialogBrowse()}else{__ws.call('project.dialog.open',{sid:%s})}", components.JSString(sid))),
+			),
 			r.Div("ws-project-list").ID("workspace-project-list"),
 			r.Div("ws-sidebar-heading").Render(r.Span("").Text("Threads"), workspaceButton("New thread", "add", "libroWorkspace.newThread()")),
 			r.Div("").ID("workspace-thread-list"),

@@ -792,8 +792,12 @@ app.on('web-contents-created', (event, contents) => {
     // Track input focus state via console messages from the injected browserShortcutsScript.
     // This lets the main process know whether to intercept plain keys (j/k/h/l etc.)
     // or let them through to text input fields.
-    contents.on('console-message', (e) => {
-      const message = e.message || ''
+    contents.on('console-message', (details, level, legacyMessage) => {
+      // Electron 44 passes the message details as the first argument. Keep
+      // the legacy argument fallback for older Electron runtimes.
+      const message = typeof details?.message === 'string'
+        ? details.message
+        : typeof legacyMessage === 'string' ? legacyMessage : ''
       if (message === '__libro:passthrough') {
         webviewKeyboardPassthrough.set(contents.id, true)
         webviewInputFocused.set(contents.id, true)
@@ -1192,14 +1196,16 @@ app.on('web-contents-created', (event, contents) => {
         contents.executeJavaScript(browserKeyActions[key]).catch(() => {})
         return
       }
-      // Bare 'o' opens URL popup, bare 'r' reloads, bare 'm' cycles viewport size.
-      // Shift+M rotates the sm/md/xl viewport between portrait and landscape.
-      if ((!input.shift && (key === 'o' || key === 'r' || key === 'm')) || (input.shift && key === 'm')) {
+      // Bare 'a' annotates an element, 'd' draws a page area, 'o' opens URL popup,
+      // 'r' reloads, and 'm' cycles viewport size. Shift+M rotates the viewport.
+      if ((!input.shift && (key === 'a' || key === 'd' || key === 'o' || key === 'r' || key === 'm')) || (input.shift && key === 'm')) {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
           let js = ''
-          if (!input.shift && key === 'o') js = `if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();`
+          if (!input.shift && key === 'a') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroTogglePageTool) window.__libroTogglePageTool(a,'annotate');})();`
+          else if (!input.shift && key === 'd') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroTogglePageTool) window.__libroTogglePageTool(a,'area');})();`
+          else if (!input.shift && key === 'o') js = `if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();`
           else if (!input.shift && key === 'r') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroWvReload) window.__libroWvReload(a);})();`
           else if (input.shift && key === 'm') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroRotateSelectedBrowserViewport) window.__libroRotateSelectedBrowserViewport(a);})();`
           else js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroToggleSelectedBrowserMobile) window.__libroToggleSelectedBrowserMobile(a);})();`

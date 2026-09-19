@@ -1003,6 +1003,18 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			OnClick(r.JS(fmt.Sprintf(`if(window.__libroOpenConsole)window.__libroOpenConsole(%s)`, components.JSString(app.ID)))).
 			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("code"))
 
+		annotateBtn := r.Button(btnCls+" ws-page-tool").
+			Attr("data-page-tool", "annotate").Attr("aria-pressed", "false").
+			Attr("title", "Annotate element (A)").Attr("aria-label", "Annotate element (A)").
+			OnClick(r.JS(fmt.Sprintf(`if(window.__libroTogglePageTool)window.__libroTogglePageTool(%s,'annotate')`, components.JSString(app.ID)))).
+			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("edit_note"))
+
+		areaBtn := r.Button(btnCls+" ws-page-tool").
+			Attr("data-page-tool", "area").Attr("aria-pressed", "false").
+			Attr("title", "Select page area (D)").Attr("aria-label", "Select page area (D)").
+			OnClick(r.JS(fmt.Sprintf(`if(window.__libroTogglePageTool)window.__libroTogglePageTool(%s,'area')`, components.JSString(app.ID)))).
+			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("crop_free"))
+
 		zoomButtons := r.Div("flex items-center gap-0.5 shrink-0").
 			Attr("role", "group").Attr("aria-label", "Browser zoom")
 		for _, zoom := range []struct {
@@ -1052,7 +1064,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		globe := r.Div(globeBadgeCls).Render(globeIcon)
 
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
-			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn, consoleBtn, zoomButtons)
+			Render(backBtn, forwardBtn, globe, urlInput, copyBtn, reloadBtn, consoleBtn, annotateBtn, areaBtn, zoomButtons)
 	} else if app.Type == AppTypeTerminal {
 		labelText := workspaceAppName(app)
 
@@ -3498,6 +3510,20 @@ func terminalFrameSetupJS() string {
 				var el = document.querySelector('[data-terminal-app="' + String(appID).replace(/"/g, '\\"') + '"]');
 				var controller = el && terminals.get(el);
 				if (controller && controller.restart) controller.restart();
+			};
+
+			window.__libroSendPageToolPrompt = function(prompt, execute) {
+				var appID = window.__libroActiveAgentID || '';
+				var el = appID ? document.querySelector('[data-terminal-app="' + String(appID).replace(/"/g, '\\"') + '"]') : null;
+				if (!el) {
+					var fallback = document.querySelector('[data-workspace-project]:not([aria-hidden="true"]) [data-dock="center"] [data-terminal-app]');
+					el = fallback || null;
+				}
+				var controller = el && terminals.get(el);
+				if (!controller || !controller.ws || controller.ws.readyState !== WebSocket.OPEN) return false;
+				var pasted = '\x1b[200~' + String(prompt || '') + '\x1b[201~';
+				sendTerminalInput(controller, pasted + (execute ? '\r' : ''));
+				return true;
 			};
 
 			window.__libroRefreshTerminalThemes = function() {

@@ -178,6 +178,41 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 
 }
 
+func TestBrowserPageToolsAutoExecutePersistence(t *testing.T) {
+	original := db
+	path := filepath.Join(t.TempDir(), "settings.db")
+	var err error
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(); db = original })
+	createTables()
+	if browserPageToolsAutoExecute() {
+		t.Fatal("page tools should be disabled by default")
+	}
+	if err := setBrowserPageToolsAutoExecute(true); err != nil {
+		t.Fatal(err)
+	}
+	if !browserPageToolsAutoExecute() {
+		t.Fatal("enabled page tools setting was not read")
+	}
+	db.Close()
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !browserPageToolsAutoExecute() {
+		t.Fatal("page tools setting did not persist")
+	}
+	if err := setBrowserPageToolsAutoExecute(false); err != nil {
+		t.Fatal(err)
+	}
+	if browserPageToolsAutoExecute() {
+		t.Fatal("page tools setting did not disable")
+	}
+}
+
 func TestSaveNewAgentWithQuotedCommand(t *testing.T) {
 	original := db
 	var err error
