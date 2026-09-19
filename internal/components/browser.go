@@ -38,11 +38,18 @@ var browserShortcutsScript = '(' + function(){
 		if (!pageToolHighlight) {
 			pageToolHighlight = document.createElement('div');
 			pageToolHighlight.setAttribute('aria-hidden', 'true');
+			pageToolHighlight.setAttribute('popover', 'manual');
+			pageToolHighlight.style.inset = 'auto';
+			pageToolHighlight.style.margin = '0';
+			pageToolHighlight.style.padding = '0';
+			pageToolHighlight.style.overflow = 'visible';
 			pageToolHighlight.style.position = 'fixed';
 			pageToolHighlight.style.pointerEvents = 'none';
 			pageToolHighlight.style.zIndex = '2147483647';
 			pageToolHighlight.style.boxSizing = 'border-box';
-			document.documentElement.appendChild(pageToolHighlight);
+			var modals = document.querySelectorAll('dialog:modal');
+			(modals[modals.length - 1] || document.documentElement).appendChild(pageToolHighlight);
+			pageToolHighlight.showPopover();
 		}
 		pageToolHighlight.className = className || '';
 		pageToolHighlight.style.left = Math.max(0, rect.left) + 'px';
@@ -92,29 +99,10 @@ var browserShortcutsScript = '(' + function(){
 			viewportRect: rect ? {x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height)} : null
 		};
 	}
-	function pageToolElementsInRect(rect) {
-		var seen = [];
-		var elements = document.querySelectorAll ? document.querySelectorAll('body *') : [];
-		for (var i = 0; i < elements.length && seen.length < 20; i++) {
-			var el = elements[i];
-			if (el === pageToolHighlight || (pageToolOverlay && pageToolOverlay.contains(el))) continue;
-			var box;
-			try { box = el.getBoundingClientRect(); } catch (err) { continue; }
-			if (!box || box.width <= 0 || box.height <= 0) continue;
-			if (box.right >= rect.left && box.left <= rect.right && box.bottom >= rect.top && box.top <= rect.bottom) {
-				var data = pageToolElementData(el);
-				if (data && data.text || data && data.tag) seen.push(data);
-			}
-		}
-		return seen;
-	}
 	function pageToolAreaData(rect) {
 		return {
 			x: Math.round(rect.left), y: Math.round(rect.top),
-			width: Math.round(rect.width), height: Math.round(rect.height),
-			pageX: Math.round(rect.left + window.scrollX), pageY: Math.round(rect.top + window.scrollY),
-			text: pageToolText(document.elementFromPoint(Math.max(0, rect.left + rect.width / 2), Math.max(0, rect.top + rect.height / 2)), 800),
-			elements: pageToolElementsInRect(rect)
+			width: Math.round(rect.width), height: Math.round(rect.height)
 		};
 	}
 	function pageToolPromptClose() {
@@ -567,18 +555,6 @@ function pageToolContext(payload, appID) {
 		if (el.viewportRect) lines.push('- Viewport rectangle: x=' + el.viewportRect.x + ', y=' + el.viewportRect.y + ', width=' + el.viewportRect.width + ', height=' + el.viewportRect.height);
 		if (el.attributes) lines.push('- Attributes: ' + JSON.stringify(el.attributes));
 		if (el.html) lines.push('- Outer HTML:\n' + el.html);
-	} else if (payload && payload.kind === 'area' && payload.area) {
-		var area = payload.area;
-		lines.push(
-			'Selected rectangle:',
-			'- Viewport coordinates: x=' + area.x + ', y=' + area.y + ', width=' + area.width + ', height=' + area.height,
-			'- Page coordinates: x=' + area.pageX + ', y=' + area.pageY,
-			'- Text at center: ' + (area.text || '(none)'),
-			'Elements intersecting the rectangle:'
-		);
-		(area.elements || []).slice(0, 20).forEach(function(el, index) {
-			lines.push('[' + (index + 1) + '] ' + (el.tag || '') + ' ' + (el.selector || '') + (el.text ? ' — ' + el.text : '') + (el.html ? '\n' + el.html : ''));
-		});
 	}
 	if (payload && payload.screenshot) lines.push('Selected-area screenshot: ' + JSON.stringify(payload.screenshot), 'Open this image and use it with the user request and page URL.');
 	return lines.join('\n');

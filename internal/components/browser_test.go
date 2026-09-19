@@ -249,8 +249,11 @@ process.stdin.on('end', async () => {
   assert.ok(opened.includes('/tmp/selection.png'));
   assert.equal(sent, undefined);
   payload.screenshot = '/tmp/selection.png'; payload.request = 'Move the button';
+  payload.area.text = 'unwanted center text';
+  payload.area.elements = [{tag: 'button', selector: '#unwanted', html: '<button>unwanted HTML</button>'}];
   await context.receivePageToolMessage('app', 'selection', JSON.stringify(payload));
   for (const text of [payload.url, payload.request, payload.screenshot]) assert.ok(sent.includes(text));
+  for (const text of ['unwanted', 'Elements intersecting', 'Viewport coordinates', 'Page coordinates']) assert.ok(!sent.includes(text));
   opened = undefined;
   context.window.libroElectron.capturePageArea = async () => { throw new Error('failed'); };
   await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(payload));

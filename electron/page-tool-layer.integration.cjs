@@ -15,6 +15,16 @@ app.whenReady().then(async () => {
     for (const modal of [false,true]) {
       const result = await win.webContents.executeJavaScript(`(() => {
         if (${modal}) document.querySelector('dialog').showModal();
+        window.__libroSetPageToolMode('area');
+        const target = ${modal} ? document.querySelector('dialog') : document.body;
+        target.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true,button:0,clientX:30,clientY:60,pointerId:1}));
+        target.dispatchEvent(new PointerEvent('pointermove', {bubbles:true,clientX:230,clientY:210,pointerId:1}));
+        const outline = document.querySelector('.libro-page-tool-area');
+        const bounds = outline.getBoundingClientRect();
+        const css = getComputedStyle(outline);
+        if (!outline.matches(':popover-open') || bounds.x !== 30 || bounds.y !== 60 || bounds.width !== 200 || bounds.height !== 150 || css.borderTopWidth !== '2px' || css.borderTopStyle !== 'solid') throw new Error('Drag outline is not visible at the selected bounds');
+        window.__libroSetPageToolMode('');
+        if (document.querySelector('.libro-page-tool-area')) throw new Error('Outline was not removed before capture');
         window.__libroPageToolPromptOpen({kind:'area',area:{x:30,y:60,width:200,height:150},screenshot:'/tmp/example.png'},'http://example.test');
         const panel = document.querySelector('[popover]');
         const input = panel.shadowRoot.querySelector('input');
@@ -27,6 +37,6 @@ app.whenReady().then(async () => {
       })()`);
       for (const [key,value] of Object.entries(result)) assert.equal(value,true,`${modal}: ${key}`);
     }
-    console.log('PASS: prompt is above modal, focused, clickable, and closes without closing page popup');
+    console.log('PASS: drag outline and prompt work on normal pages and above modals');
   } finally { win.destroy(); app.quit(); }
 }).catch(error => {console.error(error);app.exit(1)});
