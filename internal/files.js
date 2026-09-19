@@ -49,11 +49,13 @@
     render(s);
   }
   function init() {
-    for (const [id,s] of states) if (!s.el.isConnected) states.delete(id);
+    for (const [id,s] of states) if (!s.el.isConnected) { if (s.url) URL.revokeObjectURL(s.url); states.delete(id); }
     document.querySelectorAll('[data-files]').forEach(el => {
       if (states.get(el.dataset.files)?.el === el) return;
       const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,sequence:0,items:[]};
       states.set(s.id,s);
+      s.wrap = el.querySelector('.ws-file-wrap input');
+      s.wrap.onchange = () => el.querySelector('.ws-file-text').classList.toggle('is-wrapped', s.wrap.checked);
       s.hidden.onchange = () => { s.index = 0; render(s); };
       s.filter.oninput = () => { s.index = 0; render(s); };
       s.filter.onkeydown = event => { if (event.key === 'Escape' || event.key === 'ArrowDown' || event.key === 'Enter') { event.preventDefault(); s.tree.focus(); if (event.key === 'Enter') open(s); } };
@@ -87,7 +89,26 @@
     s.status.textContent = result.error || '';
     if (result.error || pending.external) return;
     if (result.directory) { s.children.set(pending.path,result.entries || []); render(s); }
-    else { s.el.querySelector('.ws-file-path').textContent = result.path; s.el.querySelector('.ws-file-text').textContent = result.text || '(Empty file)'; }
+    else {
+      s.el.querySelector('.ws-file-path').textContent = result.path;
+      const text = s.el.querySelector('.ws-file-text'), media = s.el.querySelector('.ws-file-media');
+      media.replaceChildren();
+      if (s.url) { URL.revokeObjectURL(s.url); s.url = null; }
+      text.hidden = !!result.mime;
+      media.hidden = !result.mime;
+      s.wrap.disabled = !!result.mime;
+      if (!result.mime) { text.textContent = result.text || '(Empty file)'; text.scrollTop = 0; return; }
+      const bytes = Uint8Array.from(atob(result.data || ''), c => c.charCodeAt(0));
+      s.url = URL.createObjectURL(new Blob([bytes], {type:result.mime}));
+      const kind = result.mime.split('/')[0];
+      const element = document.createElement(kind === 'image' ? 'img' : kind === 'audio' || kind === 'video' ? kind : 'iframe');
+      if (kind === 'image') element.alt = result.path;
+      else if (kind === 'audio' || kind === 'video') { element.controls = true; element.preload = 'metadata'; }
+      else element.title = 'Preview of ' + result.path;
+      element.onerror = () => { s.status.textContent = 'This browser cannot preview this file. Press o in the file tree to open externally.'; };
+      element.src = s.url;
+      media.append(element);
+    }
   }
   window.libroFiles = {init,receive};
 })();

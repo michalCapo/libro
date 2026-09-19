@@ -106,7 +106,13 @@ func renderToolSettings() *r.Node {
 		r.El("form", "").ID("tool-commands-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveTools(this)")).Render(
 			r.Div("ws-settings-group").Render(
 				r.Div("").ID("tool-command-rows"),
-				r.Div("ws-settings-row").Render(r.Button("ws-launch").Attr("type", "submit").Text("Save tools"), r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomTool()")).Text("Add custom tool"), r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomTool('url')")).Text("Add website")),
+				r.Div("ws-settings-row").Render(
+					r.Button("ws-launch").Attr("type", "submit").Text("Save tools"),
+					r.Div("ws-settings-actions").Render(
+						r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomTool()")).Text("Add custom tool"),
+						r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomTool('url')")).Text("Add website"),
+					),
+				),
 			), r.P("ws-settings-status").Attr("role", "status"),
 		),
 	)

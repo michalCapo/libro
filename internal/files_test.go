@@ -1,8 +1,10 @@
 package libro
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -68,5 +70,51 @@ func TestProjectFileToOpen(t *testing.T) {
 	}
 	if got, err := projectFileToOpen(root, "local-link"); err != nil || got != want {
 		t.Fatalf("local symlink = %q, %v; want %q", got, err, want)
+	}
+}
+
+func TestProjectMediaPreview(t *testing.T) {
+	root := t.TempDir()
+	for _, test := range []struct{ name, data, mime string }{
+		{"photo.png", "\x89PNG\r\n\x1a\n", "image/png"},
+		{"vector.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>", "image/svg+xml"},
+		{"document.pdf", "%PDF-1.7", "application/pdf"},
+		{"sound.wav", "RIFF", "audio/"},
+		{"movie.mp4", "\x00\x00\x00\x18ftypmp42", "video/mp4"},
+		{"unknown", "\x89PNG\r\n\x1a\n", "image/png"},
+		{"large.pdf", "%PDF-1.7" + strings.Repeat("x", 1024*1024), "application/pdf"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(root, test.name), []byte(test.data), 0600); err != nil {
+				t.Fatal(err)
+			}
+			result, err := readProjectFile(root, test.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, err := base64.StdEncoding.DecodeString(result.Data)
+			if err != nil || string(decoded) != test.data || !strings.HasPrefix(result.MIME, test.mime) || result.Text != "" {
+				t.Fatalf("incorrect media preview: MIME=%q, decode error=%v", result.MIME, err)
+			}
+		})
+	}
+	for _, test := range []struct {
+		name string
+		size int
+	}{
+		{"large.txt", 1024*1024 + 1}, {"oversized.pdf", 32*1024*1024 + 1},
+	} {
+		f, err := os.Create(filepath.Join(root, test.name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = f.Truncate(int64(test.size))
+		f.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := readProjectFile(root, test.name); err == nil || !strings.Contains(err.Error(), "too large") {
+			t.Fatalf("%s size limit: %v", test.name, err)
+		}
 	}
 }
