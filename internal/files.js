@@ -1,11 +1,11 @@
 (function () {
   const states = new Map();
-  function request(s, path, preview = false, external = false) {
+  function request(s, path, preview = false, external = false, parents = s.parents) {
     const token = String(++s.sequence);
-    s.pending.set(token, {path, preview, external});
+    s.pending.set(token, {path, preview, external, parents});
     if (preview) s.previewRequest = token;
     s.status.textContent = external ? 'Opening…' : 'Loading…';
-    __ws.call(external ? 'files.open' : 'files.read', {sid:window.__libroWorkspaceSID, id:s.id, path, request:token});
+    __ws.call(external ? 'files.open' : 'files.read', {sid:window.__libroWorkspaceSID, id:s.id, path, parents, request:token});
   }
   function visible(s) {
     const result = [], query = s.filter.value.toLowerCase();
@@ -52,7 +52,7 @@
     for (const [id,s] of states) if (!s.el.isConnected) { if (s.url) URL.revokeObjectURL(s.url); states.delete(id); }
     document.querySelectorAll('[data-files]').forEach(el => {
       if (states.get(el.dataset.files)?.el === el) return;
-      const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,sequence:0,items:[]};
+      const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,sequence:0,parents:0,items:[]};
       states.set(s.id,s);
       s.wrap = el.querySelector('.ws-file-wrap input');
       s.wrap.onchange = () => el.querySelector('.ws-file-text').classList.toggle('is-wrapped', s.wrap.checked);
@@ -64,6 +64,13 @@
         const key = event.key, item = s.items[s.index];
         if (!['j','k','h','l','g','G','o','/','Enter','Backspace','ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End'].includes(key)) return;
         event.preventDefault(); event.stopPropagation();
+        if (key === 'Backspace') {
+          if (!event.repeat && !s.parentRequest && s.parents < 1024) {
+            s.parentRequest = true;
+            request(s,'',false,false,s.parents + 1);
+          }
+          return;
+        }
         if (key === '/') { s.filter.focus(); s.filter.select(); return; }
         if (key === 'o') { if (item && !item.dir && !event.repeat) request(s,item.path,false,true); return; }
         if (key === 'g') { if (Date.now() - (s.lastG || 0) < 500) s.index = 0; s.lastG = Date.now(); }
@@ -73,7 +80,7 @@
         else if (key === 'k' || key === 'ArrowUp') s.index--;
         else if (key === 'l' || key === 'ArrowRight' || key === 'Enter') { open(s,key !== 'Enter'); return; }
         else if (item) {
-          if (key !== 'Backspace' && item.dir && s.expanded.has(item.path)) s.expanded.delete(item.path);
+          if (item.dir && s.expanded.has(item.path)) s.expanded.delete(item.path);
           else { const parent = item.path.split('/').slice(0,-1).join('/'); const index = s.items.findIndex(entry => entry.path === parent); if (index >= 0) s.index = index; }
         }
         render(s); s.tree.querySelector('[aria-selected=true]')?.scrollIntoView({block:'nearest'});
@@ -86,8 +93,25 @@
     const pending = s.pending.get(result.request); if (!pending) return;
     s.pending.delete(result.request);
     if (pending.preview && s.previewRequest !== result.request) return;
+    if (pending.parents !== s.parents) s.parentRequest = false;
     s.status.textContent = result.error || '';
     if (result.error || pending.external) return;
+    if (result.directory && pending.parents !== s.parents) {
+      s.parents = pending.parents;
+      s.parentRequest = false;
+      s.pending.clear();
+      s.children.clear();
+      s.expanded.clear();
+      s.filter.value = '';
+      s.index = 0;
+      s.el.querySelector('.ws-file-path').textContent = 'Open file';
+      s.el.querySelector('.ws-file-text').textContent = 'Select a file from the tree.';
+      s.el.querySelector('.ws-file-text').hidden = false;
+      s.el.querySelector('.ws-file-media').replaceChildren();
+      s.el.querySelector('.ws-file-media').hidden = true;
+      s.wrap.disabled = false;
+      if (s.url) { URL.revokeObjectURL(s.url); s.url = null; }
+    }
     if (result.directory) { s.children.set(pending.path,result.entries || []); render(s); }
     else {
       s.el.querySelector('.ws-file-path').textContent = result.path;

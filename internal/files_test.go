@@ -118,3 +118,35 @@ func TestProjectMediaPreview(t *testing.T) {
 		}
 	}
 }
+
+func TestFilesParentRoot(t *testing.T) {
+	parent := t.TempDir()
+	project := filepath.Join(parent, "project")
+	if err := os.Mkdir(project, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(parent, "sibling.txt"), []byte("outside project"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := filesRoot(project, 0); got != project {
+		t.Fatalf("initial root = %s", got)
+	}
+	root := filesRoot(project, 1)
+	if root != parent {
+		t.Fatalf("parent root = %s, want %s", root, parent)
+	}
+	result, err := readProjectFile(root, "sibling.txt")
+	if err != nil || result.Text != "outside project" {
+		t.Fatalf("preview outside project: %v, %q", err, result.Text)
+	}
+	if _, err := projectFileToOpen(root, "sibling.txt"); err != nil {
+		t.Fatalf("open outside project: %v", err)
+	}
+	if _, err := readProjectFile(root, "../escape.txt"); err == nil {
+		t.Fatal("relative file requests must stay inside the current root")
+	}
+	top := filesRoot(project, 1024)
+	if filesRoot(top, 1) != top {
+		t.Fatal("parent of filesystem root must stay at root")
+	}
+}

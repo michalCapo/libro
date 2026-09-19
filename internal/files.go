@@ -38,7 +38,7 @@ func readProjectFile(rootPath, path string) (fileResult, error) {
 		path = "."
 	}
 	if !filepath.IsLocal(path) {
-		return result, fmt.Errorf("path must stay inside the project")
+		return result, fmt.Errorf("path must stay inside the files root")
 	}
 	root, err := os.OpenRoot(rootPath)
 	if err != nil {
@@ -121,7 +121,7 @@ func readProjectFile(rootPath, path string) (fileResult, error) {
 
 func projectFileToOpen(rootPath, path string) (string, error) {
 	if !filepath.IsLocal(path) {
-		return "", fmt.Errorf("path must stay inside the project")
+		return "", fmt.Errorf("path must stay inside the files root")
 	}
 	root, err := filepath.Abs(rootPath)
 	if err != nil {
@@ -137,7 +137,7 @@ func projectFileToOpen(rootPath, path string) (string, error) {
 	}
 	relative, err := filepath.Rel(root, resolved)
 	if err != nil || !filepath.IsLocal(relative) {
-		return "", fmt.Errorf("path must stay inside the project")
+		return "", fmt.Errorf("path must stay inside the files root")
 	}
 	info, err := os.Stat(resolved)
 	if err != nil {
@@ -149,6 +149,19 @@ func projectFileToOpen(rootPath, path string) (string, error) {
 	return resolved, nil
 }
 
+// filesRoot keeps navigation local to each files panel, independent of the project.
+func filesRoot(projectPath string, parents int) string {
+	root := filepath.Clean(projectPath)
+	for i := 0; i < parents; i++ {
+		parent := filepath.Dir(root)
+		if parent == root {
+			break
+		}
+		root = parent
+	}
+	return root
+}
+
 func registerFilesActions(app *r.App) {
 	for _, action := range []string{"files.read", "files.open"} {
 		registerAction(app, action, func(ctx *r.Context) string {
@@ -157,6 +170,11 @@ func registerFilesActions(app *r.App) {
 			id, _ := data["id"].(string)
 			path, _ := data["path"].(string)
 			request, _ := data["request"].(string)
+			parents, _ := data["parents"].(float64)
+			if parents < 0 || parents > 1024 {
+				parents = 0
+			}
+			root := filesRoot(sm.GetActiveProjectPath(sid), int(parents))
 			allowed := false
 			for _, a := range sm.Get(sid).Apps {
 				if a.ID == id && a.PluginID == "files" {
@@ -166,7 +184,7 @@ func registerFilesActions(app *r.App) {
 			}
 			result := fileResult{ID: id, Path: path, Request: request}
 			if allowed && action == "files.open" {
-				file, err := projectFileToOpen(sm.GetActiveProjectPath(sid), path)
+				file, err := projectFileToOpen(root, path)
 				if err == nil {
 					err = openBrowser(file)
 				}
@@ -174,7 +192,7 @@ func registerFilesActions(app *r.App) {
 					result.Error = err.Error()
 				}
 			} else if allowed {
-				value, err := readProjectFile(sm.GetActiveProjectPath(sid), path)
+				value, err := readProjectFile(root, path)
 				result = value
 				result.ID = id
 				result.Request = request
