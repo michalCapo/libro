@@ -3586,6 +3586,12 @@ func keyboardShortcutsJS(sid string) string {
 						allWebviews[j].blur();
 					}
 
+					var fileTree = container.querySelector('.ws-file-tree');
+					if (fileTree) {
+						if (!container.contains(document.activeElement)) fileTree.focus({ preventScroll: true });
+						return;
+					}
+
 					// Try to focus a webview first, then native terminal, then iframe fallback.
 					var webview = container.querySelector('webview');
 					if (webview && window.libroElectron) {

@@ -643,3 +643,37 @@ test('Ctrl+Shift+digits selects threads and is reserved in embedded browsers', (
     assert.equal(vm.runInNewContext(matching + ';isWorkspaceShortcut(input)', { input: { key, code, control: true, shift: true } }), true)
   }
 })
+
+test('shared panel focus moves from an agent to Files and preserves file input focus', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/components.go'), 'utf8')
+  const handler = source.slice(source.indexOf('window.__libroFocusApp = function(idx)'), source.indexOf('window.__libroFocusAppByID = function(appID)'))
+  const agent = {}, filter = {}, pending = []
+  let focused = 0
+  const tree = { focus() { focused++; document.activeElement = tree } }
+  const container = {
+    getAttribute: () => 'files',
+    contains: el => el === tree || el === filter,
+    querySelector: selector => selector === '.ws-file-tree' ? tree : null,
+  }
+  const strip = { closest: () => ({ style: {}, getAttribute: () => null }) }
+  const document = {
+    activeElement: agent,
+    querySelector: () => null,
+    querySelectorAll: selector => selector === '[id^="app-strip-"]' ? [strip] : [],
+  }
+  const window = { __libroSelectedApp: 'files', __libroSortedApps: () => [container], focus() {} }
+  vm.runInNewContext(handler, { window, document, setTimeout: fn => pending.push(fn) })
+  window.__libroFocusApp(0)
+  assert.equal(document.activeElement, tree)
+  assert.equal(focused, 1)
+  document.activeElement = filter
+  pending.splice(0).forEach(fn => fn())
+  assert.equal(document.activeElement, filter)
+  assert.equal(focused, 1)
+  document.activeElement = agent
+  window.__libroSelectedApp = 'agent'
+  window.__libroFocusApp(0)
+  pending.splice(0).forEach(fn => fn())
+  assert.equal(document.activeElement, agent)
+  assert.equal(focused, 1)
+})

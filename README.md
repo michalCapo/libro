@@ -2,9 +2,7 @@
 
 Libro is a Go + Electron desktop workspace for CLI coding agents. Run Codex, Pi, Claude, or OpenCode as side-by-side agent panels, with browser, editor, and repository tools in the right dock and project terminals in the bottom dock. Switch projects on the left.
 
-Open **New agent session** to launch an agent, or **Apps & plugins** to open a tool. Open **Commands** for the command palette. Panel widths are fixed, so a new panel never resizes the others — scroll the strip horizontally to reach panels outside the viewport.
-
-Tools and agents use a small local plugin manifest. See [Creating plugins](docs/plugins.md) for the API and examples.
+Open **New agent session** to launch an agent, or use the right tool rail to open a tool. Open **Commands** for the command palette. Panel widths are fixed, so a new panel never resizes the others — scroll the strip horizontally to reach panels outside the viewport.
 
 ![Libro empty state with agent launcher](demo/libro-home.png)
 
@@ -124,7 +122,7 @@ Bundled Electron runtimes extracted from release binaries are stored under the u
 - **Agent done sound**: plays a short notification whenever an agent finishes, in any project.
 - **Panels**: default agent and tool panel widths for newly opened panels.
 - **Agent commands**: edit launch commands, rename agents, disable or remove them from the launcher, and add custom agents. One enabled agent can be set to autolaunch when a project opens with no agent panels; leave all unchecked to choose manually. Running sessions are unchanged.
-- **Tools**: edit commands for Nvim, Git, and Database; disable or remove tools; and add custom CLI tools. Changes apply to new sessions.
+- **Tools**: edit commands for Nvim, Git, and Database; disable or remove tools; and add custom CLI tools or websites. Website and CLI icons are discovered automatically and cached locally when available. Changes apply to new sessions.
 - **Keyboard shortcuts**: remap workspace shortcuts and restore defaults.
 
 ## Keyboard Shortcuts

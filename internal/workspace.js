@@ -115,7 +115,6 @@
       const terminal = frame.querySelector('[data-terminal-app]');
       if (terminal && window.__libroFitTerminalFrame) window.__libroFitTerminalFrame(terminal);
       if (window.__libroFocusAppByID) window.__libroFocusAppByID(id);
-      frame.querySelector('.ws-file-tree')?.focus();
     });
   }
   function launcher(dock) {
