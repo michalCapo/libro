@@ -162,7 +162,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-shortcuts-panel>div:first-child,.ws-shortcuts-panel>div:last-child{flex-shrink:0}
 .ws-shortcuts-panel>div:last-child{background:var(--ws-bg);border-top:1px solid var(--ws-line)}
 .ws-shortcuts-body{overflow-y:auto;min-height:0;padding:22px 18px;scrollbar-width:thin;scrollbar-color:var(--ws-line) transparent}
-.ws-project-accent{color:var(--ws-fg)}
+.ws-project-accent{color:var(--ws-accent)}
 .ws-shortcut-heading{font-size:13px;line-height:20px;font-weight:400;color:var(--ws-muted);margin:0 0 12px;padding:0 14px}
 .ws-shortcut-subtitle{font-size:12px;line-height:18px;color:var(--ws-muted);padding:0 8px;margin:-4px 0 12px}
 .ws-shortcut-group{border:1px solid var(--ws-line);border-radius:14px;overflow:hidden;background:var(--ws-bg)}
