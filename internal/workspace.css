@@ -417,3 +417,5 @@ html.dark .ws-project-agent[data-agent-status=done],html.dark .ws-project-agent[
 #tool-command-rows .ws-agent-config-row{grid-template-columns:20px minmax(90px,1fr) minmax(0,2fr) minmax(180px,1fr) auto}
 .ws-tool-shortcut{display:flex;align-items:center;gap:8px;min-width:0}
 @media(max-width:760px){#tool-command-rows .ws-agent-config-row{grid-template-columns:20px minmax(0,1fr) auto}#tool-command-rows [data-agent-command],#tool-command-rows .ws-tool-shortcut{grid-column:2}#tool-command-rows .ws-agent-config-row>.ws-button{grid-column:3;grid-row:1}}
+
+.ws-tool-icon { width: 18px; height: 18px; object-fit: contain; flex-shrink: 0; }

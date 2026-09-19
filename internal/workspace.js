@@ -136,7 +136,7 @@
     });
     const entries = node('div', 'ws-plugin-list');
     list.forEach(plugin => {
-      const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; const icon = node('i', 'material-icons-round', plugin.type === 'url' ? 'language' : 'terminal'); icon.setAttribute('aria-hidden', 'true'); const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', plugin.name), node('small', '', plugin.description || plugin.command || 'Browser app')); entry.append(icon, copy);
+      const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; const icon = node('i', 'material-icons-round', plugin.type === 'url' ? 'language' : 'terminal'); icon.setAttribute('aria-hidden', 'true'); const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', plugin.name), node('small', '', plugin.description || plugin.command || 'Browser app')); entry.append(icon, copy); applyToolIcon(entry, plugin);
       entry.onclick = () => { dialog.close(); openPlugin(plugin.id, dock, entry); }; entries.append(entry);
     });
     dialog.append(entries);
@@ -526,7 +526,7 @@
     if (rail.dataset.signature === signature) return;
     rail.dataset.signature = signature; rail.replaceChildren();
     const icons = {terminal:'terminal',browser:'language',files:'folder_open',nvim:'edit',lazyrepo:'account_tree',lazydata:'storage'};
-    list.forEach(p => { const entry = button(p.name, icons[p.id] || 'terminal', () => tool(p.id)); entry.dataset.toolId = p.id; rail.append(entry); });
+    list.forEach(p => { const entry = button(p.name, icons[p.id] || (p.type === 'url' ? 'language' : 'terminal'), () => tool(p.id)); applyToolIcon(entry, p); entry.dataset.toolId = p.id; rail.append(entry); });
     updateToolHints();
   }
   function restoreAgentFocus(grid) {
@@ -1077,6 +1077,14 @@
     rows.forEach((row, i) => row.querySelectorAll('[data-agent-move]').forEach(move => {
       move.disabled = Number(move.dataset.agentMove) < 0 ? i === 0 : i === rows.length - 1;
     }));
+  }
+  function applyToolIcon(entry, plugin) {
+    if (!plugin.icon?.startsWith('data:image/')) return;
+    const image = node('img', 'ws-tool-icon');
+    image.alt = ''; image.style.display = 'none';
+    image.onerror = () => image.remove();
+    image.onload = () => { const fallback = entry.querySelector('i'); if (fallback) fallback.remove(); image.style.display = ''; };
+    entry.prepend(image); image.src = plugin.icon;
   }
   function addCustomTool(type = 'terminal') {
     addAgentRow({id:'custom-tool-' + crypto.randomUUID(), name:'', custom:true, type}, '', true).querySelector('[data-agent-name]').focus();

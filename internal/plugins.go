@@ -15,6 +15,7 @@ import (
 // Plugin describes an app that runs in a Libro-managed terminal or browser.
 // Plugins never need to implement PTY, webview, tab, or project lifecycle code.
 type Plugin struct {
+	Icon        string  `json:"icon,omitempty"`
 	Autolaunch  bool    `json:"autolaunch,omitempty"`
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
@@ -99,7 +100,12 @@ func loadPlugins(dir string) []Plugin {
 	return result
 }
 
-func plugins() []Plugin {
+func plugins() (result []Plugin) {
+	defer func() {
+		for i := range result {
+			result[i].Icon = toolIcon(result[i])
+		}
+	}()
 	pluginOnce.Do(func() {
 		dir, err := libroDataDir()
 		if err != nil {
@@ -108,7 +114,7 @@ func plugins() []Plugin {
 		}
 		installedPlugins = loadPlugins(filepath.Join(dir, "plugins"))
 	})
-	result := append([]Plugin(nil), installedPlugins...)
+	result = append([]Plugin(nil), installedPlugins...)
 	dbMu.Lock()
 	defer dbMu.Unlock()
 	if db != nil {
