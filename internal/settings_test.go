@@ -221,6 +221,46 @@ func TestBrowserPageToolsAutoExecutePersistence(t *testing.T) {
 	}
 }
 
+func TestAgentEnvironmentPersistence(t *testing.T) {
+	original := db
+	path := filepath.Join(t.TempDir(), "settings.db")
+	var err error
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+
+	if err := setAgentEnvironment([]environmentInput{
+		{Name: "OPENROUTER_API_KEY", Value: "secret"},
+		{Name: "MODEL_NAME", Value: "openrouter/auto"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := agentEnvironment(); got["OPENROUTER_API_KEY"] != "secret" || got["MODEL_NAME"] != "openrouter/auto" {
+		t.Fatalf("environment not saved: %v", got)
+	}
+
+	// An empty value for an unchanged saved row preserves the hidden value.
+	if err := setAgentEnvironment([]environmentInput{{Name: "OPENROUTER_API_KEY", OriginalName: "OPENROUTER_API_KEY"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := agentEnvironment(); len(got) != 1 || got["OPENROUTER_API_KEY"] != "secret" {
+		t.Fatalf("hidden value was not preserved: %v", got)
+	}
+
+	for _, entries := range [][]environmentInput{
+		{{Name: "BAD-NAME", Value: "value"}},
+		{{Name: "DUP", Value: "one"}, {Name: "DUP", Value: "two"}},
+		{{Name: "NEW"}},
+	} {
+		if err := setAgentEnvironment(entries); err == nil {
+			t.Fatalf("accepted invalid environment: %+v", entries)
+		}
+	}
+}
+
 func TestSaveNewAgentWithQuotedCommand(t *testing.T) {
 	original := db
 	var err error

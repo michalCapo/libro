@@ -160,3 +160,13 @@ func TestFilesParentRoot(t *testing.T) {
 		t.Fatal("parent of filesystem root must stay at root")
 	}
 }
+
+func TestFilesWordWrapEnabledByDefault(t *testing.T) {
+	js := renderFiles(Application{ID: "files"}).ToJS()
+	if !strings.Contains(js, "setAttribute('checked','checked')") {
+		t.Fatal("word wrap checkbox is not checked by default")
+	}
+	if !strings.Contains(js, "className='ws-file-text is-wrapped'") {
+		t.Fatal("file preview is not wrapped by default")
+	}
+}

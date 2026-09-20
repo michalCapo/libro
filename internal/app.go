@@ -660,7 +660,11 @@ func Run(assets embed.FS) {
 		if state.Apps[idx].Type == AppTypeTerminal && !state.Apps[idx].TerminalReady {
 			term := state.Apps[idx]
 			pwd := sm.GetActiveProjectPath(sid)
-			session, err := tm.Start(term.ID, term.Command, pwd, term.Writable)
+			var environment []string
+			if isAgentApp(term) {
+				environment = agentEnvironmentList()
+			}
+			session, err := tm.StartWithEnvironment(term.ID, term.Command, pwd, term.Writable, environment)
 			if err != nil {
 				sm.RemoveAppByID(sid, term.ID)
 				state = sm.Get(sid)
@@ -772,7 +776,11 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 		}
 
 		pwd := sm.GetActiveProjectPath(sid)
-		if err := tm.Restart(term.ID, term.Command, term.Writable, pwd); err != nil {
+		var environment []string
+		if isAgentApp(*term) {
+			environment = agentEnvironmentList()
+		}
+		if err := tm.RestartWithEnvironment(term.ID, term.Command, term.Writable, pwd, environment); err != nil {
 			return r.Notify("error", "Failed to restart terminal: "+err.Error())
 		}
 

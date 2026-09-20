@@ -26,7 +26,6 @@ func InitDB() {
 	if err != nil {
 		log.Fatalf("db: failed to open %s: %v", dbPath, err)
 	}
-
 	// Enable WAL mode for better concurrent read performance
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		log.Printf("db: WAL pragma failed: %v", err)
@@ -36,6 +35,9 @@ func InitDB() {
 	}
 
 	createTables()
+	if err := os.Chmod(dbPath, 0o600); err != nil {
+		log.Printf("db: failed to restrict permissions on %s: %v", dbPath, err)
+	}
 	removeDefaultHomeProject()
 }
 

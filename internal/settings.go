@@ -5,9 +5,86 @@ import (
 	"fmt"
 	r "github.com/michalCapo/g-sui/ui"
 	"libro/internal/components"
+	"regexp"
 	"slices"
+	"sort"
 	"strings"
 )
+
+var environmentNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+type environmentInput struct {
+	Name         string `json:"name"`
+	Value        string `json:"value"`
+	OriginalName string `json:"originalName"`
+}
+
+func agentEnvironment() map[string]string {
+	result := map[string]string{}
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	if db == nil {
+		return result
+	}
+	var raw string
+	if db.QueryRow(`SELECT value FROM settings WHERE key = 'agent_environment'`).Scan(&raw) == nil {
+		_ = json.Unmarshal([]byte(raw), &result)
+	}
+	return result
+}
+
+func agentEnvironmentNames() []string {
+	environment := agentEnvironment()
+	names := make([]string, 0, len(environment))
+	for name := range environment {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func agentEnvironmentList() []string {
+	environment := agentEnvironment()
+	result := make([]string, 0, len(environment))
+	for name, value := range environment {
+		result = append(result, name+"="+value)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func setAgentEnvironment(inputs []environmentInput) error {
+	existing := agentEnvironment()
+	next := make(map[string]string, len(inputs))
+	for _, input := range inputs {
+		name := strings.TrimSpace(input.Name)
+		if !environmentNamePattern.MatchString(name) {
+			return fmt.Errorf("invalid environment variable name: %s", name)
+		}
+		if _, duplicate := next[name]; duplicate {
+			return fmt.Errorf("duplicate environment variable: %s", name)
+		}
+		value := input.Value
+		if value == "" && input.OriginalName != "" && name == input.OriginalName {
+			value = existing[input.OriginalName]
+		}
+		if value == "" || strings.ContainsRune(value, 0) {
+			return fmt.Errorf("enter a value for %s", name)
+		}
+		next[name] = value
+	}
+	raw, err := json.Marshal(next)
+	if err != nil {
+		return err
+	}
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	if db == nil {
+		return fmt.Errorf("settings database is unavailable")
+	}
+	_, err = db.Exec(`INSERT INTO settings (key,value) VALUES ('agent_environment',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, string(raw))
+	return err
+}
 
 func defaultPanelWidths() []Width {
 	return []Width{WidthXS, WidthSM, WidthMD, WidthLG, WidthXL, Width2XL}
@@ -302,6 +379,20 @@ func renderAgentCommands() *r.Node {
 }
 
 func registerSettingsActions(app *r.App) {
+	registerAction(app, "settings.agent-environment", func(ctx *r.Context) string {
+		raw, _ := json.Marshal(ctx.WsData()["entries"])
+		var entries []environmentInput
+		err := json.Unmarshal(raw, &entries)
+		if err == nil {
+			err = setAgentEnvironment(entries)
+		}
+		message := "Saved. Applies to new agent sessions."
+		if err != nil {
+			message = "Could not save: " + err.Error()
+		}
+		names, _ := json.Marshal(agentEnvironmentNames())
+		return fmt.Sprintf("libroWorkspace.agentEnvironmentSaved(%t,%s,%s);", err == nil, components.JSString(message), names)
+	})
 	registerAction(app, "settings.thread-agent", func(ctx *r.Context) string {
 		id, ok := ctx.WsData()["agent"].(string)
 		saved := ok && setDefaultThreadAgent(id) == nil
@@ -369,7 +460,8 @@ func registerSettingsActions(app *r.App) {
 		encoded, _ := json.Marshal(commands)
 		keys, _ := json.Marshal(toolKeybindings())
 		list, _ := json.Marshal(plugins())
-		return fmt.Sprintf("window.__libroPlugins=%s;libroWorkspace.showSettings(%s,%s,%s,%s,%s,%t);", list, components.JSString(string(DBDefaultPanelWidth())), encoded, keys, components.JSString(string(DBDefaultToolPanelWidth())), components.JSString(defaultThreadAgent()), browserPageToolsAutoExecute())
+		environment, _ := json.Marshal(agentEnvironmentNames())
+		return fmt.Sprintf("window.__libroPlugins=%s;libroWorkspace.showSettings(%s,%s,%s,%s,%s,%t,%s);", list, components.JSString(string(DBDefaultPanelWidth())), encoded, keys, components.JSString(string(DBDefaultToolPanelWidth())), components.JSString(defaultThreadAgent()), browserPageToolsAutoExecute(), environment)
 	})
 	registerAction(app, "settings.width", func(ctx *r.Context) string {
 		value, _ := ctx.WsData()["width"].(string)
@@ -438,6 +530,18 @@ func renderWorkspaceSettings() *r.Node {
 				),
 			),
 			r.P("ws-settings-status").ID("page-tools-autoexecute-status").Attr("role", "status"),
+			r.El("h2", "ws-shortcut-heading").Text("Agent environment"),
+			r.P("ws-settings-status").Text("Environment variables passed to new agent sessions. Saved values stay hidden in Settings."),
+			r.El("form", "").ID("agent-environment-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveAgentEnvironment(this)")).Render(
+				r.Div("ws-settings-group").Render(
+					r.Div("").ID("agent-environment-rows"),
+					r.Div("ws-settings-row").Render(
+						r.Button("ws-launch").Attr("type", "submit").Text("Save environment"),
+						r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addAgentEnvironment()")).Text("Add variable"),
+					),
+				),
+				r.P("ws-settings-status").Attr("role", "status"),
+			),
 			r.El("h2", "ws-shortcut-heading").Text("Panels"),
 			r.Div("ws-settings-group").Render(
 				r.Div("ws-settings-row").Render(

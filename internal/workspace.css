@@ -262,6 +262,8 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 @media(min-width:521px){#tool-key-form .ws-agent-command-row{grid-template-columns:180px minmax(0,1fr) auto}}
 .ws-agent-config-row{grid-template-columns:20px minmax(90px,1fr) minmax(0,3fr) auto}
 .ws-agent-config-row .ws-agent-command{min-width:0;width:100%}
+.ws-environment-row{grid-template-columns:minmax(160px,.7fr) minmax(220px,1.3fr) auto}
+@media(max-width:520px){.ws-environment-row{grid-template-columns:minmax(0,1fr) auto}.ws-environment-row [data-environment-name]{grid-column:1 / -1}}
 .ws-agent-enabled{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ws-muted)}
 .ws-agent-enabled input{accent-color:var(--ws-accent)}
 @media(max-width:520px){.ws-agent-config-row{grid-template-columns:20px minmax(0,1fr)}.ws-agent-config-row>label{grid-column:auto}.ws-agent-config-row>[data-agent-command]{grid-column:2}.ws-agent-config-row>.ws-agent-enabled{grid-column:1;grid-row:1}}

@@ -7,6 +7,7 @@ const { test } = require('node:test')
 const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
 const show = workspace.slice(workspace.indexOf('  function showSettings('), workspace.indexOf('  function closeSettings('))
 const save = workspace.slice(workspace.indexOf('  function saveAgentCommand('), workspace.indexOf('  function agentCommandSaved('))
+const saveEnvironment = workspace.slice(workspace.indexOf('  function saveAgentEnvironment('), workspace.indexOf('  function agentEnvironmentSaved('))
 
 test('saving a new agent excludes removed tools and preserves removed agents', () => {
   const element = { replaceChildren() {}, focus() {} }
@@ -29,11 +30,35 @@ test('saving a new agent excludes removed tools and preserves removed agents', (
       { id: 'custom-old', dock: 'center', type: 'terminal', removed: true },
     ] },
     document: { getElementById: () => element, querySelector: () => element, querySelectorAll: () => [] },
-    fillThreadAgents() {}, fillToolKeys() {}, updateToolHints() {}, themePreference() {}, addAgentRow() {},
+    fillThreadAgents() {}, fillToolKeys() {}, updateToolHints() {}, themePreference() {}, addAgentRow() {}, fillAgentEnvironment() {}, fillAutolaunchAgents() {},
     call(action, data) { assert.equal(action, 'settings.agent-command'); payload = JSON.parse(JSON.stringify(data)) },
   })
   assert.deepEqual(payload.removed, { 'custom-old': true })
   assert.deepEqual(payload.disabled, { 'custom-luna': false, 'custom-old': true })
   assert.equal(payload.custom[0].name, 'luna')
   assert.equal(payload.commands['custom-luna'], fields['[data-agent-command]'].value)
+})
+
+test('saving agent environment preserves masked values', () => {
+  const submit = { disabled: false }
+  const status = { textContent: '' }
+  const row = {
+    dataset: { originalName: 'OPENROUTER_API_KEY' },
+    querySelector: selector => ({
+      '[data-environment-name]': { value: 'OPENROUTER_API_KEY' },
+      '[data-environment-value]': { value: '' },
+    })[selector],
+  }
+  const form = {
+    querySelectorAll: () => [row],
+    querySelector: selector => selector === '[type=submit]' ? submit : status,
+  }
+  let payload
+  vm.runInNewContext(saveEnvironment + ';saveAgentEnvironment(form)', {
+    form,
+    call(action, data) { assert.equal(action, 'settings.agent-environment'); payload = JSON.parse(JSON.stringify(data)) },
+  })
+  assert.deepEqual(payload.entries, [{name: 'OPENROUTER_API_KEY', value: '', originalName: 'OPENROUTER_API_KEY'}])
+  assert.equal(submit.disabled, true)
+  assert.equal(status.textContent, 'Saving…')
 })

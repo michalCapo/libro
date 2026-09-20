@@ -140,6 +140,12 @@ func NewTerminalManager() *TerminalManager {
 
 // Start launches (or returns) a PTY session for the given app.
 func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*TerminalSession, error) {
+	return tm.StartWithEnvironment(appID, command, cwd, writable, nil)
+}
+
+// StartWithEnvironment launches a PTY session with additional environment
+// variables. Entries override variables inherited from Libro.
+func (tm *TerminalManager) StartWithEnvironment(appID, command, cwd string, writable bool, environment []string) (*TerminalSession, error) {
 	tm.launchMu.Lock()
 	defer tm.launchMu.Unlock()
 	if appID == "" {
@@ -169,7 +175,7 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 	}
 	cmd := terminalCommand(launchCommand, shell)
 	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	cmd.Env = mergeEnvironment(os.Environ(), append(environment, "TERM=xterm-256color", "COLORTERM=truecolor"))
 	if activity != nil {
 		cmd.Env = append(cmd.Env, activity.env...)
 	}
@@ -207,6 +213,33 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 	go s.watchAgentActivity()
 	go s.watchProcessActivity()
 	return s, nil
+}
+
+func mergeEnvironment(base, overrides []string) []string {
+	lastOverride := make(map[string]int, len(overrides))
+	for i, entry := range overrides {
+		if name, _, ok := strings.Cut(entry, "="); ok {
+			lastOverride[name] = i
+		}
+	}
+	result := make([]string, 0, len(base)+len(overrides))
+	for _, entry := range base {
+		name, _, ok := strings.Cut(entry, "=")
+		if !ok {
+			result = append(result, entry)
+			continue
+		}
+		if _, replaced := lastOverride[name]; !replaced {
+			result = append(result, entry)
+		}
+	}
+	for i, entry := range overrides {
+		name, _, ok := strings.Cut(entry, "=")
+		if !ok || lastOverride[name] == i {
+			result = append(result, entry)
+		}
+	}
+	return result
 }
 
 // The shell stays alive after commands finish, so session existence is not activity.
@@ -381,8 +414,13 @@ func (tm *TerminalManager) Stop(appID string) {
 
 // Restart kills the PTY session for an app, then starts it again.
 func (tm *TerminalManager) Restart(appID, command string, writable bool, cwd string) error {
+	return tm.RestartWithEnvironment(appID, command, writable, cwd, nil)
+}
+
+// RestartWithEnvironment restarts a PTY session with additional environment variables.
+func (tm *TerminalManager) RestartWithEnvironment(appID, command string, writable bool, cwd string, environment []string) error {
 	tm.Stop(appID)
-	_, err := tm.Start(appID, command, cwd, writable)
+	_, err := tm.StartWithEnvironment(appID, command, cwd, writable, environment)
 	return err
 }
 

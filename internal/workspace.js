@@ -993,7 +993,42 @@
     if (select) { select.disabled = false; select.value = enabled ? 'on' : 'off'; }
     if (status) status.textContent = ok ? 'Saved.' : 'Could not save. Try again.';
   }
-  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '', pageToolsAutoExecute = false) {
+  function addAgentEnvironment(name = '', saved = false) {
+    const row = node('div', 'ws-settings-row ws-agent-command-row ws-environment-row');
+    const key = node('input', 'ws-agent-command');
+    key.dataset.environmentName = ''; key.value = name; key.placeholder = 'VARIABLE_NAME'; key.required = true;
+    key.autocomplete = 'off'; key.spellcheck = false; key.setAttribute('aria-label', 'Environment variable name');
+    const value = node('input', 'ws-agent-command');
+    value.dataset.environmentValue = ''; value.type = 'password'; value.placeholder = saved ? 'Saved value' : 'Value';
+    value.autocomplete = 'new-password'; value.setAttribute('aria-label', name ? name + ' value' : 'Environment variable value');
+    if (!saved) value.required = true;
+    row.dataset.originalName = saved ? name : '';
+    row.append(key, value, button('Remove variable', 'delete_outline', () => row.remove()));
+    document.getElementById('agent-environment-rows').append(row);
+    if (!saved) key.focus();
+    return row;
+  }
+  function fillAgentEnvironment(names = []) {
+    document.getElementById('agent-environment-rows').replaceChildren();
+    names.forEach(name => addAgentEnvironment(name, true));
+  }
+  function saveAgentEnvironment(form) {
+    const entries = [...form.querySelectorAll('.ws-environment-row')].map(row => ({
+      name: row.querySelector('[data-environment-name]').value,
+      value: row.querySelector('[data-environment-value]').value,
+      originalName: row.dataset.originalName || '',
+    }));
+    form.querySelector('[type=submit]').disabled = true;
+    form.querySelector('[role=status]').textContent = 'Saving…';
+    call('settings.agent-environment', {entries});
+  }
+  function agentEnvironmentSaved(ok, message, names) {
+    const form = document.getElementById('agent-environment-form');
+    form.querySelector('[type=submit]').disabled = false;
+    form.querySelector('[role=status]').textContent = message;
+    if (ok) fillAgentEnvironment(names);
+  }
+  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '', pageToolsAutoExecute = false, environment = []) {
     window.__libroPageToolsAutoExecute = !!pageToolsAutoExecute;
     savedThreadAgent = threadAgent;
     fillThreadAgents();
@@ -1004,6 +1039,8 @@
     document.getElementById('page-tools-autoexecute-status').textContent = '';
     document.getElementById('workspace-theme').value = themePreference();
     document.getElementById('workspace-theme-status').textContent = '';
+    fillAgentEnvironment(environment);
+    document.querySelector('#agent-environment-form [role=status]').textContent = '';
     toolKeys = bindings; fillToolKeys(bindings); updateToolHints();
     document.getElementById('tool-key-status').textContent = '';
     document.getElementById('agent-command-rows').replaceChildren();
@@ -1205,7 +1242,7 @@
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
   }
-  window.libroWorkspace = {saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;
