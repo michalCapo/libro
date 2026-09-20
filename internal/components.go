@@ -979,12 +979,18 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			OnClick(r.JS(fmt.Sprintf(`if(window.__libroOpenConsole)window.__libroOpenConsole(%s)`, components.JSString(app.ID)))).
 			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("code"))
 
+		agentControl := r.Button(btnCls).Attr("type", "button").Attr("data-browser-control", "").
+			Attr("title", "Pause agent browser control").Attr("aria-label", "Pause agent browser control").Attr("aria-pressed", "false").
+			OnClick(r.JS(`if(window.__libroBrowserControlPause)window.__libroBrowserControlPause('toggle')`)).
+			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("pause"))
+
 		menuID := "browser-actions-" + app.ID
 		menu := r.Div("ws-browser-menu").ID(menuID).Attr("popover", "auto").
 			Attr("role", "group").Attr("aria-label", "Browser actions")
 		for _, action := range []struct {
 			label, shortcut, script, mode string
 		}{
+			{"Stop agent browser work", "", `if(window.__libroBrowserControlPause)window.__libroBrowserControlPause('stop')`, ""},
 			{"Reload", "R", fmt.Sprintf(`window.__libroWvReload(%s)`, components.JSString(app.ID)), ""},
 			{"Annotate element", "A", fmt.Sprintf(`window.__libroTogglePageTool(%s,'annotate')`, components.JSString(app.ID)), "annotate"},
 			{"Select page area", "D", fmt.Sprintf(`window.__libroTogglePageTool(%s,'area')`, components.JSString(app.ID)), "area"},
@@ -1022,7 +1028,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();if(window.__libroNavigateAddress(%s,event.target.value))event.target.blur();}`, components.JSString(app.ID))))
 
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
-			Render(backBtn, forwardBtn, urlInput, copyBtn, consoleBtn, moreBtn, menu)
+			Render(backBtn, forwardBtn, urlInput, copyBtn, consoleBtn, agentControl, moreBtn, menu)
 	} else if app.Type == AppTypeTerminal {
 		labelText := workspaceAppName(app)
 

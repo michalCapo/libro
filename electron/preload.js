@@ -4,6 +4,15 @@ const { ipcRenderer, contextBridge, webFrame } = require('electron')
 
 // Expose IPC methods to the renderer page for close confirmation flow
 contextBridge.exposeInMainWorld('libroElectron', {
+  setBrowserControlEnabled: function (enabled) {
+    return ipcRenderer.invoke('libro-browser-control-enabled', enabled)
+  },
+  browserControlState: function (action) {
+    return ipcRenderer.invoke('libro-browser-control-state', action)
+  },
+  onBrowserControlState: function (callback) {
+    if (typeof callback === 'function') ipcRenderer.on('libro-browser-control-state', (_event, state) => callback(state))
+  },
   capturePageArea: function (webContentsId, area) {
     return ipcRenderer.invoke('libro-capture-page-area', webContentsId, area)
   },

@@ -492,3 +492,40 @@ func TestWebsiteToolValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestBrowserControlSettingPersistence(t *testing.T) {
+	original := db
+	path := filepath.Join(t.TempDir(), "settings.db")
+	var err error
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	if !browserControlEnabled() {
+		t.Fatal("browser control must default to on")
+	}
+	if err := setBrowserControlEnabled(false); err != nil {
+		t.Fatal(err)
+	}
+	if browserControlEnabled() {
+		t.Fatal("browser control did not disable")
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if browserControlEnabled() {
+		t.Fatal("disabled browser control did not persist")
+	}
+	if err := setBrowserControlEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	if !browserControlEnabled() {
+		t.Fatal("browser control did not re-enable")
+	}
+}

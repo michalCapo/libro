@@ -5,6 +5,7 @@ import (
 	"fmt"
 	r "github.com/michalCapo/g-sui/ui"
 	"libro/internal/components"
+	"log"
 	"regexp"
 	"slices"
 	"sort"
@@ -128,6 +129,33 @@ func DBSetDefaultPanelWidth(width Width) error {
 
 func DBSetDefaultToolPanelWidth(width Width) error {
 	return dbSetPanelWidth("default_tool_panel_width", width)
+}
+
+func browserControlEnabled() bool {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	if db == nil {
+		return true
+	}
+	var value string
+	if err := db.QueryRow(`SELECT value FROM settings WHERE key = 'browser_control_enabled'`).Scan(&value); err != nil {
+		return true
+	}
+	return value != "0" && !strings.EqualFold(value, "false")
+}
+
+func setBrowserControlEnabled(enabled bool) error {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	if db == nil {
+		return fmt.Errorf("settings database is unavailable")
+	}
+	value := "0"
+	if enabled {
+		value = "1"
+	}
+	_, err := db.Exec(`INSERT INTO settings (key,value) VALUES ('browser_control_enabled',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, value)
+	return err
 }
 
 func browserPageToolsAutoExecute() bool {
@@ -398,6 +426,18 @@ func registerSettingsActions(app *r.App) {
 		saved := ok && setDefaultThreadAgent(id) == nil
 		return fmt.Sprintf("libroWorkspace.threadAgentSaved(%t,%s);", saved, components.JSString(defaultThreadAgent()))
 	})
+	registerAction(app, "settings.browser-control", func(ctx *r.Context) string {
+		enabled, ok := ctx.WsData()["enabled"].(bool)
+		saved := ok && setBrowserControlEnabled(enabled) == nil
+		current := browserControlEnabled()
+		if saved {
+			script := fmt.Sprintf("if(window.__libroApplyBrowserControlSetting)window.__libroApplyBrowserControlSetting(%t);", current)
+			if err := app.Broadcast(actionResult(script)); err != nil {
+				log.Printf("browser control setting broadcast: %v", err)
+			}
+		}
+		return fmt.Sprintf("libroWorkspace.browserControlSaved(%t,%t);", saved, current)
+	})
 	registerAction(app, "settings.page-tools", func(ctx *r.Context) string {
 		enabled, ok := ctx.WsData()["autoexecute"].(bool)
 		saved := ok && setBrowserPageToolsAutoExecute(enabled) == nil
@@ -461,7 +501,7 @@ func registerSettingsActions(app *r.App) {
 		keys, _ := json.Marshal(toolKeybindings())
 		list, _ := json.Marshal(plugins())
 		environment, _ := json.Marshal(agentEnvironmentNames())
-		return fmt.Sprintf("window.__libroPlugins=%s;libroWorkspace.showSettings(%s,%s,%s,%s,%s,%t,%s);", list, components.JSString(string(DBDefaultPanelWidth())), encoded, keys, components.JSString(string(DBDefaultToolPanelWidth())), components.JSString(defaultThreadAgent()), browserPageToolsAutoExecute(), environment)
+		return fmt.Sprintf("window.__libroPlugins=%s;libroWorkspace.showSettings(%s,%s,%s,%s,%s,%t,%s,%t);", list, components.JSString(string(DBDefaultPanelWidth())), encoded, keys, components.JSString(string(DBDefaultToolPanelWidth())), components.JSString(defaultThreadAgent()), browserPageToolsAutoExecute(), environment, browserControlEnabled())
 	})
 	registerAction(app, "settings.width", func(ctx *r.Context) string {
 		value, _ := ctx.WsData()["width"].(string)
@@ -516,6 +556,20 @@ func renderWorkspaceSettings() *r.Node {
 				),
 			),
 			r.P("ws-settings-status").ID("notification-sound-status").Attr("role", "status"),
+			r.El("h2", "ws-shortcut-heading").Text("Browser control"),
+			r.Div("ws-settings-group").Render(
+				r.Div("ws-settings-row").Render(
+					r.Div("ws-settings-copy").Render(
+						r.El("label", "").Attr("for", "browser-control-enabled").Text("Allow agents to control the browser"),
+						r.P("").ID("browser-control-enabled-help").Text("Let agents use your open browser panels, take screenshots, and manage files. On by default. Turning off stops current browser work and agent downloads."),
+					),
+					r.El("select", "ws-settings-select").ID("browser-control-enabled").Attr("aria-describedby", "browser-control-enabled-help").On("change", r.JS("libroWorkspace.saveBrowserControl(event.target.value === 'on')")).Render(
+						r.El("option", "").Attr("value", "on").Text("On"),
+						r.El("option", "").Attr("value", "off").Text("Off"),
+					),
+				),
+			),
+			r.P("ws-settings-status").ID("browser-control-enabled-status").Attr("role", "status"),
 			r.El("h2", "ws-shortcut-heading").Text("Page tools"),
 			r.Div("ws-settings-group").Render(
 				r.Div("ws-settings-row").Render(

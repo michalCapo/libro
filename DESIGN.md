@@ -191,3 +191,23 @@ Panel toolbars fit within the workspace viewport while terminal content retains 
 ### Thread activity
 
 Sidebar thread text and icons use the normal neutral color when idle, blue when working, and green when done, in both themes. Selection changes the row background, not its status color. Working threads show a spinning sync icon and Working label; done threads show a checkmark and Done label. Interacting with a completed thread clears its completion indicator and restores its normal text color and chat icon. Repeated done snapshots keep it idle until a new working turn starts. Project interaction acknowledges completed agents in that project.
+
+## Agent browser pointer
+
+Agent mouse actions in the existing Electron guest render a secondary blue
+pointer with a white outline and a small white-on-blue “Agent” label. It uses
+an isolated-world controller and a pointer-transparent popover above page
+content and dialogs. It disappears after five seconds of inactivity or document
+navigation. The native user pointer remains independent. No motion animation
+is applied; the pointer marks the command's actual viewport coordinates.
+
+The browser toolbar also has a compact pause icon beside the console control.
+It pauses agent browser work across panels and becomes a play icon to resume,
+with matching accessible labels and pressed state. The actions menu offers
+“Stop agent browser work” to cancel managed downloads as well. The user retains
+normal browsing while agent control is paused; only the host UI can resume it.
+
+Settings includes an On/Off select for “Allow agents to control the browser”,
+using the existing settings row pattern. It defaults to On. When Off, the browser
+pause/resume button is disabled and its tooltip explains that control is off in
+Settings. The saved preference applies immediately across panels.

@@ -47,10 +47,16 @@ func TestAgentLaunchIntegration(t *testing.T) {
 			if !strings.Contains(command, " --help") || activity.kind != kind {
 				t.Fatalf("launch lost arguments or identity: %s", command)
 			}
+			if kind != "opencode" && !strings.Contains(command, map[string]string{"codex": "mcp_servers.libro_browser", "claude": "--mcp-config", "pi": "--append-system-prompt"}[kind]) {
+				t.Fatal("browser discovery missing")
+			}
 			if kind == "opencode" {
 				var config map[string]any
 				if err := json.Unmarshal([]byte(strings.TrimPrefix(activity.env[0], "OPENCODE_CONFIG_CONTENT=")), &config); err != nil {
 					t.Fatal(err)
+				}
+				if config["mcp"].(map[string]any)["libro_browser"] == nil {
+					t.Fatal("browser MCP missing")
 				}
 				if config["theme"] != "existing" || len(config["plugin"].([]any)) != 2 {
 					t.Fatal("existing config lost")
@@ -104,7 +110,9 @@ func TestOllamaClaudeActivity(t *testing.T) {
 				t.Fatalf("missing integration: %v", err)
 			}
 			defer activity.cleanup()
-			want := agentExitCommand(test.prefix + " --settings " + shellQuote(filepath.Join(activity.dir, "claude.json")) + test.suffix)
+			executable, _ := os.Executable()
+			mcp, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"libro_browser": map[string]any{"command": executable, "args": []string{"browser-mcp"}}}})
+			want := agentExitCommand(test.prefix + " --settings " + shellQuote(filepath.Join(activity.dir, "claude.json")) + " --mcp-config " + shellQuote(string(mcp)) + test.suffix)
 			if command != want || activity.kind != "claude" {
 				t.Fatalf("launch = %q, want %q", command, want)
 			}

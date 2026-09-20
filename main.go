@@ -14,6 +14,19 @@ import (
 var assets embed.FS
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "browser" || os.Args[1] == "browser-mcp") {
+		var err error
+		if os.Args[1] == "browser-mcp" {
+			err = libro.RunBrowserMCP(os.Stdin, os.Stdout)
+		} else {
+			err = libro.RunBrowserCLI(os.Args[2:], os.Stdout)
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	// Handle --version flag
 	for _, arg := range os.Args[1:] {
 		if arg == "--version" || arg == "-v" {

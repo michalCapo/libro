@@ -112,3 +112,104 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 | `Ctrl + =` / `Ctrl + -` / `Ctrl + 0` | Zoom in / out / reset |
 
 Every shortcut can be changed in **Settings → Keyboard shortcuts**.
+
+### Agent control of the browser
+
+**Settings → Browser control → Allow agents to control the browser** turns this
+feature on or off. It is **On by default** and persists across restarts. Turning
+it off immediately cancels browser work and managed downloads, stops diagnostics,
+and blocks CLI/MCP commands. Enable it in Settings to allow browser control again.
+
+Agents can operate the browser panel you already have open, with its current
+page and login session. Libro does not launch another browser for this.
+
+New Codex, Claude (including Ollama-launched Claude), and OpenCode sessions get
+an automatically registered `libro_browser` MCP server with a `browser` tool.
+Pi gets startup instructions for the same controls through the Libro CLI.
+Restart an existing agent session to load this integration. Custom agents can
+register `libro browser-mcp` as a stdio MCP server or use the CLI below.
+Agent tool approval and sandbox settings still apply.
+
+The agent first uses `list`, chooses the requested panel ID, then sends actions
+with that ID. The tool description tells it to use the existing panel to check
+work. Missing or closed panels return an error. Use `select_panel` to show a panel in
+the current project, and `wait` to wait for a page load. Switch projects in
+Libro before selecting a panel in another project.
+
+Available actions:
+
+- `list`: panel IDs, session IDs, titles, URLs, and visibility.
+- `status`, `pause`, `stop`: read control state, cancel queued work, or also cancel
+  managed downloads. Only the user can resume via the toolbar.
+- `select_panel`: select an existing panel in the current project.
+- `snapshot`: accessibility roles, names, states, and stable element references.
+  Use `format: "dom"` for DOM structure. References expire on navigation.
+- `wait`: wait for `selector`/`ref` with `state` set to `visible`, `hidden`,
+  `attached`, or `detached`; or an exact `url` with `interactive`/`complete`.
+  `timeoutMs` defaults to 10000 and is limited to 20000.
+- `diagnostics`: recent console warnings/errors and failed network requests,
+  including HTTP errors. `clear: true` clears the returned history.
+- `screenshot`: viewport PNG, returned directly as an MCP image. Use
+  `fullPage: true` for the document or `ref`/`selector` for one element.
+- `move`, `click`, `down`, `up`: mouse actions with viewport `x`, `y`; optional
+  `button` (`left`, `middle`, `right`). Drag with down, move with the same button,
+  then up. Mouse actions also accept a snapshot `ref` or unique CSS `selector`.
+- `text`: insert `text` into the focused field, including Unicode.
+- `key`: press `key`, such as `Tab`, `Enter`, or `Backspace`, with optional
+  `modifiers` (`control`, `shift`, `alt`, `meta`).
+- `scroll`: wheel at `x`, `y` with `deltaY` and optional `deltaX` (positive is up/left).
+- `navigate`, `back`, `forward`, `reload`: navigate that same panel; navigate takes `url`.
+- `select_option`: choose `values` (an array of option values) in a select located
+  by `ref` or `selector`.
+- `check`: set `checked` to true/false on a checkbox or true on a radio button.
+- `upload`: set `files` (absolute paths) on a file input identified by `ref` or
+  `selector`. An empty array clears the selection.
+- `download`: fetch `url` with the panel's session into a unique folder under
+  `Downloads/Libro`. An optional `filename` controls its name. Returns its ID
+  and path without opening a save dialog.
+- `downloads`, `cancel_download`: inspect download progress or cancel by `downloadId`.
+
+Coordinates and screenshots use viewport CSS pixels, including when the page
+is zoomed. Mouse actions display a blue **Agent** pointer for five seconds.
+It does not move the user's pointer or block page interaction. Commands are
+serialized, and keyboard input focuses the target panel.
+
+CLI examples (replace `PANEL_ID` with an ID returned by `list`):
+
+```sh
+libro browser list
+libro browser '{"action":"click","panel":"PANEL_ID","x":120,"y":80}'
+libro browser '{"action":"text","panel":"PANEL_ID","text":"Hello"}'
+libro browser '{"action":"key","panel":"PANEL_ID","key":"Enter"}'
+libro browser '{"action":"screenshot","panel":"PANEL_ID"}' /tmp/page.png
+```
+
+The desktop bridge listens on loopback with a per-launch authentication token
+stored in the user's Libro config directory. No browser control is exposed to
+web pages. Browser-only (`--no-desktop`) mode cannot provide these controls.
+No global agent config or project instruction files are changed.
+
+Use the pause button beside the browser console button to pause all agent browser
+control. It changes to a play button for resuming. The browser actions menu also
+has **Stop agent browser work**, which cancels managed downloads. Pausing cancels
+pending waits and queued commands while leaving normal user input available.
+Agents cannot resume a user-paused browser.
+
+Element lookup covers the main document and open shadow roots. Cross-origin
+iframe controls are not yet exposed. Snapshots are capped at 1000 nodes and omit
+input values. Diagnostics keep the last 200 entries per category, without request
+headers or bodies; network capture begins when browser control first connects.
+Call diagnostics, then reload, to capture startup failures. Advanced controls
+use Electron's debugger connection and may need reconnecting after DevTools opens.
+Full-page and element screenshots are limited to 24 megapixels and 16000 pixels
+per side. Very large captures should be narrowed to an element.
+
+Examples of the additional controls:
+
+```sh
+libro browser '{"action":"snapshot","panel":"PANEL_ID"}'
+libro browser '{"action":"wait","panel":"PANEL_ID","selector":"#save","state":"visible"}'
+libro browser '{"action":"check","panel":"PANEL_ID","selector":"#agree","checked":true}'
+libro browser '{"action":"screenshot","panel":"PANEL_ID","fullPage":true}' /tmp/full-page.png
+libro browser '{"action":"download","panel":"PANEL_ID","url":"https://example.com/report.csv"}'
+```
