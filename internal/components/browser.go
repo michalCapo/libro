@@ -449,7 +449,7 @@ var devtoolsPanelObservers = {};
 var devtoolsPanelSyncers = {};
 var browserModeState = {}; // appID -> 'normal' | 'insert'
 var pageToolState = {}; // appID -> '' | 'annotate' | 'area'
-var mobileViewState = {}; // appID -> {mode, orientation, previousFrameStyle, previousContentStyle, previousWidth}
+var mobileViewState = {}; // appID -> viewport preview styles and resize observer
 var mobileViewportOrientation = {}; // appID -> last sm/md/xl orientation until browser instance closes
 var mobileSizes = {
 	sm: {label: 'SM', width: 480, height: 896},
@@ -642,7 +642,8 @@ function resizeAppForViewport(appID, width) {
 function applyMobileView(appID, mode, orientation) {
 	var frame = document.querySelector('[data-app-id="' + appID + '"]');
 	var content = document.querySelector('[data-app-content="' + appID + '"]');
-	if (!frame || !content) return false;
+	var guest = window.libroElectron ? window.__libroWebviews[appID] : getBrowserFallbackFrame(appID);
+	if (!frame || !content || !guest) return false;
 	var state = mobileViewState[appID];
 	if (!state) {
 		state = mobileViewState[appID] = {
@@ -650,11 +651,15 @@ function applyMobileView(appID, mode, orientation) {
 			orientation: mobileViewportOrientation[appID] || 'portrait',
 			previousFrameStyle: frame.getAttribute('style') || '',
 			previousContentStyle: content.getAttribute('style') || '',
-			previousWidth: currentAppWidth(appID)
+			previousWidth: currentAppWidth(appID),
+			guest: guest,
+			previousGuestStyle: guest.getAttribute('style') || ''
 		};
 	}
 	if (mode === 'normal') {
 		mobileViewportOrientation[appID] = state.orientation || mobileViewportOrientation[appID] || 'portrait';
+		if (state.observer) state.observer.disconnect();
+		guest.setAttribute('style', state.previousGuestStyle);
 		frame.setAttribute('style', state.previousFrameStyle || '');
 		content.setAttribute('style', state.previousContentStyle || '');
 		delete mobileViewState[appID];
@@ -670,14 +675,30 @@ function applyMobileView(appID, mode, orientation) {
 	var height = state.orientation === 'landscape' ? size.width : size.height;
 	frame.style.width = width + 'px';
 	frame.style.flex = '0 0 ' + width + 'px';
-	frame.style.maxWidth = width + 'px';
-	frame.style.height = 'auto';
-	frame.style.maxHeight = 'calc(100% - 8px)';
+	frame.style.maxWidth = '100%';
+	frame.style.height = '100%';
+	frame.style.maxHeight = '100%';
 	frame.style.alignSelf = 'center';
-	content.style.height = height + 'px';
-	content.style.flex = '0 0 ' + height + 'px';
-	content.style.maxHeight = height + 'px';
-	content.style.minHeight = '0';
+	content.style.overflow = 'hidden';
+	// Scale the guest, not its viewport: responsive layouts keep the selected
+	// dimensions while the complete preview fits above any docked DevTools.
+	state.fit = function() {
+		var host = guest.parentElement;
+		if (!host.clientWidth || !host.clientHeight) return;
+		var scale = Math.min(1, host.clientWidth / width, host.clientHeight / height);
+		guest.style.position = 'absolute';
+		guest.style.width = width + 'px';
+		guest.style.height = height + 'px';
+		guest.style.left = (host.clientWidth - width * scale) / 2 + 'px';
+		guest.style.top = (host.clientHeight - height * scale) / 2 + 'px';
+		guest.style.transformOrigin = 'top left';
+		guest.style.transform = 'scale(' + scale + ')';
+	};
+	if (!state.observer) {
+		state.observer = new ResizeObserver(function() { state.fit(); });
+		state.observer.observe(guest.parentElement);
+	}
+	state.fit();
 	if (window.__libroScrollToApp) window.__libroScrollToApp(frame);
 	if (window.__libroSettleAppFrame) window.__libroSettleAppFrame(appID);
 	return true;
@@ -1078,6 +1099,12 @@ window.addEventListener('resize', function() {
 
 // Clean up only the removed instance, never its replacement.
 var cleanupObserver = new MutationObserver(function(mutations) {
+	Object.keys(mobileViewState).forEach(function(appID) {
+		var state = mobileViewState[appID];
+		if (state.guest.isConnected) return;
+		if (state.observer) state.observer.disconnect();
+		delete mobileViewState[appID];
+	});
 	mutations.forEach(function(m) {
 		m.removedNodes.forEach(function(node) {
 				if (node.nodeType !== 1) return;
@@ -1197,6 +1224,8 @@ window.__libroWvZoom = function(appID, step) {
 	whenReady(appID, function() {
 		var level = step === 0 ? 0 : Math.max(-5, Math.min(5, wv.getZoomLevel() + step));
 		wv.setZoomLevel(level);
+		var preview = mobileViewState[appID];
+		if (preview) preview.fit();
 	});
 };
 window.__libroOpenNewTab = function(url) {
