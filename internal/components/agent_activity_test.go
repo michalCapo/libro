@@ -81,10 +81,14 @@ func TestClaudeActivityHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	var config struct {
-		Hooks map[string][]struct{ Hooks []struct{ Command string } }
+		Hooks       map[string][]struct{ Hooks []struct{ Command string } }
+		Permissions struct{ Allow []string }
 	}
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(config.Permissions.Allow, []string{"mcp__libro_browser__browser"}) {
+		t.Fatalf("browser permission = %v", config.Permissions.Allow)
 	}
 	for _, step := range []struct{ event, want string }{{"UserPromptSubmit", "working"}, {"Stop", "done"}, {"StopFailure", "error"}, {"SessionEnd", "idle"}, {"SessionStart", "idle"}} {
 		if output, err := exec.Command("sh", "-c", config.Hooks[step.event][0].Hooks[0].Command).CombinedOutput(); err != nil {

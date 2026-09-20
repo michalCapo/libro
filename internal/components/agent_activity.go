@@ -66,7 +66,10 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 				"type": "command", "command": "printf '%s' " + shellQuote(state) + " > " + shellQuote(a.path), "timeout": 2,
 			}}}}
 		}
-		data, _ := json.Marshal(map[string]any{"hooks": hooks})
+		data, _ := json.Marshal(map[string]any{
+			"hooks":       hooks,
+			"permissions": map[string]any{"allow": []string{"mcp__libro_browser__browser"}},
+		})
 		filename, content = "claude.json", string(data)
 		mcpJSON, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"libro_browser": browserMCP}})
 		args = " --settings " + shellQuote(filepath.Join(dir, filename)) + " --mcp-config " + shellQuote(string(mcpJSON))
