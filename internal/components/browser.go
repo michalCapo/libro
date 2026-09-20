@@ -403,6 +403,9 @@ var browserShortcutsScript = '(' + function(){
 			case 'l': window.scrollBy({left: 480, behavior: 'smooth'}); break;
 			case 'o': console.log('__libro:urlpopup'); break;
 			case 'r': console.log('__libro:reload'); break;
+			case '-': console.log('__libro:zoom-out'); break;
+			case '=': console.log('__libro:zoom-in'); break;
+			case '0': console.log('__libro:zoom-reset'); break;
 			case 'm': console.log('__libro:viewport'); break;
 			case 'M': console.log('__libro:viewportrotate'); break;
 			default: handled = false;
@@ -1007,6 +1010,9 @@ function bindWebviewEvents(wv) {
 		}
 		else if (msg === '__libro:urlpopup') { if (window.__libroOpenURLPopup) window.__libroOpenURLPopup(); }
 		else if (msg === '__libro:reload') { if (window.__libroWvReload) window.__libroWvReload(appID); }
+		else if (msg === '__libro:zoom-out' || msg === '__libro:zoom-in' || msg === '__libro:zoom-reset') {
+			window.__libroWvZoom(appID, msg === '__libro:zoom-reset' ? 0 : msg === '__libro:zoom-out' ? -1 : 1);
+		}
 		else if (msg === '__libro:mobile' || msg === '__libro:viewport') { if (window.__libroToggleSelectedBrowserMobile) window.__libroToggleSelectedBrowserMobile(appID); }
 		else if (msg === '__libro:viewportrotate') { if (window.__libroRotateSelectedBrowserViewport) window.__libroRotateSelectedBrowserViewport(appID); }
 	});

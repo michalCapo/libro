@@ -996,9 +996,9 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			{"Reload", "R", fmt.Sprintf(`window.__libroWvReload(%s)`, components.JSString(app.ID)), ""},
 			{"Annotate element", "A", fmt.Sprintf(`window.__libroTogglePageTool(%s,'annotate')`, components.JSString(app.ID)), "annotate"},
 			{"Select page area", "D", fmt.Sprintf(`window.__libroTogglePageTool(%s,'area')`, components.JSString(app.ID)), "area"},
-			{"Zoom out", "", fmt.Sprintf(`window.__libroWvZoom(%s,-1)`, components.JSString(app.ID)), ""},
-			{"Reset zoom to 100%", "", fmt.Sprintf(`window.__libroWvZoom(%s,0)`, components.JSString(app.ID)), ""},
-			{"Zoom in", "", fmt.Sprintf(`window.__libroWvZoom(%s,1)`, components.JSString(app.ID)), ""},
+			{"Zoom out", "-", fmt.Sprintf(`window.__libroWvZoom(%s,-1)`, components.JSString(app.ID)), ""},
+			{"Reset zoom to 100%", "0", fmt.Sprintf(`window.__libroWvZoom(%s,0)`, components.JSString(app.ID)), ""},
+			{"Zoom in", "=", fmt.Sprintf(`window.__libroWvZoom(%s,1)`, components.JSString(app.ID)), ""},
 		} {
 			item := r.Button("ws-browser-menu-item").Attr("type", "button").
 				OnClick(r.JS(`this.closest('[popover]').hidePopover();`+action.script)).

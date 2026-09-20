@@ -1223,8 +1223,9 @@ app.on('web-contents-created', (event, contents) => {
         return
       }
       // Bare 'a' annotates an element, 'd' draws a page area, 'o' opens URL popup,
-      // 'r' reloads, and 'm' cycles viewport size. Shift+M rotates the viewport.
-      if ((!input.shift && (key === 'a' || key === 'd' || key === 'o' || key === 'r' || key === 'm')) || (input.shift && key === 'm')) {
+      // 'r' reloads, 'm' cycles viewport size, and -/= /0 control page zoom.
+      // Shift+M rotates the viewport.
+      if ((!input.shift && (key === 'a' || key === 'd' || key === 'o' || key === 'r' || key === 'm' || key === '-' || key === '=' || key === '0')) || (input.shift && key === 'm')) {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
@@ -1233,6 +1234,7 @@ app.on('web-contents-created', (event, contents) => {
           else if (!input.shift && key === 'd') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroTogglePageTool) window.__libroTogglePageTool(a,'area');})();`
           else if (!input.shift && key === 'o') js = `if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();`
           else if (!input.shift && key === 'r') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroWvReload) window.__libroWvReload(a);})();`
+          else if (key === '-' || key === '=' || key === '0') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroWvZoom) window.__libroWvZoom(a,${key === '0' ? 0 : key === '-' ? -1 : 1});})();`
           else if (input.shift && key === 'm') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroRotateSelectedBrowserViewport) window.__libroRotateSelectedBrowserViewport(a);})();`
           else js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroToggleSelectedBrowserMobile) window.__libroToggleSelectedBrowserMobile(a);})();`
           mainWindow.webContents.executeJavaScript(js).catch(() => {})
