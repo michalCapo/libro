@@ -9,7 +9,7 @@ Think of it as one desk for all your AI helpers. Each one gets its own panel, an
 ## What It Does
 
 - Runs several AI coding assistants at the same time, side by side.
-- Puts a browser, file manager, terminal, and more right next to them.
+- Puts a browser, Notes, file manager, terminal, and more right next to them.
 - Keeps all your projects in one place. Switch between them with one click.
 - Shows when an assistant is busy (its icon spins) or finished (green check).
 - Plays a sound when an assistant finishes its work.
@@ -43,7 +43,7 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 
 ### Tools
 
-- Open the tool you need next to your assistants: Terminal, Browser, Files, Nvim, Git, Database, or any tool of your own.
+- Open the tool you need next to your assistants: Terminal, Browser, Notes, Files, Nvim, Git, Database, or any tool of your own.
 - Use whatever tool you like. Name it, add its command or web address, and it shows up next to the built-in tools.
 
 ![Tools in Settings: named tools with their commands and shortcuts](demo/tools-settings.png)
@@ -66,6 +66,14 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 - Ask the agent about part of a page: press `a` and click an element, or `d` and draw a box around it. Type a short note and it is pasted into the agent, together with that part of the page.
 
 ![Browser panel open next to other tools](demo/browser-panel.png)
+
+### Notes
+
+- Open Notes with `Ctrl + O`. Notes are stored separately for each project.
+- Start with the New list. Switch the filter to see Archived notes or all notes.
+- Open a note to edit its title, state, and Markdown. The preview stays visible while editing.
+- Paste a PNG, JPEG, or GIF image into a note to attach and preview it immediately.
+- Save keeps the editor open. Cancel discards unsaved changes. Send a saved note to the selected agent to execute it, with local paths to any attached images.
 
 ### Settings
 
@@ -114,15 +122,17 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 
 Every shortcut can be changed in **Settings → Keyboard shortcuts**.
 
-### Agent control of the browser
+### Browser automation for agents
 
 **Settings → Browser control → Allow agents to control the browser** turns this
 feature on or off. It is **On by default** and persists across restarts. Turning
 it off immediately cancels browser work and managed downloads, stops diagnostics,
 and blocks CLI/MCP commands. Enable it in Settings to allow browser control again.
 
-Agents can operate the browser panel you already have open, with its current
-page and login session. Libro does not launch another browser for this.
+Agents can inspect and operate a browser panel that is already open in Libro,
+using its current page and login session. Libro does not launch another browser.
+They can inspect accessibility snapshots, click and type, navigate, capture
+screenshots, upload files, and manage agent-started downloads.
 
 New Codex, Claude (including Ollama-launched Claude), and OpenCode sessions get
 an automatically registered `libro_browser` MCP server with a `browser` tool.
@@ -214,7 +224,3 @@ libro browser '{"action":"check","panel":"PANEL_ID","selector":"#agree","checked
 libro browser '{"action":"screenshot","panel":"PANEL_ID","fullPage":true}' /tmp/full-page.png
 libro browser '{"action":"download","panel":"PANEL_ID","url":"https://example.com/report.csv"}'
 ```
-
-### Notes
-
-Open Notes from the tools or press `Ctrl + O`. Change the shortcut in Settings. Notes are saved per project, with New and Archived states. Open a note to edit its title, Markdown, and pasted clipboard images. Save keeps changes; Cancel discards them. Send to agent executes the saved note in the selected agent, including local image paths.
