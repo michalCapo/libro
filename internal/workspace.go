@@ -44,7 +44,7 @@ func workspaceButton(label, icon, js string) *r.Node {
 }
 
 // Keep the update target for existing server actions without rendering a header.
-func renderWorkspaceTopBar(state *AppState, sid string) *r.Node {
+func renderWorkspaceTopBar(_ *AppState, _ string) *r.Node {
 	return r.Div("hidden").ID(TopBarID).Attr("aria-hidden", "true")
 }
 

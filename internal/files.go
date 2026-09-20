@@ -44,7 +44,7 @@ func readProjectFile(rootPath, path string) (fileResult, error) {
 	if err != nil {
 		return result, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	infoBefore, err := root.Stat(path)
 	if err != nil {
 		return result, err
@@ -56,7 +56,7 @@ func readProjectFile(rootPath, path string) (fileResult, error) {
 	if err != nil {
 		return result, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	info, err := f.Stat()
 	if err != nil {
 		return result, err
@@ -152,7 +152,7 @@ func projectFileToOpen(rootPath, path string) (string, error) {
 // filesRoot keeps navigation local to each files panel, independent of the project.
 func filesRoot(projectPath string, parents int) string {
 	root := filepath.Clean(projectPath)
-	for i := 0; i < parents; i++ {
+	for range parents {
 		parent := filepath.Dir(root)
 		if parent == root {
 			break

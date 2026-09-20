@@ -130,35 +130,7 @@ func newAppStateFromDB() *AppState {
 	}
 }
 
-// Get returns the state for a session, creating one if it doesn't exist
-// IterTerminalApps invokes fn for every terminal Application across all
-// sessions and project snapshots. Read lock is held for the duration, so fn
-// must not call back into StateManager mutating methods.
-func (sm *StateManager) IterTerminalApps(fn func(app Application)) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	for _, s := range sm.states {
-		if s == nil {
-			continue
-		}
-		for _, a := range s.Apps {
-			if a.Type == AppTypeTerminal && a.TerminalReady {
-				fn(a)
-			}
-		}
-		for _, snap := range s.snapshots {
-			if snap == nil {
-				continue
-			}
-			for _, a := range snap.Apps {
-				if a.Type == AppTypeTerminal && a.TerminalReady {
-					fn(a)
-				}
-			}
-		}
-	}
-}
-
+// Get returns the state for a session, creating one if it doesn't exist.
 func (sm *StateManager) Get(sessionID string) *AppState {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -284,102 +256,6 @@ func (sm *StateManager) addTerminalApp(sessionID string, appID string, command s
 // AddTerminalApp adds a new terminal application, sorted by name.
 func (sm *StateManager) AddTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string) {
 	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL)
-}
-
-// InsertTerminalApp adds a new terminal application at the given index position.
-// If index is out of range, it falls back to append + sort by name.
-func (sm *StateManager) InsertTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string, index int) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		s = &AppState{
-			snapshots: make(map[string]*projectSnapshot),
-		}
-		sm.states[sessionID] = s
-	}
-	app := Application{
-		ID:            appID,
-		Type:          AppTypeTerminal,
-		Command:       command,
-		Width:         width,
-		Writable:      writable,
-		Name:          name,
-		IconURL:       iconURL,
-		TerminalID:    appID,
-		TerminalReady: port > 0,
-	}
-	if index < 0 || index > len(s.Apps) {
-		s.Apps = append(s.Apps, app)
-		sortAppsByName(s, app.ID)
-	} else {
-		s.Apps = append(s.Apps, Application{})
-		copy(s.Apps[index+1:], s.Apps[index:])
-		s.Apps[index] = app
-		s.SelectedIndex = index
-	}
-	s.LastAppCreatedProject = s.ActiveProject
-}
-
-// InsertTerminal adds a running terminal with command and port at the given index.
-func (sm *StateManager) InsertTerminal(sessionID, appID string, width Width, command string, port int, index int) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		s = &AppState{
-			snapshots: make(map[string]*projectSnapshot),
-		}
-		sm.states[sessionID] = s
-	}
-	app := Application{
-		ID:            appID,
-		Type:          AppTypeTerminal,
-		Width:         width,
-		Command:       command,
-		Writable:      true,
-		TerminalID:    appID,
-		TerminalReady: port > 0,
-	}
-	if index < 0 || index > len(s.Apps) {
-		s.Apps = append(s.Apps, app)
-		s.SelectedIndex = len(s.Apps) - 1
-	} else {
-		s.Apps = append(s.Apps, Application{})
-		copy(s.Apps[index+1:], s.Apps[index:])
-		s.Apps[index] = app
-		s.SelectedIndex = index
-	}
-	s.LastAppCreatedProject = s.ActiveProject
-}
-
-// InsertPendingTerminal adds a terminal placeholder at the given index.
-func (sm *StateManager) InsertPendingTerminal(sessionID, appID string, width Width, index int) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		s = &AppState{
-			snapshots: make(map[string]*projectSnapshot),
-		}
-		sm.states[sessionID] = s
-	}
-	app := Application{
-		ID:         appID,
-		Type:       AppTypeTerminal,
-		Width:      width,
-		TerminalID: appID,
-	}
-	if index < 0 || index > len(s.Apps) {
-		s.Apps = append(s.Apps, app)
-		s.SelectedIndex = len(s.Apps) - 1
-	} else {
-		s.Apps = append(s.Apps, Application{})
-		copy(s.Apps[index+1:], s.Apps[index:])
-		s.Apps[index] = app
-		s.SelectedIndex = index
-	}
-	s.LastAppCreatedProject = s.ActiveProject
 }
 
 // InsertTerminalPlaceholder adds a terminal shell before its PTY has been started.
@@ -832,17 +708,6 @@ func (sm *StateManager) SelectApp(sessionID string, index int) {
 	}
 }
 
-// SetAppWidth sets the width of an app by index
-func (sm *StateManager) SetAppWidth(sessionID string, index int, width Width) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil || index < 0 || index >= len(s.Apps) {
-		return
-	}
-	applyAppWidth(&s.Apps[index], width)
-}
-
 // AddProject adds a new persisted project to the session. Returns false if name already exists.
 func (sm *StateManager) AddProject(sessionID, name, path string) bool {
 	return sm.AddProjectWithOptions(sessionID, name, path, false)
@@ -981,28 +846,6 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 	return true
 }
 
-// ProjectByIndex returns the project name at the given index (0-based), or "" if out of range
-func (sm *StateManager) ProjectByIndex(sessionID string, index int) string {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	s := sm.states[sessionID]
-	if s == nil || index < 0 || index >= len(s.Projects) {
-		return ""
-	}
-	return s.Projects[index].Name
-}
-
-// LastAppProject returns the project where the last app was created, or ""
-func (sm *StateManager) LastAppProject(sessionID string) string {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return ""
-	}
-	return s.LastAppCreatedProject
-}
-
 // IsProjectRendered checks if a project's DOM div has been created.
 // If not yet rendered, it marks it as rendered and returns false.
 func (sm *StateManager) IsProjectRendered(sessionID, projectName string) bool {
@@ -1079,16 +922,6 @@ func (sm *StateManager) GetAllRunningApps(sessionID string) []ProjectApps {
 	return result
 }
 
-// OpenProjectDialog sets the project dialog open flag
-func (sm *StateManager) OpenProjectDialog(sessionID string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s != nil {
-		s.ProjectDialogOpen = true
-	}
-}
-
 // CloseProjectDialog clears the project dialog open flag
 func (sm *StateManager) CloseProjectDialog(sessionID string) {
 	sm.mu.Lock()
@@ -1131,43 +964,6 @@ func (sm *StateManager) AddVirtualProject(sessionID, name, path, parentProject s
 		ParentProject: parentProject,
 	})
 	return true
-}
-
-// RemoveVirtualProject removes a virtual project and cleans up its snapshot/apps.
-func (sm *StateManager) RemoveVirtualProject(sessionID, name string) ([]Application, bool) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return nil, false
-	}
-
-	for _, p := range s.Projects {
-		if p.Name == name && p.Virtual {
-			return s.removeProject(name)
-		}
-	}
-	return nil, false
-}
-
-// OpenWorktreeDialog sets the worktree dialog open flag
-func (sm *StateManager) OpenWorktreeDialog(sessionID string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s != nil {
-		s.WorktreeDialogOpen = true
-	}
-}
-
-// CloseWorktreeDialog clears the worktree dialog open flag
-func (sm *StateManager) CloseWorktreeDialog(sessionID string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s != nil {
-		s.WorktreeDialogOpen = false
-	}
 }
 
 // GetProjectPath returns the path for a named project

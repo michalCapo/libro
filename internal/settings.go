@@ -5,6 +5,7 @@ import (
 	"fmt"
 	r "github.com/michalCapo/g-sui/ui"
 	"libro/internal/components"
+	"slices"
 	"strings"
 )
 
@@ -13,12 +14,7 @@ func defaultPanelWidths() []Width {
 }
 
 func validDefaultPanelWidth(width Width) bool {
-	for _, candidate := range defaultPanelWidths() {
-		if width == candidate {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(defaultPanelWidths(), width)
 }
 
 func DBDefaultPanelWidth() Width {
@@ -195,7 +191,7 @@ func saveAgentSettings(commands map[string]string, disabled map[string]bool, cus
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	for id, command := range commands {
 		if _, err := tx.Exec(`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, "agent_command."+id, strings.TrimSpace(command)); err != nil {
 			return err
@@ -363,7 +359,7 @@ func registerSettingsActions(app *r.App) {
 		list, _ := json.Marshal(plugins())
 		return fmt.Sprintf("libroWorkspace.agentCommandSaved(%s,%s);", components.JSString(message), list)
 	})
-	registerAction(app, "settings.open", func(ctx *r.Context) string {
+	registerAction(app, "settings.open", func(_ *r.Context) string {
 		commands := map[string]string{}
 		for _, plugin := range plugins() {
 			if plugin.Dock == "center" && plugin.Type == AppTypeTerminal {

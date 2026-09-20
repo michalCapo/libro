@@ -63,7 +63,7 @@ func saveTools(list []Plugin, shortcuts ...map[string]string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	_, err = tx.Exec(`INSERT INTO settings (key,value) VALUES ('tool_configs',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, string(raw))
 	if err != nil {
 		return err

@@ -344,20 +344,18 @@
   function renderProjectShortcuts() {
     const running = new Set([...document.querySelectorAll('[data-workspace-project]')]
       .filter(grid => frames(grid).length > 0).map(grid => grid.dataset.workspaceProject));
-    let index = 0, threadIndex = 0;
+    let index = 0;
     document.querySelectorAll('.ws-project-row').forEach(row => {
       const thread = row.dataset.kind === 'thread';
-      const number = thread
-        ? row.parentElement.dataset.archived !== 'true' && threadIndex < 9 ? String(++threadIndex) : ''
-        : running.has(row.dataset.projectKey) && index < 9 ? String(++index) : '';
-      row.dataset.projectShortcut = thread ? '' : number;
-      row.dataset.threadShortcut = thread ? number : '';
+      const available = thread ? row.parentElement.dataset.archived !== 'true' : running.has(row.dataset.projectKey);
+      const number = available && index < 9 ? String(++index) : '';
+      row.dataset.projectShortcut = number;
       let badge = row.querySelector('.ws-project-shortcut');
       if (!number) { badge?.remove(); row.removeAttribute('aria-keyshortcuts'); return; }
       if (!badge) { badge = node('kbd', 'ws-project-shortcut'); badge.setAttribute('aria-hidden', 'true'); row.append(badge); }
-      badge.textContent = (thread ? '⇧' : '') + number;
-      badge.title = (thread ? 'Ctrl+Shift+' : 'Ctrl+') + number;
-      row.setAttribute('aria-keyshortcuts', (thread ? 'Control+Shift+' : 'Control+') + number);
+      badge.textContent = number;
+      badge.title = 'Ctrl+' + number;
+      row.setAttribute('aria-keyshortcuts', 'Control+' + number);
     });
   }
   let notificationAudio;
@@ -676,11 +674,11 @@
       lastCtrlA = now;
     } else if (!['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) lastCtrlA = 0;
     const number = /^[1-9]$/.test(event.key) ? event.key : /^Digit[1-9]$/.test(event.code || '') ? event.code.slice(-1) : '';
-    if (event.ctrlKey && !event.metaKey && !event.altKey && number) {
+    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && number) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) {
         renderProjectShortcuts();
-        document.querySelector('.ws-project-row[data-' + (event.shiftKey ? 'thread' : 'project') + '-shortcut="' + number + '"]')?.click();
+        document.querySelector('.ws-project-row[data-project-shortcut="' + number + '"]')?.click();
       }
       return;
     }

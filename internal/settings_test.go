@@ -11,7 +11,7 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	original := db
 	t.Cleanup(func() {
 		if db != nil {
-			db.Close()
+			_ = db.Close()
 		}
 		db = original
 	})
@@ -65,7 +65,9 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	if err := saveAgentConfig(map[string]string{"custom-test": ""}, map[string]bool{"codex": false}, []Plugin{custom}, map[string]string{"codex": "My Codex", "custom-test": "My agent"}); err == nil {
 		t.Fatal("accepted empty custom command")
 	}
-	db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	db, err = sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +118,9 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	if err := saveAgentConfig(nil, map[string]bool{"codex": true, "custom-test": true}, []Plugin{}, nil, map[string]bool{"codex": true, "custom-test": true}); err != nil {
 		t.Fatal(err)
 	}
-	db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	db, err = sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
@@ -155,7 +159,9 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	if err := saveTools([]Plugin{{ID: "codex", Name: "Bad", Command: "bad", Dock: "right", Type: AppTypeTerminal}}); err == nil {
 		t.Fatal("allowed tool to replace agent")
 	}
-	db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	db, err = sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +192,7 @@ func TestBrowserPageToolsAutoExecutePersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close(); db = original })
+	t.Cleanup(func() { _ = db.Close(); db = original })
 	createTables()
 	if browserPageToolsAutoExecute() {
 		t.Fatal("page tools should be disabled by default")
@@ -197,7 +203,9 @@ func TestBrowserPageToolsAutoExecutePersistence(t *testing.T) {
 	if !browserPageToolsAutoExecute() {
 		t.Fatal("enabled page tools setting was not read")
 	}
-	db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	db, err = sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
@@ -220,12 +228,12 @@ func TestSaveNewAgentWithQuotedCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close(); db = original })
+	t.Cleanup(func() { _ = db.Close(); db = original })
 	createTables()
 	custom := Plugin{
 		ID: "custom-12345678-1234-4234-8234-123456789abc", Name: "luna",
 		Command: `codex -m gpt-5.6-luna -c 'model_reasoning_effort="xhigh"'`,
-		Type: AppTypeTerminal, Dock: "center", Custom: true,
+		Type:    AppTypeTerminal, Dock: "center", Custom: true,
 	}
 	autolaunch := ""
 	if err := saveAgentSettings(
@@ -254,7 +262,7 @@ func TestAgentAutolaunch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close(); db = original })
+	t.Cleanup(func() { _ = db.Close(); db = original })
 	createTables()
 	state := &AppState{ActiveProject: "project"}
 	if projectAutolaunchJS(state, "test") != "" {
@@ -274,7 +282,9 @@ func TestAgentAutolaunch(t *testing.T) {
 	if err := save("codex", nil); err != nil {
 		t.Fatal(err)
 	}
-	db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	db, err = sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
@@ -321,7 +331,7 @@ func TestAgentOrderPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close(); db = original })
+	t.Cleanup(func() { _ = db.Close(); db = original })
 	createTables()
 	custom := Plugin{ID: "custom-first", Name: "First", Type: AppTypeTerminal, Dock: "center", Command: "first", Custom: true}
 	order := []string{"custom-first", "claude", "codex", "pi"}
@@ -333,7 +343,9 @@ func TestAgentOrderPersistence(t *testing.T) {
 			t.Fatalf("accepted invalid order %v", invalid)
 		}
 	}
-	db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	db, err = sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
@@ -369,7 +381,7 @@ func TestDefaultThreadAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close(); db = original })
+	t.Cleanup(func() { _ = db.Close(); db = original })
 	createTables()
 	state := &AppState{ActiveProject: "thread:test", Threads: []Thread{{ID: "thread:test"}}}
 	if defaultThreadAgent() != "" {
@@ -390,7 +402,9 @@ func TestDefaultThreadAgent(t *testing.T) {
 	if err := setDefaultThreadAgent("codex"); err != nil {
 		t.Fatal(err)
 	}
-	db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	db, err = sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)

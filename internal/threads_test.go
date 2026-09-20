@@ -13,7 +13,7 @@ func TestStandaloneThreadPersistenceAndIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close(); db = original })
+	t.Cleanup(func() { _ = db.Close(); db = original })
 	createTables()
 	DBSaveProject("project", t.TempDir())
 	if _, err := db.Exec("INSERT INTO threads (id, name) VALUES ('thread:test', 'Fix server')"); err != nil {
@@ -89,7 +89,7 @@ func TestCloseThreadAgentArchivesAndClosesTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close(); db = original })
+	t.Cleanup(func() { _ = db.Close(); db = original })
 	createTables()
 	if _, err := db.Exec("INSERT INTO threads (id, name) VALUES ('thread:test', 'Test')"); err != nil {
 		t.Fatal(err)
@@ -131,7 +131,7 @@ func TestCloseThreadAgentPreservesPanelsOnArchiveFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close(); db = original })
+	t.Cleanup(func() { _ = db.Close(); db = original })
 	manager := NewStateManager()
 	state := &AppState{
 		ActiveProject: "thread:test",

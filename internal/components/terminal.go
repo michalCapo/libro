@@ -598,7 +598,6 @@ func RegisterTerminalRoutes(app *r.App, tm *TerminalManager, allowed func(sid, t
 			return
 		}
 		http.Error(w, "terminal is not running", http.StatusNotFound)
-		return
 	})
 }
 

@@ -118,13 +118,13 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	if _, err := io.Copy(out, in); err != nil {
 		return err
@@ -163,7 +163,7 @@ func removeDefaultHomeProject() {
 		log.Printf("db: migrate default project: %v", err)
 		return
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.Exec(`DELETE FROM projects WHERE name = 'home' AND path = ? AND position = 0
 		AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'default_home_removed')`, home); err == nil {
 		_, err = tx.Exec(`INSERT OR IGNORE INTO settings (key, value) VALUES ('default_home_removed', 'true')`)
@@ -179,7 +179,7 @@ func removeDefaultHomeProject() {
 // CloseDB closes the database connection.
 func CloseDB() {
 	if db != nil {
-		db.Close()
+		_ = db.Close()
 	}
 }
 
@@ -195,7 +195,7 @@ func DBLoadProjects() []Project {
 		log.Printf("db: load projects: %v", err)
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var projects []Project
 	for rows.Next() {

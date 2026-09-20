@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"libro/internal/components"
 	"log"
+	"slices"
 
 	"os"
 	"os/exec"
@@ -68,7 +69,7 @@ func actionResult(js string) r.Result {
 }
 
 func registerAction(app *r.App, name string, handler func(*r.Context) string) {
-	r.RegisterAction[map[string]any](app, name, func(ctx *r.Context, _ map[string]any) (r.Result, error) {
+	r.RegisterAction(app, name, func(ctx *r.Context, _ map[string]any) (r.Result, error) {
 		return actionResult(handler(ctx)), nil
 	})
 }
@@ -123,10 +124,8 @@ func projectAutolaunchJS(state *AppState, sid string) string {
 	if state.ActiveProject == "" {
 		return ""
 	}
-	for _, app := range state.Apps {
-		if isAgentApp(app) {
-			return ""
-		}
+	if slices.ContainsFunc(state.Apps, isAgentApp) {
+		return ""
 	}
 	threadAgent := defaultThreadAgent()
 	for _, plugin := range plugins() {
@@ -380,7 +379,7 @@ func Run(assets embed.FS) {
 	app.Favicon = "/assets/logo.svg"
 
 	// Each page starts with an empty workspace.
-	app.Page("/", func(ctx *r.Context) *r.Node {
+	app.Page("/", func(_ *r.Context) *r.Node {
 		sid := sm.NewSession()
 		state := sm.Get(sid)
 
@@ -391,7 +390,7 @@ func Run(assets embed.FS) {
 	registerFilesActions(app)
 
 	// Open add dialog
-	registerAction(app, "app.dialog.open", func(ctx *r.Context) string {
+	registerAction(app, "app.dialog.open", func(_ *r.Context) string {
 		return `if(window.libroWorkspace)libroWorkspace.launcher();`
 	})
 
@@ -574,9 +573,9 @@ func Run(assets embed.FS) {
 			appID := sm.NextAppID()
 			sm.InsertTerminalPlaceholder(sid, appID, width, command, writable, name, iconURL, insertIdx)
 			sm.SetAppPlugin(sid, appID, pluginID, dock)
-			resizeAgentsJS := ""
+			var resizeAgentsJS strings.Builder
 			for _, resized := range sm.SizeNewAgent(sid, appID, DBDefaultPanelWidth()) {
-				resizeAgentsJS += resizeJS(nil, resized.Width, resized.ID)
+				resizeAgentsJS.WriteString(resizeJS(nil, resized.Width, resized.ID))
 			}
 
 			state := sm.Get(sid)
@@ -587,7 +586,7 @@ func Run(assets embed.FS) {
 			hydrateJS := hydrateAppAfterScrollJS(newApp.ID, sidData(sid, "id", newApp.ID))
 			if hadApps > 0 {
 				frame := renderAppFramePlaceholder(*newApp, state.SelectedIndex, true, sid)
-				return resizeAgentsJS + insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
+				return resizeAgentsJS.String() + insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
 			}
 
 			return renderMainAreaWithPlaceholder(state, sid, newApp.ID).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS + navigateJS(state, sid) + hydrateJS
@@ -1009,7 +1008,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 	})
 
 	// Quick open - show the app search dialog
-	registerAction(app, "plugin.launcher.open", func(ctx *r.Context) string {
+	registerAction(app, "plugin.launcher.open", func(_ *r.Context) string {
 		return `if(window.libroWorkspace)libroWorkspace.launcher();`
 	})
 
@@ -1054,7 +1053,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 	})
 
 	// Open the unified project dialog in folder-browse mode.
-	registerAction(app, "project.dialog.open", func(ctx *r.Context) string {
+	registerAction(app, "project.dialog.open", func(_ *r.Context) string {
 		return `if(window.__libroOpenProjectDialog)window.__libroOpenProjectDialog();`
 	})
 
@@ -1280,7 +1279,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 	})
 
 	// Finish cleanup before allowing the renderer to close the desktop window.
-	registerAction(app, "app.close.all", func(ctx *r.Context) string {
+	registerAction(app, "app.close.all", func(_ *r.Context) string {
 		tm.StopAll()
 		sm.mu.Lock()
 		sm.states = make(map[string]*AppState)

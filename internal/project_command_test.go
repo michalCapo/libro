@@ -14,7 +14,7 @@ func TestProjectCommandPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close(); db = original })
+	t.Cleanup(func() { _ = db.Close(); db = original })
 	createTables()
 	if err := setProjectCommand("/project/a", "  bun src/dev.ts  "); err != nil {
 		t.Fatal(err)
@@ -25,7 +25,9 @@ func TestProjectCommandPersistence(t *testing.T) {
 	if err := setProjectCommand("/project/a", "bad\x00command"); err == nil {
 		t.Fatal("accepted null character")
 	}
-	db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	db, err = sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)

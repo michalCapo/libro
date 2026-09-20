@@ -9,7 +9,7 @@ import (
 
 // ProjectDialog renders the unified Projects dialog: existing project search and
 // directory lookup for opening folders as projects.
-func ProjectDialog(sid string) *r.Node {
+func ProjectDialog(_ string) *r.Node {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		log.Printf("components: ProjectDialog os.UserHomeDir failed: %v", err)

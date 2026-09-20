@@ -621,48 +621,50 @@ test('thread title updates use the terminal session and do not rename from tools
 })
 
 
-test('thread numbers are independent, include empty threads, and skip archived threads', () => {
+test('thread numbers continue after running projects and skip archived threads', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const render = source.slice(source.indexOf('  function renderProjectShortcuts()'), source.indexOf('  let notificationAudio;'))
-  const rows = ['project', ...Array(11).fill('thread')].map((kind, i) => ({
-    dataset: { kind, projectKey: String(i) }, parentElement: { dataset: { archived: String(i === 2) } }, attributes: {}, badge: null,
+  const rows = ['project', 'project', ...Array(10).fill('thread')].map((kind, i) => ({
+    dataset: { kind, projectKey: String(i) }, parentElement: { dataset: { archived: String(i === 3) } }, attributes: {}, badge: null,
     querySelector() { return this.badge },
     append(badge) { this.badge = badge; badge.remove = () => { this.badge = null } },
     setAttribute(key, value) { this.attributes[key] = value },
     removeAttribute(key) { delete this.attributes[key] },
   }))
   const context = vm.createContext({
-    document: { querySelectorAll: selector => selector === '.ws-project-row' ? rows : [{ dataset: { workspaceProject: '0' } }] },
+    document: { querySelectorAll: selector => selector === '.ws-project-row' ? rows : [0, 1].map(i => ({ dataset: { workspaceProject: String(i) } })) },
     frames: () => [{}], node: () => ({ setAttribute() {} }),
   })
   vm.runInContext(render + ';renderProjectShortcuts()', context)
   assert.equal(rows[0].dataset.projectShortcut, '1')
-  assert.deepEqual(rows.slice(1).map(row => row.dataset.threadShortcut), ['1', '', '2', '3', '4', '5', '6', '7', '8', '9', ''])
-  assert.equal(rows[1].badge.textContent, '⇧1')
-  assert.equal(rows[1].attributes['aria-keyshortcuts'], 'Control+Shift+1')
-  rows[1].parentElement.dataset.archived = 'true'
+  assert.equal(rows[1].dataset.projectShortcut, '2')
+  assert.deepEqual(rows.slice(2).map(row => row.dataset.projectShortcut), ['3', '', '4', '5', '6', '7', '8', '9', '', ''])
+  assert.equal(rows[2].badge.textContent, '3')
+  assert.equal(rows[2].attributes['aria-keyshortcuts'], 'Control+3')
+  rows[2].parentElement.dataset.archived = 'true'
   vm.runInContext('renderProjectShortcuts()', context)
-  assert.equal(rows[1].badge, null)
-  assert.equal(rows[3].dataset.threadShortcut, '1')
+  assert.equal(rows[2].badge, null)
+  assert.equal(rows[4].dataset.projectShortcut, '3')
 })
 
-test('Ctrl+Shift+digits selects threads and is reserved in embedded browsers', () => {
+test('Ctrl+digits selects the shared project and thread range', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('    const number = /^[1-9]$/'), source.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"))
   for (const [key, code, number] of [['1', 'Digit1', '1'], ['!', 'Digit1', '1'], ['(', 'Digit9', '9']]) {
     for (const repeat of [false, true]) {
       let clicked = 0
       vm.runInNewContext('(function(){' + handler + '})()', {
-        event: { key, code, ctrlKey: true, shiftKey: true, repeat, preventDefault() {}, stopImmediatePropagation() {} },
+        event: { key, code, ctrlKey: true, shiftKey: false, repeat, preventDefault() {}, stopImmediatePropagation() {} },
         renderProjectShortcuts() {},
         document: { querySelector(selector) {
-          assert.equal(selector, '.ws-project-row[data-thread-shortcut="' + number + '"]')
+          assert.equal(selector, '.ws-project-row[data-project-shortcut="' + number + '"]')
           return { click() { clicked++ } }
         } },
       })
       assert.equal(clicked, repeat ? 0 : 1)
     }
-    assert.equal(vm.runInNewContext(matching + ';isWorkspaceShortcut(input)', { input: { key, code, control: true, shift: true } }), true)
+    assert.equal(vm.runInNewContext(matching + ';isWorkspaceShortcut(input)', { input: { key, code, control: true, shift: false } }), true)
+    assert.equal(vm.runInNewContext(matching + ';isWorkspaceShortcut(input)', { input: { key, code, control: true, shift: true } }), false)
   }
 })
 

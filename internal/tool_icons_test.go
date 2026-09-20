@@ -33,7 +33,7 @@ func TestWebsiteToolIcon(t *testing.T) {
 }
 
 func TestWebsiteToolIconRejectsNonImages(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("<html>Not an icon</html>")) }))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("<html>Not an icon</html>")) }))
 	defer server.Close()
 	if got := websiteToolIcon(server.URL); got != "" {
 		t.Fatal("accepted HTML as an icon")

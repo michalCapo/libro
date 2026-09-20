@@ -447,8 +447,8 @@ function isWorkspaceShortcut(input) {
   const binding = (input.control ? 'Ctrl+' : '') + (input.alt ? 'Alt+' : '') +
     (input.shift && input.key !== '+' ? 'Shift+' : '') + (input.meta ? 'Meta+' : '') + key.toUpperCase()
   return workspaceShortcuts.has(binding) || binding === 'Ctrl+A' ||
-    (/^Ctrl\+(Shift\+)?[1-9]$/.test(binding) ||
-      (!!input.control && !input.meta && !input.alt && /^Digit[1-9]$/.test(input.code || '')))
+    (/^Ctrl\+[1-9]$/.test(binding) ||
+      (!!input.control && !input.meta && !input.alt && !input.shift && /^Digit[1-9]$/.test(input.code || '')))
 }
 
 // Find the Go binary — look next to the electron dir, or in PATH

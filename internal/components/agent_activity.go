@@ -175,9 +175,10 @@ func (s *TerminalSession) setAgentStatus(status string) {
 	if status == "done" && s.activity != nil && s.activity.kind == "codex" && !s.agentWorked {
 		status = "idle"
 	}
-	if status == "idle" {
+	switch status {
+	case "idle":
 		s.agentWorked = false
-	} else if status == "working" {
+	case "working":
 		s.agentWorked = true
 	}
 	if status == s.agentStatus {

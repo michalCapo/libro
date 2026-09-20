@@ -59,7 +59,9 @@ func OpenDesktop(url string) <-chan struct{} {
 	}
 
 	go func() {
-		cmd.Wait()
+		if err := cmd.Wait(); err != nil {
+			log.Printf("[desktop] Electron exited with an error: %v", err)
+		}
 		close(done)
 	}()
 
@@ -118,7 +120,7 @@ func waitForHTTPServer(address string, timeout time.Duration) error {
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", address, 250*time.Millisecond)
 		if err == nil {
-			conn.Close()
+			_ = conn.Close()
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)

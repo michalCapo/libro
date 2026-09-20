@@ -24,7 +24,7 @@ func TestKillTerminalProcessStopsChildJobs(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer cmd.Process.Kill()
+	defer func() { _ = cmd.Process.Kill() }()
 	line, err := bufio.NewReader(stdout).ReadString('\n')
 	if err != nil {
 		t.Fatal(err)
@@ -33,7 +33,7 @@ func TestKillTerminalProcessStopsChildJobs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer syscall.Kill(pid, syscall.SIGKILL)
+	defer func() { _ = syscall.Kill(pid, syscall.SIGKILL) }()
 	killTerminalProcess(cmd.Process)
 	_ = cmd.Wait()
 	deadline := time.Now().Add(2 * time.Second)

@@ -67,7 +67,7 @@ func extractBundledDesktop(baseDir, zipPath string) error {
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	if err := extractBundledApp(tmpDir); err != nil {
 		return err
@@ -161,7 +161,7 @@ func extractZipEntry(destRoot string, file *zip.File) error {
 		if err != nil {
 			return err
 		}
-		defer rc.Close()
+		defer func() { _ = rc.Close() }()
 		linkTarget, err := io.ReadAll(rc)
 		if err != nil {
 			return err
@@ -174,14 +174,14 @@ func extractZipEntry(destRoot string, file *zip.File) error {
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
 	}
 	if _, err := io.Copy(out, rc); err != nil {
-		out.Close()
+		_ = out.Close()
 		return err
 	}
 	if err := out.Close(); err != nil {

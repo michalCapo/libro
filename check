@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
+
+status=0
+GO_FILES=()
+while IFS= read -r -d '' file; do
+  GO_FILES+=("$file")
+done < <(find . -name '*.go' -not -path './third_party/*' -print0)
+
+run() {
+  echo "==> $*"
+  "$@"
+  local code=$?
+  if [[ $code -ne 0 ]]; then
+    status=1
+    echo "!! failed: $*" >&2
+  fi
+  echo
+}
+
+# Keep checks non-mutating and fail when go fix would change sources.
+run go fix -diff ./...
+
+echo "==> gofmt"
+unformatted="$(gofmt -l "${GO_FILES[@]}")"
+if [[ -n "$unformatted" ]]; then
+  status=1
+  echo "The following Go files are not formatted:" >&2
+  echo "$unformatted" >&2
+fi
+echo
+
+run go vet ./...
+run staticcheck ./...
+
+echo "==> gopls check"
+if command -v gopls >/dev/null 2>&1; then
+  gopls check -severity=hint "${GO_FILES[@]}"
+  code=$?
+  if [[ $code -ne 0 ]]; then
+    status=1
+    echo "!! failed: gopls check" >&2
+  fi
+else
+  echo "gopls not found; skipping"
+fi
+echo
+
+echo "==> golangci-lint"
+if command -v golangci-lint >/dev/null 2>&1; then
+  golangci-lint run --max-issues-per-linter=0 --max-same-issues=0 ./...
+  code=$?
+  if [[ $code -ne 0 ]]; then
+    status=1
+    echo "!! failed: golangci-lint run" >&2
+  fi
+  echo
+
+  echo "==> golangci-lint revive lsp-style diagnostics"
+  revive_config="$(mktemp --suffix=.yml)"
+  cat > "$revive_config" <<'YAML'
+version: "2"
+linters:
+  default: none
+  enable:
+    - revive
+  settings:
+    revive:
+      rules:
+        - name: unused-parameter
+        - name: package-comments
+YAML
+  golangci-lint run --config "$revive_config" --max-issues-per-linter=0 --max-same-issues=0 ./...
+  code=$?
+  rm -f "$revive_config"
+  if [[ $code -ne 0 ]]; then
+    status=1
+    echo "!! failed: golangci-lint revive lsp-style diagnostics" >&2
+  fi
+else
+  echo "golangci-lint not found; skipping"
+fi
+echo
+
+run deadcode -test ./...
+run go build ./...
+run go test ./...
+
+if [[ $status -eq 0 ]]; then
+  echo "All checks passed."
+else
+  echo "Checks finished with errors/warnings." >&2
+fi
+exit "$status"

@@ -19,7 +19,7 @@ func killTerminalProcess(process *os.Process) {
 	output, err := exec.Command("ps", "-axo", "pid=,ppid=").Output()
 	if err == nil {
 		children := make(map[int][]int)
-		for _, line := range strings.Split(string(output), "\n") {
+		for line := range strings.SplitSeq(string(output), "\n") {
 			fields := strings.Fields(line)
 			if len(fields) != 2 {
 				continue

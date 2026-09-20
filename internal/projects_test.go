@@ -13,7 +13,7 @@ func TestHomeProjectIsOptional(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { db.Close(); db = original })
+	t.Cleanup(func() { _ = db.Close(); db = original })
 	createTables()
 	home := t.TempDir()
 	t.Setenv("HOME", home)

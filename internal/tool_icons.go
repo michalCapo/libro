@@ -69,7 +69,7 @@ func downloadToolIcon(address string) string {
 	if err != nil {
 		return ""
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		return ""
 	}
@@ -116,7 +116,7 @@ func websiteToolIcon(address string) string {
 		if err != nil {
 			return nil, nil
 		}
-		defer res.Body.Close()
+		defer func() { _ = res.Body.Close() }()
 		if res.StatusCode != http.StatusOK {
 			return nil, nil
 		}
@@ -154,7 +154,7 @@ func websiteToolIcon(address string) string {
 				href = attr.Val
 			}
 		}
-		for _, value := range strings.Fields(rel) {
+		for value := range strings.FieldsSeq(rel) {
 			if value == "icon" || value == "apple-touch-icon" {
 				if ref, err := url.Parse(href); err == nil && href != "" {
 					candidates = append(candidates, base.ResolveReference(ref).String())
@@ -199,7 +199,7 @@ func localToolIcon(command string) string {
 					continue
 				}
 				data, err := io.ReadAll(io.LimitReader(f, 512*1024+1))
-				f.Close()
+				_ = f.Close()
 				if err == nil {
 					if icon := iconData(data); icon != "" {
 						return icon

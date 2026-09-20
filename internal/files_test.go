@@ -10,9 +10,15 @@ import (
 
 func TestProjectFiles(t *testing.T) {
 	root := t.TempDir()
-	os.Mkdir(filepath.Join(root, "src"), 0700)
-	os.WriteFile(filepath.Join(root, "hello.txt"), []byte("hello"), 0600)
-	os.WriteFile(filepath.Join(root, "binary"), []byte{0, 1, 2}, 0600)
+	if err := os.Mkdir(filepath.Join(root, "src"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "hello.txt"), []byte("hello"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "binary"), []byte{0, 1, 2}, 0600); err != nil {
+		t.Fatal(err)
+	}
 	listing, err := readProjectFile(root, "")
 	if err != nil || !listing.Directory || len(listing.Entries) != 3 || listing.Entries[0].Name != "src" {
 		t.Fatalf("listing: %+v %v", listing, err)
@@ -27,7 +33,9 @@ func TestProjectFiles(t *testing.T) {
 		}
 	}
 	outside := filepath.Join(t.TempDir(), "outside.txt")
-	os.WriteFile(outside, []byte("outside"), 0600)
+	if err := os.WriteFile(outside, []byte("outside"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +117,9 @@ func TestProjectMediaPreview(t *testing.T) {
 			t.Fatal(err)
 		}
 		err = f.Truncate(int64(test.size))
-		f.Close()
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
 		if err != nil {
 			t.Fatal(err)
 		}

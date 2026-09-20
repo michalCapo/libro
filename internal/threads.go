@@ -22,7 +22,7 @@ func loadThreads() []Thread {
 	if err != nil {
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var threads []Thread
 	for rows.Next() {
 		var thread Thread

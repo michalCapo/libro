@@ -398,29 +398,6 @@ func knownTermIconsJS() string {
 	return sb.String()
 }
 
-// termIconColors returns a gradient palette [top, bottom, mid] for a terminal command.
-func termIconColors(cmd string) (string, string, string) {
-	palettes := [][3]string{
-		{"#0d9488", "#065f46", "#047857"},
-		{"#7c3aed", "#4c1d95", "#5b21b6"},
-		{"#2563eb", "#1e3a5f", "#1d4ed8"},
-		{"#db2777", "#831843", "#9d174d"},
-		{"#d97706", "#78350f", "#92400e"},
-		{"#059669", "#064e3b", "#047857"},
-		{"#dc2626", "#7f1d1d", "#991b1b"},
-		{"#0891b2", "#164e63", "#155e75"},
-	}
-	h := 0
-	for _, c := range cmd {
-		h = ((h << 5) - h) + int(c)
-	}
-	if h < 0 {
-		h = -h
-	}
-	p := palettes[h%len(palettes)]
-	return p[0], p[1], p[2]
-}
-
 // stripID returns the DOM ID for a project's app strip
 func stripID(projectName string) string {
 	return "app-strip-" + projectName
@@ -553,7 +530,7 @@ func navigateJS(state *AppState, sid string) string {
 	return navigateProjectJS(state.ActiveProject, state.Apps, state.SelectedIndex, sid)
 }
 
-func navigateProjectJS(projectName string, apps []Application, selectedIndex int, sid string) string {
+func navigateProjectJS(_ string, apps []Application, selectedIndex int, _ string) string {
 	var js strings.Builder
 	for i, app := range apps {
 		fmt.Fprintf(&js, "var e=document.getElementById(%s);if(e){e.style.order=%s;e.dataset.dock=%s;}", components.JSString("frame-"+app.ID), components.JSString(fmt.Sprint(i)), components.JSString(appDock(app)))
@@ -2114,87 +2091,6 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 	return renderWorkspaceTopBar(state, sid)
 }
 
-// renderAppPreview renders clickable mini-cards for each running app in the top bar.
-// This helps users see and switch between apps when the window is too small to show all of them.
-func renderAppPreview(state *AppState, sid string) *r.Node {
-	if len(state.Apps) == 0 {
-		return r.Div("")
-	}
-
-	cards := make([]*r.Node, 0, len(state.Apps))
-	for i, app := range state.Apps {
-		isSelected := i == state.SelectedIndex
-
-		// Build icon for this app
-		var iconNode *r.Node
-		if app.Type == AppTypeTerminal {
-			if info := lookupTermIcon(app.Command); info != nil {
-				if info.URL != "" {
-					iconNode = r.Img("w-3.5 h-3.5 rounded-sm shrink-0").Attr("src", info.URL)
-				} else if info.MaterialIcon != "" {
-					iconNode = r.I("material-icons-round text-[11px] shrink-0 opacity-70").Text(info.MaterialIcon)
-				}
-			} else if app.IconURL != "" {
-				iconNode = r.Img("w-3.5 h-3.5 rounded-sm shrink-0").Attr("src", app.IconURL)
-			}
-			if iconNode == nil {
-				iconNode = r.I("material-icons-round text-[11px] shrink-0 opacity-70").Text("terminal")
-			}
-		} else {
-			if app.URL != "" {
-				if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
-					iconNode = r.Img("w-3.5 h-3.5 rounded-sm shrink-0").
-						Attr("src", faviconURL(app.URL, 16))
-				}
-			}
-			if iconNode == nil {
-				iconNode = r.I("material-icons-round text-[11px] shrink-0 opacity-70").Text("language")
-			}
-		}
-
-		// App label
-		label := app.Name
-		if label == "" {
-			if app.Type == AppTypeTerminal {
-				label = app.Command
-			} else {
-				label = app.URL
-				if u, err := urlParse(app.URL); err == nil && u.Hostname() != "" {
-					label = strings.TrimPrefix(u.Hostname(), "www.")
-				}
-			}
-		}
-		if label == "" {
-			label = "untitled"
-		}
-
-		// Card styling
-		var cardCls string
-		if isSelected {
-			cardCls = "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-75 bg-blue-600 text-white shadow-sm"
-		} else {
-			cardCls = "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-75 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700 hover:text-gray-800 dark:hover:text-zinc-200"
-		}
-
-		card := r.Button(cardCls).
-			Attr("data-libro-no-drag", "true").
-			Attr("style", "-webkit-app-region:no-drag").
-			Attr("aria-label", "Select "+label).
-			Attr("title", label).
-			OnClick(&r.Action{Name: "app.select", Data: sidData(sid, "index", i)}).
-			Render(
-				iconNode,
-				r.Span("text-[10px] font-medium truncate max-w-[120px] leading-tight whitespace-nowrap").Text(label),
-			)
-		cards = append(cards, card)
-	}
-
-	return r.Div("flex items-center gap-1 ml-3 overflow-x-auto scrollbar-none").
-		ID("app-preview-strip").
-		Attr("style", "scrollbar-width:none;-ms-overflow-style:none").
-		Render(cards...)
-}
-
 // updateAppPreviewJS returns JS that updates the selected state of preview cards
 // without re-rendering the entire top bar. Used for lightweight navigate/select actions.
 func updateAppPreviewJS(state *AppState) string {
@@ -2948,7 +2844,7 @@ func projectsJS(state *AppState) string {
 }
 
 // renderProjectDialog renders the create project modal
-func renderProjectDialog(visible bool, sid string) *r.Node {
+func renderProjectDialog(_ bool, sid string) *r.Node {
 	return components.ProjectDialog(sid)
 }
 

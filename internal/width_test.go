@@ -31,7 +31,7 @@ func TestToggleMaxWidthRestoresPreviousSize(t *testing.T) {
 			sm := NewStateManager()
 			s := &AppState{Apps: []Application{{ID: "panel", Width: initial}, {ID: "other", Width: WidthSM}}}
 			sm.states["test"] = s
-			for cycle := 0; cycle < 2; cycle++ {
+			for range 2 {
 				for _, want := range []Width{WidthFull, initial} {
 					width, id := sm.ToggleMaxWidth("test", 1920)
 					if width != want || id != "panel" || s.Apps[0].Width != want {
