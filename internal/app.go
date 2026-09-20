@@ -388,6 +388,7 @@ func Run(assets embed.FS) {
 
 	registerSettingsActions(app)
 	registerFilesActions(app)
+	registerNotesActions(app)
 
 	// Open add dialog
 	registerAction(app, "app.dialog.open", func(_ *r.Context) string {

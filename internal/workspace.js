@@ -525,6 +525,7 @@
     renderProjectActivity();
     renderProjectTerminals();
     window.libroFiles?.init();
+    window.libroNotes?.init();
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
       // Replacing a project's DOM can reset its hidden styles. Always reconcile
       // visibility with server state so inactive welcome screens cannot reappear.
@@ -559,7 +560,7 @@
     const signature = JSON.stringify(list);
     if (rail.dataset.signature === signature) return;
     rail.dataset.signature = signature; rail.replaceChildren();
-    const icons = {terminal:'terminal',browser:'language',files:'folder_open',nvim:'edit',lazyrepo:'account_tree',lazydata:'storage'};
+    const icons = {terminal:'terminal',browser:'language',files:'folder_open',notes:'description',nvim:'edit',lazyrepo:'account_tree',lazydata:'storage'};
     list.forEach(p => { const entry = button(p.name, icons[p.id] || (p.type === 'url' ? 'language' : 'terminal'), () => tool(p.id)); applyToolIcon(entry, p); entry.dataset.toolId = p.id; rail.append(entry); });
     updateToolHints();
   }
@@ -582,7 +583,7 @@
   function newBrowser() { openPlugin('browser', 'right'); }
   function navigateBrowser(delta) {
     const grid = activeGrid(); if (!grid) return;
-    const browsers = frames(grid).filter(frame => frame.dataset.appType === 'url' && frame.dataset.plugin !== 'files');
+    const browsers = frames(grid).filter(frame => frame.dataset.appType === 'url' && !['files', 'notes'].includes(frame.dataset.plugin));
     if (!browsers.length) return;
     const selected = browsers.findIndex(frame => frame.dataset.appId === window.__libroSelectedApp);
     const state = dockState(grid);
@@ -844,7 +845,7 @@
         // Restoring selection on a project switch must preserve bottom visibility.
         // Explicit selection opens the terminal in select().
     }
-    if (selected?.dataset.appType === 'url' && selected.dataset.plugin !== 'files') state.browser = selected.dataset.appId;
+    if (selected?.dataset.appType === 'url' && !['files', 'notes'].includes(selected.dataset.plugin)) state.browser = selected.dataset.appId;
     if (selected?.dataset.dock === 'center') state.agent = selected.dataset.appId;
     grid.dataset.lastSelected = selected?.dataset.appId || '';
     const width = frame => frame.style.width.endsWith('%') ? grid.clientWidth : parseFloat(frame.style.width) || frame.offsetWidth;
@@ -1059,7 +1060,7 @@
     document.getElementById('tool-key-status').textContent = '';
     document.getElementById('agent-command-rows').replaceChildren();
     document.getElementById('tool-command-rows').replaceChildren();
-    window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files'].includes(p.id) && !p.removed).forEach(p => addAgentRow(p, p.type === 'url' ? p.url : p.command, true));
+    window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files', 'notes'].includes(p.id) && !p.removed).forEach(p => addAgentRow(p, p.type === 'url' ? p.url : p.command, true));
     removedAgents = Object.fromEntries(window.__libroPlugins.filter(p => p.removed && p.dock === 'center' && p.type === 'terminal').map(p => [p.id, true]));
     window.__libroPlugins.filter(p => !p.removed && p.dock === 'center' && p.type === 'terminal').forEach(p => addAgentRow(p, commands[p.id] || p.command));
     fillAutolaunchAgents();

@@ -105,6 +105,9 @@ components:
     textColor: "{colors.muted}"
     rounded: "{rounded.badge}"
     padding: "1px 5px"
+  note-row:
+    textColor: "{colors.fg}"
+    padding: "12px 4px"
   palette-row:
     textColor: "{colors.fg}"
     rounded: "{rounded.row}"
@@ -154,6 +157,8 @@ Width presets are XS 320px, SM 480px, MD 640px, LG 960px, XL 1280px, and 2XL 192
 
 Toolbars are at least 48px tall and allow controls to wrap. Popups are centered with viewport height limits and internal scrolling. Commands and the app launcher are at most 420px wide with a 24px viewport gutter; other existing dialogs retain their component-specific widths. At small widths, preserve the dock and tab model and overlay the selected right tool instead of stacking panels.
 
+Notes uses a single scrolling column with 16px padding at every panel width. Its toolbar and action row wrap with 8px gaps. The editor stacks fields with 16px gaps; image previews stay within the panel width and a 360px maximum height. Preserve this layout at XS (320px) as well as MD (640px).
+
 ## Elevation & Depth
 
 The workspace uses tonal differences and 1px dividers. Panels are flat and square. Popups alone use the shared shadow `0 12px 36px rgb(0 0 0 / 14%)` with a 10% black backdrop and no blur. The mobile sidebar uses a lateral shadow. Bordered launch controls have only a faint shadow where implemented. Exact shadow values and component samples are in `.impeccable/design.json`.
@@ -172,6 +177,14 @@ Use the frontmatter radii by role: small keycaps and size badges, gently rounded
 - **Size controls:** only the selected size appears in the panel toolbar, with raised fill and a fine ring. Hover or click opens a floating size picker with every preset, including the current size. Keyboard users open it with Enter, Space, or Arrow Down; Escape dismisses it. The command resize picker uses rounded rows and radio indicators.
 - **Palettes:** commands, apps, and project results use rounded rows with muted icons, a primary label, and a smaller description. Command and app rows are at least 62px high. Selection and hover use the popup-row surface. Keyboard hints stay muted; searchable lists show a no-results state.
 - **Shortcuts:** search above grouped rows; 50px minimum row height, fine separators, right-aligned outlined keycaps. Long labels wrap; keycaps stay on one line.
+
+### Notes
+
+Notes extends the quiet desktop controls inside a project tool panel. Open it to a list filtered to New, with New, Archived, and All options and an Add note action. Rows use fine bottom dividers, a wrapping title, and muted state text; their minimum height is 48px. Show a plain empty message when the filter has no notes.
+
+Selecting a row opens an editable form with explicit Title, State, and Note labels. State offers New and Archived. Keep the textarea visible with the simple Markdown preview below it; there is no edit/preview switch. Clipboard images appear below the preview with a labeled removal button for each image.
+
+Save note keeps the editor open and shows Saved. Cancel discards draft changes and returns to the list. Send to agent sends the saved note to the active agent in the same project; it is disabled until the note is saved and has no unsaved changes. Keep loading, unsaved, saving, sending, success, and error messages in the status area. Controls reuse raised fills, neutral borders, and blue keyboard-focus outlines. Notes opens with Ctrl+O by default; the shortcut is configurable in Settings.
 
 ## Do's and Don'ts
 

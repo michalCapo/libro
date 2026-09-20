@@ -136,7 +136,16 @@ func copyFile(src, dst string) error {
 
 func createTables() {
 	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS threads (
+		CREATE TABLE IF NOT EXISTS notes (
+            id TEXT PRIMARY KEY,
+            project TEXT NOT NULL,
+            title TEXT NOT NULL,
+            body TEXT NOT NULL,
+            state TEXT NOT NULL CHECK(state IN ('new', 'archived')),
+            updated TEXT NOT NULL,
+            images TEXT NOT NULL DEFAULT '[]'
+        );
+        CREATE TABLE IF NOT EXISTS threads (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             archived INTEGER NOT NULL DEFAULT 0

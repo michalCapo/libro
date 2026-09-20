@@ -99,6 +99,7 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 | `Ctrl + B` | Browser |
 | `Ctrl + Shift + B` | New browser panel |
 | `Ctrl + F` | Files |
+| `Ctrl + O` | Notes |
 | `Ctrl + E` | Nvim |
 | `Ctrl + G` | Git |
 | `Ctrl + D` | Database |
@@ -213,3 +214,7 @@ libro browser '{"action":"check","panel":"PANEL_ID","selector":"#agree","checked
 libro browser '{"action":"screenshot","panel":"PANEL_ID","fullPage":true}' /tmp/full-page.png
 libro browser '{"action":"download","panel":"PANEL_ID","url":"https://example.com/report.csv"}'
 ```
+
+### Notes
+
+Open Notes from the tools or press `Ctrl + O`. Change the shortcut in Settings. Notes are saved per project, with New and Archived states. Open a note to edit its title, Markdown, and pasted clipboard images. Save keeps changes; Cancel discards them. Send to agent executes the saved note in the selected agent, including local image paths.

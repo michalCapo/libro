@@ -945,6 +945,8 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 	var leftSide *r.Node
 	if appDock(app) == "center" {
 		leftSide = r.Div("ws-panel-title").Render(r.Span("").Text(workspaceAppName(app)))
+	} else if app.PluginID == "notes" {
+		leftSide = r.Div("ws-panel-title").Render(r.I("material-icons-round").Text("description"), r.Span("").Text("Notes"))
 	} else if app.PluginID == "files" {
 		leftSide = r.Div("ws-panel-title").Render(r.I("material-icons-round").Text("folder_open"), r.Span("").Text("Files"))
 	} else if app.Type == AppTypeURL {
@@ -1145,6 +1147,9 @@ func renderAppPlaceholder(app Application) *r.Node {
 }
 
 func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
+	if app.PluginID == "notes" {
+		return renderNotes(app)
+	}
 	if app.PluginID == "files" {
 		return renderFiles(app)
 	}
