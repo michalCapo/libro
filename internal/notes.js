@@ -6,8 +6,8 @@
     if (text !== undefined) el.textContent = text;
     return el;
   };
-  function button(text, action) {
-    const el = element('button', 'ws-notes-button', text); el.type = 'button'; el.onclick = action; return el;
+  function button(text, action, cls = 'ws-notes-button') {
+    const el = element('button', cls, text); el.type = 'button'; el.onclick = action; return el;
   }
   function request(s, action, data = {}) {
     const token = String(++sequence);
@@ -34,6 +34,20 @@
     s.previewRequest = '';
     s.timer = setTimeout(() => { s.previewRequest = request(s, 'preview', {body:s.draft.body}); }, 150);
   }
+  function relativeTime(value) {
+    const time = Date.parse(value);
+    if (Number.isNaN(time)) return '';
+    const seconds = Math.max(1, Math.round((Date.now() - time) / 1000));
+    const units = [[31536000, 'y'], [2592000, 'mo'], [604800, 'w'], [86400, 'd'], [3600, 'h'], [60, 'm']];
+    for (const [span, label] of units) if (seconds >= span) return Math.floor(seconds / span) + label + ' ago';
+    return 'just now';
+  }
+  function badge(state) {
+    const el = element('span', 'ws-note-badge ws-note-badge-' + state);
+    el.append(element('span', 'ws-note-badge-dot'), state === 'new' ? 'Open' : 'Archived');
+    return el;
+  }
+  function shortID(note) { return '#' + note.id.slice(0, 6); }
   function showImages(s) {
     s.images.replaceChildren();
     s.draft.images.forEach((attachment, index) => {
@@ -51,32 +65,57 @@
     s.saved.images ||= []; s.draft.images ||= [];
     s.el.replaceChildren();
     const form = element('form', 'ws-note-editor');
-    const titleLabel = element('label', 'ws-note-label', 'Title');
+    const back = button('‹ Issues', () => s.cancel.click(), 'ws-note-back');
+    const header = element('div', 'ws-note-editor-header');
     const title = element('input', 'ws-note-title'); title.value = note.title; title.maxLength = 200; title.required = true;
-    titleLabel.append(title);
-    const stateLabel = element('label', 'ws-note-label', 'State');
-    const select = element('select');
-    select.add(new Option('New', 'new')); select.add(new Option('Archived', 'archived')); select.value = note.state;
-    stateLabel.append(select);
-    const bodyLabel = element('label', 'ws-note-label', 'Note');
+    title.placeholder = 'Issue title'; title.setAttribute('aria-label', 'Title');
+    header.append(back, title, badge(s.draft.state));
+    const meta = element('div', 'ws-note-editor-meta');
+    const idSpan = element('span', 'ws-note-id', note.id ? shortID(note) : 'New issue');
+    const dateSpan = element('span', 'ws-note-date');
+    if (note.updated) dateSpan.textContent = 'Last edited ' + relativeTime(note.updated);
+    meta.append(idSpan, dateSpan);
+    const stateRow = element('div', 'ws-note-state-row');
+    stateRow.append(element('span', 'ws-note-state-label', 'State'));
+    const chips = element('div', 'ws-note-state-chips'); chips.setAttribute('role', 'radiogroup'); chips.setAttribute('aria-label', 'State');
+    const chipButtons = {};
+    for (const [value, label] of [['new', 'Open'], ['archived', 'Archived']]) {
+      const chip = button(label, () => {
+        s.draft.state = value;
+        for (const [k, b] of Object.entries(chipButtons)) {
+          b.classList.toggle('ws-note-chip-active', k === value);
+          b.setAttribute('aria-checked', String(k === value));
+        }
+        header.querySelector('.ws-note-badge').replaceWith(badge(value));
+        changed(s);
+      }, 'ws-note-chip' + (value === note.state ? ' ws-note-chip-active' : ''));
+      chip.setAttribute('role', 'radio');
+      chip.setAttribute('aria-checked', String(value === note.state));
+      chipButtons[value] = chip;
+      chips.append(chip);
+    }
+    stateRow.append(chips);
     const body = element('textarea', 'ws-note-body'); body.value = note.body;
-    body.placeholder = 'Describe the task…'; bodyLabel.append(body);
+    body.placeholder = 'Describe the task…'; body.setAttribute('aria-label', 'Note');
+    body.rows = 10;
     const hint = element('p', 'ws-note-hint', 'Markdown supported: headings, lists, **bold**, *italic*, and `code`. Paste images here.');
+    const previewWrap = element('div', 'ws-note-preview-wrap');
+    previewWrap.append(element('div', 'ws-note-preview-title', 'Preview'));
     s.preview = element('div', 'ws-note-preview'); s.preview.setAttribute('aria-label', 'Live Markdown preview');
+    previewWrap.append(s.preview);
     s.images = element('div', 'ws-note-images');
     s.status = element('div', 'ws-notes-status'); s.status.setAttribute('role', 'status');
     const actions = element('div', 'ws-note-actions');
-    s.save = button('Save note', () => form.requestSubmit());
+    s.save = button('Save issue', () => form.requestSubmit(), 'ws-notes-button ws-notes-primary');
     s.cancel = button('Cancel', () => { clearTimeout(s.timer); const id = s.draft.id; s.draft = null; renderList(s); (Array.from(s.el.querySelectorAll('[data-note-id]')).find(row => row.dataset.noteId === id) || s.el.querySelector('.ws-notes-toolbar button')).focus(); });
     s.send = button('Send to agent', () => {
       s.busy = true; updateActions(s); status(s, 'Sending…');
       request(s, 'send', {noteID:s.draft.id});
     });
-    actions.append(s.save, s.cancel, s.send);
-    form.append(titleLabel, stateLabel, bodyLabel, hint, s.preview, s.images, actions, s.status);
+    actions.append(s.save, s.send, s.cancel);
+    form.append(header, meta, stateRow, body, hint, previewWrap, s.images, actions, s.status);
     s.el.append(form);
     title.oninput = () => { s.draft.title = title.value; changed(s); };
-    select.onchange = () => { s.draft.state = select.value; changed(s); };
     body.oninput = () => { s.draft.body = body.value; changed(s); preview(s); };
     body.onpaste = async event => {
       const items = Array.from(event.clipboardData?.items || []).filter(item => item.type.startsWith('image/'));
@@ -110,32 +149,57 @@
   }
   function renderList(s) {
     s.el.replaceChildren();
+    const header = element('div', 'ws-notes-header');
+    const heading = element('div', 'ws-notes-heading');
+    const open = s.notes.filter(note => note.state === 'new').length;
+    const archived = s.notes.length - open;
+    heading.append(element('span', 'ws-notes-title', 'Issues'), element('span', 'ws-notes-count', open + ' Open · ' + archived + ' Archived'));
+    header.append(heading, button('New issue', () => edit(s, {id:'', title:'', body:'', state:'new', images:[]}), 'ws-notes-button ws-notes-primary'));
     const toolbar = element('div', 'ws-notes-toolbar');
-    const filter = element('select'); filter.setAttribute('aria-label', 'Filter notes by state');
-    ['new', 'archived', 'all'].forEach(value => filter.add(new Option(value[0].toUpperCase() + value.slice(1), value)));
-    filter.value = s.filter;
-    filter.onchange = () => { s.filter = filter.value; renderList(s); s.el.querySelector('.ws-notes-toolbar select').focus(); };
-    toolbar.append(filter, button('Add note', () => edit(s, {id:'', title:'', body:'', state:'new', images:[]})));
+    const tabs = element('div', 'ws-notes-tabs');
+    for (const [value, label] of [['new', 'Open'], ['archived', 'Archived'], ['all', 'All']]) {
+      const tab = button(label, () => { s.filter = value; s.search = s.el.querySelector('.ws-notes-search').value; renderList(s); }, 'ws-notes-tab' + (s.filter === value ? ' ws-notes-tab-active' : ''));
+      tab.setAttribute('aria-pressed', String(s.filter === value));
+      tabs.append(tab);
+    }
+    const search = element('input', 'ws-notes-search');
+    search.type = 'search'; search.placeholder = 'Search issues…'; search.value = s.search; search.setAttribute('aria-label', 'Search issues');
+    search.oninput = () => { s.search = search.value; listRows(s, list); };
+    toolbar.append(tabs, search);
     const list = element('div', 'ws-notes-list');
-    const notes = s.notes.filter(note => s.filter === 'all' || note.state === s.filter);
+    s.status = element('div', 'ws-notes-status'); s.status.setAttribute('role', 'status');
+    s.el.append(header, toolbar, list, s.status);
+    listRows(s, list);
+  }
+  function listRows(s, list) {
+    list.replaceChildren();
+    const query = s.search.trim().toLowerCase();
+    const notes = s.notes.filter(note => (s.filter === 'all' || note.state === s.filter) && (!query || note.title.toLowerCase().includes(query)));
     notes.forEach(note => {
-      const row = button('', () => edit(s, note)); row.className = 'ws-note-row'; row.dataset.noteId = note.id;
-      row.append(element('span', 'ws-note-row-title', note.title), element('span', 'ws-note-state', note.state === 'new' ? 'New' : 'Archived'));
+      const row = button('', () => edit(s, note), 'ws-note-row');
+      row.dataset.noteId = note.id;
+      const main = element('span', 'ws-note-row-main');
+      main.append(element('span', 'ws-note-row-title-line', note.title),
+        element('span', 'ws-note-row-meta', shortID(note) + ' · updated ' + relativeTime(note.updated)));
+      row.append(badge(note.state), main, element('span', 'ws-note-chevron', '›'));
       list.append(row);
     });
-    if (!notes.length) list.append(element('p', 'ws-notes-empty', s.filter === 'archived' ? 'No archived notes.' : 'No notes yet. Add a note to track a task.'));
-    s.status = element('div', 'ws-notes-status'); s.status.setAttribute('role', 'status');
-    s.el.append(toolbar, list, s.status);
+    if (!notes.length) {
+      const empty = element('div', 'ws-notes-empty');
+      empty.append(element('div', 'ws-notes-empty-icon', '✓'),
+        element('p', 'ws-notes-empty-text', query ? 'No issues match your search.' : s.filter === 'archived' ? 'No archived issues.' : 'No open issues. Good job, or add one to track a task.'));
+      list.append(empty);
+    }
   }
   function init() {
     for (const [id, s] of states) if (!s.el.isConnected) { clearTimeout(s.timer); states.delete(id); }
     document.querySelectorAll('[data-notes]').forEach(el => {
       const project = el.closest('[data-workspace-project]')?.dataset.workspaceProject;
       if (project !== window.__libroActiveProject || states.has(el.dataset.notes)) return;
-      const s = {el, id:el.dataset.notes, project, notes:[], requests:new Map(), filter:'new', busy:false, reading:0};
+      const s = {el, id:el.dataset.notes, project, notes:[], requests:new Map(), filter:'new', search:'', busy:false, reading:0};
       states.set(s.id, s);
       s.status = element('div', 'ws-notes-status'); s.status.setAttribute('role', 'status');
-      s.el.replaceChildren(s.status); status(s, 'Loading notes…'); request(s, 'list');
+      s.el.replaceChildren(s.status); status(s, 'Loading issues…'); request(s, 'list');
     });
   }
   function receive(result) {
@@ -162,7 +226,7 @@
     }
     if (result.error) {
       status(s, result.error);
-      if (action === 'list') s.el.replaceChildren(s.status, button('Retry', () => { s.el.replaceChildren(s.status); status(s, 'Loading notes…'); request(s, 'list'); }));
+      if (action === 'list') s.el.replaceChildren(s.status, button('Retry', () => { s.el.replaceChildren(s.status); status(s, 'Loading issues…'); request(s, 'list'); }));
       return;
     }
     if (action === 'list') { s.notes = result.notes; if (!s.draft) renderList(s); }

@@ -141,6 +141,11 @@ Restart an existing agent session to load this integration. Custom agents can
 register `libro browser-mcp` as a stdio MCP server or use the CLI below.
 Agent tool approval and sandbox settings still apply.
 
+Libro panels use `libro_browser`, not Codex's `iab` or shared browser connection.
+If an agent reports "Browser is not available: iab" or "No browser is available",
+tell it to call the `libro_browser` tool with `{"action":"list"}`, or run
+`libro browser list`. Those errors refer to a different browser connection.
+
 The agent first uses `list`, chooses the requested panel ID, then sends actions
 with that ID. The tool description tells it to use the existing panel to check
 work. Missing or closed panels return an error. Use `select_panel` to show a panel in

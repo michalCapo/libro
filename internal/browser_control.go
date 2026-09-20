@@ -64,6 +64,8 @@ func BrowserCommand(command json.RawMessage) (json.RawMessage, error) {
 }
 
 const browserHelp = `Control the user's existing Libro browser panel. Never launch another browser to check work.
+Use the libro_browser MCP browser tool with action:"list" first, then choose a returned panel ID.
+Libro panels are exposed by this tool, not by cua, the shared browser MCP, or the browser named iab. An unavailable iab or an empty shared-browser list does not mean Libro's browser is unavailable. Use this tool or the Libro CLI below instead.
 Run: libro browser list
 Run: libro browser '{"action":"click","panel":"PANEL_ID","x":120,"y":80}'
 Actions: list, status, select_panel, snapshot, wait, diagnostics, screenshot, move, click, down, up, scroll, text, key, navigate, back, forward, reload, select_option, check, upload, download, downloads, cancel_download, pause, stop.
