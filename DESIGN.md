@@ -15,6 +15,14 @@ colors:
   popup: "#f7f7f8"
   popup-row: "#fff"
   popup-muted: "#70707b"
+  code-comment: "#6c7580"
+  code-keyword: "#cf222e"
+  code-string: "#0a3069"
+  code-title: "#8250df"
+  code-constant: "#0550ae"
+  code-property: "#116329"
+  code-meta: "#953800"
+  code-deletion: "#82071e"
   dark-bg: "#1c1c1f"
   dark-chrome: "#222225"
   dark-raised: "#2b2b30"
@@ -28,6 +36,14 @@ colors:
   dark-popup: "#252529"
   dark-popup-row: "#34343b"
   dark-popup-muted: "#aaaab5"
+  dark-code-comment: "#8b949e"
+  dark-code-keyword: "#ff7b72"
+  dark-code-string: "#a5d6ff"
+  dark-code-title: "#d2a8ff"
+  dark-code-constant: "#79c0ff"
+  dark-code-property: "#7ee787"
+  dark-code-meta: "#ffa657"
+  dark-code-deletion: "#ffa198"
 typography:
   body:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
@@ -121,6 +137,8 @@ Scope: the built workspace shell and its dialogs. Source of truth is `internal/w
 `bg` is the near-white main surface; `chrome` is the soft gray navigation surface; `raised` is the white selected row and control surface. `fg` carries primary text, `muted` secondary text and icons. `line` separates surfaces; `control-line` outlines compact controls; `hover` gives restrained pointer feedback. `popup`, `popup-row`, and `popup-muted` apply the same hierarchy to overlays. Each `dark-` counterpart is applied under `html.dark`.
 
 The muted text token was checked against the sidebar surface at 4.57:1. This does not claim a complete accessibility audit of embedded content. Terminal backgrounds and colors follow the shell theme, including live changes. Settings provides Auto (the default), Light, and Dark. Auto follows the OS color scheme; explicit choices override it and persist through the UI library’s theme storage.
+
+The `code-*` tokens give file previews a restrained syntax palette. Their `dark-code-*` counterparts preserve token roles instead of mechanically inverting the light colors.
 
 ## Typography
 

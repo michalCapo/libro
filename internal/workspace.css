@@ -1,7 +1,7 @@
 /* T3-inspired desktop chrome around a horizontal row of fixed-width panels.
    Shared surface, control, and typography tokens also style every popup. */
-:root{--ws-bg:#fcfcfd;--ws-chrome:#f7f7f8;--ws-raised:#fff;--ws-line:#e9e9ec;--ws-control-line:#d4d4db;--ws-fg:#29292e;--ws-muted:#70707b;--ws-hover:#efeff2;--ws-accent:#2452df;--ws-popup:#f7f7f8;--ws-popup-row:#fff;--ws-popup-muted:#70707b;--ws-projects:216px}
-html.dark{--ws-bg:#1c1c1f;--ws-chrome:#222225;--ws-raised:#2b2b30;--ws-line:#333339;--ws-control-line:#484850;--ws-fg:#e6e6eb;--ws-muted:#aaaab5;--ws-hover:#303036;--ws-accent:#8aa7ff;--ws-popup:#252529;--ws-popup-row:#34343b;--ws-popup-muted:#aaaab5}
+:root{--ws-bg:#fcfcfd;--ws-chrome:#f7f7f8;--ws-raised:#fff;--ws-line:#e9e9ec;--ws-control-line:#d4d4db;--ws-fg:#29292e;--ws-muted:#70707b;--ws-hover:#efeff2;--ws-accent:#2452df;--ws-popup:#f7f7f8;--ws-popup-row:#fff;--ws-popup-muted:#70707b;--ws-code-comment:#6c7580;--ws-code-keyword:#cf222e;--ws-code-string:#0a3069;--ws-code-title:#8250df;--ws-code-constant:#0550ae;--ws-code-property:#116329;--ws-code-meta:#953800;--ws-code-deletion:#82071e;--ws-projects:216px}
+html.dark{--ws-bg:#1c1c1f;--ws-chrome:#222225;--ws-raised:#2b2b30;--ws-line:#333339;--ws-control-line:#484850;--ws-fg:#e6e6eb;--ws-muted:#aaaab5;--ws-hover:#303036;--ws-accent:#8aa7ff;--ws-popup:#252529;--ws-popup-row:#34343b;--ws-popup-muted:#aaaab5;--ws-code-comment:#8b949e;--ws-code-keyword:#ff7b72;--ws-code-string:#a5d6ff;--ws-code-title:#d2a8ff;--ws-code-constant:#79c0ff;--ws-code-property:#7ee787;--ws-code-meta:#ffa657;--ws-code-deletion:#ffa198}
 #libro-workspace{background:var(--ws-bg);color:var(--ws-fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 #libro-workspace ::selection{background:#4873ef33}
 #libro-workspace button{cursor:pointer}
@@ -281,6 +281,13 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-file-path{flex:1;min-width:0;font-size:12px;overflow-wrap:anywhere}
 .ws-file-wrap{display:flex;align-items:center;gap:6px;flex-shrink:0;font-size:12px;cursor:pointer}
 .ws-file-text.is-wrapped{white-space:pre-wrap;overflow-wrap:anywhere}
+.ws-file-text .hljs-comment,.ws-file-text .hljs-quote{color:var(--ws-code-comment);font-style:italic}
+.ws-file-text .hljs-keyword,.ws-file-text .hljs-selector-tag,.ws-file-text .hljs-doctag{color:var(--ws-code-keyword)}
+.ws-file-text .hljs-string,.ws-file-text .hljs-regexp,.ws-file-text .hljs-symbol,.ws-file-text .hljs-bullet,.ws-file-text .hljs-addition{color:var(--ws-code-string)}
+.ws-file-text .hljs-title,.ws-file-text .hljs-section,.ws-file-text .hljs-selector-id{color:var(--ws-code-title);font-weight:600}
+.ws-file-text .hljs-number,.ws-file-text .hljs-literal,.ws-file-text .hljs-type,.ws-file-text .hljs-built_in,.ws-file-text .hljs-builtin-name,.ws-file-text .hljs-params{color:var(--ws-code-constant)}
+.ws-file-text .hljs-attr,.ws-file-text .hljs-attribute,.ws-file-text .hljs-name,.ws-file-text .hljs-selector-class,.ws-file-text .hljs-variable,.ws-file-text .hljs-template-variable{color:var(--ws-code-property)}
+.ws-file-text .hljs-meta,.ws-file-text .hljs-meta .hljs-keyword{color:var(--ws-code-meta)}.ws-file-text .hljs-deletion{color:var(--ws-code-deletion)}.ws-file-text .hljs-emphasis{font-style:italic}.ws-file-text .hljs-strong{font-weight:700}
 .ws-file-media{flex:1;min-height:0;overflow:auto;display:flex;align-items:center;justify-content:center}
 .ws-file-media[hidden],.ws-file-text[hidden]{display:none}
 .ws-file-media img,.ws-file-media video{max-width:100%;max-height:100%;object-fit:contain}

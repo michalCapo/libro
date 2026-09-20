@@ -1,5 +1,61 @@
 (function () {
   const states = new Map();
+  const highlightLanguages = {
+    bash:'bash', sh:'bash', zsh:'bash', c:'c', h:'c', cc:'cpp', cpp:'cpp', cxx:'cpp', hpp:'cpp',
+    cs:'csharp', css:'css', diff:'diff', patch:'diff', go:'go', gql:'graphql', graphql:'graphql',
+    ini:'ini', conf:'ini', properties:'ini', java:'java', js:'javascript', jsx:'javascript',
+    cjs:'javascript', mjs:'javascript', json:'json', jsonc:'json', jsonl:'json', ndjson:'json',
+    kt:'kotlin', kts:'kotlin', less:'less', lua:'lua', md:'markdown', markdown:'markdown', mdx:'markdown',
+    m:'objectivec', mm:'objectivec', pl:'perl', php:'php', py:'python', pyi:'python', r:'r', rb:'ruby',
+    rs:'rust', scss:'scss', sql:'sql', swift:'swift', ts:'typescript', tsx:'typescript', mts:'typescript',
+    cts:'typescript', vb:'vbnet', wasm:'wasm', html:'xml', htm:'xml', svg:'xml', xml:'xml', vue:'xml',
+    svelte:'xml', yaml:'yaml', yml:'yaml'
+  };
+  const highlightNames = {makefile:'makefile', gnumakefile:'makefile', gemfile:'ruby', rakefile:'ruby'};
+  const highlightMaxCharacters = 256 * 1024, highlightMaxLines = 5000, highlightMaxLineLength = 1000;
+  let highlighterPromise;
+  function loadHighlighter() {
+    if (window.hljs) return Promise.resolve(window.hljs);
+    if (highlighterPromise) return highlighterPromise;
+    highlighterPromise = new Promise((resolve,reject) => {
+      const script = document.createElement('script');
+      script.src = '/assets/highlight/highlight.min.js';
+      script.onload = () => window.hljs ? resolve(window.hljs) : reject(new Error('Highlight.js did not initialize'));
+      script.onerror = () => { script.remove(); reject(new Error('Highlight.js failed to load')); };
+      document.head.append(script);
+    }).catch(error => { highlighterPromise = null; throw error; });
+    return highlighterPromise;
+  }
+  function highlightLanguage(path) {
+    const name = path.split('/').pop().toLowerCase();
+    if (highlightNames[name]) return highlightNames[name];
+    const dot = name.lastIndexOf('.');
+    return dot < 0 ? null : highlightLanguages[name.slice(dot + 1)] || null;
+  }
+  function highlightable(source) {
+    if (source.length > highlightMaxCharacters) return false;
+    let lines = 1, lineLength = 0;
+    for (let i = 0; i < source.length; i++) {
+      if (source.charCodeAt(i) === 10) { lines++; lineLength = 0; if (lines > highlightMaxLines) return false; }
+      else if (++lineLength > highlightMaxLineLength) return false;
+    }
+    return true;
+  }
+  function showText(s, path, source) {
+    const text = s.el.querySelector('.ws-file-text'), version = ++s.highlightVersion;
+    text.classList.remove('has-syntax');
+    text.removeAttribute('data-language');
+    text.textContent = source || '(Empty file)';
+    text.scrollTop = 0;
+    const language = source && highlightLanguage(path);
+    if (!language || !highlightable(source)) return;
+    loadHighlighter().then(highlighter => {
+      if (s.highlightVersion !== version || !text.isConnected || text.hidden) return;
+      text.innerHTML = highlighter.highlight(source, {language, ignoreIllegals:true}).value;
+      text.dataset.language = language;
+      text.classList.add('has-syntax');
+    }).catch(() => {});
+  }
   function request(s, path, preview = false, external = false, parents = s.parents) {
     const token = String(++s.sequence);
     s.pending.set(token, {path, preview, external, parents});
@@ -52,7 +108,7 @@
     for (const [id,s] of states) if (!s.el.isConnected) { if (s.url) URL.revokeObjectURL(s.url); states.delete(id); }
     document.querySelectorAll('[data-files]').forEach(el => {
       if (states.get(el.dataset.files)?.el === el) return;
-      const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,sequence:0,parents:0,items:[]};
+      const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,sequence:0,parents:0,items:[],highlightVersion:0};
       states.set(s.id,s);
       s.wrap = el.querySelector('.ws-file-wrap input');
       s.wrap.onchange = () => el.querySelector('.ws-file-text').classList.toggle('is-wrapped', s.wrap.checked);
@@ -105,7 +161,7 @@
       s.filter.value = '';
       s.index = 0;
       s.el.querySelector('.ws-file-path').textContent = 'Open file';
-      s.el.querySelector('.ws-file-text').textContent = 'Select a file from the tree.';
+      showText(s, '', 'Select a file from the tree.');
       s.el.querySelector('.ws-file-text').hidden = false;
       s.el.querySelector('.ws-file-media').replaceChildren();
       s.el.querySelector('.ws-file-media').hidden = true;
@@ -121,7 +177,8 @@
       text.hidden = !!result.mime;
       media.hidden = !result.mime;
       s.wrap.disabled = !!result.mime;
-      if (!result.mime) { text.textContent = result.text || '(Empty file)'; text.scrollTop = 0; return; }
+      if (!result.mime) { showText(s, result.path, result.text || ''); return; }
+      s.highlightVersion++;
       const bytes = Uint8Array.from(atob(result.data || ''), c => c.charCodeAt(0));
       s.url = URL.createObjectURL(new Blob([bytes], {type:result.mime}));
       const kind = result.mime.split('/')[0];
