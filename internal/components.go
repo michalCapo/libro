@@ -2134,6 +2134,7 @@ func projectDialogJS(sid string) string {
 	var lookupQuery='';
 	var lookupLoading=false;
 	var documentKeydownBound=false;
+	var documentInputBound=false;
 
 	function getDlg(){return document.getElementById('%s');}
 	function getInp(){return document.getElementById('project-input');}
@@ -2503,13 +2504,18 @@ func projectDialogJS(sid string) string {
 	function bindInput(){
 		bindCreateConfirm();
 		var inp=getInp();
+		if(!documentInputBound){
+			documentInputBound=true;
+			document.addEventListener('input',function(e){
+				if(e.target&&e.target.id==='project-input')filter();
+			},true);
+		}
 		if(!documentKeydownBound){
 			documentKeydownBound=true;
 			document.addEventListener('keydown',normalKey,true);
 		}
 		if(!inp||inp.__libroProjectDialogBound)return;
 		inp.__libroProjectDialogBound=true;
-		inp.addEventListener('input',filter);
 		inp.addEventListener('keydown',function(e){
 			var dlg=getDlg();
 			if(!dlg||dlg.classList.contains('hidden'))return;
