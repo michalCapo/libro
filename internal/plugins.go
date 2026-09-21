@@ -39,7 +39,7 @@ var builtinPlugins = []Plugin{
 	{ID: "lazyrepo", Name: "Git", Type: AppTypeTerminal, Command: "lazyrepo", Dock: "right", Description: "Repository tools"},
 	{ID: "lazydata", Name: "Database", Type: AppTypeTerminal, Command: "lazydata", Dock: "right", Description: "Explore your data"},
 	{ID: "files", Name: "Files", Type: AppTypeURL, Dock: "right", Description: "Browse project files with Vim navigation"},
-	{ID: "notes", Name: "Notes", Type: AppTypeURL, Dock: "right", Description: "Track project notes and send them to an agent"},
+	{ID: "notes", Name: "Issues", Type: AppTypeURL, Dock: "right", Description: "Track project issues and send them to an agent"},
 	{ID: "opencode", Name: "OpenCode", Type: AppTypeTerminal, Command: "opencode", Dock: "center", Description: "OpenCode coding agent"},
 }
 

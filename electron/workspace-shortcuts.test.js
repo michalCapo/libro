@@ -299,7 +299,7 @@ test('settings shortcut opens and closes settings and ignores key repeat', () =>
   }
 })
 
-test('panel navigation includes the side-by-side tool in visual order and wraps', () => {
+test('panel navigation includes the side-by-side tool in visual order and stops at the edges', () => {
   const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = workspace.slice(workspace.indexOf("    if (binding && (binding === toolKeys['previous-agent']"), workspace.indexOf("    if (binding && binding === toolKeys['new-agent'])"))
   const panel = (appId, dock, visible = true, overlay = false) => ({ dataset: {
@@ -321,11 +321,13 @@ test('panel navigation includes the side-by-side tool in visual order and wraps'
     return { selected, state }
   }
   for (const key of ['Ctrl+H', 'Ctrl+L']) {
-    assert.equal(navigate(panels, 'agent', key).selected, 'tool')
-    assert.equal(navigate(panels, 'tool', key).selected, 'agent')
+    assert.equal(navigate(panels, 'agent', key).selected, key === 'Ctrl+H' ? 'agent' : 'tool')
+    assert.equal(navigate(panels, 'tool', key).selected, key === 'Ctrl+L' ? 'tool' : 'agent')
     assert.equal(navigate(panels, 'agent', key, true).selected, undefined)
   }
   const twoAgents = [...panels, panel('agent-2', 'center')]
+  assert.equal(navigate(twoAgents, 'agent', 'Ctrl+H').selected, 'agent')
+  assert.equal(navigate(twoAgents, 'tool', 'Ctrl+L').selected, 'tool')
   assert.equal(navigate(twoAgents, 'agent', 'Ctrl+L').selected, 'agent-2')
   assert.equal(navigate(twoAgents, 'agent-2', 'Ctrl+L').selected, 'tool')
   assert.equal(navigate(twoAgents, 'tool', 'Ctrl+H').selected, 'agent-2')

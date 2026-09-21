@@ -17,7 +17,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"previous-browser", "Previous browser panel", "Ctrl+["},
 	{"next-browser", "Next browser panel", "Ctrl+]"},
 	{"files", "Files", "Ctrl+F"},
-	{"notes", "Notes", "Ctrl+O"},
+	{"notes", "Issues", "Ctrl+I"},
 	{"nvim", "Nvim", "Ctrl+E"},
 	{"lazyrepo", "Git", "Ctrl+G"},
 	{"lazydata", "Database", "Ctrl+D"},
@@ -97,6 +97,17 @@ func toolKeybindings() map[string]string {
 		var raw string
 		var saved map[string]string
 		if db.QueryRow(`SELECT value FROM settings WHERE key = 'tool_keybindings'`).Scan(&raw) == nil && json.Unmarshal([]byte(raw), &saved) == nil {
+			if saved["notes"] == "Ctrl+O" {
+				available := true
+				for _, key := range saved {
+					if key == "Ctrl+I" {
+						available = false
+					}
+				}
+				if available {
+					saved["notes"] = "Ctrl+I"
+				}
+			}
 			if _, exists := saved["new-agent"]; saved["nvim"] == "Ctrl+Alt+N" || (!exists && saved["nvim"] == "Ctrl+N") {
 				saved["nvim"] = "Ctrl+E"
 				for id, key := range saved {

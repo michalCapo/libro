@@ -29,11 +29,6 @@
     s.cancel.disabled = s.busy;
   }
   function changed(s) { updateActions(s); status(s, dirty(s) ? 'Unsaved changes' : ''); }
-  function preview(s) {
-    clearTimeout(s.timer);
-    s.previewRequest = '';
-    s.timer = setTimeout(() => { s.previewRequest = request(s, 'preview', {body:s.draft.body}); }, 150);
-  }
   function relativeTime(value) {
     const time = Date.parse(value);
     if (Number.isNaN(time)) return '';
@@ -48,127 +43,90 @@
     return el;
   }
   function shortID(note) { return '#' + note.id.slice(0, 6); }
-  function showImages(s) {
-    s.images.replaceChildren();
-    s.draft.images.forEach((attachment, index) => {
-      const figure = element('figure', 'ws-note-image');
-      const img = element('img'); img.src = attachment.data; img.alt = 'Pasted image ' + (index + 1);
-      figure.append(img, button('Remove image ' + (index + 1), () => {
-        s.draft.images.splice(index, 1); showImages(s); changed(s);
-      }));
-      s.images.append(figure);
-    });
-  }
   function edit(s, note) {
+    s.editor?.destroy();
+    s.reading = 0;
     s.saved = structuredClone(note);
     s.draft = structuredClone(note);
     s.saved.images ||= []; s.draft.images ||= [];
     s.el.replaceChildren();
     const form = element('form', 'ws-note-editor');
-    const back = button('‹ Issues', () => s.cancel.click(), 'ws-note-back');
     const header = element('div', 'ws-note-editor-header');
+    const stateToggle = button('', () => {
+      s.draft.state = s.draft.state === 'new' ? 'archived' : 'new';
+      stateToggle.classList.toggle('ws-note-state-toggle-archived', s.draft.state === 'archived');
+      stateToggle.setAttribute('aria-label', s.draft.state === 'new' ? 'Archive issue' : 'Reopen issue');
+      stateToggle.title = stateToggle.getAttribute('aria-label');
+      changed(s);
+    }, 'ws-note-state-toggle' + (note.state === 'archived' ? ' ws-note-state-toggle-archived' : ''));
+    stateToggle.setAttribute('aria-label', note.state === 'new' ? 'Archive issue' : 'Reopen issue');
+    stateToggle.title = stateToggle.getAttribute('aria-label');
     const title = element('input', 'ws-note-title'); title.value = note.title; title.maxLength = 200; title.required = true;
     title.placeholder = 'Issue title'; title.setAttribute('aria-label', 'Title');
-    header.append(back, title, badge(s.draft.state));
-    const meta = element('div', 'ws-note-editor-meta');
-    const idSpan = element('span', 'ws-note-id', note.id ? shortID(note) : 'New issue');
-    const dateSpan = element('span', 'ws-note-date');
-    if (note.updated) dateSpan.textContent = 'Last edited ' + relativeTime(note.updated);
-    meta.append(idSpan, dateSpan);
-    const stateRow = element('div', 'ws-note-state-row');
-    stateRow.append(element('span', 'ws-note-state-label', 'State'));
-    const chips = element('div', 'ws-note-state-chips'); chips.setAttribute('role', 'radiogroup'); chips.setAttribute('aria-label', 'State');
-    const chipButtons = {};
-    for (const [value, label] of [['new', 'Open'], ['archived', 'Archived']]) {
-      const chip = button(label, () => {
-        s.draft.state = value;
-        for (const [k, b] of Object.entries(chipButtons)) {
-          b.classList.toggle('ws-note-chip-active', k === value);
-          b.setAttribute('aria-checked', String(k === value));
-        }
-        header.querySelector('.ws-note-badge').replaceWith(badge(value));
-        changed(s);
-      }, 'ws-note-chip' + (value === note.state ? ' ws-note-chip-active' : ''));
-      chip.setAttribute('role', 'radio');
-      chip.setAttribute('aria-checked', String(value === note.state));
-      chipButtons[value] = chip;
-      chips.append(chip);
-    }
-    stateRow.append(chips);
-    const body = element('textarea', 'ws-note-body'); body.value = note.body;
-    body.placeholder = 'Describe the task…'; body.setAttribute('aria-label', 'Note');
-    body.rows = 10;
-    const hint = element('p', 'ws-note-hint', 'Markdown supported: headings, lists, **bold**, *italic*, and `code`. Paste images here.');
-    const previewWrap = element('div', 'ws-note-preview-wrap');
-    previewWrap.append(element('div', 'ws-note-preview-title', 'Preview'));
-    s.preview = element('div', 'ws-note-preview'); s.preview.setAttribute('aria-label', 'Live Markdown preview');
-    previewWrap.append(s.preview);
-    s.images = element('div', 'ws-note-images');
+    header.append(stateToggle, title);
+    const body = element('div', 'ws-note-rich-editor');
+    const hint = element('p', 'ws-note-hint', 'Use Markdown shortcuts or the toolbar. Paste screenshots anywhere in the text.');
+    const description = element('section', 'ws-note-section');
+    const descriptionContent = element('div', 'ws-note-section-content');
+    description.append(element('span', 'material-icons-round ws-note-section-icon', 'subject'), descriptionContent);
+    descriptionContent.append(element('h2', 'ws-note-section-title', 'Description'), body, hint);
     s.status = element('div', 'ws-notes-status'); s.status.setAttribute('role', 'status');
+    const actionsSection = element('section', 'ws-note-section');
+    const actionsContent = element('div', 'ws-note-section-content');
+    actionsSection.append(element('span', 'material-icons-round ws-note-section-icon', 'bolt'), actionsContent);
     const actions = element('div', 'ws-note-actions');
     s.save = button('Save issue', () => form.requestSubmit(), 'ws-notes-button ws-notes-primary');
-    s.cancel = button('Cancel', () => { clearTimeout(s.timer); const id = s.draft.id; s.draft = null; renderList(s); (Array.from(s.el.querySelectorAll('[data-note-id]')).find(row => row.dataset.noteId === id) || s.el.querySelector('.ws-notes-toolbar button')).focus(); });
+    s.cancel = button('Cancel', () => { const id = s.draft.id; s.draft = null; renderList(s); (Array.from(s.el.querySelectorAll('[data-note-id]')).find(row => row.dataset.noteId === id) || s.el.querySelector('.ws-notes-toolbar button')).focus(); });
     s.send = button('Send to agent', () => {
       s.busy = true; updateActions(s); status(s, 'Sending…');
       request(s, 'send', {noteID:s.draft.id});
     });
     actions.append(s.save, s.send, s.cancel);
-    form.append(header, meta, stateRow, body, hint, previewWrap, s.images, actions, s.status);
+    actionsContent.append(element('h2', 'ws-note-section-title', 'Actions'), actions, s.status);
+    form.append(header, description, actionsSection);
     s.el.append(form);
     title.oninput = () => { s.draft.title = title.value; changed(s); };
-    body.oninput = () => { s.draft.body = body.value; changed(s); preview(s); };
-    body.onpaste = async event => {
-      const items = Array.from(event.clipboardData?.items || []).filter(item => item.type.startsWith('image/'));
-      if (!items.length) return;
-      event.preventDefault();
-      const draft = s.draft;
-      s.reading++; updateActions(s);
-      try {
-        for (const item of items) {
-          const file = item.getAsFile();
-          if (!file || !['image/png', 'image/jpeg', 'image/gif'].includes(file.type)) throw new Error('Paste a PNG, JPEG, or GIF image.');
-          if (file.size > 4 * 1024 * 1024) throw new Error('Each image must be 4 MB or smaller.');
-          const data = await new Promise((resolve, reject) => {
-            const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('Could not read clipboard image.')); reader.readAsDataURL(file);
-          });
-          if (s.draft !== draft) return;
-          if (draft.images.reduce((size, image) => size + atob(image.data.split(',')[1]).length, file.size) > 4 * 1024 * 1024) throw new Error('Images must total 4 MB or less.');
-          draft.images.push({data}); showImages(s); changed(s);
-        }
-      } catch (error) { if (s.draft === draft) status(s, error.message); }
-      finally { s.reading--; if (s.draft) updateActions(s); }
-    };
+    s.editor = libroNoteEditor.create({
+      element: body, note: s.draft,
+      onChange: value => { Object.assign(s.draft, value); changed(s); },
+      onBusy: value => { s.reading = Number(value); updateActions(s); },
+      onError: message => status(s, message),
+    });
     form.onsubmit = event => {
       event.preventDefault(); if (s.save.disabled) return;
+      Object.assign(s.draft, s.editor.serialize());
       if (new TextEncoder().encode(JSON.stringify(s.draft)).length > 9 * 1024 * 1024) { status(s, 'This note is too large. Remove an image or shorten the text.'); return; }
       s.busy = true; updateActions(s); status(s, 'Saving…');
       request(s, 'save', {note:s.draft});
+      s.editor.setEditable(false);
       form.querySelectorAll('input,textarea,select,button').forEach(el => { el.disabled = true; });
     };
-    showImages(s); updateActions(s); preview(s); title.focus();
+    updateActions(s); title.focus();
   }
   function renderList(s) {
+    s.editor?.destroy(); s.editor = null;
     s.el.replaceChildren();
-    const header = element('div', 'ws-notes-header');
     const heading = element('div', 'ws-notes-heading');
     const open = s.notes.filter(note => note.state === 'new').length;
     const archived = s.notes.length - open;
-    heading.append(element('span', 'ws-notes-title', 'Issues'), element('span', 'ws-notes-count', open + ' Open · ' + archived + ' Archived'));
-    header.append(heading, button('New issue', () => edit(s, {id:'', title:'', body:'', state:'new', images:[]}), 'ws-notes-button ws-notes-primary'));
+    heading.append(element('span', 'ws-notes-title', 'Issues'));
     const toolbar = element('div', 'ws-notes-toolbar');
     const tabs = element('div', 'ws-notes-tabs');
-    for (const [value, label] of [['new', 'Open'], ['archived', 'Archived'], ['all', 'All']]) {
+    for (const [value, label, count] of [['new', 'Open', open], ['archived', 'Archived', archived], ['all', 'All', s.notes.length]]) {
       const tab = button(label, () => { s.filter = value; s.search = s.el.querySelector('.ws-notes-search').value; renderList(s); }, 'ws-notes-tab' + (s.filter === value ? ' ws-notes-tab-active' : ''));
+      tab.append(' ', element('span', 'ws-notes-tab-count', String(count)));
       tab.setAttribute('aria-pressed', String(s.filter === value));
       tabs.append(tab);
     }
     const search = element('input', 'ws-notes-search');
     search.type = 'search'; search.placeholder = 'Search issues…'; search.value = s.search; search.setAttribute('aria-label', 'Search issues');
     search.oninput = () => { s.search = search.value; listRows(s, list); };
-    toolbar.append(tabs, search);
+    const actions = element('div', 'ws-notes-toolbar-actions');
+    actions.append(search, button('New issue', () => edit(s, {id:'', title:'', body:'', state:'new', images:[]}), 'ws-notes-button ws-notes-primary'));
+    toolbar.append(heading, tabs, actions);
     const list = element('div', 'ws-notes-list');
     s.status = element('div', 'ws-notes-status'); s.status.setAttribute('role', 'status');
-    s.el.append(header, toolbar, list, s.status);
+    s.el.append(toolbar, list, s.status);
     listRows(s, list);
   }
   function listRows(s, list) {
@@ -192,7 +150,7 @@
     }
   }
   function init() {
-    for (const [id, s] of states) if (!s.el.isConnected) { clearTimeout(s.timer); states.delete(id); }
+    for (const [id, s] of states) if (!s.el.isConnected) { s.editor?.destroy(); states.delete(id); }
     document.querySelectorAll('[data-notes]').forEach(el => {
       const project = el.closest('[data-workspace-project]')?.dataset.workspaceProject;
       if (project !== window.__libroActiveProject || states.has(el.dataset.notes)) return;
@@ -207,20 +165,9 @@
     if (!s || !s.el.isConnected) return;
     const action = s.requests.get(result.request); s.requests.delete(result.request);
     if (!action) return;
-    if (action === 'preview') {
-      if (result.request !== s.previewRequest || !s.draft) return;
-      if (!result.error) {
-        const template = document.createElement('template');
-        template.innerHTML = result.html;
-        // Notes never fetch remote images or navigate the workspace from their preview.
-        template.content.querySelectorAll('img').forEach(image => image.replaceWith(document.createTextNode(image.alt || '[image]')));
-        template.content.querySelectorAll('a').forEach(link => { link.removeAttribute('href'); });
-        s.preview.replaceChildren(template.content);
-      }
-      return;
-    }
     s.busy = false;
     if (s.draft) {
+      s.editor.setEditable(true);
       s.el.querySelectorAll('input,textarea,select,button').forEach(el => { el.disabled = false; });
       updateActions(s);
     }

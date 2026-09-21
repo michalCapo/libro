@@ -725,7 +725,7 @@
         frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => state.hidden.add(frame.dataset.appId));
       }
       const step = binding === toolKeys['previous-agent'] ? -1 : 1;
-      select(panels[(current + step + panels.length) % panels.length].dataset.appId);
+      select(panels[Math.max(0, Math.min(current + step, panels.length - 1))].dataset.appId);
       return;
     }
     if (binding && binding === toolKeys['new-browser']) {

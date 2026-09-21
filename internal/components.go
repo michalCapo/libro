@@ -946,7 +946,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 	if appDock(app) == "center" {
 		leftSide = r.Div("ws-panel-title").Render(r.Span("").Text(workspaceAppName(app)))
 	} else if app.PluginID == "notes" {
-		leftSide = r.Div("ws-panel-title").Render(r.I("material-icons-round").Text("description"), r.Span("").Text("Notes"))
+		leftSide = r.Div("flex-1")
 	} else if app.PluginID == "files" {
 		leftSide = r.Div("ws-panel-title").Render(r.I("material-icons-round").Text("folder_open"), r.Span("").Text("Files"))
 	} else if app.Type == AppTypeURL {
@@ -1098,18 +1098,19 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		toolbar = toolbar.Render(closeButton, leftSide, rightButtons)
 	}
 
-	return r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
+	frame := r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
 		ID(fmt.Sprintf("frame-%s", app.ID)).
 		Attr("data-app-id", app.ID).
 		Attr("data-app-name", workspaceAppName(app)).
 		Attr("data-app-type", string(app.Type)).
 		Attr("data-dock", appDock(app)).
 		Attr("data-plugin", pluginForApp(app).ID).
-		Attr("style", appFrameStyle(app, index)).
-		Render(
-			toolbar,
-			renderAppContent(app, sid, placeholder, clickOverlay),
-		)
+		Attr("style", appFrameStyle(app, index))
+	content := renderAppContent(app, sid, placeholder, clickOverlay)
+	if app.PluginID == "notes" {
+		return frame.Render(content)
+	}
+	return frame.Render(toolbar, content)
 }
 
 func renderAppContent(app Application, sid string, placeholder bool, clickOverlay *r.Node) *r.Node {

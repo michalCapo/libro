@@ -9,21 +9,25 @@ import (
 	"path/filepath"
 )
 
-//go:embed workspace.css workspace.js files.js notes.js
+//go:embed workspace.css workspace.js files.js notes.js note-editor.bundle.js
 var workspaceAssets embed.FS
 
 func workspaceJS(sid string) string {
 	css, _ := workspaceAssets.ReadFile("workspace.css")
 	js, _ := workspaceAssets.ReadFile("workspace.js")
+	noteEditorJS, _ := workspaceAssets.ReadFile("note-editor.bundle.js")
 	notesJS, _ := workspaceAssets.ReadFile("notes.js")
 	filesJS, _ := workspaceAssets.ReadFile("files.js")
 	list, _ := json.Marshal(plugins())
 	keys, _ := json.Marshal(toolKeybindings())
 	defaults, _ := json.Marshal(defaultToolKeybindings())
-	return fmt.Sprintf("if(window.__libroApplyBrowserControlSetting)window.__libroApplyBrowserControlSetting(%t);", browserControlEnabled()) + "window.__libroToolKeys=" + string(keys) + ";window.__libroDefaultToolKeys=" + string(defaults) + ";window.__libroPageToolsAutoExecute=" + fmt.Sprint(browserPageToolsAutoExecute()) + ";" + fmt.Sprintf("window.__libroWorkspaceSID=%s;window.__libroPlugins=%s;var wsStyle=document.createElement('style');wsStyle.textContent=%s;document.head.appendChild(wsStyle);", components.JSString(sid), list, components.JSString(string(css))) + string(filesJS) + string(notesJS) + string(js)
+	return fmt.Sprintf("if(window.__libroApplyBrowserControlSetting)window.__libroApplyBrowserControlSetting(%t);", browserControlEnabled()) + "window.__libroToolKeys=" + string(keys) + ";window.__libroDefaultToolKeys=" + string(defaults) + ";window.__libroPageToolsAutoExecute=" + fmt.Sprint(browserPageToolsAutoExecute()) + ";" + fmt.Sprintf("window.__libroWorkspaceSID=%s;window.__libroPlugins=%s;var wsStyle=document.createElement('style');wsStyle.textContent=%s;document.head.appendChild(wsStyle);", components.JSString(sid), list, components.JSString(string(css))) + string(filesJS) + string(noteEditorJS) + string(notesJS) + string(js)
 }
 
 func workspaceAppName(app Application) string {
+	if app.PluginID == "notes" && (app.Name == "" || app.Name == "Notes") {
+		return "Issues"
+	}
 	if app.Name != "" {
 		return app.Name
 	}

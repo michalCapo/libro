@@ -9,7 +9,7 @@ Think of it as one desk for all your AI helpers. Each one gets its own panel, an
 ## What It Does
 
 - Runs several AI coding assistants at the same time, side by side.
-- Puts a browser, Notes, file manager, terminal, and more right next to them.
+- Puts a browser, Issues, file manager, terminal, and more right next to them.
 - Keeps all your projects in one place. Switch between them with one click.
 - Shows when an assistant is busy (its icon spins) or finished (green check).
 - Plays a sound when an assistant finishes its work.
@@ -53,6 +53,12 @@ Flags must come before browser commands: `libro --dev browser list`.
 agents and terminals launched inside Libro. An occupied port fails before the
 app opens a window or database.
 
+The notes editor is bundled locally into the Go binary. After changing
+`internal/note-editor.js`, run `npm ci` and `npm run build:notes`, and include the
+updated `internal/note-editor.bundle.js`. `npm run check:notes` checks that the
+bundle matches its source. Run the editor integration tests with
+`xvfb-run -a node_modules/.bin/electron --no-sandbox --ozone-platform=x11 electron/notes.integration.cjs`.
+
 ## Features
 
 ### AI assistants
@@ -66,7 +72,7 @@ app opens a window or database.
 
 ### Tools
 
-- Open the tool you need next to your assistants: Terminal, Browser, Notes, Files, Nvim, Git, Database, or any tool of your own.
+- Open the tool you need next to your assistants: Terminal, Browser, Issues, Files, Nvim, Git, Database, or any tool of your own.
 - Use whatever tool you like. Name it, add its command or web address, and it shows up next to the built-in tools.
 
 ![Tools in Settings: named tools with their commands and shortcuts](demo/tools-settings.png)
@@ -90,12 +96,12 @@ app opens a window or database.
 
 ![Browser panel open next to other tools](demo/browser-panel.png)
 
-### Notes
+### Issues
 
-- Open Notes with `Ctrl + O`. Notes are stored separately for each project.
-- Start with the New list. Switch the filter to see Archived notes or all notes.
-- Open a note to edit its title, state, and Markdown. The preview stays visible while editing.
-- Paste a PNG, JPEG, or GIF image into a note to attach and preview it immediately.
+- Open Issues with `Ctrl + I`. Issues are stored separately for each project.
+- Start with the Open list. Switch the filter to see Archived notes or all notes.
+- Edit formatted text in one area using Markdown shortcuts or the formatting toolbar.
+- Paste a PNG, JPEG, or GIF screenshot at the cursor, or use Insert image. Images stay in place between paragraphs when saved. Select an image and press Backspace or Delete to remove it.
 - Save keeps the editor open. Cancel discards unsaved changes. Send a saved note to the selected agent to execute it, with local paths to any attached images.
 
 ### Settings
@@ -130,7 +136,7 @@ app opens a window or database.
 | `Ctrl + B` | Browser |
 | `Ctrl + Shift + B` | New browser panel |
 | `Ctrl + F` | Files |
-| `Ctrl + O` | Notes |
+| `Ctrl + I` | Issues |
 | `Ctrl + E` | Nvim |
 | `Ctrl + G` | Git |
 | `Ctrl + D` | Database |

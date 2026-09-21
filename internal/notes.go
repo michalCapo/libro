@@ -23,6 +23,7 @@ import (
 )
 
 type noteImage struct {
+	ID   string `json:"id,omitempty"`
 	Data string `json:"data"`
 }
 
@@ -228,6 +229,9 @@ func notePrompt(note projectNote) (string, error) {
 		path := filepath.Join(dir, fmt.Sprintf("image-%d.%s", i+1, format))
 		if err := os.WriteFile(path, data, 0o600); err != nil {
 			return "", err
+		}
+		if attachment.ID != "" {
+			prompt = strings.ReplaceAll(prompt, "note-image:"+attachment.ID, filepath.ToSlash(path))
 		}
 		prompt += "\n\nAttached image: " + path
 	}

@@ -74,6 +74,13 @@ func TestNoteImagesAndAgentPrompt(t *testing.T) {
 	if !strings.Contains(prompt, note.Body) || !strings.Contains(prompt, note.Title) {
 		t.Fatal("prompt lost note content")
 	}
+	image.ID = "screenshot-1"
+	note.Images = []noteImage{image}
+	note.Body = "Before\n\n![Screenshot](note-image:screenshot-1)\n\nAfter"
+	prompt, err = notePrompt(note)
+	if err != nil || !strings.Contains(prompt, "![Screenshot]("+filepath.ToSlash(path)+")\n\nAfter") || strings.Contains(prompt, "note-image:") {
+		t.Fatalf("inline image reference was not resolved: %v %s", err, prompt)
+	}
 	if _, _, err := decodeNoteImage(strings.Replace(image.Data, "image/png", "image/jpeg", 1)); err == nil {
 		t.Fatal("accepted mismatched image type")
 	}
@@ -123,7 +130,7 @@ func TestNotesHTTPLargeImage(t *testing.T) {
 	}
 	// Valid PNG with padding exceeds the UI websocket limit after encoding.
 	png = append(png, make([]byte, 1024*1024)...)
-	note := projectNote{Title: "Screenshot", State: "new", Images: []noteImage{{Data: "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)}}}
+	note := projectNote{Title: "Screenshot", State: "new", Body: "Before\n\n![Screenshot](note-image:pasted)\n\nAfter", Images: []noteImage{{ID: "pasted", Data: "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)}}}
 	data, err := json.Marshal(noteRequest{SID: "session", ID: "notes", Project: "one", Action: "save", Note: note})
 	if err != nil {
 		t.Fatal(err)
@@ -144,7 +151,7 @@ func TestNotesHTTPLargeImage(t *testing.T) {
 		t.Fatalf("save failed: %v %s", err, result.Error)
 	}
 	notes, err := loadNotes("one")
-	if err != nil || len(notes) != 1 || len(notes[0].Images) != 1 || notes[0].Images[0].Data != note.Images[0].Data {
+	if err != nil || len(notes) != 1 || len(notes[0].Images) != 1 || notes[0].Images[0] != note.Images[0] || notes[0].Body != note.Body {
 		t.Fatalf("image did not persist: %v", err)
 	}
 	request = httptest.NewRequest(http.MethodPost, "/notes/action", bytes.NewReader(data))
