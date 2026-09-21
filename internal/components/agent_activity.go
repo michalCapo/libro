@@ -10,7 +10,7 @@ import (
 )
 
 // Launch-local integrations never modify the user's agent settings. Only a
-// fixed status word is written; prompts and hook payloads are not collected.
+// fixed status word is written to activity files.
 var agentCommandPattern = regexp.MustCompile(`^([a-zA-Z0-9_./-]+)(\s.*)?$`)
 var ollamaClaudePattern = regexp.MustCompile(`^(\s+launch\s+claude(?:\s+(?:--model(?:=|\s+)(?:"[^"]*"|'[^']*'|[^\s;&|]+)|--yes|-y))*)(?:\s+--(\s.*)?)?\s*$`)
 
@@ -49,7 +49,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 	browserMCP := map[string]any{"command": executable, "args": []string{"browser-mcp"}}
 	a := &agentActivity{kind: kind}
 	if kind == "codex" {
-		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","thread-title"]'` + " -c " + shellQuote("mcp_servers.libro_browser.command="+string(executableJSON)) + " -c " + shellQuote(`mcp_servers.libro_browser.args=["browser-mcp"]`) + parts[2]), a, nil
+		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","thread-name"]'` + " -c " + shellQuote("mcp_servers.libro_browser.command="+string(executableJSON)) + " -c " + shellQuote(`mcp_servers.libro_browser.args=["browser-mcp"]`) + parts[2]), a, nil
 	}
 	dir, err := os.MkdirTemp("", "libro-agent-")
 	if err != nil {
@@ -78,7 +78,20 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 		content = `import { writeFileSync } from 'node:fs';
 export default function (pi) {
   const status = value => { try { writeFileSync(` + string(pathJSON) + `, value); } catch {} };
-  pi.on('session_start', () => status('idle'));
+  const nameSession = text => {
+    if (pi.getSessionName()) return;
+    const name = text.replace(/[\x00-\x1f\x7f-\x9f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+    if (name) pi.setSessionName(name);
+  };
+  pi.on('session_start', (_event, ctx) => {
+    status('idle');
+    const entry = ctx.sessionManager.getBranch().find(entry => entry.type === 'message' && entry.message.role === 'user');
+    if (entry) {
+      const content = entry.message.content;
+      nameSession(typeof content === 'string' ? content : content.filter(part => part.type === 'text').map(part => part.text).join(' '));
+    }
+  });
+  pi.on('input', event => { if (event.source !== 'extension') nameSession(event.text); });
   pi.on('agent_start', () => status('working'));
   pi.on('agent_end', event => { if (!event.willRetry) status('done'); });
   pi.on('session_shutdown', () => status('idle'));

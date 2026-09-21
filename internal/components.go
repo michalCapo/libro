@@ -3333,8 +3333,19 @@ func terminalFrameSetupJS() string {
 					term.onTitleChange(function(title) {
 						const frame = document.getElementById('frame-' + appID);
 						if (!frame || frame.dataset.dock !== 'center') return;
-						const task = title.replace(/^(Working|Thinking|Waiting|Ready|Starting)(?:\s*[·|—-]\s*|$)/, '').trim();
-						if (!task) return;
+						const codexTitle = /^(Working|Thinking|Waiting|Ready|Starting)(?:\s*[·|—-]\s*|$)/;
+                        let task = title.replace(codexTitle, '').trim();
+                        if (codexTitle.test(title)) {
+                            task = task.replace(/\s*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]$/, '').trim();
+                            if (task === 'renaming...') return;
+                        }
+                        // Pi's window title includes its app name and working directory.
+                        if (task.startsWith('π - ')) {
+                            const end = task.lastIndexOf(' - ');
+                            task = end > 4 ? task.slice(4, end).trim() : '';
+                        }
+                        // Unnamed Codex sessions can emit their UUID instead of a task.
+                        if (!task || /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(task)) return;
 						frame.dataset.taskTitle = task.slice(0, 240);
 						const grid = frame.closest('[data-workspace-project]');
 						const threadId = grid && grid.dataset.workspaceProject;

@@ -621,6 +621,33 @@ test('thread title updates use the terminal session and do not rename from tools
 })
 
 
+test('thread titles ignore harness placeholders and extract task names', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/components.go'), 'utf8')
+  const start = source.indexOf('term.onTitleChange(function(title)')
+  const handler = source.slice(start, source.indexOf('term.onData(function(data)', start))
+  for (const project of ['thread:test', 'project']) {
+    let onTitle
+    const calls = []
+    const frame = { dataset: { dock: 'center', taskTitle: 'Existing task' }, closest: () => ({ dataset: { workspaceProject: project } }) }
+    const ws = { call(action, data) { calls.push(data.name) } }
+    vm.runInNewContext(handler, {
+      term: { onTitleChange(fn) { onTitle = fn } }, sid: 'session', appID: 'agent',
+      window: { __ws: ws }, __ws: ws, document: { getElementById: () => frame },
+    })
+    for (const title of ['π - capo', 'Ready', 'Ready | renaming... ⠋', 'Ready | ⠙', 'Working | 01a0c304-7225-78c3-b807-123456789abc', 'Ready | 01a0c304-7225-78c3-b807-123456789abc ⠼']) {
+      onTitle(title)
+      assert.equal(frame.dataset.taskTitle, 'Existing task')
+    }
+    assert.deepEqual(calls, [])
+    onTitle('π - Fix login - capo')
+    assert.equal(frame.dataset.taskTitle, 'Fix login')
+    onTitle('Thinking | Fix sidebar ⠹')
+    assert.equal(frame.dataset.taskTitle, 'Fix sidebar')
+    assert.deepEqual(calls, project.startsWith('thread:') ? ['Fix login', 'Fix sidebar'] : [])
+  }
+})
+
+
 test('thread numbers continue after running projects and skip archived threads', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const render = source.slice(source.indexOf('  function renderProjectShortcuts()'), source.indexOf('  let notificationAudio;'))

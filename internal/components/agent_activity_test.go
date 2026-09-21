@@ -50,6 +50,9 @@ func TestAgentLaunchIntegration(t *testing.T) {
 			if kind != "opencode" && !strings.Contains(command, map[string]string{"codex": "mcp_servers.libro_browser", "claude": "--mcp-config", "pi": "--append-system-prompt"}[kind]) {
 				t.Fatal("browser discovery missing")
 			}
+			if kind == "codex" && !strings.Contains(command, `tui.terminal_title=["run-state","thread-name"]`) {
+				t.Fatal("Codex titles must omit the session ID fallback")
+			}
 			if kind == "opencode" {
 				var config map[string]any
 				if err := json.Unmarshal([]byte(strings.TrimPrefix(activity.env[0], "OPENCODE_CONFIG_CONTENT=")), &config); err != nil {
@@ -153,11 +156,23 @@ const plugin = (await import(pathToFileURL(process.argv[1]))).default;
 const check = expected => assert.equal(readFileSync(process.argv[2], 'utf8'), expected);
 `
 			if kind == "pi" {
-				script += `const hooks = {}; plugin({on:(event, handler) => hooks[event] = handler});
+				script += `const hooks = {};
+let name;
+plugin({on:(event, handler) => hooks[event] = handler, getSessionName:() => name, setSessionName:value => name = value});
+const ctx = {sessionManager:{getBranch:() => []}};
+hooks.input({text:'Fix\n login', source:'interactive'});
+assert.equal(name, 'Fix login');
+hooks.input({text:'Second prompt', source:'interactive'});
+assert.equal(name, 'Fix login');
+name = undefined;
+hooks.input({text:'Extension instructions', source:'extension'});
+assert.equal(name, undefined);
+hooks.session_start({reason:'resume'}, {sessionManager:{getBranch:() => [{type:'message', message:{role:'user', content:[{type:'image'}, {type:'text', text:'Restore title'}]}}]}});
+assert.equal(name, 'Restore title');
 hooks.agent_start({}); check('working');
 hooks.agent_end({willRetry:true}); check('working');
 hooks.agent_end({willRetry:false}); check('done');
-hooks.session_start({reason:'new'}); check('idle');
+hooks.session_start({reason:'new'}, ctx); check('idle');
 hooks.agent_start({}); check('working');
 hooks.session_shutdown({}); check('idle');`
 			} else {
