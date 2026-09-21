@@ -1,10 +1,13 @@
 package libro
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	r "github.com/michalCapo/g-sui/ui"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
 	"io"
 	"mime"
 	"net/http"
@@ -26,6 +29,7 @@ type fileResult struct {
 	Request   string      `json:"request"`
 	Entries   []fileEntry `json:"entries,omitempty"`
 	Directory bool        `json:"directory"`
+	HTML      string      `json:"html,omitempty"`
 	Text      string      `json:"text,omitempty"`
 	MIME      string      `json:"mime,omitempty"`
 	Data      string      `json:"data,omitempty"`
@@ -100,22 +104,32 @@ func readProjectFile(rootPath, path string) (fileResult, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return result, err
 	}
-	bytes, err := io.ReadAll(io.LimitReader(f, int64(limit+1)))
+	content, err := io.ReadAll(io.LimitReader(f, int64(limit+1)))
 	if err != nil {
 		return result, err
 	}
-	if len(bytes) > limit {
+	if len(content) > limit {
 		return result, fmt.Errorf("file is too large to preview (limit %d MB); use Open externally", limit/(1024*1024))
 	}
 	if preview {
 		result.MIME = mediaType
-		result.Data = base64.StdEncoding.EncodeToString(bytes)
+		result.Data = base64.StdEncoding.EncodeToString(content)
 		return result, nil
 	}
-	if !utf8.Valid(bytes) || strings.ContainsRune(string(bytes), 0) {
+	if !utf8.Valid(content) || strings.ContainsRune(string(content), 0) {
 		return result, fmt.Errorf("unsupported file format; use Open externally")
 	}
-	result.Text = string(bytes)
+	result.Text = string(content)
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".html", ".htm":
+		result.HTML = result.Text
+	case ".md", ".markdown":
+		var rendered bytes.Buffer
+		if err := goldmark.New(goldmark.WithExtensions(extension.GFM)).Convert([]byte(result.Text), &rendered); err != nil {
+			return result, err
+		}
+		result.HTML = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>:root{color-scheme:light dark}body{font:16px/1.6 system-ui,sans-serif;max-width:75ch;margin:0 auto;padding:24px;overflow-wrap:anywhere}pre{overflow:auto;padding:12px;background:light-dark(#f7f7f8,#222225)}table{border-collapse:collapse}th,td{border:1px solid #888;padding:6px 12px}img{max-width:100%}blockquote{margin-left:0;padding-left:12px;border-left:1px solid #888}</style></head><body>` + rendered.String() + "</body></html>"
+	}
 	return result, nil
 }
 
@@ -224,6 +238,7 @@ func renderFiles(app Application) *r.Node {
 	return r.Div("ws-files").Attr("data-files", app.ID).Render(
 		r.Div("ws-file-preview").Render(
 			r.Div("ws-file-toolbar").Render(r.Div("ws-file-path").Text("Open file"),
+				r.El("label", "ws-file-render").Attr("title", "Preview HTML and Markdown").Render(r.Input("").Attr("type", "checkbox"), r.Span("").Text("Preview")),
 				r.El("label", "ws-file-wrap").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Word wrap"))),
 			r.El("pre", "ws-file-text is-wrapped").Attr("tabindex", "0").Text("Select a file from the project tree."),
 			r.Div("ws-file-media").Attr("hidden", "hidden"),

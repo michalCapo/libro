@@ -110,6 +110,13 @@
       if (states.get(el.dataset.files)?.el === el) return;
       const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,sequence:0,parents:0,items:[],highlightVersion:0};
       states.set(s.id,s);
+      s.preview = el.querySelector('.ws-file-render input');
+      const preferenceKey = 'libro.files.preview:' + el.closest('[data-workspace-project]').dataset.workspaceProject;
+      try { s.preview.checked = localStorage.getItem(preferenceKey) === 'true'; } catch (_) {}
+      s.preview.onchange = () => {
+        try { localStorage.setItem(preferenceKey, String(s.preview.checked)); } catch (_) {}
+        if (s.file) showFile(s);
+      };
       s.wrap = el.querySelector('.ws-file-wrap input');
       s.wrap.onchange = () => el.querySelector('.ws-file-text').classList.toggle('is-wrapped', s.wrap.checked);
       s.hidden.onchange = () => { s.index = 0; render(s); };
@@ -144,6 +151,40 @@
       request(s,'');
     });
   }
+  function showFile(s) {
+    const result = s.file;
+    s.el.querySelector('.ws-file-path').textContent = result.path;
+    const text = s.el.querySelector('.ws-file-text'), media = s.el.querySelector('.ws-file-media');
+    media.replaceChildren();
+    if (s.url) { URL.revokeObjectURL(s.url); s.url = null; }
+    text.hidden = !!result.mime;
+    media.hidden = !result.mime;
+    s.wrap.disabled = !!result.mime;
+    if (!result.mime && s.preview.checked && /\.(html?|md|markdown)$/i.test(result.path)) {
+      s.highlightVersion++;
+      text.hidden = true;
+      media.hidden = false;
+      s.wrap.disabled = true;
+      const frame = document.createElement('iframe');
+      frame.title = 'Preview of ' + result.path;
+      frame.setAttribute('sandbox', 'allow-scripts');
+      frame.srcdoc = result.html || '';
+      media.append(frame);
+      return;
+    }
+    if (!result.mime) { showText(s, result.path, result.text || ''); return; }
+    s.highlightVersion++;
+    const bytes = Uint8Array.from(atob(result.data || ''), c => c.charCodeAt(0));
+    s.url = URL.createObjectURL(new Blob([bytes], {type:result.mime}));
+    const kind = result.mime.split('/')[0];
+    const element = document.createElement(kind === 'image' ? 'img' : kind === 'audio' || kind === 'video' ? kind : 'iframe');
+    if (kind === 'image') element.alt = result.path;
+    else if (kind === 'audio' || kind === 'video') { element.controls = true; element.preload = 'metadata'; }
+    else element.title = 'Preview of ' + result.path;
+    element.onerror = () => { s.status.textContent = 'This browser cannot preview this file. Press o in the file tree to open externally.'; };
+    element.src = s.url;
+    media.append(element);
+  }
   function receive(result) {
     const s = states.get(result.id); if (!s?.el.isConnected) return;
     const pending = s.pending.get(result.request); if (!pending) return;
@@ -153,6 +194,7 @@
     s.status.textContent = result.error || '';
     if (result.error || pending.external) return;
     if (result.directory && pending.parents !== s.parents) {
+      s.file = null;
       s.parents = pending.parents;
       s.parentRequest = false;
       s.pending.clear();
@@ -170,25 +212,8 @@
     }
     if (result.directory) { s.children.set(pending.path,result.entries || []); render(s); }
     else {
-      s.el.querySelector('.ws-file-path').textContent = result.path;
-      const text = s.el.querySelector('.ws-file-text'), media = s.el.querySelector('.ws-file-media');
-      media.replaceChildren();
-      if (s.url) { URL.revokeObjectURL(s.url); s.url = null; }
-      text.hidden = !!result.mime;
-      media.hidden = !result.mime;
-      s.wrap.disabled = !!result.mime;
-      if (!result.mime) { showText(s, result.path, result.text || ''); return; }
-      s.highlightVersion++;
-      const bytes = Uint8Array.from(atob(result.data || ''), c => c.charCodeAt(0));
-      s.url = URL.createObjectURL(new Blob([bytes], {type:result.mime}));
-      const kind = result.mime.split('/')[0];
-      const element = document.createElement(kind === 'image' ? 'img' : kind === 'audio' || kind === 'video' ? kind : 'iframe');
-      if (kind === 'image') element.alt = result.path;
-      else if (kind === 'audio' || kind === 'video') { element.controls = true; element.preload = 'metadata'; }
-      else element.title = 'Preview of ' + result.path;
-      element.onerror = () => { s.status.textContent = 'This browser cannot preview this file. Press o in the file tree to open externally.'; };
-      element.src = s.url;
-      media.append(element);
+      s.file = result;
+      showFile(s);
     }
   }
   window.libroFiles = {init,receive};

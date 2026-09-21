@@ -170,3 +170,31 @@ func TestFilesWordWrapEnabledByDefault(t *testing.T) {
 		t.Fatal("file preview is not wrapped by default")
 	}
 }
+
+func TestFileDocumentPreviews(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"page.html", "page.HTM", "readme.md", "readme.MARKDOWN", "plain.txt"} {
+		source := "# Heading\n\n| One | Two |\n| --- | --- |\n| A | B |\n\n<script>alert(1)</script>"
+		if err := os.WriteFile(filepath.Join(root, name), []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+		result, err := readProjectFile(root, name)
+		if err != nil || result.Text != source || result.MIME != "" {
+			t.Fatalf("%s: source changed: %+v, %v", name, result, err)
+		}
+		switch name {
+		case "page.html", "page.HTM":
+			if result.HTML != source {
+				t.Fatalf("%s: HTML content changed", name)
+			}
+		case "readme.md", "readme.MARKDOWN":
+			if !strings.Contains(result.HTML, "<h1>Heading</h1>") || !strings.Contains(result.HTML, "<table>") || strings.Contains(result.HTML, "<script>") {
+				t.Fatalf("%s: incorrect Markdown rendering: %s", name, result.HTML)
+			}
+		default:
+			if result.HTML != "" {
+				t.Fatal("plain text must not have a document preview")
+			}
+		}
+	}
+}

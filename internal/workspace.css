@@ -277,9 +277,9 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-grid>[data-dock=bottom]>[data-app-toolbar] .ws-button{width:26px;height:26px}
 .ws-files{position:absolute;inset:0;display:grid;grid-template-columns:minmax(0,1fr) 220px;background:var(--ws-bg);color:var(--ws-fg)}
 .ws-file-preview{display:flex;flex-direction:column;min-width:0;min-height:0}
-.ws-file-toolbar{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--ws-line)}
+.ws-file-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--ws-line)}
 .ws-file-path{flex:1;min-width:0;font-size:12px;overflow-wrap:anywhere}
-.ws-file-wrap{display:flex;align-items:center;gap:6px;flex-shrink:0;font-size:12px;cursor:pointer}
+.ws-file-wrap,.ws-file-render{display:flex;align-items:center;gap:6px;flex-shrink:0;font-size:12px;cursor:pointer}
 .ws-file-text.is-wrapped{white-space:pre-wrap;overflow-wrap:anywhere}
 .ws-file-text .hljs-comment,.ws-file-text .hljs-quote{color:var(--ws-code-comment);font-style:italic}
 .ws-file-text .hljs-keyword,.ws-file-text .hljs-selector-tag,.ws-file-text .hljs-doctag{color:var(--ws-code-keyword)}
