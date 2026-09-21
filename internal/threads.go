@@ -12,13 +12,16 @@ import (
 
 // Thread is a single agent session, independent of registered projects.
 type Thread struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Archived bool   `json:"archived"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Archived     bool   `json:"archived"`
+	SessionID    string `json:"-"`
+	AgentID      string `json:"-"`
+	AgentCommand string `json:"-"`
 }
 
 func loadThreads() []Thread {
-	rows, err := db.Query("SELECT id, name, archived FROM threads ORDER BY rowid")
+	rows, err := db.Query("SELECT id, name, archived, session_id, agent_id, agent_command FROM threads ORDER BY rowid")
 	if err != nil {
 		return nil
 	}
@@ -26,7 +29,7 @@ func loadThreads() []Thread {
 	var threads []Thread
 	for rows.Next() {
 		var thread Thread
-		if rows.Scan(&thread.ID, &thread.Name, &thread.Archived) == nil {
+		if rows.Scan(&thread.ID, &thread.Name, &thread.Archived, &thread.SessionID, &thread.AgentID, &thread.AgentCommand) == nil {
 			threads = append(threads, thread)
 		}
 	}
@@ -159,4 +162,22 @@ func (sm *StateManager) CloseThreadAgent(sid, appID string) ([]Application, erro
 		return apps, nil
 	}
 	return nil, nil
+}
+
+// Record the session against the launching thread, even after workspace switches.
+func (sm *StateManager) saveThreadSession(sid, threadID, agentID, command, sessionID string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	state := sm.states[sid]
+	if state == nil {
+		return
+	}
+	thread := state.thread(threadID)
+	if thread == nil || (thread.SessionID == sessionID && thread.AgentID == agentID && thread.AgentCommand == command) {
+		return
+	}
+	if _, err := db.Exec("UPDATE threads SET session_id = ?, agent_id = ?, agent_command = ? WHERE id = ?", sessionID, agentID, command, threadID); err != nil {
+		return
+	}
+	thread.SessionID, thread.AgentID, thread.AgentCommand = sessionID, agentID, command
 }

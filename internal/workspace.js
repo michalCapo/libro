@@ -263,7 +263,7 @@
     if (!threads.length) {
       list.append(node('div', 'ws-no-threads', 'No threads to show'));
     }
-    threads.filter(thread => thread.archived).forEach(appendThread);
+    threads.filter(thread => thread.archived).slice(0, 10).forEach(appendThread);
   }
   function renderProjects() {
     const list = document.getElementById('workspace-project-list'); if (!list) return;

@@ -3,6 +3,7 @@ package libro
 import (
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -144,5 +145,44 @@ func TestCloseThreadAgentPreservesPanelsOnArchiveFailure(t *testing.T) {
 	}
 	if state.Threads[0].Archived || len(state.Apps) != 1 {
 		t.Fatal("archive failure changed the workspace")
+	}
+}
+
+func TestThreadSessionSurvivesRestartAndDefaultAgentChange(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "threads.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	// Start with the schema used before session persistence was added.
+	if _, err := db.Exec("CREATE TABLE threads (id TEXT PRIMARY KEY, name TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0); INSERT INTO threads VALUES ('thread:test', 'Existing', 1)"); err != nil {
+		t.Fatal(err)
+	}
+	createTables()
+	createTables() // Migration must be safe on subsequent launches.
+	manager := NewStateManager()
+	sid := manager.NewSession()
+	manager.saveThreadSession(sid, "thread:test", "pi", "pi --model example", "saved-session")
+	state := newAppStateFromDB()
+	thread := state.thread("thread:test")
+	if thread == nil || thread.Name != "Existing" || !thread.Archived || thread.SessionID != "saved-session" || thread.AgentID != "pi" || thread.AgentCommand != "pi --model example" {
+		t.Fatalf("resume metadata lost: %+v", thread)
+	}
+	if err := setDefaultThreadAgent("codex"); err != nil {
+		t.Fatal(err)
+	}
+	state.ActiveProject = "thread:test"
+	if launch := projectAutolaunchJS(state, sid); !strings.Contains(launch, `"plugin":"pi"`) {
+		t.Fatalf("wrong agent on reopen: %s", launch)
+	}
+	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "pi"}}
+	if projectAutolaunchJS(state, sid) != "" {
+		t.Fatal("reopening a running thread started a second agent")
+	}
+	manager.saveThreadSession(sid, "thread:test", "pi", "pi --model example", "next-session")
+	if loadThreads()[0].SessionID != "next-session" {
+		t.Fatal("in-agent session switch was not persisted")
 	}
 }

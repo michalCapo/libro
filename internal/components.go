@@ -3336,6 +3336,7 @@ func terminalFrameSetupJS() string {
 						const codexTitle = /^(Working|Thinking|Waiting|Ready|Starting)(?:\s*[·|—-]\s*|$)/;
                         let task = title.replace(codexTitle, '').trim();
                         if (codexTitle.test(title)) {
+                            task = task.replace(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}(?: [^|]*)?(?: \| |$)/i, '');
                             task = task.replace(/\s*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]$/, '').trim();
                             if (task === 'renaming...') return;
                         }

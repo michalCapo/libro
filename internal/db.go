@@ -161,6 +161,18 @@ func createTables() {
 	if err != nil {
 		log.Fatalf("db: failed to create tables: %v", err)
 	}
+	// Add resume metadata to existing installations as well as new databases.
+	for _, column := range []string{"session_id", "agent_id", "agent_command"} {
+		var count int
+		if err := db.QueryRow("SELECT count(*) FROM pragma_table_info('threads') WHERE name = ?", column).Scan(&count); err != nil {
+			log.Fatalf("db: inspect threads: %v", err)
+		}
+		if count == 0 {
+			if _, err := db.Exec("ALTER TABLE threads ADD COLUMN " + column + " TEXT NOT NULL DEFAULT ''"); err != nil {
+				log.Fatalf("db: migrate threads: %v", err)
+			}
+		}
+	}
 }
 
 // Remove the old automatically seeded project once, preserving later user additions.

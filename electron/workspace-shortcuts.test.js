@@ -641,7 +641,7 @@ test('thread titles ignore harness placeholders and extract task names', () => {
     assert.deepEqual(calls, [])
     onTitle('π - Fix login - capo')
     assert.equal(frame.dataset.taskTitle, 'Fix login')
-    onTitle('Thinking | Fix sidebar ⠹')
+    onTitle('Thinking | 01a0c304-7225-78c3-b807-123456789abc ⠋ | Fix sidebar ⠹')
     assert.equal(frame.dataset.taskTitle, 'Fix sidebar')
     assert.deepEqual(calls, project.startsWith('thread:') ? ['Fix login', 'Fix sidebar'] : [])
   }
@@ -727,4 +727,21 @@ test('shared panel focus moves from an agent to Files and preserves file input f
   pending.splice(0).forEach(fn => fn())
   assert.equal(document.activeElement, agent)
   assert.equal(focused, 1)
+})
+
+test('thread list keeps all open threads and only the newest ten archived threads', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('  function renderThreads()'), source.indexOf('  function renderProjects()'))
+  const node = () => ({ dataset: {}, children: [], classList: { add() {} }, setAttribute() {}, append(...items) { this.children.push(...items) }, replaceChildren() { this.children = [] } })
+  const list = node(), calls = []
+  const threads = Array.from({ length: 25 }, (_, id) => ({ id: String(id), name: 'Thread ' + id, archived: id % 2 === 0 }))
+  vm.runInNewContext(handler + ';renderThreads()', {
+    window: { __libroThreads: threads }, document: { getElementById: () => list },
+    node, button: node, closeSettings() {}, innerWidth: 1000, call(action, data) { calls.push([action, data.name]) },
+  })
+  const rows = list.children.map(item => item.children[0])
+  assert.deepEqual(rows.map(row => row.dataset.projectKey), [...threads.filter(t => !t.archived).reverse(), ...threads.filter(t => t.archived).reverse().slice(0, 10)].map(t => t.id))
+  rows.at(-1).onclick()
+  assert.deepEqual(calls, [['project.switch', '6']])
+  assert.equal(threads.length, 25, 'older archives remain stored')
 })

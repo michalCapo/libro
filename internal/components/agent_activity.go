@@ -10,8 +10,10 @@ import (
 )
 
 // Launch-local integrations never modify the user's agent settings. Only a
-// fixed status word is written to activity files.
+// status and session metadata are written to temporary activity files.
 var agentCommandPattern = regexp.MustCompile(`^([a-zA-Z0-9_./-]+)(\s.*)?$`)
+var agentSessionPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
+var codexSessionPattern = regexp.MustCompile(`^([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})(?: [^|]*)?(?: \| |$)`)
 var ollamaClaudePattern = regexp.MustCompile(`^(\s+launch\s+claude(?:\s+(?:--model(?:=|\s+)(?:"[^"]*"|'[^']*'|[^\s;&|]+)|--yes|-y))*)(?:\s+--(\s.*)?)?\s*$`)
 
 type agentActivity struct {
@@ -49,7 +51,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 	browserMCP := map[string]any{"command": executable, "args": []string{"browser-mcp"}}
 	a := &agentActivity{kind: kind}
 	if kind == "codex" {
-		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","thread-name"]'` + " -c " + shellQuote("mcp_servers.libro_browser.command="+string(executableJSON)) + " -c " + shellQuote(`mcp_servers.libro_browser.args=["browser-mcp"]`) + parts[2]), a, nil
+		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","session-id","thread-name"]'` + " -c " + shellQuote("mcp_servers.libro_browser.command="+string(executableJSON)) + " -c " + shellQuote(`mcp_servers.libro_browser.args=["browser-mcp"]`) + parts[2]), a, nil
 	}
 	dir, err := os.MkdirTemp("", "libro-agent-")
 	if err != nil {
@@ -57,13 +59,18 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 	}
 	a.dir, a.path = dir, filepath.Join(dir, "status")
 	pathJSON, _ := json.Marshal(a.path)
+	sessionJSON, _ := json.Marshal(filepath.Join(dir, "session"))
 	var filename, content, args string
 	switch kind {
 	case "claude":
 		hooks := map[string]any{}
 		for event, state := range map[string]string{"UserPromptSubmit": "working", "PreToolUse": "working", "Stop": "done", "StopFailure": "error", "SessionEnd": "idle", "SessionStart": "idle"} {
+			hookCommand := "printf '%s' " + shellQuote(state) + " > " + shellQuote(a.path)
+			if event == "SessionStart" {
+				hookCommand = "cat > " + shellQuote(filepath.Join(dir, "session")) + "; " + hookCommand
+			}
 			hooks[event] = []any{map[string]any{"hooks": []any{map[string]any{
-				"type": "command", "command": "printf '%s' " + shellQuote(state) + " > " + shellQuote(a.path), "timeout": 2,
+				"type": "command", "command": hookCommand, "timeout": 2,
 			}}}}
 		}
 		data, _ := json.Marshal(map[string]any{
@@ -84,6 +91,7 @@ export default function (pi) {
     if (name) pi.setSessionName(name);
   };
   pi.on('session_start', (_event, ctx) => {
+    try { writeFileSync(` + string(sessionJSON) + `, JSON.stringify({session_id:ctx.sessionManager.getSessionId()})); } catch {}
     status('idle');
     const entry = ctx.sessionManager.getBranch().find(entry => entry.type === 'message' && entry.message.role === 'user');
     if (entry) {
@@ -109,6 +117,9 @@ export default async function () {
   };
   return { event: async ({ event }) => {
     const p = event.properties;
+    if ((event.type === 'session.created' || event.type === 'session.updated') && !p.info.parentID) {
+      try { writeFileSync(` + string(sessionJSON) + `, JSON.stringify({session_id:p.info.id})); } catch {}
+    }
     if (event.type === 'session.status') {
       if (p.status.type !== 'idle') sessions.set(p.sessionID, 'working');
       else if (sessions.get(p.sessionID) !== 'error') sessions.set(p.sessionID, 'done');
@@ -169,6 +180,7 @@ func (s *TerminalSession) watchAgentActivity() {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for range ticker.C {
+		s.readAgentSession()
 		s.mu.Lock()
 		stopped := s.closed || s.agentEnded
 		s.mu.Unlock()
@@ -181,7 +193,34 @@ func (s *TerminalSession) watchAgentActivity() {
 	}
 }
 
+func (s *TerminalSession) readAgentSession() {
+	if s.activity == nil || s.activity.dir == "" {
+		return
+	}
+	data, err := os.ReadFile(filepath.Join(s.activity.dir, "session"))
+	var payload struct {
+		SessionID string `json:"session_id"`
+	}
+	if err == nil && json.Unmarshal(data, &payload) == nil {
+		s.setAgentStatus("session:" + payload.SessionID)
+	}
+}
+
 func (s *TerminalSession) setAgentStatus(status string) {
+	if id, ok := strings.CutPrefix(status, "session:"); ok {
+		if !agentSessionPattern.MatchString(id) {
+			return
+		}
+		s.agentMu.Lock()
+		defer s.agentMu.Unlock()
+		if id != s.agentSessionID {
+			s.agentSessionID = id
+			if s.reportSession != nil {
+				s.reportSession(id)
+			}
+		}
+		return
+	}
 	switch status {
 	case "idle", "working", "done", "error", "exited":
 	default:
@@ -234,6 +273,10 @@ func (a *agentActivity) output(data []byte, report func(string)) {
 				}
 				if a.kind == "codex" && (strings.HasPrefix(title, "0;") || strings.HasPrefix(title, "2;")) {
 					state, threadTitle, _ := strings.Cut(title[2:], " | ")
+					if match := codexSessionPattern.FindStringSubmatch(threadTitle); match != nil {
+						report("session:" + match[1])
+						threadTitle = strings.TrimPrefix(threadTitle, match[0])
+					}
 					// /new drops the old thread title before the new session is ready.
 					if a.hasThreadTitle && threadTitle == "" {
 						report("idle")
@@ -260,5 +303,34 @@ func (a *agentActivity) output(data []byte, report func(string)) {
 			a.inOSC, a.osc = true, nil
 		}
 		a.escape = b == 27
+	}
+}
+
+// ResumeAgentCommand preserves configured flags and uses the agent's session selector.
+func ResumeAgentCommand(command, sessionID string) string {
+	if sessionID == "" {
+		return command
+	}
+	parts := agentCommandPattern.FindStringSubmatch(strings.TrimSpace(command))
+	if parts == nil {
+		return command
+	}
+	kind := filepath.Base(parts[1])
+	if kind == "ollama" {
+		launch := ollamaClaudePattern.FindStringSubmatch(parts[2])
+		if launch == nil {
+			return command
+		}
+		return parts[1] + launch[1] + " --" + launch[2] + " --resume " + shellQuote(sessionID)
+	}
+	switch kind {
+	case "codex":
+		return parts[1] + " resume " + shellQuote(sessionID) + parts[2]
+	case "claude":
+		return command + " --resume " + shellQuote(sessionID)
+	case "pi", "opencode":
+		return command + " --session " + shellQuote(sessionID)
+	default:
+		return command
 	}
 }

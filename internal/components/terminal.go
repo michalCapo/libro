@@ -89,19 +89,21 @@ type TerminalSession struct {
 	outputDone  chan struct{}
 	processDone chan struct{}
 
-	mu            sync.Mutex
-	clients       map[*terminalClient]bool
-	closed        bool
-	pendingOutput []byte // startup output retained until the first client connects
-	connected     bool
-	cols          uint16
-	rows          uint16
-	activity      *agentActivity
-	agentStatus   string
-	agentWorked   bool
-	agentEnded    bool
-	agentMu       sync.Mutex
-	processStatus string
+	mu             sync.Mutex
+	clients        map[*terminalClient]bool
+	closed         bool
+	pendingOutput  []byte // startup output retained until the first client connects
+	connected      bool
+	cols           uint16
+	rows           uint16
+	activity       *agentActivity
+	agentStatus    string
+	agentSessionID string
+	reportSession  func(string)
+	agentWorked    bool
+	agentEnded     bool
+	agentMu        sync.Mutex
+	processStatus  string
 }
 
 type terminalClient struct {
@@ -146,6 +148,11 @@ func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*Te
 // StartWithEnvironment launches a PTY session with additional environment
 // variables. Entries override variables inherited from Libro.
 func (tm *TerminalManager) StartWithEnvironment(appID, command, cwd string, writable bool, environment []string) (*TerminalSession, error) {
+	return tm.StartWithSessionReporter(appID, command, cwd, writable, environment, nil)
+}
+
+// StartWithSessionReporter reports agent session IDs before the terminal closes.
+func (tm *TerminalManager) StartWithSessionReporter(appID, command, cwd string, writable bool, environment []string, reportSession func(string)) (*TerminalSession, error) {
 	tm.launchMu.Lock()
 	defer tm.launchMu.Unlock()
 	if appID == "" {
@@ -187,20 +194,21 @@ func (tm *TerminalManager) StartWithEnvironment(appID, command, cwd string, writ
 	}
 
 	s := &TerminalSession{
-		ID:          appID,
-		AppID:       appID,
-		Command:     command,
-		Cwd:         cwd,
-		Writable:    writable,
-		cmd:         cmd,
-		ptyFile:     ptyFile,
-		outputDone:  make(chan struct{}),
-		processDone: make(chan struct{}),
-		clients:     make(map[*terminalClient]bool),
-		cols:        100,
-		rows:        30,
-		activity:    activity,
-		agentStatus: "idle",
+		ID:            appID,
+		AppID:         appID,
+		Command:       command,
+		Cwd:           cwd,
+		Writable:      writable,
+		cmd:           cmd,
+		ptyFile:       ptyFile,
+		outputDone:    make(chan struct{}),
+		processDone:   make(chan struct{}),
+		clients:       make(map[*terminalClient]bool),
+		cols:          100,
+		rows:          30,
+		activity:      activity,
+		agentStatus:   "idle",
+		reportSession: reportSession,
 	}
 
 	tm.mu.Lock()
@@ -476,6 +484,7 @@ func (s *TerminalSession) close(killProcess bool) {
 	if ptyFile != nil {
 		_ = ptyFile.Close()
 	}
+	s.readAgentSession()
 	s.activity.cleanup()
 	if killProcess && s.processDone != nil {
 		<-s.processDone

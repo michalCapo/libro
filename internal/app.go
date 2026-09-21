@@ -128,6 +128,9 @@ func projectAutolaunchJS(state *AppState, sid string) string {
 		return ""
 	}
 	threadAgent := defaultThreadAgent()
+	if thread := state.thread(state.ActiveProject); thread != nil && thread.AgentID != "" {
+		threadAgent = thread.AgentID
+	}
 	for _, plugin := range plugins() {
 		autolaunch := plugin.Autolaunch
 		if state.thread(state.ActiveProject) != nil {
@@ -665,7 +668,18 @@ func Run(assets embed.FS) {
 			if isAgentApp(term) {
 				environment = agentEnvironmentList()
 			}
-			session, err := tm.StartWithEnvironment(term.ID, term.Command, pwd, term.Writable, environment)
+			command := term.Command
+			var reportSession func(string)
+			if thread := state.thread(state.ActiveProject); thread != nil && isAgentApp(term) {
+				threadID := thread.ID
+				baseCommand := command
+				if thread.SessionID != "" && thread.AgentID == term.PluginID {
+					baseCommand = thread.AgentCommand
+					command = components.ResumeAgentCommand(baseCommand, thread.SessionID)
+				}
+				reportSession = func(id string) { sm.saveThreadSession(sid, threadID, term.PluginID, baseCommand, id) }
+			}
+			session, err := tm.StartWithSessionReporter(term.ID, command, pwd, term.Writable, environment, reportSession)
 			if err != nil {
 				sm.RemoveAppByID(sid, term.ID)
 				state = sm.Get(sid)

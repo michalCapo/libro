@@ -50,8 +50,8 @@ func TestAgentLaunchIntegration(t *testing.T) {
 			if kind != "opencode" && !strings.Contains(command, map[string]string{"codex": "mcp_servers.libro_browser", "claude": "--mcp-config", "pi": "--append-system-prompt"}[kind]) {
 				t.Fatal("browser discovery missing")
 			}
-			if kind == "codex" && !strings.Contains(command, `tui.terminal_title=["run-state","thread-name"]`) {
-				t.Fatal("Codex titles must omit the session ID fallback")
+			if kind == "codex" && !strings.Contains(command, `tui.terminal_title=["run-state","session-id","thread-name"]`) {
+				t.Fatal("Codex titles must include the session ID for resume")
 			}
 			if kind == "opencode" {
 				var config map[string]any
@@ -159,7 +159,7 @@ const check = expected => assert.equal(readFileSync(process.argv[2], 'utf8'), ex
 				script += `const hooks = {};
 let name;
 plugin({on:(event, handler) => hooks[event] = handler, getSessionName:() => name, setSessionName:value => name = value});
-const ctx = {sessionManager:{getBranch:() => []}};
+const ctx = {sessionManager:{getSessionId:() => 'pi-session', getBranch:() => []}};
 hooks.input({text:'Fix\n login', source:'interactive'});
 assert.equal(name, 'Fix login');
 hooks.input({text:'Second prompt', source:'interactive'});
@@ -173,10 +173,14 @@ hooks.agent_start({}); check('working');
 hooks.agent_end({willRetry:true}); check('working');
 hooks.agent_end({willRetry:false}); check('done');
 hooks.session_start({reason:'new'}, ctx); check('idle');
+assert.equal(JSON.parse(readFileSync(process.argv[2].replace(/status$/, 'session'), 'utf8')).session_id, 'pi-session');
 hooks.agent_start({}); check('working');
 hooks.session_shutdown({}); check('idle');`
 			} else {
 				script += `const hooks = await plugin();
+await hooks.event({event:{type:'session.created',properties:{info:{id:'parent-session'}}}});
+await hooks.event({event:{type:'session.created',properties:{info:{id:'child-session',parentID:'parent-session'}}}});
+assert.equal(JSON.parse(readFileSync(process.argv[2].replace(/status$/, 'session'), 'utf8')).session_id, 'parent-session');
 const send = (sessionID, type) => hooks.event({event:{type:'session.status',properties:{sessionID,status:{type}}}});
 await send('a','busy'); check('working');
 await send('b','busy'); check('working');
@@ -215,5 +219,63 @@ func TestCodexActivityNewSession(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestResumeAgentCommand(t *testing.T) {
+	for _, test := range []struct{ command, want string }{
+		{"codex --model example", "codex resume 'session-123' --model example"},
+		{"/usr/bin/claude --model example", "/usr/bin/claude --model example --resume 'session-123'"},
+		{"pi --model example", "pi --model example --session 'session-123'"},
+		{"opencode", "opencode --session 'session-123'"},
+		{"ollama launch claude --model 'some model' --yes", "ollama launch claude --model 'some model' --yes -- --resume 'session-123'"},
+		{"ollama launch claude -- --verbose", "ollama launch claude -- --verbose --resume 'session-123'"},
+	} {
+		if got := ResumeAgentCommand(test.command, "session-123"); got != test.want {
+			t.Errorf("resume %q = %q, want %q", test.command, got, test.want)
+		}
+		if got := ResumeAgentCommand(test.command, ""); got != test.command {
+			t.Errorf("new launch changed: %q", got)
+		}
+	}
+	if got := ResumeAgentCommand("pi", "a'; echo injected"); got != `pi --session 'a'"'"'; echo injected'` {
+		t.Fatalf("session argument not quoted: %s", got)
+	}
+}
+
+func TestAgentSessionCapture(t *testing.T) {
+	const id = "01a0c304-7225-78c3-b807-123456789abc"
+	var got []string
+	s := &TerminalSession{activity: &agentActivity{kind: "codex"}, reportSession: func(id string) { got = append(got, id) }}
+	for _, chunk := range []string{"\x1b]0;Ready | 01a0c304-", "7225-78c3-b807-123456789abc | Fix login\x07", "\x1b]0;Working | " + id + " ⠋ | Fix login\x07"} {
+		s.activity.output([]byte(chunk), s.setAgentStatus)
+	}
+	if !reflect.DeepEqual(got, []string{id}) {
+		t.Fatalf("session reports = %v", got)
+	}
+	_, activity, err := prepareAgentActivity("claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer activity.cleanup()
+	data, err := os.ReadFile(filepath.Join(activity.dir, "claude.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Hooks map[string][]struct{ Hooks []struct{ Command string } }
+	}
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("sh", "-c", config.Hooks["SessionStart"][0].Hooks[0].Command)
+	cmd.Stdin = strings.NewReader(`{"session_id":"claude-session"}`)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("hook: %v: %s", err, output)
+	}
+	s.activity = activity
+	s.readAgentSession()
+	if !reflect.DeepEqual(got, []string{id, "claude-session"}) {
+		t.Fatalf("hook session reports = %v", got)
 	}
 }
