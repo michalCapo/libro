@@ -390,6 +390,10 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 .ws-project-item:has(+ .ws-project-agents){margin-bottom:1px;background:var(--ws-raised);border-radius:10px 10px 0 0}
 .ws-project-item:has(+ .ws-project-agents) .ws-project-row{background:transparent;border-radius:10px 10px 0 0}
 .ws-project-item:has(+ .ws-project-agents) + .ws-project-agents{margin:0 0 8px;padding:0;background:var(--ws-raised);border-radius:0 0 10px 10px;display:flex;flex-direction:column;gap:1px;overflow:hidden}
+#workspace-project-list .ws-project-item:has(.ws-project-row[aria-current=true])::after{content:"";position:absolute;inset:0;border:1px solid var(--ws-accent);border-radius:inherit;pointer-events:none;z-index:1}
+#libro-workspace[data-projects=true] .ws-project-item:has(.ws-project-row[aria-current=true]):has(+ .ws-project-agents)::after{bottom:-1px;border-bottom:0}
+.ws-project-item:has(.ws-project-row[aria-current=true]) + .ws-project-agents{position:relative}
+.ws-project-item:has(.ws-project-row[aria-current=true]) + .ws-project-agents::after{content:"";position:absolute;inset:0;border:1px solid var(--ws-accent);border-top:0;border-radius:inherit;pointer-events:none;z-index:1}
 .ws-project-agent{box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;min-width:0;min-height:34px;padding:7px 8px 7px 12px;border:0;border-radius:0;background:transparent;color:var(--ws-muted);text-align:left;font:inherit;font-size:12px;line-height:1;cursor:pointer}
 .ws-project-agent .material-icons-round{font-size:15px;flex-shrink:0}
 .ws-project-agent span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
