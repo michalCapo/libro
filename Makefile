@@ -1,10 +1,13 @@
 SHELL := /usr/bin/bash
 .DEFAULT_GOAL := help
 .ONESHELL:
-.PHONY: help check install release release-dry-run
+.PHONY: help dev check install release release-dry-run
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+dev: ## Run an isolated development instance on port 8101
+	go run . --dev
 
 check: ## Run all code checks
 	@set -uo pipefail

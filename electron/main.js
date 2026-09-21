@@ -30,13 +30,16 @@ if (process.env.LIBRO_FORCE_GPU !== '0') {
 }
 
 // Pin Electron's profile directory so persistent webview partitions survive relaunches.
-app.setPath('userData', path.join(app.getPath('appData'), 'libro'))
-app.setName('Libro')
+const instance = process.env.LIBRO_INSTANCE || ''
+if (instance && !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(instance)) throw new Error('Invalid Libro instance name')
+const profileDir = path.join(app.getPath('appData'), 'libro')
+app.setPath('userData', instance ? path.join(profileDir, 'instances', instance) : profileDir)
+app.setName(instance ? `Libro (${instance})` : 'Libro')
 if (process.platform === 'windows') {
   app.setAppUserModelId('com.michalcapo.libro')
 }
 
-const port = process.env.LIBRO_PORT || '8100'
+const port = process.env.LIBRO_PORT || (instance ? '8101' : '8100')
 const serverURL = `http://localhost:${port}`
 
 let browserController = null
@@ -640,8 +643,8 @@ function createWindow() {
   }, { useSystemPicker: true })
 
   mainWindow = new BrowserWindow({
-    width: 1920,
-    height: 1080,
+    width: instance ? 1200 : 1920,
+    height: instance ? 800 : 1080,
     show: false,
     frame: false,
     autoHideMenuBar: true,
@@ -655,7 +658,7 @@ function createWindow() {
     },
   })
 
-  mainWindow.maximize()
+  if (!instance) mainWindow.maximize()
   mainWindow.show()
 
   mainWindow.loadURL(serverURL).catch((err) => {

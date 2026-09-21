@@ -18,7 +18,7 @@ var (
 	dbMu sync.Mutex
 )
 
-// InitDB opens (or creates) libro.db next to the running binary and creates tables.
+// InitDB opens (or creates) the instance database and creates tables.
 func InitDB() {
 	dbPath := dbFilePath()
 	var err error
@@ -52,11 +52,21 @@ func dbFilePath() string {
 		return filepath.Join(dir, "libro.db")
 	}
 	dbPath := filepath.Join(dir, "libro.db")
-	migrateLegacyDB(dbPath)
+	if os.Getenv("LIBRO_INSTANCE") == "" {
+		migrateLegacyDB(dbPath)
+	}
 	return dbPath
 }
 
 func libroDataDir() (string, error) {
+	dir, err := libroBaseDataDir()
+	if err != nil {
+		return "", err
+	}
+	return instanceDir(dir), nil
+}
+
+func libroBaseDataDir() (string, error) {
 	if dataHome := strings.TrimSpace(os.Getenv("XDG_DATA_HOME")); dataHome != "" {
 		return filepath.Join(dataHome, "libro"), nil
 	}

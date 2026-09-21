@@ -20,7 +20,7 @@ func BrowserCommand(command json.RawMessage) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "libro", "browser-control-"+Port()+".json"))
+	data, err := os.ReadFile(filepath.Join(instanceDir(filepath.Join(dir, "libro")), "browser-control-"+Port()+".json"))
 	if err != nil {
 		return nil, errors.New("browser control unavailable; open Libro desktop first")
 	}

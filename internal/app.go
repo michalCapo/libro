@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"libro/internal/components"
 	"log"
+	"net"
+	"net/http"
 	"slices"
 
 	"os"
@@ -370,13 +372,22 @@ func installShutdownSignalHandler() {
 }
 
 // Run initializes and starts the Libro application server.
-func Run(assets embed.FS) {
+func Run(assets embed.FS, desktop bool) error {
+	listener, err := net.Listen("tcp", ":"+Port())
+	if err != nil {
+		return fmt.Errorf("start Libro on port %s: %w", Port(), err)
+	}
+	defer func() { _ = listener.Close() }()
+
 	installShutdownSignalHandler()
 	InitDB()
 	defer CloseDB()
 	defer CleanupRuntime()
 	app := r.NewApp()
 	app.Title = "Libro"
+	if name := os.Getenv("LIBRO_INSTANCE"); name != "" {
+		app.Title += " (" + name + ")"
+	}
 	app.Description = "Application Manager"
 	app.Assets(assets, "assets", "/assets/")
 	app.Favicon = "/assets/logo.svg"
@@ -1450,9 +1461,16 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 		}
 	})
 
-	if err := app.Listen(":" + Port()); err != nil {
-		log.Printf("libro: app.Listen on :%s failed: %v", Port(), err)
+	if desktop {
+		go func() {
+			<-OpenDesktop("http://localhost:" + Port())
+			CleanupRuntime()
+			CloseDB()
+			os.Exit(0)
+		}()
 	}
+	log.Printf("Libro listening on http://localhost:%s", Port())
+	return http.Serve(listener, app.Handler())
 }
 
 // ensureScheme adds http:// for local URLs and https:// for everything else.

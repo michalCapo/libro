@@ -30,6 +30,29 @@ Works on Linux, macOS, and Windows.
 
 Note: Libro starts the assistants for you, but the assistants themselves (Codex, Claude, Pi, OpenCode) must be installed on your computer first.
 
+## Development instances
+
+Run `make dev` (or `go run . --dev`) while your installed Libro stays open.
+The development instance uses port 8101 and starts with its own empty database,
+settings, notes, and browser profile. Its data persists across restarts.
+The regular instance keeps port 8100 and its existing data.
+
+For additional instances, choose a unique name and unused port:
+
+```sh
+go run . --instance feature-a --port 8102
+go run . --dev --no-desktop
+```
+
+Named instance data lives under `libro/instances/<name>` in the usual data and
+Electron profile directories. Project folders remain shared if you add the same
+folder to both instances; edits and commands still affect those files.
+
+Flags must come before browser commands: `libro --dev browser list`.
+`LIBRO_INSTANCE` and `LIBRO_PORT` also select an instance and are inherited by
+agents and terminals launched inside Libro. An occupied port fails before the
+app opens a window or database.
+
 ## Features
 
 ### AI assistants

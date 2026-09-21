@@ -3,6 +3,7 @@ package main
 
 import (
 	"embed"
+	"flag"
 	"fmt"
 	"os"
 
@@ -14,46 +15,52 @@ import (
 var assets embed.FS
 
 func main() {
-	if len(os.Args) > 1 && (os.Args[1] == "browser" || os.Args[1] == "browser-mcp") {
-		var err error
-		if os.Args[1] == "browser-mcp" {
-			err = libro.RunBrowserMCP(os.Stdin, os.Stdout)
-		} else {
-			err = libro.RunBrowserCLI(os.Args[2:], os.Stdout)
-		}
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
+	flags := flag.NewFlagSet("libro", flag.ExitOnError)
+	dev := flags.Bool("dev", false, "Run an isolated development instance")
+	instance := flags.String("instance", os.Getenv("LIBRO_INSTANCE"), "Instance name (separate data and browser profile)")
+	port := flags.String("port", os.Getenv("LIBRO_PORT"), "HTTP port (default 8100, or 8101 for named instances)")
+	noDesktop := flags.Bool("no-desktop", false, "Run without a desktop window")
+	showVersion := flags.Bool("version", false, "Print version")
+	flags.BoolVar(showVersion, "v", false, "Print version")
+	_ = flags.Parse(os.Args[1:])
+	if *showVersion {
+		fmt.Println("libro", version.Version)
 		return
 	}
-	// Handle --version flag
-	for _, arg := range os.Args[1:] {
-		if arg == "--version" || arg == "-v" {
-			fmt.Println("libro", version.Version)
-			return
+	if *dev {
+		*instance = "dev"
+	}
+	// A new profile must not reuse the parent terminal's instance port.
+	explicitPort := false
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == "port" {
+			explicitPort = true
 		}
+	})
+	if *instance != os.Getenv("LIBRO_INSTANCE") && !explicitPort {
+		*port = ""
 	}
-
-	// Desktop mode is default — use --no-desktop to skip opening the browser window
-	desktop := true
-	for _, arg := range os.Args[1:] {
-		if arg == "--no-desktop" {
-			desktop = false
+	if err := libro.ConfigureInstance(*instance, *port); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	args := flags.Args()
+	var err error
+	if len(args) > 0 {
+		switch args[0] {
+		case "browser":
+			err = libro.RunBrowserCLI(args[1:], os.Stdout)
+		case "browser-mcp":
+			err = libro.RunBrowserMCP(os.Stdin, os.Stdout)
+		default:
+			err = fmt.Errorf("unknown command: %s", args[0])
 		}
+	} else {
+		err = libro.Run(assets, !*noDesktop)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 
-	if desktop {
-		go func() {
-			done := libro.OpenDesktop("http://localhost:" + libro.Port())
-
-			// When the browser window closes, exit the process
-			<-done
-			libro.CleanupRuntime()
-			libro.CloseDB()
-			os.Exit(0)
-		}()
-	}
-
-	libro.Run(assets)
 }
