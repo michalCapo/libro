@@ -258,3 +258,27 @@ libro browser '{"action":"check","panel":"PANEL_ID","selector":"#agree","checked
 libro browser '{"action":"screenshot","panel":"PANEL_ID","fullPage":true}' /tmp/full-page.png
 libro browser '{"action":"download","panel":"PANEL_ID","url":"https://example.com/report.csv"}'
 ```
+
+### Agent application control
+
+Agents can use the `application` tool on the existing `libro_browser` MCP
+server to start, restart, stop, or check the project application. Set the
+**Start command** in project settings first. The tool uses the same bottom
+terminal as Libro's application shortcuts and leaves agent terminals running.
+
+For agents without MCP:
+
+```sh
+libro application status
+libro application start
+libro application restart
+libro application stop
+```
+
+The project path defaults to the agent's working directory. Pass an explicit
+path as the second argument (or `project` in MCP) if needed. Libro must have
+that project active. `start` preserves a running or starting application;
+`restart` replaces it. A `starting` response confirms a launch request, while
+`status` reports whether the process is running; it does not test server readiness.
+Only the saved command can be run. This uses the desktop browser bridge and
+respects its enable and pause controls.

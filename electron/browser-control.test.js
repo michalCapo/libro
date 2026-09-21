@@ -116,3 +116,17 @@ test('disable aborts active work and invalidates queued commands', async () => {
   finish([])
   await rejected
 })
+
+test('application control uses the workspace without a browser panel and respects pause', async () => {
+  const scripts = []
+  const win = {isDestroyed:()=>false,webContents:{executeJavaScript:async script=>{scripts.push(script);return {status:'starting'}}}}
+  const control = createController(()=>win,()=>{throw new Error('unexpected browser lookup')})
+  assert.deepEqual(await control({action:'application',operation:'start',project:'/project'}),{status:'starting'})
+  assert.match(scripts[0],/libroWorkspace.applicationControl/)
+  assert.match(scripts[0],/"project":"\/project"/)
+  await assert.rejects(control({action:'application',operation:'shell',project:'/project'}),/Invalid application/)
+  control.setPaused(true)
+  await assert.rejects(control({action:'application',operation:'restart',project:'/project'}),/paused/)
+  control.setEnabled(false)
+  await assert.rejects(control({action:'application',operation:'stop',project:'/project'}),/disabled/)
+})

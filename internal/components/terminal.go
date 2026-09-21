@@ -447,6 +447,12 @@ func (tm *TerminalManager) StopAll() {
 	}
 }
 
+// IsRunning reports whether a terminal still has a live process session.
+func (tm *TerminalManager) IsRunning(id string) bool {
+	s := tm.session(id)
+	return s != nil && !s.isClosed()
+}
+
 func (tm *TerminalManager) session(id string) *TerminalSession {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()

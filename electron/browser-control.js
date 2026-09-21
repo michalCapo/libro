@@ -147,6 +147,10 @@ function createController(getWindow, fromId, options = {}) {
       const execute = async () => {
         const win = getWindow()
         if (!win || win.isDestroyed()) throw new Error('Desktop window is not available')
+        if (command.action === 'application') {
+          if (!['status', 'start', 'restart', 'stop'].includes(command.operation) || typeof command.project !== 'string' || !command.project) throw new Error('Invalid application command')
+          return win.webContents.executeJavaScript(`window.libroWorkspace.applicationControl(${JSON.stringify({operation:command.operation, project:command.project})})`)
+        }
         const panels = await win.webContents.executeJavaScript(`Object.entries(window.__libroWebviews || {}).flatMap(([id, wv]) => {
           try { const rect = wv.getBoundingClientRect(); return [{id, sid:wv.getAttribute('data-sid'), title:wv.getTitle(), url:wv.getURL(), contentsId:wv.getWebContentsId(), visible:rect.width>0 && rect.height>0 && wv.checkVisibility({checkVisibilityCSS:true})}]; } catch (_) { return []; }
         })`)

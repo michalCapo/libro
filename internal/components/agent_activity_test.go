@@ -90,7 +90,7 @@ func TestClaudeActivityHooks(t *testing.T) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(config.Permissions.Allow, []string{"mcp__libro_browser__browser"}) {
+	if !reflect.DeepEqual(config.Permissions.Allow, []string{"mcp__libro_browser__browser", "mcp__libro_browser__application"}) {
 		t.Fatalf("browser permission = %v", config.Permissions.Allow)
 	}
 	for _, step := range []struct{ event, want string }{{"UserPromptSubmit", "working"}, {"Stop", "done"}, {"StopFailure", "error"}, {"SessionEnd", "idle"}, {"SessionStart", "idle"}} {

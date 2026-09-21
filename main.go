@@ -48,6 +48,8 @@ func main() {
 	var err error
 	if len(args) > 0 {
 		switch args[0] {
+		case "application":
+			err = libro.RunApplicationCLI(args[1:], os.Stdout)
 		case "browser":
 			err = libro.RunBrowserCLI(args[1:], os.Stdout)
 		case "browser-mcp":

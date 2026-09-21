@@ -33,6 +33,7 @@ func setProjectCommand(path, command string) error {
 }
 
 func registerProjectCommandActions(app *r.App) {
+	registerApplicationControl(app)
 	registerAction(app, "project.command.save", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		name, _ := ctx.WsData()["name"].(string)
@@ -60,17 +61,7 @@ func registerProjectCommandActions(app *r.App) {
 		if command == "" {
 			return fmt.Sprintf(`libroWorkspace.projectSettings(%s);`, components.JSString(state.ActiveProject))
 		}
-		js := stopProjectCommand(sid)
-		id := sm.NextAppID()
-		sm.InsertTerminalPlaceholder(sid, id, WidthFull, command, true, "Project command", "", -1)
-		sm.SetAppPlugin(sid, id, "project-command", "bottom")
-		state = sm.Get(sid)
-		frame := renderAppFramePlaceholder(state.Apps[state.SelectedIndex], state.SelectedIndex, true, sid)
-		result := js + insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + projectsJS(state) + hydrateAppAfterScrollJS(id, sidData(sid, "id", id)) + fmt.Sprintf(`libroWorkspace.select(%s);`, components.JSString(id))
-		if js != "" {
-			return "libroWorkspace.restartProject(function(){" + result + "});" + `if(window.__libroShowToast)window.__libroShowToast('Restarting application', '', 1200);`
-		}
-		return result + `if(window.__libroShowToast)window.__libroShowToast('Starting application', '', 1200);`
+		return runProjectCommand(sid, command)
 	})
 	registerAction(app, "project.command.stop", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
@@ -81,6 +72,20 @@ func registerProjectCommandActions(app *r.App) {
 		}
 		return js + navigateJS(sm.Get(sid), sid) + projectsJS(sm.Get(sid)) + fmt.Sprintf(`if(window.__libroShowToast)window.__libroShowToast(%s, '', 1200);`, components.JSString(message))
 	})
+}
+
+func runProjectCommand(sid, command string) string {
+	js := stopProjectCommand(sid)
+	id := sm.NextAppID()
+	sm.InsertTerminalPlaceholder(sid, id, WidthFull, command, true, "Project command", "", -1)
+	sm.SetAppPlugin(sid, id, "project-command", "bottom")
+	state := sm.Get(sid)
+	frame := renderAppFramePlaceholder(state.Apps[state.SelectedIndex], state.SelectedIndex, true, sid)
+	result := js + insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + projectsJS(state) + hydrateAppAfterScrollJS(id, sidData(sid, "id", id)) + fmt.Sprintf(`libroWorkspace.select(%s);`, components.JSString(id))
+	if js != "" {
+		return "libroWorkspace.restartProject(function(){" + result + "});" + `if(window.__libroShowToast)window.__libroShowToast('Restarting application', '', 1200);`
+	}
+	return result + `if(window.__libroShowToast)window.__libroShowToast('Starting application', '', 1200);`
 }
 
 func stopProjectCommand(sid string) string {
