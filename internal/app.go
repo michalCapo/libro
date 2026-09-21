@@ -116,7 +116,7 @@ func closeWorkspaceApp(sid, appID string) string {
 		js = removeAppJS(appID)
 	}
 	state := sm.Get(sid)
-	return js + navigateJS(state, sid) + renderTopBar(state, sid).ToJSReplace(TopBarID) + projectsJS(state)
+	return js + "if(window.libroWorkspace)libroWorkspace.restorePanelFocus();" + renderTopBar(state, sid).ToJSReplace(TopBarID) + projectsJS(state)
 }
 
 // Autolaunch uses app.start so command validation and terminal lifecycle stay shared.

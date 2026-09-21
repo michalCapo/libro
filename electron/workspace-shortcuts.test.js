@@ -745,3 +745,25 @@ test('thread list keeps all open threads and only the newest ten archived thread
   assert.deepEqual(calls, [['project.switch', '6']])
   assert.equal(threads.length, 25, 'older archives remain stored')
 })
+
+test('closing panels restores focus without revealing hidden terminals', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('  function restorePanelFocus('), source.indexOf('  function restoreAgentFocus('))
+  for (const bottomVisible of [false, true]) for (const hasAgent of [false, true]) for (const selected of ['closed-panel', 'agent']) {
+    const panels = [
+      { dataset: { appId: 'shell', dockVisible: String(bottomVisible) } },
+      ...(hasAgent ? [{ dataset: { appId: 'agent', dockVisible: 'true' } }] : []),
+      { dataset: { appId: 'hidden-tool', dockVisible: 'false' } },
+    ]
+    const window = { __libroSelectedApp: selected }
+    const focused = []
+    vm.runInNewContext(handler + ';restorePanelFocus()', {
+      window, activeGrid: () => ({}), refresh() {}, frames: () => panels,
+      dockState: () => ({ agent: 'agent' }),
+      select(id) { window.__libroSelectedApp = id; focused.push(id) },
+    })
+    const expected = hasAgent ? 'agent' : bottomVisible ? 'shell' : ''
+    assert.equal(window.__libroSelectedApp, expected)
+    assert.deepEqual(focused, expected ? [expected] : [])
+  }
+})

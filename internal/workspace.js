@@ -564,6 +564,16 @@
     list.forEach(p => { const entry = button(p.name, icons[p.id] || (p.type === 'url' ? 'language' : 'terminal'), () => tool(p.id)); applyToolIcon(entry, p); entry.dataset.toolId = p.id; rail.append(entry); });
     updateToolHints();
   }
+  function restorePanelFocus() {
+    const grid = activeGrid();
+    if (!grid) return;
+    refresh();
+    const visible = frames(grid).filter(frame => frame.dataset.dockVisible === 'true');
+    const frame = visible.find(frame => frame.dataset.appId === window.__libroSelectedApp) ||
+      visible.find(frame => frame.dataset.appId === dockState(grid).agent) || visible[0];
+    if (frame) select(frame.dataset.appId);
+    else window.__libroSelectedApp = '';
+  }
   function restoreAgentFocus(grid) {
     const agents = frames(grid).filter(frame => frame.dataset.dock === 'center');
     const agent = agents.find(frame => frame.dataset.appId === dockState(grid).agent) || agents[0];
@@ -1257,7 +1267,7 @@
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
   }
-  window.libroWorkspace = {saveBrowserControl, browserControlSaved, saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {saveBrowserControl, browserControlSaved, saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;
