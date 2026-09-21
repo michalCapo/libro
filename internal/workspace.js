@@ -873,7 +873,7 @@
     const overlay = !full && right.length > 0 && (center.length ? center.reduce((sum, frame) => sum + width(frame), 0) : 320) + width(right[0]) > grid.clientWidth;
     const visible = full ? [full] : [...center, ...right];
     const columns = (overlay ? center : visible).map(frame => full ? grid.clientWidth + 'px' : width(frame) + 'px');
-    if (center.length === 1 && !full) columns[0] = 'minmax(' + width(center[0]) + 'px, 1fr)';
+    if (center.length && !full) columns[center.length - 1] = 'minmax(' + width(center.at(-1)) + 'px, 1fr)';
     if (!center.length && !full) columns.unshift('minmax(0, 1fr)');
     grid.style.gridTemplateColumns = columns.join(' ') || 'minmax(0, 1fr)';
     grid.style.gridTemplateRows = bottomVisible ? 'minmax(120px, 1fr) minmax(120px, 25.2875%)' : 'minmax(0, 1fr)';
