@@ -182,7 +182,11 @@ Use the frontmatter radii by role: small keycaps and size badges, gently rounded
 
 Notes extends the quiet desktop controls inside a project tool panel. Open it to a list filtered to New, with New, Archived, and All options and an Add note action. Rows use fine bottom dividers, a wrapping title, and muted state text; their minimum height is 48px. Show a plain empty message when the filter has no notes.
 
+The issue list header includes the project name. Lists stay bound to their project and refresh when switching projects.
+
 Selecting a row opens an editable detail with a large title beside a status circle. The circle archives or reopens the issue. Description and Actions use labeled section headings; Send to agent belongs in Actions. The Markdown editor keeps pasted images inline with the text.
+
+A destination project select and Move issue button sit below the existing Actions buttons. Moving requires a saved issue with no unsaved changes and a selected destination. The row wraps at narrow widths and reuses the existing select and button styles.
 
 Save note keeps the editor open and shows Saved. Cancel discards draft changes and returns to the list. Send to agent sends the saved note to the active agent in the same project; it is disabled until the note is saved and has no unsaved changes. Keep loading, unsaved, saving, sending, success, and error messages in the status area. Controls reuse raised fills, neutral borders, and blue keyboard-focus outlines. Notes opens with Ctrl+O by default; the shortcut is configurable in Settings.
 

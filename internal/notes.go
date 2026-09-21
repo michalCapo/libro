@@ -101,7 +101,23 @@ func saveNote(project string, note projectNote) (projectNote, error) {
 	return note, err
 }
 
+func moveNote(project, target, id string) error {
+	if target == "" || target == project {
+		return fmt.Errorf("choose another project")
+	}
+	result, err := db.Exec(`UPDATE notes SET project = ?, updated = ? WHERE id = ? AND project = ?`, target, time.Now().UTC().Format(time.RFC3339Nano), id, project)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err == nil && count != 1 {
+		err = fmt.Errorf("issue not found in this project")
+	}
+	return err
+}
+
 type noteRequest struct {
+	Target  string      `json:"target"`
 	SID     string      `json:"sid"`
 	ID      string      `json:"id"`
 	Project string      `json:"project"`
@@ -136,8 +152,16 @@ func registerNotesActions(app *r.App) {
 func handleNoteRequest(data noteRequest) map[string]any {
 	result := map[string]any{"id": data.ID, "request": data.Request}
 	allowed := false
+	projects := []string{}
+	targetAllowed := false
 	sm.mu.Lock()
 	if state := sm.states[data.SID]; state != nil && data.Project == state.ActiveProject {
+		for _, project := range state.Projects {
+			if project.Name != data.Project {
+				projects = append(projects, project.Name)
+				targetAllowed = targetAllowed || project.Name == data.Target
+			}
+		}
 		for _, panel := range state.Apps {
 			if panel.ID == data.ID && panel.PluginID == "notes" {
 				allowed = true
@@ -171,10 +195,18 @@ func handleNoteRequest(data noteRequest) map[string]any {
 					}
 				}
 			}
+		case "move":
+			if !targetAllowed {
+				err = fmt.Errorf("choose an existing project")
+			} else {
+				err = moveNote(data.Project, data.Target, data.NoteID)
+				result["noteID"] = data.NoteID
+			}
 		case "save":
 			result["note"], err = saveNote(data.Project, data.Note)
 		case "list":
 			result["notes"], err = loadNotes(data.Project)
+			result["projects"] = projects
 		default:
 			err = fmt.Errorf("unknown notes action")
 		}

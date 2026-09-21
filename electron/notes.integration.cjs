@@ -5,7 +5,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
-  const win = new BrowserWindow({width:640,height:900,show:false});
+  const win = new BrowserWindow({width:640,height:900,show:true});
   win.webContents.on('console-message', event => console.log(event.message));
   try {
     const css = fs.readFileSync(path.join(__dirname, '../internal/workspace.css'), 'utf8');
@@ -18,15 +18,16 @@ app.whenReady().then(async () => {
       window.fetch = async (url, options) => {
         const data = JSON.parse(options.body), action = 'notes.' + data.action;
         const result = {id:data.id,request:data.request};
-        if(action === 'notes.list') result.notes = structuredClone(savedNotes);
+        if(action === 'notes.list') { result.notes = structuredClone(savedNotes.filter(note => note.project === data.project)); result.projects = ['test', 'other'].filter(project => project !== data.project); }
         if(action === 'notes.save') {
-          result.note = {...structuredClone(data.note), id:data.note.id || String(savedNotes.length+1)};
+          result.note = {...structuredClone(data.note), id:data.note.id || String(savedNotes.length+1), project:data.project};
           savedNotes = [result.note,...savedNotes.filter(note=>note.id !== result.note.id)];
         }
+        if(action === 'notes.move') { savedNotes.find(note => note.id === data.noteID && note.project === data.project).project = data.target; result.noteID = data.noteID; }
         if(action === 'notes.send') result.prompt = savedNotes.find(note=>note.id === data.noteID).body;
         return {ok:true, json:async () => result};
       };
-      window.clickText = text => Array.from(document.querySelectorAll('button')).find(button=>button.textContent===text).click();
+      window.clickText = text => Array.from(document.querySelectorAll('button')).find(button=>button.firstChild?.textContent.trim()===text).click();
       window.input = (selector,value) => { const el=document.querySelector(selector); el.value=value; el.dispatchEvent(new Event('input')); };
       void 0;
     `);
@@ -121,6 +122,38 @@ app.whenReady().then(async () => {
     for (const character of '**bold**') win.webContents.sendInputEvent({type:'char',keyCode:character});
     await new Promise(resolve => setTimeout(resolve, 50));
     assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-note-body strong')?.textContent`), 'bold', 'typed Markdown bold shortcut');
+    await win.webContents.executeJavaScript(`
+      clickText('Cancel'); clickText('Archived'); document.querySelector('.ws-note-row').click();
+      window.issueToMove = savedNotes[0].id;
+      const picker = document.querySelector('[aria-label="Move issue to project"]');
+      picker.value = 'other'; picker.dispatchEvent(new Event('change'));
+      input('.ws-note-title', 'Unsaved title');
+      if (!Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Move issue').disabled) throw new Error('Move must require saved changes');
+      input('.ws-note-title', savedNotes[0].title);
+      clickText('Move issue');
+    `);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-row').length`), 0, 'moved issue disappears from source');
+    await win.webContents.executeJavaScript(`
+      const grid = document.querySelector('[data-workspace-project]');
+      grid.dataset.workspaceProject = 'other'; window.__libroActiveProject = 'other'; libroNotes.init();
+    `);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await win.webContents.executeJavaScript(`clickText('Archived')`);
+    assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-note-row').dataset.noteId === issueToMove`), true, 'same panel rebinds to destination project');
+    await win.webContents.executeJavaScript(`document.querySelector('.ws-note-row').click()`);
+    for (const width of [1209,640,320]) {
+      win.setSize(width,900);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-notes').scrollWidth <= document.querySelector('.ws-notes').clientWidth`), true, 'move controls fit at '+width);
+      fs.writeFileSync(path.join(__dirname, '../.impeccable/review/issues-move-'+width+'.png'), (await win.webContents.capturePage()).toPNG());
+    }
+    await win.webContents.executeJavaScript(`
+      clickText('Cancel'); window.__libroActiveProject = 'test'; libroNotes.init();
+      savedNotes = []; window.__libroActiveProject = 'other'; libroNotes.init();
+    `);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-row').length`), 0, 'returning to project refreshes cached list');
     console.log('Notes editor integration passed');
   } finally { win.destroy(); app.quit(); }
 }).catch(error => { console.error(error); app.exit(1); });

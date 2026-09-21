@@ -1,6 +1,7 @@
 (function () {
   const states = new Map();
   let sequence = 0;
+  let activeProject;
   const element = (tag, cls, text) => {
     const el = document.createElement(tag); el.className = cls || '';
     if (text !== undefined) el.textContent = text;
@@ -27,6 +28,8 @@
     s.save.disabled = s.busy || s.reading > 0 || !s.draft.title.trim() || !dirty(s);
     s.send.disabled = s.busy || s.reading > 0 || !s.draft.id || dirty(s);
     s.cancel.disabled = s.busy;
+    s.move.disabled = s.busy || s.reading > 0 || !s.draft.id || dirty(s) || !s.target.value;
+    s.target.disabled = s.busy;
   }
   function changed(s) { updateActions(s); status(s, dirty(s) ? 'Unsaved changes' : ''); }
   function relativeTime(value) {
@@ -82,7 +85,24 @@
       request(s, 'send', {noteID:s.draft.id});
     });
     actions.append(s.save, s.send, s.cancel);
-    actionsContent.append(element('h2', 'ws-note-section-title', 'Actions'), actions, s.status);
+    const moveActions = element('div', 'ws-note-actions');
+    s.target = element('select');
+    s.target.setAttribute('aria-label', 'Move issue to project');
+    const placeholder = element('option', '', 'Choose project…'); placeholder.value = '';
+    s.target.append(placeholder);
+    for (const project of s.projects) {
+      const option = element('option', '', project); option.value = project; s.target.append(option);
+    }
+    s.target.onchange = () => updateActions(s);
+    s.move = button('Move issue', () => {
+      if (s.move.disabled) return;
+      s.busy = true; updateActions(s); status(s, 'Moving…');
+      request(s, 'move', {noteID:s.draft.id, target:s.target.value});
+      s.editor.setEditable(false);
+      form.querySelectorAll('input,textarea,select,button').forEach(el => { el.disabled = true; });
+    });
+    moveActions.append(s.target, s.move);
+    actionsContent.append(element('h2', 'ws-note-section-title', 'Actions'), actions, moveActions, s.status);
     form.append(header, description, actionsSection);
     s.el.append(form);
     title.oninput = () => { s.draft.title = title.value; changed(s); };
@@ -109,7 +129,7 @@
     const heading = element('div', 'ws-notes-heading');
     const open = s.notes.filter(note => note.state === 'new').length;
     const archived = s.notes.length - open;
-    heading.append(element('span', 'ws-notes-title', 'Issues'));
+    heading.append(element('span', 'ws-notes-title', 'Issues · ' + s.project));
     const toolbar = element('div', 'ws-notes-toolbar');
     const tabs = element('div', 'ws-notes-tabs');
     for (const [value, label, count] of [['new', 'Open', open], ['archived', 'Archived', archived], ['all', 'All', s.notes.length]]) {
@@ -150,11 +170,18 @@
     }
   }
   function init() {
-    for (const [id, s] of states) if (!s.el.isConnected) { s.editor?.destroy(); states.delete(id); }
+    const switched = activeProject !== window.__libroActiveProject;
+    activeProject = window.__libroActiveProject;
+    for (const [id, s] of states) if (!s.el.isConnected || s.el.closest('[data-workspace-project]')?.dataset.workspaceProject !== s.project) { s.editor?.destroy(); states.delete(id); }
     document.querySelectorAll('[data-notes]').forEach(el => {
       const project = el.closest('[data-workspace-project]')?.dataset.workspaceProject;
-      if (project !== window.__libroActiveProject || states.has(el.dataset.notes)) return;
-      const s = {el, id:el.dataset.notes, project, notes:[], requests:new Map(), filter:'new', search:'', busy:false, reading:0};
+      if (project !== activeProject) return;
+      const existing = states.get(el.dataset.notes);
+      if (existing) {
+        if (switched) request(existing, 'list');
+        return;
+      }
+      const s = {el, id:el.dataset.notes, project, notes:[], projects:[], requests:new Map(), filter:'new', search:'', busy:false, reading:0};
       states.set(s.id, s);
       s.status = element('div', 'ws-notes-status'); s.status.setAttribute('role', 'status');
       s.el.replaceChildren(s.status); status(s, 'Loading issues…'); request(s, 'list');
@@ -165,8 +192,8 @@
     if (!s || !s.el.isConnected) return;
     const action = s.requests.get(result.request); s.requests.delete(result.request);
     if (!action) return;
-    s.busy = false;
-    if (s.draft) {
+    if (action !== 'list') s.busy = false;
+    if (s.draft && action !== 'list') {
       s.editor.setEditable(true);
       s.el.querySelectorAll('input,textarea,select,button').forEach(el => { el.disabled = false; });
       updateActions(s);
@@ -176,10 +203,18 @@
       if (action === 'list') s.el.replaceChildren(s.status, button('Retry', () => { s.el.replaceChildren(s.status); status(s, 'Loading issues…'); request(s, 'list'); }));
       return;
     }
-    if (action === 'list') { s.notes = result.notes; if (!s.draft) renderList(s); }
+    if (action === 'list') { s.notes = result.notes; s.projects = result.projects || []; if (!s.draft) renderList(s); }
     if (action === 'save') {
       s.notes = [result.note, ...s.notes.filter(note => note.id !== result.note.id)];
       edit(s, result.note); status(s, 'Saved');
+    }
+    if (action === 'move') {
+      s.notes = s.notes.filter(note => note.id !== result.noteID);
+      s.draft = null; renderList(s); status(s, 'Issue moved');
+      s.el.querySelector('.ws-notes-toolbar button')?.focus();
+      for (const other of states.values()) {
+        if (other !== s && other.project === activeProject) request(other, 'list');
+      }
     }
     if (action === 'send') {
       const active = s.project === window.__libroActiveProject;

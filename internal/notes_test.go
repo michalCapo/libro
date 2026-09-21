@@ -162,3 +162,68 @@ func TestNotesHTTPLargeImage(t *testing.T) {
 		t.Fatal("allowed a cross-origin request")
 	}
 }
+
+func TestMoveIssueBetweenProjects(t *testing.T) {
+	originalDB, originalSM := db, sm
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "notes.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sm = NewStateManager()
+	t.Cleanup(func() { _ = db.Close(); db, sm = originalDB, originalSM })
+	createTables()
+	sm.states["session"] = &AppState{ActiveProject: "one", Projects: []Project{{Name: "one"}, {Name: "two"}}, Apps: []Application{{ID: "notes", PluginID: "notes"}}}
+	png, err := os.ReadFile("../winres/icon16.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	note, err := saveNote("one", projectNote{Title: "Move me", Body: "Keep **Markdown**", State: "archived", Images: []noteImage{{ID: "image", Data: "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := noteRequest{SID: "session", ID: "notes", Project: "one", Action: "move", NoteID: note.ID}
+	for _, target := range []string{"", "one", "missing"} {
+		req.Target = target
+		if handleNoteRequest(req)["error"] == nil {
+			t.Fatalf("accepted target %q", target)
+		}
+	}
+	req.Target = "two"
+	req.NoteID = "missing"
+	if handleNoteRequest(req)["error"] == nil {
+		t.Fatal("moved nonexistent issue")
+	}
+	req.NoteID = note.ID
+	if result := handleNoteRequest(req); result["error"] != nil {
+		t.Fatalf("move failed: %v", result)
+	}
+	if notes, err := loadNotes("one"); err != nil || len(notes) != 0 {
+		t.Fatalf("source still contains issue: %v %v", notes, err)
+	}
+	notes, err := loadNotes("two")
+	if err != nil || len(notes) != 1 {
+		t.Fatalf("destination: %v %v", notes, err)
+	}
+	moved := notes[0]
+	if moved.ID != note.ID || moved.Title != note.Title || moved.Body != note.Body || moved.State != note.State || len(moved.Images) != 1 || moved.Images[0] != note.Images[0] {
+		t.Fatal("move changed issue content")
+	}
+	if _, err := saveNote("one", note); err == nil {
+		t.Fatal("stale source editor can update moved issue")
+	}
+	if handleNoteRequest(req)["error"] == nil {
+		t.Fatal("moved issue from wrong source")
+	}
+	req.Action = "list"
+	result := handleNoteRequest(req)
+	if result["error"] != nil || len(result["notes"].([]projectNote)) != 0 || len(result["projects"].([]string)) != 1 {
+		t.Fatalf("source list: %v", result)
+	}
+	sm.states["session"].ActiveProject = "two"
+	req.Project = "two"
+	result = handleNoteRequest(req)
+	if result["error"] != nil || len(result["notes"].([]projectNote)) != 1 {
+		t.Fatalf("destination list: %v", result)
+	}
+}

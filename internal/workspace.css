@@ -533,4 +533,6 @@ html.dark .ws-project-agent[data-agent-status=done],html.dark .ws-project-agent[
 .ws-note-body th{background:var(--ws-chrome);font-weight:600}
 .ws-note-image-missing{color:var(--ws-muted)}
 .ws-note-hint{margin:0;line-height:1.5}
+.ws-note-actions + .ws-note-actions{margin-top:12px}
+.ws-note-actions select{min-width:0;max-width:100%}
 .ws-note-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
