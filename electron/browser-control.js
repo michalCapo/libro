@@ -147,6 +147,11 @@ function createController(getWindow, fromId, options = {}) {
       const execute = async () => {
         const win = getWindow()
         if (!win || win.isDestroyed()) throw new Error('Desktop window is not available')
+        if (command.action === 'issues') {
+          const args = command.command
+          if (!args || !['list', 'read', 'create', 'set_status', 'delete'].includes(args.action) || typeof args.project !== 'string' || !args.project) throw new Error('Invalid issues command')
+          return win.webContents.executeJavaScript(`window.libroNotes.control(${JSON.stringify(args)})`)
+        }
         if (command.action === 'application') {
           if (!['status', 'start', 'restart', 'stop'].includes(command.operation) || typeof command.project !== 'string' || !command.project) throw new Error('Invalid application command')
           return win.webContents.executeJavaScript(`window.libroWorkspace.applicationControl(${JSON.stringify({operation:command.operation, project:command.project})})`)

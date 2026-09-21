@@ -222,5 +222,20 @@
       status(s, sent ? 'Sent to agent' : 'Start or select an agent in this project, then try again.');
     }
   }
-  window.libroNotes = {init, receive};
+  async function control(command) {
+    const response = await fetch('/issues/agent', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sid:window.__libroWorkspaceSID, command})
+    });
+    if (!response.ok) throw new Error('Issue request failed: HTTP ' + response.status);
+    const reply = await response.json();
+    if (reply.error) throw new Error(reply.error);
+    if (['create', 'set_status', 'delete'].includes(command.action)) {
+      for (const s of states.values()) {
+        if (s.el.isConnected && s.project === window.__libroActiveProject) request(s, 'list');
+      }
+    }
+    return reply.result;
+  }
+  window.libroNotes = {init, receive, control};
 })();

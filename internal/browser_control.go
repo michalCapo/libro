@@ -145,7 +145,7 @@ func RunBrowserMCP(in io.Reader, out io.Writer) error {
 		reply := map[string]any{"jsonrpc": "2.0", "id": request.ID}
 		switch request.Method {
 		case "initialize":
-			reply["result"] = map[string]any{"protocolVersion": "2024-11-05", "capabilities": map[string]any{"tools": map[string]any{}}, "serverInfo": map[string]any{"name": "libro-browser", "version": "1.0.0"}, "instructions": browserHelp + "\n" + applicationHelp}
+			reply["result"] = map[string]any{"protocolVersion": "2024-11-05", "capabilities": map[string]any{"tools": map[string]any{}}, "serverInfo": map[string]any{"name": "libro-browser", "version": "1.0.0"}, "instructions": browserHelp + "\n" + applicationHelp + "\n" + issuesHelp}
 		case "ping":
 			reply["result"] = map[string]any{}
 		case "tools/list":
@@ -165,11 +165,13 @@ func RunBrowserMCP(in io.Reader, out io.Writer) error {
 			}
 			properties["button"] = map[string]any{"type": "string", "enum": []string{"left", "middle", "right"}}
 			properties["modifiers"] = map[string]any{"type": "array", "items": map[string]any{"type": "string", "enum": []string{"shift", "control", "alt", "meta"}}}
-			reply["result"] = map[string]any{"tools": []any{map[string]any{"name": "browser", "description": browserHelp, "inputSchema": map[string]any{"type": "object", "properties": properties, "required": []string{"action"}, "additionalProperties": false}}, map[string]any{"name": "application", "description": applicationHelp, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "start", "restart", "stop"}}, "project": map[string]any{"type": "string", "description": "Absolute project path; defaults to the agent working directory"}}, "required": []string{"action"}, "additionalProperties": false}}}}
+			reply["result"] = map[string]any{"tools": []any{map[string]any{"name": "browser", "description": browserHelp, "inputSchema": map[string]any{"type": "object", "properties": properties, "required": []string{"action"}, "additionalProperties": false}}, map[string]any{"name": "application", "description": applicationHelp, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "start", "restart", "stop"}}, "project": map[string]any{"type": "string", "description": "Absolute project path; defaults to the agent working directory"}}, "required": []string{"action"}, "additionalProperties": false}}, issuesTool()}}
 		case "tools/call":
 			var result json.RawMessage
 			var err error
-			if request.Params.Name == "application" {
+			if request.Params.Name == "issues" {
+				result, err = IssuesCommand(request.Params.Arguments)
+			} else if request.Params.Name == "application" {
 				result, err = ApplicationCommand(request.Params.Arguments)
 			} else if request.Params.Name != "browser" {
 				err = errors.New("unknown tool")

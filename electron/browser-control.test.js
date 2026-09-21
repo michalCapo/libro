@@ -130,3 +130,30 @@ test('application control uses the workspace without a browser panel and respect
   control.setEnabled(false)
   await assert.rejects(control({action:'application',operation:'stop',project:'/project'}),/disabled/)
 })
+
+test('issues tool reaches the issue endpoint without a panel and propagates results and errors', async () => {
+  const vm = require('node:vm')
+  const requests = []
+  let reply = {result:{id:'issue-id',title:'Fix login',state:'new'}}
+  const context = vm.createContext({
+    window:{__libroWorkspaceSID:'session'},
+    fetch:async (url, options) => {
+      requests.push({url,...JSON.parse(options.body)})
+      return {ok:true,json:async()=>reply}
+    }
+  })
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../internal/notes.js'),'utf8'),context)
+  const win = {isDestroyed:()=>false,webContents:{executeJavaScript:script=>vm.runInContext(script,context)}}
+  const control = createController(()=>win,()=>{throw new Error('unexpected panel lookup')})
+  const command = {action:'create',project:'/project',title:'Fix login',body:'Markdown **steps**'}
+  assert.deepEqual(await control({action:'issues',command}),reply.result)
+  assert.deepEqual(requests[0],{url:'/issues/agent',sid:'session',command})
+  reply = {error:'issue not found in this project'}
+  await assert.rejects(control({action:'issues',command:{action:'delete',project:'/project',id:'other'}}),/not found/)
+  await assert.rejects(control({action:'issues',command:{action:'unknown',project:'/project'}}),/Invalid issues command/)
+  control.setPaused(true)
+  await assert.rejects(control({action:'issues',command}),/paused/)
+  control.setEnabled(false)
+  await assert.rejects(control({action:'issues',command}),/disabled/)
+  assert.equal(requests.length,2)
+})

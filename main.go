@@ -48,6 +48,8 @@ func main() {
 	var err error
 	if len(args) > 0 {
 		switch args[0] {
+		case "issues":
+			err = libro.RunIssuesCLI(args[1:], os.Stdout)
 		case "application":
 			err = libro.RunApplicationCLI(args[1:], os.Stdout)
 		case "browser":

@@ -32,12 +32,16 @@ func TestBrowserMCPDiscovery(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[2]), &discovery); err != nil {
 		t.Fatal(err)
 	}
-	if len(discovery.Result.Tools) != 2 {
+	if len(discovery.Result.Tools) != 3 {
 		t.Fatal("browser tool missing")
 	}
 	application := discovery.Result.Tools[1]
 	if application.Name != "application" || application.InputSchema.Properties["project"] == nil || !strings.Contains(application.Description, "project settings") {
 		t.Fatal("application tool must explain the configured project command")
+	}
+	issues := discovery.Result.Tools[2]
+	if issues.Name != "issues" || issues.InputSchema.Properties["status"] == nil || issues.InputSchema.Properties["id"] == nil {
+		t.Fatal("issues tool missing status or id")
 	}
 	tool := discovery.Result.Tools[0]
 	if tool.Name != "browser" || !strings.Contains(tool.Description, "existing Libro browser panel") || tool.InputSchema.Properties["panel"] == nil {

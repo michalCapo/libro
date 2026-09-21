@@ -130,6 +130,7 @@ type noteRequest struct {
 
 // HTTP allows clipboard images larger than the UI websocket's 1 MB limit.
 func registerNotesActions(app *r.App) {
+	registerIssueControl(app)
 	app.POST("/notes/action", func(w http.ResponseWriter, req *http.Request) {
 		if origin := req.Header.Get("Origin"); origin != "" {
 			parsed, err := url.Parse(origin)

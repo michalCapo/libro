@@ -282,3 +282,34 @@ that project active. `start` preserves a running or starting application;
 `status` reports whether the process is running; it does not test server readiness.
 Only the saved command can be run. This uses the desktop browser bridge and
 respects its enable and pause controls.
+
+### Agent issue management
+
+The `issues` tool on the existing `libro_browser` MCP server supports:
+
+- `list`: issue summaries, with optional `status`, `limit` (default 100, max 200), and `offset`.
+- `read`: the full issue, including Markdown body and saved images, by `id`.
+- `create`: requires `title`; accepts `body` and `status`.
+- `set_status`: requires `id` and `status`; preserves the description and images.
+- `delete`: permanently removes the issue by `id`.
+
+Statuses are `new` (Open) and `archived`. Create defaults to `new`.
+Use full issue IDs from `list` or `create`. Read/create results use `state`
+for the saved status, matching Libro's issue storage.
+
+The project defaults to the agent's working directory, or accepts an explicit
+`project` path. That project must be active in Libro. No Issues or browser
+panel needs to be open. This uses the same desktop bridge and enable/pause
+controls as application control. Restart existing agent sessions to discover
+the new tool. Open issue lists refresh after agent changes; unsaved editor
+text is preserved.
+
+CLI fallback:
+
+```sh
+libro issues '{"action":"list"}'
+libro issues '{"action":"create","title":"Fix login","body":"Steps to reproduce"}'
+libro issues '{"action":"read","id":"ISSUE_ID"}'
+libro issues '{"action":"set_status","id":"ISSUE_ID","status":"archived"}'
+libro issues '{"action":"delete","id":"ISSUE_ID"}'
+```
