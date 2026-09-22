@@ -171,6 +171,15 @@ func TestFilesWordWrapEnabledByDefault(t *testing.T) {
 	}
 }
 
+func TestFilesImageZoomControls(t *testing.T) {
+	js := renderFiles(Application{ID: "files"}).ToJS()
+	for _, want := range []string{"data-image-zoom", "Zoom out", "Reset zoom", "Zoom in"} {
+		if !strings.Contains(js, want) {
+			t.Fatalf("image preview is missing %q", want)
+		}
+	}
+}
+
 func TestFileDocumentPreviews(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range []string{"page.html", "page.HTM", "readme.md", "readme.MARKDOWN", "plain.txt"} {

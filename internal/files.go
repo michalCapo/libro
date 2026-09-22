@@ -238,6 +238,10 @@ func renderFiles(app Application) *r.Node {
 	return r.Div("ws-files").Attr("data-files", app.ID).Render(
 		r.Div("ws-file-preview").Render(
 			r.Div("ws-file-toolbar").Render(r.Div("ws-file-path").Text("Open file"),
+				r.Div("ws-file-image-tools").Attr("hidden", "hidden").Attr("role", "group").Attr("aria-label", "Image zoom").Render(
+					r.Button("ws-file-image-zoom").Attr("type", "button").Attr("data-image-zoom", "out").Attr("aria-label", "Zoom out").Text("−"),
+					r.Button("ws-file-image-zoom ws-file-image-reset").Attr("type", "button").Attr("data-image-zoom", "reset").Attr("aria-label", "Reset zoom").Text("100%"),
+					r.Button("ws-file-image-zoom").Attr("type", "button").Attr("data-image-zoom", "in").Attr("aria-label", "Zoom in").Text("+")),
 				r.El("label", "ws-file-render").Attr("title", "Preview HTML and Markdown").Render(r.Input("").Attr("type", "checkbox"), r.Span("").Text("Preview")),
 				r.El("label", "ws-file-wrap").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Word wrap"))),
 			r.El("pre", "ws-file-text is-wrapped").Attr("tabindex", "0").Text("Select a file from the project tree."),

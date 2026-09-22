@@ -56,6 +56,94 @@
       text.classList.add('has-syntax');
     }).catch(() => {});
   }
+  function clearImageView(s) {
+    if (s.imageResizeObserver) s.imageResizeObserver.disconnect();
+    s.imageResizeObserver = null;
+    s.imageView = null;
+    const tools = s.el.querySelector('.ws-file-image-tools');
+    tools.hidden = true;
+  }
+  function renderImageView(s, anchor) {
+    const view = s.imageView;
+    if (!view || !view.image.naturalWidth) return;
+    const media = view.media, width = media.clientWidth, height = media.clientHeight;
+    if (!width || !height) return;
+    const old = {left:view.left || 0, top:view.top || 0, width:view.width || 0, height:view.height || 0};
+    const base = Math.min(1, width / view.image.naturalWidth, height / view.image.naturalHeight);
+    view.width = view.image.naturalWidth * base * view.zoom;
+    view.height = view.image.naturalHeight * base * view.zoom;
+    view.stage.style.width = Math.max(width, view.width) + 'px';
+    view.stage.style.height = Math.max(height, view.height) + 'px';
+    view.image.style.width = view.width + 'px';
+    view.image.style.height = view.height + 'px';
+    view.left = Math.max(0, (width - view.width) / 2);
+    view.top = Math.max(0, (height - view.height) / 2);
+    view.image.style.left = view.left + 'px';
+    view.image.style.top = view.top + 'px';
+    if (anchor && old.width && old.height) {
+      media.scrollLeft = view.left + anchor.imageX * view.width - anchor.x;
+      media.scrollTop = view.top + anchor.imageY * view.height - anchor.y;
+    }
+    s.el.querySelector('.ws-file-image-reset').textContent = Math.round(view.zoom * 100) + '%';
+  }
+  function zoomImage(s, zoom, x, y) {
+    const view = s.imageView;
+    if (!view || !view.width || !view.height) return;
+    const media = view.media;
+    x = x == null ? media.clientWidth / 2 : x;
+    y = y == null ? media.clientHeight / 2 : y;
+    const anchor = {
+      x, y,
+      imageX:Math.max(0, Math.min(1, (media.scrollLeft + x - view.left) / view.width)),
+      imageY:Math.max(0, Math.min(1, (media.scrollTop + y - view.top) / view.height))
+    };
+    view.zoom = Math.max(0.25, Math.min(8, zoom));
+    renderImageView(s, anchor);
+  }
+  function showImage(s, media, image) {
+    const stage = document.createElement('div');
+    stage.className = 'ws-file-image-stage';
+    stage.append(image);
+    media.append(stage);
+    media.tabIndex = 0;
+    media.setAttribute('aria-label', 'Image preview. Use the mouse wheel or plus and minus to zoom. Drag or use arrow keys to move.');
+    s.imageView = {media,stage,image,zoom:1,left:0,top:0,width:0,height:0};
+    s.el.querySelector('.ws-file-image-tools').hidden = false;
+    image.onload = () => renderImageView(s);
+    media.onwheel = event => {
+      event.preventDefault();
+      const rect = media.getBoundingClientRect();
+      zoomImage(s, s.imageView.zoom * Math.exp(-event.deltaY * 0.0015), event.clientX - rect.left, event.clientY - rect.top);
+    };
+    media.onkeydown = event => {
+      if (event.key === '+' || event.key === '=') zoomImage(s, s.imageView.zoom * 1.2);
+      else if (event.key === '-') zoomImage(s, s.imageView.zoom / 1.2);
+      else if (event.key === '0') zoomImage(s, 1);
+      else if (event.key === 'ArrowLeft') media.scrollLeft -= 48;
+      else if (event.key === 'ArrowRight') media.scrollLeft += 48;
+      else if (event.key === 'ArrowUp') media.scrollTop -= 48;
+      else if (event.key === 'ArrowDown') media.scrollTop += 48;
+      else return;
+      event.preventDefault();
+    };
+    media.onpointerdown = event => {
+      if (event.button !== 0) return;
+      const left = media.scrollLeft, top = media.scrollTop, x = event.clientX, y = event.clientY;
+      media.focus();
+      media.setPointerCapture(event.pointerId);
+      media.classList.add('is-dragging');
+      const move = next => { media.scrollLeft = left - (next.clientX - x); media.scrollTop = top - (next.clientY - y); };
+      const stop = () => { media.classList.remove('is-dragging'); media.removeEventListener('pointermove',move); media.removeEventListener('pointerup',stop); media.removeEventListener('pointercancel',stop); };
+      media.addEventListener('pointermove',move);
+      media.addEventListener('pointerup',stop);
+      media.addEventListener('pointercancel',stop);
+      event.preventDefault();
+    };
+    if (window.ResizeObserver) {
+      s.imageResizeObserver = new ResizeObserver(() => renderImageView(s));
+      s.imageResizeObserver.observe(media);
+    }
+  }
   function request(s, path, preview = false, external = false, parents = s.parents) {
     const token = String(++s.sequence);
     s.pending.set(token, {path, preview, external, parents});
@@ -121,6 +209,12 @@
       s.wrap.onchange = () => el.querySelector('.ws-file-text').classList.toggle('is-wrapped', s.wrap.checked);
       s.hidden.onchange = () => { s.index = 0; render(s); };
       s.filter.oninput = () => { s.index = 0; render(s); };
+      el.querySelector('.ws-file-image-tools').onclick = event => {
+        const action = event.target.closest('[data-image-zoom]')?.dataset.imageZoom;
+        if (!action || !s.imageView) return;
+        zoomImage(s, action === 'reset' ? 1 : s.imageView.zoom * (action === 'in' ? 1.2 : 1 / 1.2));
+        s.imageView.media.focus();
+      };
       s.filter.onkeydown = event => { if (event.key === 'Escape' || event.key === 'ArrowDown' || event.key === 'Enter') { event.preventDefault(); s.tree.focus(); if (event.key === 'Enter') open(s); } };
       s.tree.onkeydown = event => {
         if (event.ctrlKey || event.altKey || event.metaKey) return;
@@ -155,6 +249,11 @@
     const result = s.file;
     s.el.querySelector('.ws-file-path').textContent = result.path;
     const text = s.el.querySelector('.ws-file-text'), media = s.el.querySelector('.ws-file-media');
+    clearImageView(s);
+    media.onwheel = media.onkeydown = media.onpointerdown = null;
+    media.removeAttribute('tabindex');
+    media.removeAttribute('aria-label');
+    media.classList.remove('is-image','is-dragging');
     media.replaceChildren();
     if (s.url) { URL.revokeObjectURL(s.url); s.url = null; }
     text.hidden = !!result.mime;
@@ -182,8 +281,9 @@
     else if (kind === 'audio' || kind === 'video') { element.controls = true; element.preload = 'metadata'; }
     else element.title = 'Preview of ' + result.path;
     element.onerror = () => { s.status.textContent = 'This browser cannot preview this file. Press o in the file tree to open externally.'; };
+    if (kind === 'image') { media.classList.add('is-image'); showImage(s,media,element); }
+    else media.append(element);
     element.src = s.url;
-    media.append(element);
   }
   function receive(result) {
     const s = states.get(result.id); if (!s?.el.isConnected) return;
@@ -207,6 +307,7 @@
       s.el.querySelector('.ws-file-text').hidden = false;
       s.el.querySelector('.ws-file-media').replaceChildren();
       s.el.querySelector('.ws-file-media').hidden = true;
+      clearImageView(s);
       s.wrap.disabled = false;
       if (s.url) { URL.revokeObjectURL(s.url); s.url = null; }
     }
