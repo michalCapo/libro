@@ -93,17 +93,6 @@ func TestNewThreadAgentSizing(t *testing.T) {
 	if state.Apps[1].Width != WidthFull || state.Apps[0].Width != WidthLG {
 		t.Fatal("first agent should be MAX without resizing tools")
 	}
-	add("second")
-	resized := manager.SizeNewAgent("test", "second", WidthSM)
-	if len(resized) != 1 || resized[0].ID != "first" || state.Apps[1].Width != WidthSM || state.Apps[2].Width != WidthSM {
-		t.Fatal("second agent should restore the first to the configured default")
-	}
-	manager.SetAppWidthByID("test", "first", WidthXL)
-	add("third")
-	manager.SizeNewAgent("test", "third", WidthSM)
-	if state.Apps[1].Width != WidthXL || state.Apps[3].Width != WidthSM {
-		t.Fatal("later agents should preserve existing sizes")
-	}
 	manager.SizeNewAgent("test", "tool", WidthSM)
 	if state.Apps[0].Width != WidthLG {
 		t.Fatal("tool width changed")
@@ -130,5 +119,50 @@ func TestNewProjectAgentKeepsConfiguredWidth(t *testing.T) {
 	}
 	if state.Apps[0].Width != WidthFull {
 		t.Fatal("opening a project agent changed a manually maximized panel")
+	}
+}
+
+func TestSharedProjectAppsMoveBetweenProjectThreads(t *testing.T) {
+	manager := NewStateManager()
+	state := &AppState{
+		ActiveProject: "thread:one",
+		Projects:      []Project{{Name: "project", Path: "/project"}},
+		Threads: []Thread{
+			{ID: "thread:one", Project: "project", Path: "/project"},
+			{ID: "thread:two", Project: "project", Path: "/project"},
+			{ID: "thread:other", Project: "other", Path: "/other"},
+		},
+		Apps: []Application{
+			{ID: "agent-one", PluginID: "codex", Dock: "center"},
+			{ID: "browser", PluginID: "browser", Dock: "right"},
+			{ID: "issues", PluginID: "notes", Dock: "right"},
+			{ID: "app", PluginID: "project-command", Dock: "bottom"},
+		},
+		snapshots: map[string]*projectSnapshot{
+			"thread:two":   {Apps: []Application{{ID: "agent-two", PluginID: "claude", Dock: "center"}}},
+			"thread:other": {Apps: []Application{{ID: "agent-other", PluginID: "pi", Dock: "center"}}},
+		},
+	}
+	manager.states["test"] = state
+
+	moved := manager.MoveSharedProjectApps("test", "thread:two")
+	if len(moved) != 2 || len(state.Apps) != 2 || state.Apps[0].ID != "agent-one" || state.Apps[1].ID != "browser" {
+		t.Fatalf("thread-local panels moved: moved=%+v source=%+v", moved, state.Apps)
+	}
+	if !manager.SwitchProject("test", "thread:two") || len(state.Apps) != 3 {
+		t.Fatalf("shared panels missing from target: %+v", state.Apps)
+	}
+	if state.Apps[0].ID != "agent-two" || state.Apps[1].ID != "issues" || state.Apps[2].ID != "app" {
+		t.Fatalf("unexpected target panels: %+v", state.Apps)
+	}
+	if moved := manager.MoveSharedProjectApps("test", "thread:other"); len(moved) != 0 {
+		t.Fatalf("shared panels crossed projects: %+v", moved)
+	}
+	if !manager.SwitchProject("test", "thread:other") {
+		t.Fatal("could not switch to other project")
+	}
+	moved = manager.MoveSharedProjectApps("test", "thread:one")
+	if len(moved) != 2 {
+		t.Fatalf("shared panels were stranded in an inactive thread: %+v", moved)
 	}
 }

@@ -55,6 +55,25 @@ func TestStandaloneThreadPersistenceAndIsolation(t *testing.T) {
 	}
 }
 
+func TestProjectThreadKeepsItsProjectDirectory(t *testing.T) {
+	projectPath := t.TempDir()
+	manager := NewStateManager()
+	state := &AppState{
+		ActiveProject: "thread:test",
+		Projects:      []Project{{Name: "project", Path: projectPath}},
+		Threads:       []Thread{{ID: "thread:test", Project: "project", Path: projectPath}},
+	}
+	manager.states["test"] = state
+
+	project, path := threadProjectContext(state, "thread:test")
+	if project != "project" || path != projectPath {
+		t.Fatalf("thread context = %q, %q", project, path)
+	}
+	if got := manager.GetActiveProjectPath("test"); got != projectPath {
+		t.Fatalf("thread directory = %q", got)
+	}
+}
+
 func TestThreadAllowsToolsAndOneAgent(t *testing.T) {
 	state := &AppState{}
 	agent := Application{Type: AppTypeTerminal, Command: "codex", PluginID: "codex"}
@@ -125,6 +144,40 @@ func TestCloseThreadAgentArchivesAndClosesTools(t *testing.T) {
 	}
 }
 
+func TestCloseThreadAgentKeepsSharedProjectApps(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "threads.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	if _, err := db.Exec("INSERT INTO threads (id, name, project, path) VALUES ('thread:test', 'Test', 'project', '/project')"); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewStateManager()
+	state := &AppState{
+		ActiveProject: "thread:test",
+		Threads:       []Thread{{ID: "thread:test", Project: "project", Path: "/project"}},
+		Apps: []Application{
+			{ID: "agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"},
+			{ID: "browser", PluginID: "browser", Dock: "right"},
+			{ID: "issues", PluginID: "notes", Dock: "right"},
+			{ID: "app", PluginID: "project-command", Dock: "bottom"},
+		},
+	}
+	manager.states["test"] = state
+
+	closed, err := manager.CloseThreadAgent("test", "agent")
+	if err != nil || len(closed) != 2 || len(state.Apps) != 2 {
+		t.Fatalf("close result: closed=%+v remaining=%+v err=%v", closed, state.Apps, err)
+	}
+	if state.Apps[0].ID != "issues" || state.Apps[1].ID != "app" {
+		t.Fatalf("shared apps were closed: %+v", state.Apps)
+	}
+}
+
 func TestCloseThreadAgentPreservesPanelsOnArchiveFailure(t *testing.T) {
 	original := db
 	var err error
@@ -184,5 +237,15 @@ func TestThreadSessionSurvivesRestartAndDefaultAgentChange(t *testing.T) {
 	manager.saveThreadSession(sid, "thread:test", "pi", "pi --model example", "next-session")
 	if loadThreads()[0].SessionID != "next-session" {
 		t.Fatal("in-agent session switch was not persisted")
+	}
+}
+
+func TestProjectAutolaunchSkipsExistingProjectThread(t *testing.T) {
+	state := &AppState{
+		ActiveProject: "project",
+		Threads:       []Thread{{ID: "thread:test", Project: "project"}},
+	}
+	if got := projectAutolaunchJS(state, "test"); got != "" {
+		t.Fatalf("autolaunched beside existing project thread: %s", got)
 	}
 }

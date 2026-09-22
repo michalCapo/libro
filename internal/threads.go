@@ -10,18 +10,21 @@ import (
 	r "github.com/michalCapo/g-sui/ui"
 )
 
-// Thread is a single agent session, independent of registered projects.
+// Thread is a single agent session with its own tool state. Project and Path
+// keep project-backed threads in the directory where they were created.
 type Thread struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	Archived     bool   `json:"archived"`
+	Project      string `json:"project,omitempty"`
+	Path         string `json:"-"`
 	SessionID    string `json:"-"`
 	AgentID      string `json:"-"`
 	AgentCommand string `json:"-"`
 }
 
 func loadThreads() []Thread {
-	rows, err := db.Query("SELECT id, name, archived, session_id, agent_id, agent_command FROM threads ORDER BY rowid")
+	rows, err := db.Query("SELECT id, name, archived, project, path, session_id, agent_id, agent_command FROM threads ORDER BY rowid")
 	if err != nil {
 		return nil
 	}
@@ -29,7 +32,7 @@ func loadThreads() []Thread {
 	var threads []Thread
 	for rows.Next() {
 		var thread Thread
-		if rows.Scan(&thread.ID, &thread.Name, &thread.Archived, &thread.SessionID, &thread.AgentID, &thread.AgentCommand) == nil {
+		if rows.Scan(&thread.ID, &thread.Name, &thread.Archived, &thread.Project, &thread.Path, &thread.SessionID, &thread.AgentID, &thread.AgentCommand) == nil {
 			threads = append(threads, thread)
 		}
 	}
@@ -50,10 +53,47 @@ func threadsJS(state *AppState) string {
 	return "window.__libroThreads=" + string(data) + ";"
 }
 
+func threadProjectContext(state *AppState, id string) (string, string) {
+	if state == nil || id == "" {
+		return "", ""
+	}
+	if thread := state.thread(id); thread != nil {
+		return thread.Project, thread.Path
+	}
+	for _, project := range state.Projects {
+		if project.Name == id {
+			return project.Name, project.Path
+		}
+	}
+	return "", ""
+}
+
+func (s *AppState) projectScope(id string) string {
+	project, _ := threadProjectContext(s, id)
+	if project == "" && id != "" && !strings.HasPrefix(id, "thread:") {
+		return id
+	}
+	return project
+}
+
+func isSharedProjectApp(app Application) bool {
+	return app.PluginID == "notes" || app.PluginID == "project-command"
+}
+
+func enabledAgentPlugin(id string) bool {
+	for _, plugin := range plugins() {
+		if plugin.ID == id {
+			return !plugin.Disabled && !plugin.Removed && plugin.Dock == "center" && plugin.Type == AppTypeTerminal
+		}
+	}
+	return false
+}
+
 func registerThreadActions(app *r.App, switchWorkspace func(string, string) string) {
 	registerAction(app, "thread.create", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
-		name, _ := ctx.WsData()["name"].(string)
+		data := ctx.WsData()
+		name, _ := data["name"].(string)
 		name = strings.TrimSpace(name)
 		if len(name) > 200 {
 			return r.Notify("error", "Enter a thread name (up to 200 characters)")
@@ -61,15 +101,21 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) stri
 		if name == "" {
 			name = "New thread"
 		}
+		agentID, _ := data["agent"].(string)
+		if agentID != "" && !enabledAgentPlugin(agentID) {
+			return r.Notify("error", "This agent is not available")
+		}
+		state := sm.Get(sid)
+		projectID, _ := data["project"].(string)
+		project, path := threadProjectContext(state, projectID)
 		var random [16]byte
 		if _, err := rand.Read(random[:]); err != nil {
 			return r.Notify("error", "Could not create thread")
 		}
-		thread := Thread{ID: "thread:" + hex.EncodeToString(random[:]), Name: name}
-		if _, err := db.Exec("INSERT INTO threads (id, name) VALUES (?, ?)", thread.ID, thread.Name); err != nil {
+		thread := Thread{ID: "thread:" + hex.EncodeToString(random[:]), Name: name, Project: project, Path: path, AgentID: agentID}
+		if _, err := db.Exec("INSERT INTO threads (id, name, project, path, agent_id) VALUES (?, ?, ?, ?, ?)", thread.ID, thread.Name, thread.Project, thread.Path, thread.AgentID); err != nil {
 			return r.Notify("error", "Could not save thread")
 		}
-		sm.Get(sid)
 		sm.mu.Lock()
 		sm.states[sid].Threads = append(sm.states[sid].Threads, thread)
 		sm.mu.Unlock()
@@ -156,8 +202,16 @@ func (sm *StateManager) CloseThreadAgent(sid, appID string) ([]Application, erro
 			return nil, err
 		}
 		thread.Archived = true
-		apps := state.Apps
-		state.Apps = nil
+		apps := make([]Application, 0, len(state.Apps))
+		shared := make([]Application, 0, 2)
+		for _, existing := range state.Apps {
+			if isSharedProjectApp(existing) {
+				shared = append(shared, existing)
+			} else {
+				apps = append(apps, existing)
+			}
+		}
+		state.Apps = shared
 		state.SelectedIndex = 0
 		return apps, nil
 	}

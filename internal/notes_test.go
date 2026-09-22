@@ -113,6 +113,26 @@ func TestNotesRequestAuthorizationAndMarkdown(t *testing.T) {
 	}
 }
 
+func TestProjectThreadUsesSharedIssues(t *testing.T) {
+	original := sm
+	sm = NewStateManager()
+	t.Cleanup(func() { sm = original })
+	sm.states["session"] = &AppState{
+		ActiveProject: "thread:test",
+		Projects:      []Project{{Name: "one", Path: "/one"}},
+		Threads:       []Thread{{ID: "thread:test", Project: "one", Path: "/one"}},
+		Apps:          []Application{{ID: "notes", PluginID: "notes"}},
+	}
+	req := noteRequest{SID: "session", ID: "notes", Project: "one", Action: "preview", Body: "Shared"}
+	if result := handleNoteRequest(req); result["error"] != nil {
+		t.Fatalf("project thread could not use project issues: %v", result)
+	}
+	req.Project = "thread:test"
+	if handleNoteRequest(req)["error"] == nil {
+		t.Fatal("thread id was accepted as an issue store")
+	}
+}
+
 func TestNotesHTTPLargeImage(t *testing.T) {
 	originalDB, originalSM := db, sm
 	var err error

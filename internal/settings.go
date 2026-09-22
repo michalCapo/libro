@@ -601,7 +601,7 @@ func renderWorkspaceSettings() *r.Node {
 				r.Div("ws-settings-row").Render(
 					r.Div("ws-settings-copy").Render(
 						r.El("label", "").Attr("for", "default-panel-width").Text("Agent panel width"),
-						r.P("").ID("default-panel-width-help").Text("Default width for new agent panels in every project."),
+						r.P("").ID("default-panel-width-help").Text("Default width for the agent panel in new threads."),
 					),
 					r.El("select", "ws-settings-select").ID("default-panel-width").Attr("aria-describedby", "default-panel-width-help").On("change", r.JS("libroWorkspace.saveSettings(event.target.value)")).Render(options...),
 				),
@@ -631,13 +631,13 @@ func renderWorkspaceSettings() *r.Node {
 				r.Div("ws-settings-row").Render(
 					r.Div("ws-settings-copy").Render(
 						r.El("label", "").Attr("for", "autolaunch-agent").Text("Autolaunch agent"),
-						r.P("").ID("autolaunch-agent-help").Text("Start this agent when you open a project with no agent panels. Choose Off to start manually. Apply with Save agents below."),
+						r.P("").ID("autolaunch-agent-help").Text("Create a thread with this agent when you open a project with no threads. Choose Off to start manually. Apply with Save agents below."),
 					),
 					r.El("select", "ws-settings-select").ID("autolaunch-agent").Attr("form", "agent-commands-form").Attr("aria-describedby", "autolaunch-agent-help"),
 				),
 			),
 			r.El("h2", "ws-shortcut-heading").Text("Agent commands"),
-			r.P("ws-settings-status").Text("CLI commands used to start agents in every project. Drag the handles or use the arrows to reorder agents, then save. The first three enabled agents appear on the welcome screen. Include any flags you need. Running sessions are unchanged."),
+			r.P("ws-settings-status").Text("CLI commands used to start agents in new threads. Drag the handles or use the arrows to reorder agents, then save. The first three enabled agents appear on the welcome screen. Include any flags you need. Running sessions are unchanged."),
 			renderAgentCommands(),
 			renderToolSettings(),
 			renderToolKeybindings(),

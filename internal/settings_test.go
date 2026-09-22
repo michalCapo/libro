@@ -329,7 +329,7 @@ func TestAgentAutolaunch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := projectAutolaunchJS(state, "test"); !strings.Contains(got, `"plugin":"codex"`) {
+	if got := projectAutolaunchJS(state, "test"); !strings.Contains(got, `"agent":"codex"`) || !strings.Contains(got, `"project":"project"`) {
 		t.Fatalf("missing persisted agent: %s", got)
 	}
 	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "pi", Dock: "center"}}
@@ -453,7 +453,7 @@ func TestDefaultThreadAgent(t *testing.T) {
 		t.Fatalf("thread preference not persisted: %s", got)
 	}
 	state.ActiveProject = "project"
-	if got := projectAutolaunchJS(state, "test"); !strings.Contains(got, `"plugin":"pi"`) {
+	if got := projectAutolaunchJS(state, "test"); !strings.Contains(got, `"agent":"pi"`) || !strings.Contains(got, `"project":"project"`) {
 		t.Fatalf("project preference changed: %s", got)
 	}
 	state.ActiveProject = "thread:test"

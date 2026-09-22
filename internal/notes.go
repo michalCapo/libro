@@ -156,7 +156,7 @@ func handleNoteRequest(data noteRequest) map[string]any {
 	projects := []string{}
 	targetAllowed := false
 	sm.mu.Lock()
-	if state := sm.states[data.SID]; state != nil && data.Project == state.ActiveProject {
+	if state := sm.states[data.SID]; state != nil && data.Project != "" && data.Project == state.projectScope(state.ActiveProject) {
 		for _, project := range state.Projects {
 			if project.Name != data.Project {
 				projects = append(projects, project.Name)

@@ -462,8 +462,8 @@ func applyAppWidth(app *Application, width Width) {
 	app.PreviousWidth = ""
 }
 
-// SizeNewAgent expands the first thread agent and restores its default width
-// when a second agent joins it. Project agents keep their configured widths.
+// SizeNewAgent expands a thread's single agent. Project agents keep their
+// configured width while legacy project workspaces are still open.
 func (sm *StateManager) SizeNewAgent(sessionID, appID string, defaultWidth Width) []Application {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -471,28 +471,11 @@ func (sm *StateManager) SizeNewAgent(sessionID, appID string, defaultWidth Width
 	if state == nil || state.thread(state.ActiveProject) == nil {
 		return nil
 	}
-	var agents []*Application
-	var added *Application
 	for i := range state.Apps {
 		app := &state.Apps[i]
-		if appDock(*app) == "center" {
-			agents = append(agents, app)
-			if app.ID == appID {
-				added = app
-			}
-		}
-	}
-	if added == nil {
-		return nil
-	}
-	if len(agents) == 1 {
-		applyAppWidth(added, WidthFull)
-	} else if len(agents) == 2 {
-		for _, agent := range agents {
-			if agent != added && agent.Width == WidthFull {
-				applyAppWidth(agent, defaultWidth)
-				return []Application{*agent}
-			}
+		if app.ID == appID && appDock(*app) == "center" {
+			applyAppWidth(app, WidthFull)
+			break
 		}
 	}
 	return nil
@@ -846,6 +829,71 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 	return true
 }
 
+// MoveSharedProjectApps moves project-level panels into another workspace for
+// the same project. Agent, browser, and other tool panels stay with the thread.
+func (sm *StateManager) MoveSharedProjectApps(sessionID, target string) []Application {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil || target == s.ActiveProject {
+		return nil
+	}
+	targetProject := s.projectScope(target)
+	if targetProject == "" {
+		return nil
+	}
+	if s.snapshots == nil {
+		s.snapshots = make(map[string]*projectSnapshot)
+	}
+	targetSnapshot := s.snapshots[target]
+	if targetSnapshot == nil {
+		targetSnapshot = &projectSnapshot{}
+		s.snapshots[target] = targetSnapshot
+	}
+	existing := make(map[string]bool, len(targetSnapshot.Apps))
+	for _, app := range targetSnapshot.Apps {
+		existing[app.PluginID] = true
+	}
+	var moved []Application
+	moveFrom := func(apps *[]Application, selectedIndex *int) {
+		selectedID := ""
+		if *selectedIndex >= 0 && *selectedIndex < len(*apps) {
+			selectedID = (*apps)[*selectedIndex].ID
+		}
+		kept := make([]Application, 0, len(*apps))
+		for _, app := range *apps {
+			if isSharedProjectApp(app) && !existing[app.PluginID] {
+				moved = append(moved, app)
+				targetSnapshot.Apps = append(targetSnapshot.Apps, app)
+				existing[app.PluginID] = true
+				continue
+			}
+			kept = append(kept, app)
+		}
+		*apps = kept
+		*selectedIndex = 0
+		for i, app := range kept {
+			if app.ID == selectedID {
+				*selectedIndex = i
+				return
+			}
+			if isAgentApp(app) {
+				*selectedIndex = i
+			}
+		}
+	}
+	if s.projectScope(s.ActiveProject) == targetProject {
+		moveFrom(&s.Apps, &s.SelectedIndex)
+	}
+	for workspace, snapshot := range s.snapshots {
+		if workspace == target || snapshot == nil || s.projectScope(workspace) != targetProject {
+			continue
+		}
+		moveFrom(&snapshot.Apps, &snapshot.SelectedIndex)
+	}
+	return moved
+}
+
 // IsProjectRendered checks if a project's DOM div has been created.
 // If not yet rendered, it marks it as rendered and returns false.
 func (sm *StateManager) IsProjectRendered(sessionID, projectName string) bool {
@@ -871,6 +919,12 @@ func (sm *StateManager) GetActiveProjectPath(sessionID string) string {
 	defer sm.mu.RUnlock()
 	s := sm.states[sessionID]
 	if s == nil {
+		return defaultHomeDir()
+	}
+	if thread := s.thread(s.ActiveProject); thread != nil {
+		if thread.Path != "" {
+			return thread.Path
+		}
 		return defaultHomeDir()
 	}
 	for _, p := range s.Projects {

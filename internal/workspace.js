@@ -112,22 +112,39 @@
   function frames(grid) { return [...grid.querySelectorAll(':scope > [data-app-id]')].sort((a, b) => Number(a.style.order) - Number(b.style.order)); }
   function isThread(grid = activeGrid()) { return grid?.dataset.thread === 'true'; }
   function openPlugin(id, dock, trigger) {
-    if (isThread() && dock === 'center' && frames(activeGrid()).some(frame => frame.dataset.dock === 'center')) return;
     const plugin = window.__libroPlugins.find(candidate => candidate.id === id);
     if (!plugin || plugin.disabled || plugin.removed || trigger?.disabled) return;
     if (trigger) {
       trigger.disabled = true;
       trigger.setAttribute('aria-busy', 'true');
     }
-    call('app.start', {
-      type: plugin.type,
-      command: plugin.command || '',
-      url: plugin.url || '',
-      name: plugin.name,
-      plugin: plugin.id,
-      dock: dock || plugin.dock,
-      writable: true
-    });
+    const targetDock = dock || plugin.dock;
+    if (targetDock === 'center') {
+      const grid = activeGrid();
+      const emptyThread = isThread(grid) && !frames(grid).some(frame => frame.dataset.dock === 'center');
+      if (emptyThread) {
+        call('app.start', {
+          type: plugin.type,
+          command: plugin.command || '',
+          name: plugin.name,
+          plugin: plugin.id,
+          dock: targetDock,
+          writable: true
+        });
+      } else {
+        call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''});
+      }
+    } else {
+      call('app.start', {
+        type: plugin.type,
+        command: plugin.command || '',
+        url: plugin.url || '',
+        name: plugin.name,
+        plugin: plugin.id,
+        dock: targetDock,
+        writable: true
+      });
+    }
     if (trigger) setTimeout(() => {
       if (!trigger.isConnected) return;
       trigger.disabled = false;
@@ -177,7 +194,6 @@
     return false;
   };
   function launcher(dock, onLaunch) {
-    if (isThread() && dock === 'center' && frames(activeGrid()).some(frame => frame.dataset.dock === 'center')) return;
     if (dock === 'bottom') { bottom(); return; }
     let dialog = document.getElementById('workspace-plugin-dialog');
     if (dialog) dialog.remove();
@@ -225,7 +241,7 @@
     const heading = node(center ? 'h1' : 'h2', '', center ? (standalone ? 'What would you like to do in ' : 'What are we building on ') : zone === 'right' ? 'Tools for your workspace' : 'Your project terminal');
     if (center) heading.append(node('span', 'ws-project-accent', grid.dataset.projectLabel), document.createTextNode('?'));
     el.append(heading);
-    el.append(node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers. Agents start in your home folder.' : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.'));
+    el.append(node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : 'Start a new agent thread for this project. Each thread keeps its own tools and browser state.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.'));
     const actions = node('div', 'ws-agent-actions');
 
     (center ? window.__libroPlugins.filter(p => p.dock === 'center' && p.type === 'terminal' && !p.disabled && !p.removed).slice(0, 3).map(p => p.id) : zone === 'right' ? ['browser', 'lazyrepo', 'terminal'] : ['terminal']).forEach(id => {

@@ -1,14 +1,14 @@
 # Libro
 
-Libro is a desktop app for working with AI coding assistants. Run Codex, Claude, Pi, OpenCode, or any other agent side by side in one window, with a browser, your files, and terminals right next to them.
+Libro is a desktop app for working with AI coding assistants. Run Codex, Claude, Pi, OpenCode, or any other agent in separate threads, with a browser, your files, and terminals right next to each one.
 
-Think of it as one desk for all your AI helpers. Each one gets its own panel, and you can see them all at once.
+Think of it as one desk for all your AI helpers. Each one gets its own thread and tool state.
 
 ![Libro home screen with the agent launcher open](demo/libro-home.png)
 
 ## What It Does
 
-- Runs several AI coding assistants at the same time, side by side.
+- Runs several AI coding assistants at the same time in separate threads.
 - Puts a browser, Issues, file manager, terminal, and more right next to them.
 - Keeps all your projects in one place. Switch between them with one click.
 - Shows when an assistant is busy (its icon spins) or finished (green check).
@@ -63,7 +63,7 @@ bundle matches its source. Run the editor integration tests with
 
 ### AI assistants
 
-- Open one or more assistants, side by side. All of them stay visible.
+- Open one or more assistants. Each new assistant gets a separate thread with one agent panel.
 - Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
@@ -83,8 +83,8 @@ bundle matches its source. Run the editor integration tests with
 
 - A project is a folder on your computer. Add as many as you like.
 - Switch projects with `Ctrl + P`, or with `Ctrl + 1` to `Ctrl + 9`.
-- Each project remembers its own open panels.
-- Running assistants are listed under their project in the sidebar. Click one to jump straight to it.
+- Project-backed threads keep the project folder as their working directory.
+- Each thread remembers its own browser, files, terminal, and other thread-local tools. Threads in the same project share Issues and the running project start/stop application.
 
 ![Project sidebar: projects with their running assistants listed underneath](demo/projects-sidebar.png)
 

@@ -87,6 +87,22 @@ func TestIssueControlLifecycle(t *testing.T) {
 	}
 }
 
+func TestIssueControlUsesProjectFromThread(t *testing.T) {
+	path := setupIssueControl(t)
+	state := sm.states["test"]
+	state.Threads = []Thread{{ID: "thread:test", Project: "one", Path: path}}
+	state.ActiveProject = "thread:test"
+
+	result, err := controlIssues("test", issueCommand{Project: path, Action: "create", Title: "From thread"})
+	if err != nil || result.(projectNote).Title != "From thread" {
+		t.Fatalf("thread issue control failed: %v, %+v", err, result)
+	}
+	issues, err := loadNotes("one")
+	if err != nil || len(issues) != 1 {
+		t.Fatalf("issue was not stored under project: %+v, %v", issues, err)
+	}
+}
+
 func TestIssueControlListAndValidation(t *testing.T) {
 	path := setupIssueControl(t)
 	for _, status := range []string{"new", "archived", "new"} {

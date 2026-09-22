@@ -92,12 +92,13 @@ func workspaceProjectLabel(state *AppState) string {
 
 func renderWorkspaceStrip(state *AppState, sid, placeholderID string) *r.Node {
 	projectLabel := workspaceProjectLabel(state)
+	projectScope := state.projectScope(state.ActiveProject)
 	children := []*r.Node{}
 	for i, app := range state.Apps {
 		children = append(children, renderAppFrameBase(app, i, i == state.SelectedIndex, sid, app.ID == placeholderID))
 	}
 	return r.Div("ws-project").ID(projectMainID(state.ActiveProject)).Render(
-		r.Div("ws-grid").ID(stripID(state.ActiveProject)).Attr("data-workspace-project", state.ActiveProject).Attr("data-thread", fmt.Sprint(state.thread(state.ActiveProject) != nil)).Attr("data-project-label", projectLabel).Render(children...),
+		r.Div("ws-grid").ID(stripID(state.ActiveProject)).Attr("data-workspace-project", state.ActiveProject).Attr("data-project-scope", projectScope).Attr("data-thread", fmt.Sprint(state.thread(state.ActiveProject) != nil)).Attr("data-project-label", projectLabel).Render(children...),
 	).JS(centerSelectedJS(state))
 }
 

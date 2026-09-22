@@ -434,6 +434,23 @@ for (const thread of [false, true]) test('new browser creates separate blank pan
   }
 })
 
+test('opening an agent creates a project-backed thread instead of another panel', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const launch = source.slice(source.indexOf('  function openPlugin('), source.indexOf('  function select('))
+  const calls = []
+  vm.runInNewContext(launch + ';openPlugin("codex", "center")', {
+    window: {
+      __libroActiveProject: 'project',
+      __libroPlugins: [{ id: 'codex', type: 'terminal', name: 'Codex', dock: 'center' }],
+    },
+    activeGrid: () => ({ dataset: { thread: 'false' } }),
+    isThread: () => false,
+    frames: () => [],
+    call: (action, data) => calls.push([action, JSON.parse(JSON.stringify(data))]),
+  })
+  assert.deepEqual(calls, [['thread.create', { agent: 'codex', project: 'project' }]])
+})
+
 test('browser navigation wraps, includes hidden browsers, and skips other tools', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('  function navigateBrowser('), source.indexOf('  let toolKeys'))

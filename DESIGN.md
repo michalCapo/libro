@@ -151,7 +151,7 @@ Use the system sans-serif stack in `body`; there is no separate display font. Bo
 
 The shell has a 56px titlebar, a 26px statusbar, and left project navigation. The sidebar is 216px wide. At 760px or less it overlays the content between the titlebar and statusbar, with width `min(216px, calc(100vw - 48px))`. It defaults closed on small screens when no preference exists; selecting a project closes it. The brand and trailing status text hide, and empty-state headings become 24px.
 
-The main area uses center, right, and bottom docks with no outer card padding. Center agent panels remain visible side by side. The right dock keeps multiple tools alive but shows one selected tool at a time. If the selected tool and center panels do not fit together, the tool overlays the right side. The bottom dock can show the project shell or start command below the main row. A shared tab row selects running agents and tools and exposes their size picker.
+The main area uses center, right, and bottom docks with no outer card padding. Each thread has at most one center agent panel. Starting another agent creates and selects a new thread, giving that agent its own browser and thread-local tool state. Project-backed threads reuse the same Issues panel and live project start/stop application; those panels move with the selected thread without restarting. The right dock keeps multiple tools alive but shows one selected tool at a time. If the selected right tool and center panel do not fit together, the tool overlays the right side. The bottom dock can show the shared project command below the main row. A shared tab row selects the running agent and tools and exposes their size picker.
 
 Width presets are XS 320px, SM 480px, MD 640px, LG 960px, XL 1280px, and 2XL 1920px. These are panel widths, not viewport breakpoints. Legacy 3XL 2560px and MAX (full strip width, formerly called FULL) remain available as steps beyond 2XL; the existing screen-width policy disables 3XL on Full HD or smaller screens. MAX uses available workspace width. Maximizing temporarily fills the workspace and hides other panels.
 
@@ -192,7 +192,7 @@ Save note keeps the editor open and shows Saved. Cancel discards draft changes a
 
 ## Do's and Don'ts
 
-- Do keep app widths fixed as panels are added and use horizontal scrolling.
+- Do keep app widths fixed as tools are added and use horizontal scrolling.
 - Do reuse workspace color tokens for shell controls and popups.
 - Do show selected, hover, keyboard-focus, empty, and no-results states.
 - Don't turn the app strip into a wrapping or equal-width responsive grid.

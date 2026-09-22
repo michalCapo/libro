@@ -118,8 +118,9 @@ func controlIssues(sid string, command issueCommand) (any, error) {
 	project := ""
 	sm.mu.RLock()
 	if state := sm.states[sid]; state != nil && state.ActiveProject != "" && command.Project != "" {
+		activeProject := state.projectScope(state.ActiveProject)
 		for _, p := range state.Projects {
-			if p.Name == state.ActiveProject && filepath.Clean(p.Path) == filepath.Clean(command.Project) {
+			if p.Name == activeProject && filepath.Clean(p.Path) == filepath.Clean(command.Project) {
 				project = p.Name
 				break
 			}

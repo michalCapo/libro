@@ -59,7 +59,11 @@ func registerProjectCommandActions(app *r.App) {
 			return r.Notify("error", "Open a project first")
 		}
 		if command == "" {
-			return fmt.Sprintf(`libroWorkspace.projectSettings(%s);`, components.JSString(state.ActiveProject))
+			project := state.projectScope(state.ActiveProject)
+			if project == "" {
+				return r.Notify("error", "Open a project first")
+			}
+			return fmt.Sprintf(`libroWorkspace.projectSettings(%s);`, components.JSString(project))
 		}
 		return runProjectCommand(sid, command)
 	})

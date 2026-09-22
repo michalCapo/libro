@@ -59,6 +59,46 @@ func settleHydratedAppContentJS(appID string) string {
 `, components.JSString(appID))
 }
 
+func reparentProjectAppsJS(apps []Application, project string) string {
+	if len(apps) == 0 {
+		return ""
+	}
+	ids := make([]string, 0, len(apps))
+	for _, app := range apps {
+		ids = append(ids, app.ID)
+	}
+	encoded, _ := json.Marshal(ids)
+	return fmt.Sprintf(`
+(function(){
+	var grid=document.getElementById(%s);
+	if(!grid)return;
+	%s.forEach(function(id){
+		var frame=document.getElementById('frame-'+id);
+		if(frame)grid.appendChild(frame);
+	});
+})();`, components.JSString(stripID(project)), string(encoded))
+}
+
+func stateWithoutApps(state *AppState, removed []Application) *AppState {
+	copy := *state
+	ids := make(map[string]bool, len(removed))
+	for _, app := range removed {
+		ids[app.ID] = true
+	}
+	copy.Apps = nil
+	for _, app := range state.Apps {
+		if !ids[app.ID] {
+			copy.Apps = append(copy.Apps, app)
+		}
+	}
+	if len(copy.Apps) == 0 {
+		copy.SelectedIndex = 0
+	} else if copy.SelectedIndex >= len(copy.Apps) {
+		copy.SelectedIndex = len(copy.Apps) - 1
+	}
+	return &copy
+}
+
 // actionResult keeps Libro's client-side view orchestration behind g-sui's
 // typed Result API. The temporary node is removed after its trusted script has
 // run so repeated actions do not grow the DOM.
@@ -96,7 +136,8 @@ func (b *responseBuilder) Replace(id string, node *r.Node) *responseBuilder {
 
 func (b *responseBuilder) Build() string { return strings.Join(b.parts, "") }
 
-// Closing a thread's agent archives the thread and closes its tools as well.
+// Closing a thread's agent archives the thread and closes thread-local tools.
+// Issues and the project command remain available to the other project threads.
 func closeWorkspaceApp(sid, appID string) string {
 	apps, err := sm.CloseThreadAgent(sid, appID)
 	if err != nil {
@@ -121,7 +162,8 @@ func closeWorkspaceApp(sid, appID string) string {
 	return js + "if(window.libroWorkspace)libroWorkspace.restorePanelFocus();" + renderTopBar(state, sid).ToJSReplace(TopBarID) + projectsJS(state)
 }
 
-// Autolaunch uses app.start so command validation and terminal lifecycle stay shared.
+// Autolaunch resumes a thread's only agent. For a project it creates one
+// project-backed thread, so agent and tool state never share another session.
 func projectAutolaunchJS(state *AppState, sid string) string {
 	if state.ActiveProject == "" {
 		return ""
@@ -129,17 +171,27 @@ func projectAutolaunchJS(state *AppState, sid string) string {
 	if slices.ContainsFunc(state.Apps, isAgentApp) {
 		return ""
 	}
+	thread := state.thread(state.ActiveProject)
 	threadAgent := defaultThreadAgent()
-	if thread := state.thread(state.ActiveProject); thread != nil && thread.AgentID != "" {
+	if thread != nil && thread.AgentID != "" {
 		threadAgent = thread.AgentID
 	}
 	for _, plugin := range plugins() {
 		autolaunch := plugin.Autolaunch
-		if state.thread(state.ActiveProject) != nil {
+		if thread != nil {
 			autolaunch = plugin.ID == threadAgent
 		}
 		if !autolaunch || plugin.Disabled || plugin.Removed || plugin.Dock != "center" || plugin.Type != AppTypeTerminal {
 			continue
+		}
+		if thread == nil {
+			for _, existing := range state.Threads {
+				if !existing.Archived && existing.Project == state.ActiveProject {
+					return ""
+				}
+			}
+			payload, _ := json.Marshal(sidData(sid, "agent", plugin.ID, "project", state.ActiveProject))
+			return fmt.Sprintf("__ws.call('thread.create',%s);", payload)
 		}
 		payload, _ := json.Marshal(sidData(sid, "type", string(plugin.Type), "plugin", plugin.ID, "name", plugin.Name, "dock", "center", "writable", true, "autolaunchProject", state.ActiveProject))
 		return fmt.Sprintf("__ws.call('app.start',%s);", payload)
@@ -530,8 +582,16 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 		command, _ := data["command"].(string)
 		threadState := sm.Get(sid)
+		candidate := Application{Type: AppType(appType), Command: command, PluginID: pluginID, Dock: dock}
+		if threadState.thread(threadState.ActiveProject) == nil && isAgentApp(candidate) {
+			if pluginID == "" {
+				return r.Notify("error", "Choose a configured agent to start a new thread")
+			}
+			payload, _ := json.Marshal(sidData(sid, "agent", pluginID, "project", threadState.ActiveProject))
+			return fmt.Sprintf("__ws.call('thread.create',%s);", payload)
+		}
 		if threadState.thread(threadState.ActiveProject) != nil {
-			if !threadState.canStartThreadApp(Application{Type: AppType(appType), Command: command, PluginID: pluginID, Dock: dock}) {
+			if !threadState.canStartThreadApp(candidate) {
 				return ""
 			}
 		}
@@ -1187,11 +1247,13 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 
 		prevState := sm.Get(sid)
 		closeDevtoolsJS := closeDevtoolsForAppsJS(prevState.Apps)
+		targetRendered := prevState.renderedProjects[name]
 
 		// Worktrees can exist before their virtual project has been created
 		// in the current session. Resolve the matching worktree lazily.
 		restoreWorktreeProject(sm, sid, name)
 
+		movedProjectApps := sm.MoveSharedProjectApps(sid, name)
 		if !sm.SwitchProject(sid, name) {
 			return "/* noop */"
 		}
@@ -1199,19 +1261,25 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 		state := sm.Get(sid)
 
 		var jsSwitch string
-		if sm.IsProjectRendered(sid, name) {
+		if targetRendered {
 			// Project div exists in DOM, just hide/show
-			jsSwitch = switchProjectJS(name, nil)
+			jsSwitch = switchProjectJS(name, nil) + reparentProjectAppsJS(movedProjectApps, name)
 		} else {
 			// Project div doesn't exist yet, append new content and hide old
-			jsSwitch = switchProjectJS(name, renderMainArea(state, sid))
+			contentState := state
+			if len(movedProjectApps) > 0 {
+				contentState = stateWithoutApps(state, movedProjectApps)
+			}
+			jsSwitch = switchProjectJS(name, renderMainArea(contentState, sid)) + reparentProjectAppsJS(movedProjectApps, name)
 		}
+		sm.IsProjectRendered(sid, name)
 
 		resp := newResponse().
 			Add(projectsJS(state)).
 			Replace(TopBarID, renderTopBar(state, sid)).
 			Add(closeDevtoolsJS).
 			Add(jsSwitch).
+			Add(navigateJS(state, sid)).
 			Add(updateHashJS(name)).
 			Add(projectAutolaunchJS(state, sid)).
 			Add(focusSelectedAppJS(state))

@@ -170,11 +170,13 @@
     }
   }
   function init() {
-    const switched = activeProject !== window.__libroActiveProject;
-    activeProject = window.__libroActiveProject;
-    for (const [id, s] of states) if (!s.el.isConnected || s.el.closest('[data-workspace-project]')?.dataset.workspaceProject !== s.project) { s.editor?.destroy(); states.delete(id); }
+    const activeGrid = Array.from(document.querySelectorAll('[data-workspace-project]')).find(el => el.parentElement.style.display !== 'none');
+    const projectScope = activeGrid?.dataset.projectScope || '';
+    const switched = activeProject !== projectScope;
+    activeProject = projectScope;
+    for (const [id, s] of states) if (!s.el.isConnected || s.el.closest('[data-workspace-project]')?.dataset.projectScope !== s.project) { s.editor?.destroy(); states.delete(id); }
     document.querySelectorAll('[data-notes]').forEach(el => {
-      const project = el.closest('[data-workspace-project]')?.dataset.workspaceProject;
+      const project = el.closest('[data-workspace-project]')?.dataset.projectScope;
       if (project !== activeProject) return;
       const existing = states.get(el.dataset.notes);
       if (existing) {
@@ -217,7 +219,7 @@
       }
     }
     if (action === 'send') {
-      const active = s.project === window.__libroActiveProject;
+      const active = s.project === activeProject;
       const sent = active && window.__libroSendPageToolPrompt?.(result.prompt, true);
       status(s, sent ? 'Sent to agent' : 'Start or select an agent in this project, then try again.');
     }
