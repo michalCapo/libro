@@ -809,11 +809,11 @@ test('clicking a project thread only hides a tool that covers the selected agent
       closeSettings() {}, innerWidth: 1000, prefs: {}, save() {},
       select: id => { selected = id }, call(action, data) {
         assert.equal(action, 'project.switch')
-        selected = data.appId
+        assert.equal(data.appId, undefined)
       },
     })
     tab.onclick()
-    assert.equal(selected, 'agent')
+    assert.equal(selected, visible ? 'agent' : '')
     assert.equal(state.hidden.has('browser'), visible && overlaps)
   }
 })
@@ -869,17 +869,21 @@ test('project threads hide archived agents and stay separate from standalone thr
   vm.runInContext('renderThreads()', context)
   assert.deepEqual(ids(project), ['one', 'new'])
   project.children[0].children[0].onclick()
-  assert.deepEqual(calls, [['project.switch', { name: 'one', appId: '' }]])
+  assert.deepEqual(calls, [['project.switch', { name: 'one' }]])
   const grid = { dataset: { workspaceProject: 'one' } }
   context.document.querySelectorAll = () => [grid]
-  context.frames = () => [{ dataset: { dock: 'center', appId: 'agent-one' } }]
-  context.toolOverlapsFrame = () => false
+  context.frames = () => [{ dataset: { dock: 'center', appId: 'agent-one' } }, { dataset: { dock: 'right', appId: 'browser' } }]
+  const hidden = new Set()
+  context.dockState = () => ({ hidden })
+  context.toolOverlapsFrame = () => true
   context.select = id => calls.push(['select', id])
   project.children[0].children[0].onclick()
-  assert.deepEqual(calls.at(-1), ['project.switch', { name: 'one', appId: 'agent-one' }])
+  assert.deepEqual(calls.at(-1), ['project.switch', { name: 'one' }])
+  assert.equal(hidden.has('browser'), false)
   context.window.__libroActiveProject = 'one'
   project.children[0].children[0].onclick()
   assert.deepEqual(calls.at(-1), ['select', 'agent-one'])
+  assert.equal(hidden.has('browser'), true)
 })
 
 test('new thread uses the active project context, while standalone creation remains explicit', () => {

@@ -299,13 +299,16 @@
       row.onclick = () => {
         closeSettings();
         if (innerWidth <= 760) { prefs.projects = false; save(); }
+        if (thread.id !== window.__libroActiveProject) {
+          call('project.switch', {name:thread.id});
+          return;
+        }
         const grid = [...document.querySelectorAll('[data-workspace-project]')].find(grid => grid.dataset.workspaceProject === thread.id);
         const agent = grid && frames(grid).find(frame => frame.dataset.dock === 'center');
         if (agent && toolOverlapsFrame(grid, agent)) {
           frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => dockState(grid).hidden.add(frame.dataset.appId));
         }
-        if (agent && thread.id === window.__libroActiveProject) select(agent.dataset.appId);
-        else call('project.switch', {name:thread.id, appId:agent?.dataset.appId || ''});
+        if (agent) select(agent.dataset.appId);
       };
       item.append(row);
       if (!thread.project) {
@@ -402,12 +405,15 @@
         tab.onclick = () => {
           closeSettings();
           if (innerWidth <= 760) { prefs.projects = false; save(); }
+          if (grid.dataset.workspaceProject !== window.__libroActiveProject) {
+            call('project.switch', {name:grid.dataset.workspaceProject});
+            return;
+          }
           const frame = agents.find(frame => frame.dataset.appId === entry.id);
           if (toolOverlapsFrame(grid, frame)) {
             frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => dockState(grid).hidden.add(frame.dataset.appId));
           }
-          if (grid.dataset.workspaceProject === window.__libroActiveProject) select(entry.id);
-          else call('project.switch', {name:grid.dataset.workspaceProject, appId:entry.id});
+          select(entry.id);
         };
         // Keep the button mounted while terminal titles animate, including during a click.
         if (tree.children[index] !== tab) tree.insertBefore(tab, tree.children[index] || null);
