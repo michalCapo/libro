@@ -165,7 +165,7 @@ var browserShortcutsScript = '(' + function(){
 			'.close{width:26px;height:26px;padding:0;border:0;border-radius:6px;background:transparent;color:#64748b;font-size:20px;line-height:1;cursor:pointer}' +
 			'.close:hover{background:#f1f5f9;color:#1f2937}' +
 			'.summary{margin-bottom:8px;color:#64748b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-			'input[type=text]{display:block;box-sizing:border-box;width:100%;height:40px;margin:0;padding:9px 10px;border:1px solid #94a3b8;border-radius:7px;background:#fff;color:#1f2937;font:inherit;line-height:1.45;outline:none}' +
+			'input[type=text]{display:block;box-sizing:border-box;width:100%;height:44px;margin:0;padding:9px 10px;border:1px solid #94a3b8;border-radius:7px;background:#fff;color:#1f2937;font:inherit;font-size:16px;line-height:1.45;outline:none}' +
 			'input[type=text]:focus{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18)}' +
 			'.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:9px}' +
 			'button.action{padding:7px 11px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#334155;font:inherit;cursor:pointer}' +
