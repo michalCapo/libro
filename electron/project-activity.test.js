@@ -41,9 +41,9 @@ test('interaction acknowledges only its project and a new completion restores th
 test('thread interaction clears completion until a new turn completes', () => {
   const listeners = {};
   const tabs = ['a', 'b', 'c'].map(id => ({
-    dataset: { agentId: id }, icon: {}, badge: null,
-    querySelector(selector) { return selector === 'i' ? this.icon : selector === 'span' ? { textContent: id } : this.badge },
-    append(badge) { this.badge = badge; badge.remove = () => { this.badge = null } },
+    dataset: { agentId: id }, icon: {}, badge: null, shortcut: {},
+    querySelector(selector) { return selector === 'i' ? this.icon : selector === 'span' ? { textContent: id } : selector === '.ws-project-shortcut' ? this.shortcut : this.badge },
+    insertBefore(badge, before) { this.badge = badge; this.badgeBefore = before; badge.remove = () => { this.badge = null } },
     setAttribute(name, value) { this[name] = value },
   }))
   const context = vm.createContext({
@@ -54,6 +54,7 @@ test('thread interaction clears completion until a new turn completes', () => {
   vm.runInContext(source, context)
   vm.runInContext('renderProjectActivity()', context)
   assert.equal(tabs[0].badge.textContent, 'Working')
+  assert.equal(tabs[0].badgeBefore, tabs[0].shortcut)
   assert.equal(tabs[1].badge.textContent, 'Done')
   assert.equal(tabs[1].icon.textContent, 'check_circle_outline')
   assert.equal(tabs[1]['aria-label'], 'b: Done')

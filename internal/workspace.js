@@ -475,10 +475,12 @@
       let badge = tab.querySelector('.ws-thread-status');
       if (status && !badge) {
         badge = node('small', 'ws-thread-status');
-        tab.append(badge);
       }
       if (badge) {
-        if (status) badge.textContent = status;
+        if (status) {
+          badge.textContent = status;
+          tab.insertBefore(badge, tab.querySelector('.ws-project-shortcut'));
+        }
         else badge.remove();
       }
       tab.setAttribute('aria-label', tab.querySelector('span').textContent + (status ? ': ' + status : ''));
