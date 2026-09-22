@@ -280,7 +280,7 @@
     const threads = window.__libroThreads || [];
     renderThreadList(document.getElementById('workspace-thread-list'), threads.filter(thread => !thread.project));
     document.querySelectorAll('[data-project-threads]').forEach(list => {
-      renderThreadList(list, threads.filter(thread => thread.project === list.dataset.projectThreads));
+      renderThreadList(list, threads.filter(thread => thread.project === list.dataset.projectThreads && !thread.archived));
     });
   }
   function renderThreadList(list, threads) {
@@ -297,8 +297,12 @@
       const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
       row.append(icon, node('span', '', thread.name));
       row.onclick = () => { closeSettings(); if (innerWidth <= 760) { prefs.projects = false; save(); } call('project.switch', {name:thread.id}); };
-      const archive = button(thread.archived ? 'Restore thread' : 'Archive thread', thread.archived ? 'unarchive' : 'archive', () => call('thread.archive', {id:thread.id, archived:!thread.archived}));
-      archive.classList.add('ws-project-remove'); item.append(row, archive); list.append(item);
+      item.append(row);
+      if (!thread.project) {
+        const archive = button(thread.archived ? 'Restore thread' : 'Archive thread', thread.archived ? 'unarchive' : 'archive', () => call('thread.archive', {id:thread.id, archived:!thread.archived}));
+        archive.classList.add('ws-project-remove'); item.append(archive);
+      }
+      list.append(item);
     };
     threads.filter(thread => !thread.archived).forEach(appendThread);
     if (!threads.length && !list.dataset.projectThreads) {

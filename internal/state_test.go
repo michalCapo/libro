@@ -80,7 +80,7 @@ func TestCloseProjectOnlyClearsActiveProject(t *testing.T) {
 	}
 }
 
-func TestNewThreadAgentSizing(t *testing.T) {
+func TestNewThreadAgentKeepsConfiguredWidth(t *testing.T) {
 	manager := NewStateManager()
 	state := &AppState{ActiveProject: "thread:test", Threads: []Thread{{ID: "thread:test"}}, Apps: []Application{{ID: "tool", Type: AppTypeURL, Dock: "right", Width: WidthLG}}}
 	manager.states["test"] = state
@@ -89,13 +89,8 @@ func TestNewThreadAgentSizing(t *testing.T) {
 		manager.SetAppPlugin("test", id, "codex", "center")
 	}
 	add("first")
-	manager.SizeNewAgent("test", "first", WidthSM)
-	if state.Apps[1].Width != WidthFull || state.Apps[0].Width != WidthLG {
-		t.Fatal("first agent should be MAX without resizing tools")
-	}
-	manager.SizeNewAgent("test", "tool", WidthSM)
-	if state.Apps[0].Width != WidthLG {
-		t.Fatal("tool width changed")
+	if state.Apps[1].Width != WidthSM || state.Apps[0].Width != WidthLG {
+		t.Fatal("agent should keep its configured width without resizing tools")
 	}
 }
 
@@ -106,9 +101,6 @@ func TestNewProjectAgentKeepsConfiguredWidth(t *testing.T) {
 	for _, id := range []string{"first", "second"} {
 		manager.InsertTerminalPlaceholder("test", id, WidthSM, "codex", true, "Agent", "", -1)
 		manager.SetAppPlugin("test", id, "codex", "center")
-		if resized := manager.SizeNewAgent("test", id, WidthSM); len(resized) != 0 {
-			t.Fatal("project agents should not resize existing panels")
-		}
 		if state.Apps[len(state.Apps)-1].Width != WidthSM {
 			t.Fatal("new project agent should keep its configured width")
 		}

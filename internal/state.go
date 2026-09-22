@@ -462,25 +462,6 @@ func applyAppWidth(app *Application, width Width) {
 	app.PreviousWidth = ""
 }
 
-// SizeNewAgent expands a thread's single agent. Project agents keep their
-// configured width in project workspaces.
-func (sm *StateManager) SizeNewAgent(sessionID, appID string, defaultWidth Width) []Application {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	state := sm.states[sessionID]
-	if state == nil || state.thread(state.ActiveProject) == nil {
-		return nil
-	}
-	for i := range state.Apps {
-		app := &state.Apps[i]
-		if app.ID == appID && appDock(*app) == "center" {
-			applyAppWidth(app, WidthFull)
-			break
-		}
-	}
-	return nil
-}
-
 // SetAppWidthByID sets the width of an app by its ID and returns the app's current index
 func (sm *StateManager) SetAppWidthByID(sessionID, appID string, width Width) int {
 	sm.mu.Lock()

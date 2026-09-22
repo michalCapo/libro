@@ -837,7 +837,7 @@ test('closing panels restores focus without revealing hidden terminals', () => {
   }
 })
 
-test('project threads are grouped under their own project, separate from standalone threads', () => {
+test('project threads hide archived agents and stay separate from standalone threads', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('  function renderThreads()'), source.indexOf('  function renderProjects()'))
   const node = () => ({ dataset: {}, children: [], classList: { add() {} }, setAttribute() {}, append(...items) { this.children.push(...items) }, replaceChildren() { this.children = [] } })
@@ -859,11 +859,10 @@ test('project threads are grouped under their own project, separate from standal
   vm.runInContext(handler + ';renderThreads()', context)
   const ids = list => list.children.map(item => item.children[0].dataset.projectKey)
   assert.deepEqual(ids(standalone), ['standalone'])
-  assert.deepEqual(ids(project), ['one', 'two'])
+  assert.deepEqual(ids(project), ['one'])
   assert.deepEqual(ids(other), ['other'])
   project.children[0].children[0].onclick()
-  project.children[1].children[1].onclick()
-  assert.deepEqual(calls, [['project.switch', { name: 'one' }], ['thread.archive', { id: 'two', archived: false }]])
+  assert.deepEqual(calls, [['project.switch', { name: 'one' }]])
 })
 
 test('new thread uses the active project context, while standalone creation remains explicit', () => {

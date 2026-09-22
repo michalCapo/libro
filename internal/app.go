@@ -635,10 +635,6 @@ func Run(assets embed.FS, desktop bool) error {
 			appID := sm.NextAppID()
 			sm.InsertTerminalPlaceholder(sid, appID, width, command, writable, name, iconURL, insertIdx)
 			sm.SetAppPlugin(sid, appID, pluginID, dock)
-			var resizeAgentsJS strings.Builder
-			for _, resized := range sm.SizeNewAgent(sid, appID, DBDefaultPanelWidth()) {
-				resizeAgentsJS.WriteString(resizeJS(nil, resized.Width, resized.ID))
-			}
 
 			state := sm.Get(sid)
 			newApp := &state.Apps[state.SelectedIndex]
@@ -648,7 +644,7 @@ func Run(assets embed.FS, desktop bool) error {
 			hydrateJS := hydrateAppAfterScrollJS(newApp.ID, sidData(sid, "id", newApp.ID))
 			if hadApps > 0 {
 				frame := renderAppFramePlaceholder(*newApp, state.SelectedIndex, true, sid)
-				return resizeAgentsJS.String() + insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
+				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
 			}
 
 			return renderMainAreaWithPlaceholder(state, sid, newApp.ID).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS + navigateJS(state, sid) + hydrateJS
