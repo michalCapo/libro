@@ -831,9 +831,15 @@ func (sm *StateManager) MoveSharedProjectApps(sessionID, target string) []Applic
 		targetSnapshot = &projectSnapshot{}
 		s.snapshots[target] = targetSnapshot
 	}
+	sharedKey := func(app Application) string {
+		if appDock(app) == "bottom" {
+			return app.ID
+		}
+		return app.PluginID
+	}
 	existing := make(map[string]bool, len(targetSnapshot.Apps))
 	for _, app := range targetSnapshot.Apps {
-		existing[app.PluginID] = true
+		existing[sharedKey(app)] = true
 	}
 	var moved []Application
 	moveFrom := func(apps *[]Application, selectedIndex *int) {
@@ -843,10 +849,10 @@ func (sm *StateManager) MoveSharedProjectApps(sessionID, target string) []Applic
 		}
 		kept := make([]Application, 0, len(*apps))
 		for _, app := range *apps {
-			if isSharedProjectApp(app) && !existing[app.PluginID] {
+			if isSharedProjectApp(app) && !existing[sharedKey(app)] {
 				moved = append(moved, app)
 				targetSnapshot.Apps = append(targetSnapshot.Apps, app)
-				existing[app.PluginID] = true
+				existing[sharedKey(app)] = true
 				continue
 			}
 			kept = append(kept, app)

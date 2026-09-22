@@ -79,7 +79,7 @@ func (s *AppState) projectScope(id string) string {
 }
 
 func isSharedProjectApp(app Application) bool {
-	return app.PluginID == "notes" || app.PluginID == "project-command"
+	return app.PluginID == "notes" || app.PluginID == "project-command" || appDock(app) == "bottom"
 }
 
 func enabledAgentPlugin(id string) bool {
@@ -267,7 +267,7 @@ func (sm *StateManager) CloseThreadAgent(sid, appID string) ([]Application, erro
 		apps := make([]Application, 0, len(state.Apps))
 		shared := make([]Application, 0, 2)
 		for _, existing := range state.Apps {
-			if isSharedProjectApp(existing) {
+			if thread.Project != "" && isSharedProjectApp(existing) {
 				shared = append(shared, existing)
 			} else {
 				apps = append(apps, existing)

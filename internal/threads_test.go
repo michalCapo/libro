@@ -170,15 +170,16 @@ func TestCloseThreadAgentKeepsSharedProjectApps(t *testing.T) {
 			{ID: "browser", PluginID: "browser", Dock: "right"},
 			{ID: "issues", PluginID: "notes", Dock: "right"},
 			{ID: "app", PluginID: "project-command", Dock: "bottom"},
+			{ID: "shell", PluginID: "terminal", Dock: "bottom"},
 		},
 	}
 	manager.states["test"] = state
 
 	closed, err := manager.CloseThreadAgent("test", "agent")
-	if err != nil || len(closed) != 2 || len(state.Apps) != 2 {
+	if err != nil || len(closed) != 2 || len(state.Apps) != 3 {
 		t.Fatalf("close result: closed=%+v remaining=%+v err=%v", closed, state.Apps, err)
 	}
-	if state.Apps[0].ID != "issues" || state.Apps[1].ID != "app" {
+	if state.Apps[0].ID != "issues" || state.Apps[1].ID != "app" || state.Apps[2].ID != "shell" {
 		t.Fatalf("shared apps were closed: %+v", state.Apps)
 	}
 }

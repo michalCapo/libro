@@ -296,7 +296,17 @@
       row.setAttribute('aria-current', String(thread.id === window.__libroActiveProject));
       const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
       row.append(icon, node('span', '', thread.name));
-      row.onclick = () => { closeSettings(); if (innerWidth <= 760) { prefs.projects = false; save(); } call('project.switch', {name:thread.id}); };
+      row.onclick = () => {
+        closeSettings();
+        if (innerWidth <= 760) { prefs.projects = false; save(); }
+        const grid = [...document.querySelectorAll('[data-workspace-project]')].find(grid => grid.dataset.workspaceProject === thread.id);
+        const agent = grid && frames(grid).find(frame => frame.dataset.dock === 'center');
+        if (agent && toolOverlapsFrame(grid, agent)) {
+          frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => dockState(grid).hidden.add(frame.dataset.appId));
+        }
+        if (agent && thread.id === window.__libroActiveProject) select(agent.dataset.appId);
+        else call('project.switch', {name:thread.id, appId:agent?.dataset.appId || ''});
+      };
       item.append(row);
       if (!thread.project) {
         const archive = button(thread.archived ? 'Restore thread' : 'Archive thread', thread.archived ? 'unarchive' : 'archive', () => call('thread.archive', {id:thread.id, archived:!thread.archived}));
@@ -414,6 +424,7 @@
       let badge = row.querySelector('.ws-project-shortcut');
       if (!number) { badge?.remove(); row.removeAttribute('aria-keyshortcuts'); return; }
       if (!badge) { badge = node('kbd', 'ws-project-shortcut'); badge.setAttribute('aria-hidden', 'true'); row.append(badge); }
+      if (row.lastElementChild !== badge) row.append(badge);
       badge.textContent = number;
       badge.title = 'Ctrl+' + number;
       row.setAttribute('aria-keyshortcuts', 'Control+' + number);
@@ -547,10 +558,10 @@
   function renderProjectTerminals() {
     const running = new Set([...document.querySelectorAll('[data-workspace-project]')]
       .filter(grid => grid.querySelector('[data-dock="bottom"] [data-process-status="running"]'))
-      .flatMap(grid => [grid.dataset.workspaceProject, ...(grid.querySelector('[data-plugin="project-command"] [data-process-status="running"]') ? [grid.dataset.projectScope] : [])]));
+      .map(grid => grid.dataset.projectScope || grid.dataset.workspaceProject));
     document.querySelectorAll('.ws-project-row').forEach(row => {
       const thread = (window.__libroThreads || []).find(thread => thread.id === row.dataset.projectKey);
-      const active = running.has(row.dataset.projectKey) || !!thread?.project && running.has(thread.project);
+      const active = !thread?.project && running.has(row.dataset.projectKey);
       let icon = row.querySelector('.ws-project-terminal');
       if (!active) { icon?.remove(); return; }
       if (icon) return;

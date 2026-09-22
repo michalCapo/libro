@@ -862,7 +862,17 @@ test('project threads hide archived agents and stay separate from standalone thr
   assert.deepEqual(ids(project), ['one'])
   assert.deepEqual(ids(other), ['other'])
   project.children[0].children[0].onclick()
-  assert.deepEqual(calls, [['project.switch', { name: 'one' }]])
+  assert.deepEqual(calls, [['project.switch', { name: 'one', appId: '' }]])
+  const grid = { dataset: { workspaceProject: 'one' } }
+  context.document.querySelectorAll = () => [grid]
+  context.frames = () => [{ dataset: { dock: 'center', appId: 'agent-one' } }]
+  context.toolOverlapsFrame = () => false
+  context.select = id => calls.push(['select', id])
+  project.children[0].children[0].onclick()
+  assert.deepEqual(calls.at(-1), ['project.switch', { name: 'one', appId: 'agent-one' }])
+  context.window.__libroActiveProject = 'one'
+  project.children[0].children[0].onclick()
+  assert.deepEqual(calls.at(-1), ['select', 'agent-one'])
 })
 
 test('new thread uses the active project context, while standalone creation remains explicit', () => {

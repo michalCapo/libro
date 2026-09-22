@@ -452,8 +452,8 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 #agent-command-rows [data-agent-drop=after]{box-shadow:inset 0 -2px var(--ws-fg)}
 
 
-.ws-project-item .ws-thread-row .ws-project-shortcut{position:static;margin-left:auto;width:24px;height:24px;padding:0;border-radius:4px}
-.ws-project-item:has(.ws-project-shortcut) .ws-thread-row{padding-right:12px}
+.ws-project-item .ws-thread-row .ws-project-shortcut{position:absolute;right:12px;width:24px;height:24px;padding:0;border-radius:4px}
+.ws-project-item:has(.ws-project-shortcut) .ws-thread-row{padding-right:44px}
 .ws-project-item:has(.ws-thread-row):has(.ws-project-shortcut) .ws-project-remove{right:40px}
 .ws-project-item:has(.ws-thread-row):has(.ws-project-shortcut):has(.ws-project-remove) .ws-project-row{padding-right:76px}
 
@@ -557,3 +557,7 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 .ws-project-threads:empty{display:none}
 .ws-project-threads .ws-project-item[data-archived=true]{opacity:.52}
 .ws-project-threads .ws-project-item[data-archived=true]:hover,.ws-project-threads .ws-project-item[data-archived=true]:focus-within{opacity:1}
+
+/* Keep terminal activity in the row, before the trailing shortcut. */
+.ws-project-item:has(.ws-thread-row) .ws-thread-row .ws-project-terminal{position:static;order:1}
+.ws-project-item .ws-thread-row .ws-project-shortcut{order:2}

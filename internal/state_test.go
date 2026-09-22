@@ -129,6 +129,8 @@ func TestSharedProjectAppsMoveBetweenProjectThreads(t *testing.T) {
 			{ID: "browser", PluginID: "browser", Dock: "right"},
 			{ID: "issues", PluginID: "notes", Dock: "right"},
 			{ID: "app", PluginID: "project-command", Dock: "bottom"},
+			{ID: "shell-one", PluginID: "terminal", Dock: "bottom"},
+			{ID: "shell-two", PluginID: "terminal", Dock: "bottom"},
 		},
 		snapshots: map[string]*projectSnapshot{
 			"thread:two":   {Apps: []Application{{ID: "agent-two", PluginID: "claude", Dock: "center"}}},
@@ -138,13 +140,13 @@ func TestSharedProjectAppsMoveBetweenProjectThreads(t *testing.T) {
 	manager.states["test"] = state
 
 	moved := manager.MoveSharedProjectApps("test", "thread:two")
-	if len(moved) != 2 || len(state.Apps) != 2 || state.Apps[0].ID != "agent-one" || state.Apps[1].ID != "browser" {
+	if len(moved) != 4 || len(state.Apps) != 2 || state.Apps[0].ID != "agent-one" || state.Apps[1].ID != "browser" {
 		t.Fatalf("thread-local panels moved: moved=%+v source=%+v", moved, state.Apps)
 	}
-	if !manager.SwitchProject("test", "thread:two") || len(state.Apps) != 3 {
+	if !manager.SwitchProject("test", "thread:two") || len(state.Apps) != 5 {
 		t.Fatalf("shared panels missing from target: %+v", state.Apps)
 	}
-	if state.Apps[0].ID != "agent-two" || state.Apps[1].ID != "issues" || state.Apps[2].ID != "app" {
+	if state.Apps[0].ID != "agent-two" || state.Apps[1].ID != "issues" || state.Apps[2].ID != "app" || state.Apps[3].ID != "shell-one" || state.Apps[4].ID != "shell-two" {
 		t.Fatalf("unexpected target panels: %+v", state.Apps)
 	}
 	if moved := manager.MoveSharedProjectApps("test", "thread:other"); len(moved) != 0 {
@@ -154,7 +156,7 @@ func TestSharedProjectAppsMoveBetweenProjectThreads(t *testing.T) {
 		t.Fatal("could not switch to other project")
 	}
 	moved = manager.MoveSharedProjectApps("test", "thread:one")
-	if len(moved) != 2 {
+	if len(moved) != 4 {
 		t.Fatalf("shared panels were stranded in an inactive thread: %+v", moved)
 	}
 }

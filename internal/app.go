@@ -1286,6 +1286,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 				if panel.ID == id {
 					sm.SelectApp(sid, index)
 					resp += navigateJS(sm.Get(sid), sid)
+					resp += fmt.Sprintf("libroWorkspace.select(%s, false);", components.JSString(id))
 					break
 				}
 			}

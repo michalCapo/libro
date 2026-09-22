@@ -14,7 +14,7 @@ Libro is a Go and Electron desktop workspace for CLI coding agents. The main are
 
 Project agents run in project threads, with one agent per thread. Starting another agent creates a sibling thread under the same project. Project autolaunch creates a project thread. Standalone threads keep their existing behavior.
 
-Collapsible project and thread navigation with one center agent panel per thread, a tabbed right tool dock, and a bottom project-terminal dock. Starting another agent creates another thread so every agent has isolated browser and thread-local tool state. Threads in the same project share Issues and one live project start/stop application. The selected right tool overlays the agent when the workspace is too narrow to show both. Browser and terminal tools use a shared plugin manifest and host-managed lifecycle. Keep existing project and worktree workflows.
+Collapsible project and thread navigation with one center agent panel per thread, a tabbed right tool dock, and a bottom project-terminal dock. Starting another agent creates another thread so every agent has isolated browser and thread-local tool state. Threads in the same project share Issues, one live project start/stop application, and bottom terminal processes without restarting them when switching threads. The selected right tool overlays the agent when the workspace is too narrow to show both. Browser and terminal tools use a shared plugin manifest and host-managed lifecycle. Show running bottom terminal activity on the project row; standalone threads show their own activity. Shortcut numbers trail all row indicators and actions. Keep existing project and worktree workflows.
 
 ## Brand Commitments
 
