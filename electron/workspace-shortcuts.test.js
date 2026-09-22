@@ -748,6 +748,42 @@ test('thread list keeps all open threads and only the newest ten archived thread
   assert.equal(threads.length, 25, 'older archives remain stored')
 })
 
+test('clicking a project thread hides an overlaying tool before selecting it', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('  function renderProjectAgents()'), source.indexOf('  function renderProjectShortcuts()'))
+  const agent = { dataset: { appId: 'agent', appName: 'Agent', dock: 'center', taskTitle: 'Task' } }
+  const tool = { dataset: { appId: 'browser', dock: 'right' } }
+  const label = { textContent: 'Task' }
+  const tab = {
+    dataset: { agentId: 'agent' }, title: '',
+    querySelector: () => label,
+    setAttribute() {},
+  }
+  const tree = {
+    dataset: {}, children: [tab],
+    classList: { contains: name => name === 'ws-project-agents' },
+    setAttribute() {}, insertBefore() {},
+  }
+  const parent = { nextElementSibling: tree, after() {} }
+  const row = { dataset: { projectKey: 'project' }, parentElement: parent, querySelector: () => ({ textContent: 'Project' }) }
+  const grid = {
+    dataset: { workspaceProject: 'project' },
+    querySelector: selector => selector === '[data-tool-overlay=true][data-dock-visible=true]' ? {} : null,
+  }
+  const state = { hidden: new Set() }
+  let selected = ''
+  vm.runInNewContext(handler + ';renderProjectAgents();', {
+    window: { __libroActiveProject: 'project', __libroSelectedApp: 'browser' },
+    document: { querySelectorAll: selector => selector === '[data-workspace-project]' ? [grid] : [row] },
+    frames: () => [agent, tool], dockState: () => state,
+    closeSettings() {}, innerWidth: 1000, prefs: {}, save() {},
+    select: id => { selected = id }, call() {},
+  })
+  tab.onclick()
+  assert.equal(selected, 'agent')
+  assert.equal(state.hidden.has('browser'), true)
+})
+
 test('closing panels restores focus without revealing hidden terminals', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('  function restorePanelFocus('), source.indexOf('  function restoreAgentFocus('))

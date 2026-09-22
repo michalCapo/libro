@@ -350,6 +350,9 @@
         tab.onclick = () => {
           closeSettings();
           if (innerWidth <= 760) { prefs.projects = false; save(); }
+          if (grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
+            frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => dockState(grid).hidden.add(frame.dataset.appId));
+          }
           if (grid.dataset.workspaceProject === window.__libroActiveProject) select(entry.id);
           else call('project.switch', {name:grid.dataset.workspaceProject, appId:entry.id});
         };
