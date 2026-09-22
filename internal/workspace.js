@@ -285,7 +285,7 @@
   }
   function renderThreadList(list, threads) {
     if (!list) return;
-    threads = threads.slice().reverse();
+    if (!list.dataset.projectThreads) threads = threads.slice().reverse();
     const signature = JSON.stringify([threads, window.__libroActiveProject]);
     if (list.dataset.signature === signature) return;
     list.dataset.signature = signature; list.replaceChildren();
@@ -362,7 +362,8 @@
     if (!tool.getBoundingClientRect || !frame.getBoundingClientRect) return true;
     const toolRect = tool.getBoundingClientRect();
     const frameRect = frame.getBoundingClientRect();
-    if (!toolRect.width || !frameRect.width) return true;
+    // Inactive threads have no layout, so they cannot establish an overlap.
+    if (!toolRect.width || !frameRect.width) return false;
     return toolRect.left < frameRect.right && toolRect.right > frameRect.left;
   }
   function renderProjectAgents() {

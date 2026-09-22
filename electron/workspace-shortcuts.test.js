@@ -774,10 +774,10 @@ test('thread list keeps all open threads and only the newest ten archived thread
 test('clicking a project thread only hides a tool that covers the selected agent', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('  function toolOverlapsFrame('), source.indexOf('  function renderThreadShortcuts()'))
-  for (const overlaps of [false, true]) {
+  for (const visible of [false, true]) for (const overlaps of [false, true]) {
     const agent = {
       dataset: { appId: 'agent', appName: 'Agent', dock: 'center', taskTitle: 'Task' },
-      getBoundingClientRect: () => ({ left:0, right:640, width:640 }),
+      getBoundingClientRect: () => ({ left:0, right:visible ? 640 : 0, width:visible ? 640 : 0 }),
     }
     const tool = {
       dataset: { appId: 'browser', dock: 'right' },
@@ -803,15 +803,18 @@ test('clicking a project thread only hides a tool that covers the selected agent
     const state = { hidden: new Set() }
     let selected = ''
     vm.runInNewContext(handler + ';renderProjectAgents();', {
-      window: { __libroActiveProject: 'project', __libroSelectedApp: 'browser' },
+      window: { __libroActiveProject: visible ? 'project' : 'other', __libroSelectedApp: 'browser' },
       document: { querySelectorAll: selector => selector === '[data-workspace-project]' ? [grid] : [row] },
       frames: () => [agent, tool], dockState: () => state,
       closeSettings() {}, innerWidth: 1000, prefs: {}, save() {},
-      select: id => { selected = id }, call() {},
+      select: id => { selected = id }, call(action, data) {
+        assert.equal(action, 'project.switch')
+        selected = data.appId
+      },
     })
     tab.onclick()
     assert.equal(selected, 'agent')
-    assert.equal(state.hidden.has('browser'), overlaps)
+    assert.equal(state.hidden.has('browser'), visible && overlaps)
   }
 })
 
@@ -861,6 +864,10 @@ test('project threads hide archived agents and stay separate from standalone thr
   assert.deepEqual(ids(standalone), ['standalone'])
   assert.deepEqual(ids(project), ['one'])
   assert.deepEqual(ids(other), ['other'])
+  context.window.__libroThreads.push({ id: 'new', name: 'New', project: 'project' })
+  context.window.__libroActiveProject = 'new'
+  vm.runInContext('renderThreads()', context)
+  assert.deepEqual(ids(project), ['one', 'new'])
   project.children[0].children[0].onclick()
   assert.deepEqual(calls, [['project.switch', { name: 'one', appId: '' }]])
   const grid = { dataset: { workspaceProject: 'one' } }
