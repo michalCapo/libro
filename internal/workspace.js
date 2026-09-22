@@ -904,7 +904,9 @@
       const isOverlay = overlay && frame === right[0];
       frame.dataset.toolOverlay = String(isOverlay);
       frame.style.left = isOverlay ? Math.max(0, grid.clientWidth - width(frame)) + grid.scrollLeft + 'px' : '';
-      frame.style.justifySelf = center.length === 1 && frame === center[0] && !full && !overlay ? 'center' : 'start';
+      // Keep agent panels anchored to the left while the flexible column
+      // absorbs spare space before right-docked tools.
+      frame.style.justifySelf = 'start';
       frame.style.gridRow = frame === terminal && !full ? '2' : '1';
       frame.style.gridColumn = frame === terminal && !full ? '1 / -1' : String(index + 1 + (!center.length && !full ? 1 : 0));
       if (isOverlay) frame.style.gridColumn = '1 / -1';
