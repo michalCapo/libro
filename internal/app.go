@@ -795,7 +795,10 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 	// Close every panel and terminal in the active project.
 	registerAction(app, "project.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
-		apps := sm.CloseProject(sid)
+		apps, err := sm.CloseProject(sid)
+		if err != nil {
+			return r.Notify("error", "Could not archive thread")
+		}
 		for _, a := range apps {
 			if a.Type == AppTypeTerminal {
 				tm.Stop(a.ID)

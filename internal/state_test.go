@@ -62,7 +62,10 @@ func TestCloseProjectOnlyClearsActiveProject(t *testing.T) {
 		},
 	}
 	sm.states["test"] = s
-	apps := sm.CloseProject("test")
+	apps, err := sm.CloseProject("test")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(apps) != 2 || len(s.Apps) != 0 || s.SelectedIndex != 0 {
 		t.Fatalf("close did not return and clear all panels: %+v", s)
 	}
@@ -75,7 +78,7 @@ func TestCloseProjectOnlyClearsActiveProject(t *testing.T) {
 	if !sm.SwitchProject("test", "work") || len(s.Apps) != 0 {
 		t.Fatal("closed panels restored on switching back")
 	}
-	if len(sm.CloseProject("missing")) != 0 {
+	if apps, err := sm.CloseProject("missing"); err != nil || len(apps) != 0 {
 		t.Fatal("missing session returned panels")
 	}
 }

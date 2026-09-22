@@ -751,18 +751,24 @@ func (s *AppState) removeProject(projectName string) ([]Application, bool) {
 	return apps, true
 }
 
-// CloseProject clears the active project's panels, returning them for cleanup.
-func (sm *StateManager) CloseProject(sessionID string) []Application {
+// CloseProject archives the active thread and clears its panels for cleanup.
+func (sm *StateManager) CloseProject(sessionID string) ([]Application, error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
 	if s == nil {
-		return nil
+		return nil, nil
+	}
+	if thread := s.thread(s.ActiveProject); thread != nil {
+		if _, err := db.Exec("UPDATE threads SET archived = 1 WHERE id = ?", thread.ID); err != nil {
+			return nil, err
+		}
+		thread.Archived = true
 	}
 	apps := s.Apps
 	s.Apps = nil
 	s.SelectedIndex = 0
-	return apps
+	return apps, nil
 }
 
 // SwitchProject switches the active project, saving and restoring app state
