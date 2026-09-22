@@ -355,44 +355,40 @@ test('close project asks for confirmation, uses saved binding and ignores repeat
   }
 })
 
-test('project numbers skip empty projects and update when the last panel closes', () => {
+test('project agent threads are numbered instead of project rows', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const render = source.slice(source.indexOf('  function renderProjectShortcuts()'), source.indexOf('  let notificationAudio;'))
-  const rows = Array.from({ length: 12 }, (_, i) => ({
-    dataset: { projectKey: String(i) }, attributes: {}, badge: null,
+  const render = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  let notificationAudio;'))
+  const rows = Array.from({ length: 11 }, (_, i) => ({
+    dataset: { agentId: String(i) }, attributes: {}, badge: null,
     querySelector() { return this.badge },
     append(badge) { this.badge = badge; badge.remove = () => { this.badge = null } },
     setAttribute(key, value) { this.attributes[key] = value },
     removeAttribute(key) { delete this.attributes[key] },
   }))
-  const grids = rows.map((row, i) => ({ dataset: { workspaceProject: row.dataset.projectKey }, panels: i ? [{}] : [] }))
   const context = vm.createContext({
-    document: { querySelectorAll: selector => selector === '.ws-project-row' ? rows : grids },
-    frames: grid => grid.panels,
+    document: { querySelectorAll: selector => {
+      assert.equal(selector, '.ws-project-agent, .ws-thread-row')
+      return rows
+    } },
     node: () => ({ setAttribute() {} }),
   })
-  vm.runInContext(render + '\nrenderProjectShortcuts();', context)
-  assert.deepEqual(rows.map(row => row.dataset.projectShortcut), ['', '1', '2', '3', '4', '5', '6', '7', '8', '9', '', ''])
-  assert.equal(rows[1].badge.textContent, '1')
-  assert.equal(rows[1].attributes['aria-keyshortcuts'], 'Control+1')
-  grids[1].panels = []
-  vm.runInContext('renderProjectShortcuts()', context)
-  assert.equal(rows[1].badge, null)
-  assert.equal(rows[1].attributes['aria-keyshortcuts'], undefined)
-  assert.equal(rows[2].dataset.projectShortcut, '1')
-  assert.equal(rows[10].dataset.projectShortcut, '9')
+  vm.runInContext(render + '\nrenderThreadShortcuts();', context)
+  assert.deepEqual(rows.map(row => row.dataset.projectShortcut), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', ''])
+  assert.equal(rows[0].badge.textContent, '1')
+  assert.equal(rows[0].attributes['aria-keyshortcuts'], 'Control+1')
+  assert.equal(rows[9].badge, null)
 })
 
-test('Ctrl+1–9 selects the numbered project once', () => {
+test('Ctrl+1–9 selects the numbered thread once', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('    if (event.ctrlKey &&'), source.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"))
   for (const key of ['1', '9']) for (const repeat of [false, true]) {
     let clicked = 0
     vm.runInNewContext('(function () {' + handler + '})()', {
       event: { key, ctrlKey: true, repeat, preventDefault() {}, stopImmediatePropagation() {} },
-      renderProjectShortcuts() {},
+      renderThreadShortcuts() {},
       document: { querySelector(selector) {
-        assert.equal(selector, '.ws-project-row[data-project-shortcut="' + key + '"]')
+        assert.equal(selector, '[data-project-shortcut="' + key + '"]')
         return { click() { clicked++ } }
       } },
     })
@@ -650,9 +646,9 @@ test('thread titles ignore harness placeholders and extract task names', () => {
 })
 
 
-test('thread numbers continue after running projects and skip archived threads', () => {
+test('standalone thread numbers continue after project agent threads and skip archived threads', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const render = source.slice(source.indexOf('  function renderProjectShortcuts()'), source.indexOf('  let notificationAudio;'))
+  const render = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  let notificationAudio;'))
   const rows = ['project', 'project', ...Array(10).fill('thread')].map((kind, i) => ({
     dataset: { kind, projectKey: String(i) }, parentElement: { dataset: { archived: String(i === 3) } }, attributes: {}, badge: null,
     querySelector() { return this.badge },
@@ -661,22 +657,25 @@ test('thread numbers continue after running projects and skip archived threads',
     removeAttribute(key) { delete this.attributes[key] },
   }))
   const context = vm.createContext({
-    document: { querySelectorAll: selector => selector === '.ws-project-row' ? rows : [0, 1].map(i => ({ dataset: { workspaceProject: String(i) } })) },
-    frames: () => [{}], node: () => ({ setAttribute() {} }),
+    document: { querySelectorAll: selector => {
+      assert.equal(selector, '.ws-project-agent, .ws-thread-row')
+      return rows
+    } },
+    node: () => ({ setAttribute() {} }),
   })
-  vm.runInContext(render + ';renderProjectShortcuts()', context)
+  vm.runInContext(render + ';renderThreadShortcuts()', context)
   assert.equal(rows[0].dataset.projectShortcut, '1')
   assert.equal(rows[1].dataset.projectShortcut, '2')
   assert.deepEqual(rows.slice(2).map(row => row.dataset.projectShortcut), ['3', '', '4', '5', '6', '7', '8', '9', '', ''])
   assert.equal(rows[2].badge.textContent, '3')
   assert.equal(rows[2].attributes['aria-keyshortcuts'], 'Control+3')
   rows[2].parentElement.dataset.archived = 'true'
-  vm.runInContext('renderProjectShortcuts()', context)
+  vm.runInContext('renderThreadShortcuts()', context)
   assert.equal(rows[2].badge, null)
   assert.equal(rows[4].dataset.projectShortcut, '3')
 })
 
-test('Ctrl+digits selects the shared project and thread range', () => {
+test('Ctrl+digits selects the shared project-agent and standalone-thread range', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('    const number = /^[1-9]$/'), source.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"))
   for (const [key, code, number] of [['1', 'Digit1', '1'], ['!', 'Digit1', '1'], ['(', 'Digit9', '9']]) {
@@ -684,9 +683,9 @@ test('Ctrl+digits selects the shared project and thread range', () => {
       let clicked = 0
       vm.runInNewContext('(function(){' + handler + '})()', {
         event: { key, code, ctrlKey: true, shiftKey: false, repeat, preventDefault() {}, stopImmediatePropagation() {} },
-        renderProjectShortcuts() {},
+        renderThreadShortcuts() {},
         document: { querySelector(selector) {
-          assert.equal(selector, '.ws-project-row[data-project-shortcut="' + number + '"]')
+          assert.equal(selector, '[data-project-shortcut="' + number + '"]')
           return { click() { clicked++ } }
         } },
       })
@@ -750,7 +749,7 @@ test('thread list keeps all open threads and only the newest ten archived thread
 
 test('clicking a project thread hides an overlaying tool before selecting it', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const handler = source.slice(source.indexOf('  function renderProjectAgents()'), source.indexOf('  function renderProjectShortcuts()'))
+  const handler = source.slice(source.indexOf('  function renderProjectAgents()'), source.indexOf('  function renderThreadShortcuts()'))
   const agent = { dataset: { appId: 'agent', appName: 'Agent', dock: 'center', taskTitle: 'Task' } }
   const tool = { dataset: { appId: 'browser', dock: 'right' } }
   const label = { textContent: 'Task' }

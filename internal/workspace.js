@@ -362,13 +362,11 @@
       tabs.forEach(tab => tab.remove());
     });
   }
-  function renderProjectShortcuts() {
-    const running = new Set([...document.querySelectorAll('[data-workspace-project]')]
-      .filter(grid => frames(grid).length > 0).map(grid => grid.dataset.workspaceProject));
+  function renderThreadShortcuts() {
     let index = 0;
-    document.querySelectorAll('.ws-project-row').forEach(row => {
+    document.querySelectorAll('.ws-project-agent, .ws-thread-row').forEach(row => {
       const thread = row.dataset.kind === 'thread';
-      const available = thread ? row.parentElement.dataset.archived !== 'true' : running.has(row.dataset.projectKey);
+      const available = !thread || row.parentElement.dataset.archived !== 'true';
       const number = available && index < 9 ? String(++index) : '';
       row.dataset.projectShortcut = number;
       let badge = row.querySelector('.ws-project-shortcut');
@@ -542,7 +540,7 @@
     renderProjects();
     renderThreads();
     renderProjectAgents();
-    renderProjectShortcuts();
+    renderThreadShortcuts();
     renderProjectActivity();
     renderProjectTerminals();
     window.libroFiles?.init();
@@ -709,8 +707,8 @@
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && number) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) {
-        renderProjectShortcuts();
-        document.querySelector('.ws-project-row[data-project-shortcut="' + number + '"]')?.click();
+        renderThreadShortcuts();
+        document.querySelector('[data-project-shortcut="' + number + '"]')?.click();
       }
       return;
     }

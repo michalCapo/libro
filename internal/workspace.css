@@ -382,7 +382,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-project-item:has(.ws-project-shortcut) .ws-project-settings{right:36px}
 .ws-project-item:has(.ws-project-shortcut):has(.ws-project-remove) .ws-project-settings{right:66px}
 .ws-project-item:has(.ws-project-shortcut) .ws-project-remove{right:36px}
-.ws-project-shortcut{position:absolute;right:12px}
+.ws-project-item .ws-project-shortcut{position:absolute;right:12px}
 .ws-project-item:has(.ws-project-shortcut):has(.ws-project-terminal) .ws-project-terminal{position:absolute;right:40px}
 .ws-project-item:has(.ws-project-shortcut):has(.ws-project-terminal) .ws-project-row{padding-right:94px}
 .ws-project-item:has(.ws-project-shortcut):has(.ws-project-terminal) .ws-project-settings{right:64px}
@@ -407,7 +407,8 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 .ws-project-item:has(.ws-project-row[aria-current=true]) + .ws-project-agents::after{content:"";position:absolute;inset:0;border:1px solid var(--ws-accent);border-top:0;border-radius:inherit;pointer-events:none;z-index:1}
 .ws-project-agent{box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;min-width:0;min-height:34px;padding:7px 8px 7px 12px;border:0;border-radius:0;background:transparent;color:var(--ws-muted);text-align:left;font:inherit;font-size:12px;line-height:1;cursor:pointer}
 .ws-project-agent .material-icons-round{font-size:15px;flex-shrink:0}
-.ws-project-agent span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ws-project-agent span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ws-project-agent .ws-project-shortcut{position:static;min-width:20px;height:20px;padding:0 4px}
 .ws-project-agent:hover{background:var(--ws-hover);color:var(--ws-fg)}
 .ws-project-agent[aria-current=true]{position:relative;background:transparent;color:var(--ws-fg);box-shadow:none}
 .ws-project-agent[aria-current=true]::after{content:"";position:absolute;inset:0;z-index:0;border-radius:0;background:color-mix(in srgb,var(--ws-accent) 8%,var(--ws-raised));pointer-events:none}
