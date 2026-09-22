@@ -162,8 +162,7 @@ func closeWorkspaceApp(sid, appID string) string {
 	return js + "if(window.libroWorkspace)libroWorkspace.restorePanelFocus();" + renderTopBar(state, sid).ToJSReplace(TopBarID) + projectsJS(state)
 }
 
-// Autolaunch resumes a thread's only agent. For a project it creates one
-// project-backed thread, so agent and tool state never share another session.
+// Autolaunch starts an agent panel directly in the active workspace.
 func projectAutolaunchJS(state *AppState, sid string) string {
 	if state.ActiveProject == "" {
 		return ""
@@ -183,15 +182,6 @@ func projectAutolaunchJS(state *AppState, sid string) string {
 		}
 		if !autolaunch || plugin.Disabled || plugin.Removed || plugin.Dock != "center" || plugin.Type != AppTypeTerminal {
 			continue
-		}
-		if thread == nil {
-			for _, existing := range state.Threads {
-				if !existing.Archived && existing.Project == state.ActiveProject {
-					return ""
-				}
-			}
-			payload, _ := json.Marshal(sidData(sid, "agent", plugin.ID, "project", state.ActiveProject))
-			return fmt.Sprintf("__ws.call('thread.create',%s);", payload)
 		}
 		payload, _ := json.Marshal(sidData(sid, "type", string(plugin.Type), "plugin", plugin.ID, "name", plugin.Name, "dock", "center", "writable", true, "autolaunchProject", state.ActiveProject))
 		return fmt.Sprintf("__ws.call('app.start',%s);", payload)
@@ -583,13 +573,6 @@ func Run(assets embed.FS, desktop bool) error {
 		command, _ := data["command"].(string)
 		threadState := sm.Get(sid)
 		candidate := Application{Type: AppType(appType), Command: command, PluginID: pluginID, Dock: dock}
-		if threadState.thread(threadState.ActiveProject) == nil && isAgentApp(candidate) {
-			if pluginID == "" {
-				return r.Notify("error", "Choose a configured agent to start a new thread")
-			}
-			payload, _ := json.Marshal(sidData(sid, "agent", pluginID, "project", threadState.ActiveProject))
-			return fmt.Sprintf("__ws.call('thread.create',%s);", payload)
-		}
 		if threadState.thread(threadState.ActiveProject) != nil {
 			if !threadState.canStartThreadApp(candidate) {
 				return ""

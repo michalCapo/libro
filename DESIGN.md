@@ -149,6 +149,8 @@ Use the system sans-serif stack in `body`; there is no separate display font. Bo
 
 ## Layout
 
+Project workspaces support multiple center agent panels side by side. New agent actions in projects add a panel directly. The single-agent and new-thread launch rules below apply to thread workspaces only.
+
 The shell has a 56px titlebar, a 26px statusbar, and left project navigation. The sidebar is 216px wide. At 760px or less it overlays the content between the titlebar and statusbar, with width `min(216px, calc(100vw - 48px))`. It defaults closed on small screens when no preference exists; selecting a project closes it. The brand and trailing status text hide, and empty-state headings become 24px.
 
 The main area uses center, right, and bottom docks with no outer card padding. Each thread has at most one center agent panel. Starting another agent creates and selects a new thread, giving that agent its own browser and thread-local tool state. Project-backed threads reuse the same Issues panel and live project start/stop application; those panels move with the selected thread without restarting. The right dock keeps multiple tools alive but shows one selected tool at a time. If the selected right tool and center panel do not fit together, the tool overlays the right side. The bottom dock can show the shared project command below the main row. A shared tab row selects the running agent and tools and exposes their size picker.

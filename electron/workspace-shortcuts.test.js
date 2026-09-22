@@ -434,7 +434,7 @@ for (const thread of [false, true]) test('new browser creates separate blank pan
   }
 })
 
-test('opening an agent creates a project-backed thread instead of another panel', () => {
+for (const thread of [false, true]) for (const occupied of [false, true]) test(`agent launch routing: thread=${thread}, occupied=${occupied}`, () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const launch = source.slice(source.indexOf('  function openPlugin('), source.indexOf('  function select('))
   const calls = []
@@ -444,11 +444,17 @@ test('opening an agent creates a project-backed thread instead of another panel'
       __libroPlugins: [{ id: 'codex', type: 'terminal', name: 'Codex', dock: 'center' }],
     },
     activeGrid: () => ({ dataset: { thread: 'false' } }),
-    isThread: () => false,
-    frames: () => [],
+    isThread: () => thread,
+    frames: () => occupied ? [{ dataset: { dock: 'center' } }] : [],
     call: (action, data) => calls.push([action, JSON.parse(JSON.stringify(data))]),
   })
-  assert.deepEqual(calls, [['thread.create', { agent: 'codex', project: 'project' }]])
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0][0], thread && occupied ? 'thread.create' : 'app.start')
+  if (thread && occupied) assert.equal(calls[0][1].agent, 'codex')
+  else {
+    assert.equal(calls[0][1].plugin, 'codex')
+    assert.equal(calls[0][1].dock, 'center')
+  }
 })
 
 test('browser navigation wraps, includes hidden browsers, and skips other tools', () => {

@@ -63,7 +63,7 @@ bundle matches its source. Run the editor integration tests with
 
 ### AI assistants
 
-- Open one or more assistants. Each new assistant gets a separate thread with one agent panel.
+- Projects can open multiple agent panels side by side. Standalone threads have one agent each; starting another agent from an occupied thread creates a new thread.
 - Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)

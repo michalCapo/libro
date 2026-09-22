@@ -631,7 +631,7 @@ func renderWorkspaceSettings() *r.Node {
 				r.Div("ws-settings-row").Render(
 					r.Div("ws-settings-copy").Render(
 						r.El("label", "").Attr("for", "autolaunch-agent").Text("Autolaunch agent"),
-						r.P("").ID("autolaunch-agent-help").Text("Create a thread with this agent when you open a project with no threads. Choose Off to start manually. Apply with Save agents below."),
+						r.P("").ID("autolaunch-agent-help").Text("Start this agent when you open a project with no agent panels. Choose Off to start manually. Apply with Save agents below."),
 					),
 					r.El("select", "ws-settings-select").ID("autolaunch-agent").Attr("form", "agent-commands-form").Attr("aria-describedby", "autolaunch-agent-help"),
 				),

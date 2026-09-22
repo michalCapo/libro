@@ -119,9 +119,9 @@
       trigger.setAttribute('aria-busy', 'true');
     }
     const targetDock = dock || plugin.dock;
-    if (targetDock === 'center') {
+    if (targetDock === 'center' && isThread()) {
       const grid = activeGrid();
-      const emptyThread = isThread(grid) && !frames(grid).some(frame => frame.dataset.dock === 'center');
+      const emptyThread = !frames(grid).some(frame => frame.dataset.dock === 'center');
       if (emptyThread) {
         call('app.start', {
           type: plugin.type,
@@ -241,7 +241,7 @@
     const heading = node(center ? 'h1' : 'h2', '', center ? (standalone ? 'What would you like to do in ' : 'What are we building on ') : zone === 'right' ? 'Tools for your workspace' : 'Your project terminal');
     if (center) heading.append(node('span', 'ws-project-accent', grid.dataset.projectLabel), document.createTextNode('?'));
     el.append(heading);
-    el.append(node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : 'Start a new agent thread for this project. Each thread keeps its own tools and browser state.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.'));
+    el.append(node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.'));
     const actions = node('div', 'ws-agent-actions');
 
     (center ? window.__libroPlugins.filter(p => p.dock === 'center' && p.type === 'terminal' && !p.disabled && !p.removed).slice(0, 3).map(p => p.id) : zone === 'right' ? ['browser', 'lazyrepo', 'terminal'] : ['terminal']).forEach(id => {

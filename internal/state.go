@@ -463,7 +463,7 @@ func applyAppWidth(app *Application, width Width) {
 }
 
 // SizeNewAgent expands a thread's single agent. Project agents keep their
-// configured width while legacy project workspaces are still open.
+// configured width in project workspaces.
 func (sm *StateManager) SizeNewAgent(sessionID, appID string, defaultWidth Width) []Application {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()

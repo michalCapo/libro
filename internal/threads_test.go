@@ -239,13 +239,3 @@ func TestThreadSessionSurvivesRestartAndDefaultAgentChange(t *testing.T) {
 		t.Fatal("in-agent session switch was not persisted")
 	}
 }
-
-func TestProjectAutolaunchSkipsExistingProjectThread(t *testing.T) {
-	state := &AppState{
-		ActiveProject: "project",
-		Threads:       []Thread{{ID: "thread:test", Project: "project"}},
-	}
-	if got := projectAutolaunchJS(state, "test"); got != "" {
-		t.Fatalf("autolaunched beside existing project thread: %s", got)
-	}
-}
