@@ -573,6 +573,10 @@ func Run(assets embed.FS, desktop bool) error {
 		command, _ := data["command"].(string)
 		threadState := sm.Get(sid)
 		candidate := Application{Type: AppType(appType), Command: command, PluginID: pluginID, Dock: dock}
+		if threadState.needsProjectThread(candidate) {
+			payload, _ := json.Marshal(sidData(sid, "agent", pluginID, "project", threadState.ActiveProject))
+			return fmt.Sprintf("__ws.call('thread.create',%s);", payload)
+		}
 		if threadState.thread(threadState.ActiveProject) != nil {
 			if !threadState.canStartThreadApp(candidate) {
 				return ""
@@ -1229,6 +1233,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 		}
 
 		prevState := sm.Get(sid)
+		name = prevState.projectWorkspace(name)
 		closeDevtoolsJS := closeDevtoolsForAppsJS(prevState.Apps)
 		targetRendered := prevState.renderedProjects[name]
 

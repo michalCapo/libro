@@ -272,13 +272,20 @@
     form.onsubmit = event => { event.preventDefault(); call('project.command.save', {name, command:input.value}); };
     dialog.append(heading, form); root.append(dialog); dialog.showModal(); input.focus();
   }
-  function newThread() {
-    call('thread.create', {});
+  function newThread(project = window.__libroActiveProject || '') {
+    call('thread.create', {project});
   }
   function threadArchived() { refresh(); }
   function renderThreads() {
-    const list = document.getElementById('workspace-thread-list'); if (!list) return;
-    const threads = (window.__libroThreads || []).slice().reverse();
+    const threads = window.__libroThreads || [];
+    renderThreadList(document.getElementById('workspace-thread-list'), threads.filter(thread => !thread.project));
+    document.querySelectorAll('[data-project-threads]').forEach(list => {
+      renderThreadList(list, threads.filter(thread => thread.project === list.dataset.projectThreads));
+    });
+  }
+  function renderThreadList(list, threads) {
+    if (!list) return;
+    threads = threads.slice().reverse();
     const signature = JSON.stringify([threads, window.__libroActiveProject]);
     if (list.dataset.signature === signature) return;
     list.dataset.signature = signature; list.replaceChildren();
@@ -294,7 +301,7 @@
       archive.classList.add('ws-project-remove'); item.append(row, archive); list.append(item);
     };
     threads.filter(thread => !thread.archived).forEach(appendThread);
-    if (!threads.length) {
+    if (!threads.length && !list.dataset.projectThreads) {
       list.append(node('div', 'ws-no-threads', 'No threads to show'));
     }
     threads.filter(thread => thread.archived).slice(0, 10).forEach(appendThread);
@@ -328,6 +335,16 @@
         remove.classList.add('ws-project-remove'); item.append(remove);
       }
       list.append(item);
+      const threadList = node('div', 'ws-project-threads');
+      threadList.dataset.projectThreads = row.dataset.projectKey;
+      threadList.setAttribute('role', 'group');
+      threadList.setAttribute('aria-label', projectName + ' threads');
+      list.append(threadList);
+      const create = button('New thread in ' + projectName, 'add', event => {
+        event.stopPropagation();
+        newThread(row.dataset.projectKey);
+      });
+      create.classList.add('ws-project-new-thread'); item.append(create);
     });
   }
   function toolOverlapsFrame(grid, frame) {
@@ -531,9 +548,10 @@
   function renderProjectTerminals() {
     const running = new Set([...document.querySelectorAll('[data-workspace-project]')]
       .filter(grid => grid.querySelector('[data-dock="bottom"] [data-process-status="running"]'))
-      .map(grid => grid.dataset.workspaceProject));
+      .flatMap(grid => [grid.dataset.workspaceProject, ...(grid.querySelector('[data-plugin="project-command"] [data-process-status="running"]') ? [grid.dataset.projectScope] : [])]));
     document.querySelectorAll('.ws-project-row').forEach(row => {
-      const active = running.has(row.dataset.projectKey);
+      const thread = (window.__libroThreads || []).find(thread => thread.id === row.dataset.projectKey);
+      const active = running.has(row.dataset.projectKey) || !!thread?.project && running.has(thread.project);
       let icon = row.querySelector('.ws-project-terminal');
       if (!active) { icon?.remove(); return; }
       if (icon) return;

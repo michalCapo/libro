@@ -2791,7 +2791,7 @@ func projectsJS(state *AppState) string {
 		if p.Virtual {
 			continue
 		}
-		isActive := p.Name == state.ActiveProject
+		isActive := p.Name == state.projectScope(state.ActiveProject)
 		entry := jsProject{
 			Kind:        "project",
 			Name:        p.Name,
@@ -2841,7 +2841,7 @@ func projectsJS(state *AppState) string {
 				continue
 			}
 			vtName := p.Name + "/" + wt.Branch
-			wtActive := state.ActiveProject == vtName
+			wtActive := state.projectScope(state.ActiveProject) == vtName
 			all = append(all, jsProject{
 				DisplayName: displayProjectName(wt.Branch, wt.Path),
 				Kind:        "worktree",

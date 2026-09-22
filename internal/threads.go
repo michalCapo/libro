@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os/exec"
+	"slices"
 	"strings"
 
 	r "github.com/michalCapo/g-sui/ui"
@@ -89,6 +91,26 @@ func enabledAgentPlugin(id string) bool {
 	return false
 }
 
+func defaultProjectThreadAgent() string {
+	configured := defaultThreadAgent()
+	fallback := ""
+	for _, plugin := range plugins() {
+		if plugin.Disabled || plugin.Removed || plugin.Dock != "center" || plugin.Type != AppTypeTerminal {
+			continue
+		}
+		if _, err := exec.LookPath(extractBaseCmd(agentCommand(plugin))); err != nil {
+			continue
+		}
+		if plugin.ID == configured {
+			return plugin.ID
+		}
+		if fallback == "" || plugin.Autolaunch {
+			fallback = plugin.ID
+		}
+	}
+	return fallback
+}
+
 func registerThreadActions(app *r.App, switchWorkspace func(string, string) string) {
 	registerAction(app, "thread.create", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
@@ -107,7 +129,17 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) stri
 		}
 		state := sm.Get(sid)
 		projectID, _ := data["project"].(string)
+		restoreWorktreeProject(sm, sid, projectID)
 		project, path := threadProjectContext(state, projectID)
+		if projectID != "" && state.thread(projectID) == nil && project == "" {
+			return r.Notify("error", "Project not found")
+		}
+		if project != "" && agentID == "" {
+			agentID = defaultProjectThreadAgent()
+			if agentID == "" {
+				return r.Notify("error", "Install or enable an agent before creating a project thread")
+			}
+		}
 		var random [16]byte
 		if _, err := rand.Read(random[:]); err != nil {
 			return r.Notify("error", "Could not create thread")
@@ -164,6 +196,33 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) stri
 		// Archiving keeps the workspace alive and recoverable without interrupting commands.
 		return projectsJS(state) + fmt.Sprintf("if(window.libroWorkspace)libroWorkspace.threadArchived(%t);", archived)
 	})
+}
+
+// Selecting a project returns to an open thread instead of creating another.
+func (s *AppState) projectWorkspace(project string) string {
+	if s.thread(project) != nil {
+		return project
+	}
+	if thread := s.thread(s.ActiveProject); thread != nil && thread.Project == project && !thread.Archived {
+		return thread.ID
+	}
+	for i := len(s.Threads) - 1; i >= 0; i-- {
+		if thread := s.Threads[i]; thread.Project == project && !thread.Archived {
+			return thread.ID
+		}
+	}
+	return project
+}
+
+// Project agents always belong to a thread. An occupied thread starts a sibling.
+func (s *AppState) needsProjectThread(app Application) bool {
+	if s.projectScope(s.ActiveProject) == "" || !isAgentApp(app) {
+		return false
+	}
+	if s.thread(s.ActiveProject) == nil {
+		return true
+	}
+	return slices.ContainsFunc(s.Apps, isAgentApp)
 }
 
 func (s *AppState) canStartThreadApp(app Application) bool {

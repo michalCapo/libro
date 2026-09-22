@@ -61,7 +61,7 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 				workspaceButton("Add project", "add", fmt.Sprintf("if(window.__libroOpenProjectDialogBrowse){__libroOpenProjectDialogBrowse()}else{__ws.call('project.dialog.open',{sid:%s})}", components.JSString(sid))),
 			),
 			r.Div("ws-project-list").ID("workspace-project-list"),
-			r.Div("ws-sidebar-heading").Render(r.Span("").Text("Threads"), workspaceButton("New thread", "add", "libroWorkspace.newThread()")),
+			r.Div("ws-sidebar-heading").Render(r.Span("").Text("Threads"), workspaceButton("New thread", "add", "libroWorkspace.newThread('')")),
 			r.Div("").ID("workspace-thread-list"),
 		),
 		r.Div("ws-sidebar-footer").Render(

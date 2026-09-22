@@ -610,11 +610,12 @@ test('address popup reclaims native focus only for the workspace sender', () => 
 
 test('new thread shortcut uses the same action as the sidebar and ignores repeats', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const create = source.slice(source.indexOf('  function newThread()'), source.indexOf('  function threadArchived()'))
+  const create = source.slice(source.indexOf('  function newThread('), source.indexOf('  function threadArchived()'))
   const handler = source.slice(source.indexOf("    if (binding && binding === toolKeys['new-thread'])"), source.indexOf("    if (binding && binding === toolKeys['new-agent'])"))
   for (const binding of ['Ctrl+Shift+N', 'Alt+N']) for (const repeat of [false, true]) {
     const calls = []
     vm.runInNewContext(create + '(function(){' + handler + '})()', {
+      window: { __libroActiveProject: 'thread:project' },
       binding, toolKeys: { 'new-thread': binding },
       event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
       call(action) { calls.push(action) },
@@ -760,7 +761,7 @@ test('thread list keeps all open threads and only the newest ten archived thread
   const list = node(), calls = []
   const threads = Array.from({ length: 25 }, (_, id) => ({ id: String(id), name: 'Thread ' + id, archived: id % 2 === 0 }))
   vm.runInNewContext(handler + ';renderThreads()', {
-    window: { __libroThreads: threads }, document: { getElementById: () => list },
+    window: { __libroThreads: threads }, document: { getElementById: () => list, querySelectorAll: () => [] },
     node, button: node, closeSettings() {}, innerWidth: 1000, call(action, data) { calls.push([action, data.name]) },
   })
   const rows = list.children.map(item => item.children[0])
@@ -834,4 +835,44 @@ test('closing panels restores focus without revealing hidden terminals', () => {
     assert.equal(window.__libroSelectedApp, expected)
     assert.deepEqual(focused, expected ? [expected] : [])
   }
+})
+
+test('project threads are grouped under their own project, separate from standalone threads', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('  function renderThreads()'), source.indexOf('  function renderProjects()'))
+  const node = () => ({ dataset: {}, children: [], classList: { add() {} }, setAttribute() {}, append(...items) { this.children.push(...items) }, replaceChildren() { this.children = [] } })
+  const standalone = node(), project = node(), other = node()
+  project.dataset.projectThreads = 'project'
+  other.dataset.projectThreads = 'other'
+  const calls = []
+  const context = vm.createContext({
+    window: { __libroThreads: [
+      { id: 'standalone', name: 'Standalone' },
+      { id: 'one', name: 'One', project: 'project' },
+      { id: 'two', name: 'Two', project: 'project', archived: true },
+      { id: 'other', name: 'Other', project: 'other' },
+    ] },
+    document: { getElementById: () => standalone, querySelectorAll: () => [project, other] },
+    node, button: (label, icon, onclick) => Object.assign(node(), { onclick }), closeSettings() {}, innerWidth: 1000,
+    call: (action, data) => calls.push([action, JSON.parse(JSON.stringify(data))]),
+  })
+  vm.runInContext(handler + ';renderThreads()', context)
+  const ids = list => list.children.map(item => item.children[0].dataset.projectKey)
+  assert.deepEqual(ids(standalone), ['standalone'])
+  assert.deepEqual(ids(project), ['one', 'two'])
+  assert.deepEqual(ids(other), ['other'])
+  project.children[0].children[0].onclick()
+  project.children[1].children[1].onclick()
+  assert.deepEqual(calls, [['project.switch', { name: 'one' }], ['thread.archive', { id: 'two', archived: false }]])
+})
+
+test('new thread uses the active project context, while standalone creation remains explicit', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('  function newThread('), source.indexOf('  function threadArchived()'))
+  const calls = []
+  vm.runInNewContext(handler + ";newThread();newThread('');newThread('other')", {
+    window: { __libroActiveProject: 'thread:project' },
+    call: (action, data) => calls.push([action, data.project]),
+  })
+  assert.deepEqual(calls, [['thread.create', 'thread:project'], ['thread.create', ''], ['thread.create', 'other']])
 })

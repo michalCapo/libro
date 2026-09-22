@@ -63,7 +63,7 @@ bundle matches its source. Run the editor integration tests with
 
 ### AI assistants
 
-- Projects can open multiple agent panels side by side. Standalone threads have one agent each; starting another agent from an occupied thread creates a new thread.
+- Each project thread has one agent and its own browser and tool state. Starting another agent creates a new thread under the same project. Issues and the running application are shared across that project. Standalone threads are unchanged.
 - Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
