@@ -21,6 +21,10 @@ func TestStandaloneThreadPersistenceAndIsolation(t *testing.T) {
 	if _, err := db.Exec("INSERT INTO threads (id, name) VALUES ('thread:test', 'Fix server')"); err != nil {
 		t.Fatal(err)
 	}
+	// Older versions persisted project threads; new sessions must ignore them.
+	if _, err := db.Exec("INSERT INTO threads (id, name, project) VALUES ('thread:old-project', 'Old project thread', 'project')"); err != nil {
+		t.Fatal(err)
+	}
 	manager := NewStateManager()
 	sid := manager.NewSession()
 	state := manager.Get(sid)

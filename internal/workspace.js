@@ -340,11 +340,6 @@
       threadList.setAttribute('role', 'group');
       threadList.setAttribute('aria-label', projectName + ' threads');
       list.append(threadList);
-      const create = button('New thread in ' + projectName, 'add', event => {
-        event.stopPropagation();
-        newThread(row.dataset.projectKey);
-      });
-      create.classList.add('ws-project-new-thread'); item.append(create);
     });
   }
   function toolOverlapsFrame(grid, frame) {

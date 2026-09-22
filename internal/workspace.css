@@ -553,8 +553,3 @@ html.dark .ws-project-agent[data-agent-status=done],html.dark .ws-project-agent[
 .ws-project-threads:empty{display:none}
 .ws-project-threads .ws-project-item[data-archived=true]{opacity:.52}
 .ws-project-threads .ws-project-item[data-archived=true]:hover,.ws-project-threads .ws-project-item[data-archived=true]:focus-within{opacity:1}
-.ws-project-new-thread{position:absolute;right:64px;flex:none;width:28px;height:28px;border:0;border-radius:8px;background:transparent;color:var(--ws-muted);cursor:pointer}
-.ws-project-new-thread:hover{background:var(--ws-hover);color:var(--ws-fg)}
-.ws-project-new-thread:focus-visible{outline:2px solid var(--ws-accent);outline-offset:-2px}
-.ws-project-item:has(.ws-project-new-thread) .ws-project-row{padding-right:96px}
-#libro-workspace[data-projects=false] .ws-project-new-thread{display:none}

@@ -26,7 +26,7 @@ type Thread struct {
 }
 
 func loadThreads() []Thread {
-	rows, err := db.Query("SELECT id, name, archived, project, path, session_id, agent_id, agent_command FROM threads ORDER BY rowid")
+	rows, err := db.Query("SELECT id, name, archived, project, path, session_id, agent_id, agent_command FROM threads WHERE project = '' ORDER BY rowid")
 	if err != nil {
 		return nil
 	}
@@ -145,8 +145,11 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) stri
 			return r.Notify("error", "Could not create thread")
 		}
 		thread := Thread{ID: "thread:" + hex.EncodeToString(random[:]), Name: name, Project: project, Path: path, AgentID: agentID}
-		if _, err := db.Exec("INSERT INTO threads (id, name, project, path, agent_id) VALUES (?, ?, ?, ?, ?)", thread.ID, thread.Name, thread.Project, thread.Path, thread.AgentID); err != nil {
-			return r.Notify("error", "Could not save thread")
+		// Project threads live only in the current session.
+		if thread.Project == "" {
+			if _, err := db.Exec("INSERT INTO threads (id, name, agent_id) VALUES (?, ?, ?)", thread.ID, thread.Name, thread.AgentID); err != nil {
+				return r.Notify("error", "Could not save thread")
+			}
 		}
 		sm.mu.Lock()
 		sm.states[sid].Threads = append(sm.states[sid].Threads, thread)
