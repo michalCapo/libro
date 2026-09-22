@@ -747,40 +747,48 @@ test('thread list keeps all open threads and only the newest ten archived thread
   assert.equal(threads.length, 25, 'older archives remain stored')
 })
 
-test('clicking a project thread hides an overlaying tool before selecting it', () => {
+test('clicking a project thread only hides a tool that covers the selected agent', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const handler = source.slice(source.indexOf('  function renderProjectAgents()'), source.indexOf('  function renderThreadShortcuts()'))
-  const agent = { dataset: { appId: 'agent', appName: 'Agent', dock: 'center', taskTitle: 'Task' } }
-  const tool = { dataset: { appId: 'browser', dock: 'right' } }
-  const label = { textContent: 'Task' }
-  const tab = {
-    dataset: { agentId: 'agent' }, title: '',
-    querySelector: () => label,
-    setAttribute() {},
+  const handler = source.slice(source.indexOf('  function toolOverlapsFrame('), source.indexOf('  function renderThreadShortcuts()'))
+  for (const overlaps of [false, true]) {
+    const agent = {
+      dataset: { appId: 'agent', appName: 'Agent', dock: 'center', taskTitle: 'Task' },
+      getBoundingClientRect: () => ({ left:0, right:640, width:640 }),
+    }
+    const tool = {
+      dataset: { appId: 'browser', dock: 'right' },
+      getBoundingClientRect: () => overlaps ? ({ left:500, right:1140, width:640 }) : ({ left:900, right:1540, width:640 }),
+    }
+    const label = { textContent: 'Task' }
+    const tab = {
+      dataset: { agentId: 'agent' }, title: '',
+      querySelector: () => label,
+      setAttribute() {},
+    }
+    const tree = {
+      dataset: {}, children: [tab],
+      classList: { contains: name => name === 'ws-project-agents' },
+      setAttribute() {}, insertBefore() {},
+    }
+    const parent = { nextElementSibling: tree, after() {} }
+    const row = { dataset: { projectKey: 'project' }, parentElement: parent, querySelector: () => ({ textContent: 'Project' }) }
+    const grid = {
+      dataset: { workspaceProject: 'project' },
+      querySelector: selector => selector === ':scope > [data-tool-overlay=true][data-dock-visible=true]' ? tool : null,
+    }
+    const state = { hidden: new Set() }
+    let selected = ''
+    vm.runInNewContext(handler + ';renderProjectAgents();', {
+      window: { __libroActiveProject: 'project', __libroSelectedApp: 'browser' },
+      document: { querySelectorAll: selector => selector === '[data-workspace-project]' ? [grid] : [row] },
+      frames: () => [agent, tool], dockState: () => state,
+      closeSettings() {}, innerWidth: 1000, prefs: {}, save() {},
+      select: id => { selected = id }, call() {},
+    })
+    tab.onclick()
+    assert.equal(selected, 'agent')
+    assert.equal(state.hidden.has('browser'), overlaps)
   }
-  const tree = {
-    dataset: {}, children: [tab],
-    classList: { contains: name => name === 'ws-project-agents' },
-    setAttribute() {}, insertBefore() {},
-  }
-  const parent = { nextElementSibling: tree, after() {} }
-  const row = { dataset: { projectKey: 'project' }, parentElement: parent, querySelector: () => ({ textContent: 'Project' }) }
-  const grid = {
-    dataset: { workspaceProject: 'project' },
-    querySelector: selector => selector === '[data-tool-overlay=true][data-dock-visible=true]' ? {} : null,
-  }
-  const state = { hidden: new Set() }
-  let selected = ''
-  vm.runInNewContext(handler + ';renderProjectAgents();', {
-    window: { __libroActiveProject: 'project', __libroSelectedApp: 'browser' },
-    document: { querySelectorAll: selector => selector === '[data-workspace-project]' ? [grid] : [row] },
-    frames: () => [agent, tool], dockState: () => state,
-    closeSettings() {}, innerWidth: 1000, prefs: {}, save() {},
-    select: id => { selected = id }, call() {},
-  })
-  tab.onclick()
-  assert.equal(selected, 'agent')
-  assert.equal(state.hidden.has('browser'), true)
 })
 
 test('closing panels restores focus without revealing hidden terminals', () => {

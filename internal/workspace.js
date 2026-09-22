@@ -314,6 +314,15 @@
       list.append(item);
     });
   }
+  function toolOverlapsFrame(grid, frame) {
+    const tool = grid.querySelector(':scope > [data-tool-overlay=true][data-dock-visible=true]');
+    if (!tool || !frame) return false;
+    if (!tool.getBoundingClientRect || !frame.getBoundingClientRect) return true;
+    const toolRect = tool.getBoundingClientRect();
+    const frameRect = frame.getBoundingClientRect();
+    if (!toolRect.width || !frameRect.width) return true;
+    return toolRect.left < frameRect.right && toolRect.right > frameRect.left;
+  }
   function renderProjectAgents() {
     const grids = new Map([...document.querySelectorAll('[data-workspace-project]')].map(grid => [grid.dataset.workspaceProject, grid]));
     document.querySelectorAll('.ws-project-row:not([data-kind=thread])').forEach(row => {
@@ -350,7 +359,8 @@
         tab.onclick = () => {
           closeSettings();
           if (innerWidth <= 760) { prefs.projects = false; save(); }
-          if (grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
+          const frame = agents.find(frame => frame.dataset.appId === entry.id);
+          if (toolOverlapsFrame(grid, frame)) {
             frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => dockState(grid).hidden.add(frame.dataset.appId));
           }
           if (grid.dataset.workspaceProject === window.__libroActiveProject) select(entry.id);
