@@ -403,3 +403,78 @@ process.stdin.on('end', () => {
 		t.Fatalf("viewport fit: %v\n%s", err, output)
 	}
 }
+
+func TestPageToolActivation(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is not installed")
+	}
+	const harness = `
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+let script = '';
+process.stdin.on('data', data => script += data);
+process.stdin.on('end', async () => {
+  try {
+    let guest;
+    let executions = 0;
+    let fail = false;
+    const listeners = {};
+    function navigate() {
+      guest = vm.createContext({window: {addEventListener() {}}, document: {
+        documentElement: {style: {}}, activeElement: null,
+        addEventListener(name, fn) { listeners[name] = fn; },
+      }, console: {log() {}}});
+    }
+    navigate();
+    const webview = {executeJavaScript(js) {
+      executions++;
+      if (fail) return Promise.reject(new Error('Guest was destroyed'));
+      return Promise.resolve(vm.runInContext(js, guest));
+    }};
+    const toasts = [];
+    const queued = [];
+    let ready = false;
+    const host = vm.createContext({window: {__libroWebviews: {test: webview},
+      __libroShowToast(title) { toasts.push(title); }},
+      document: {querySelector() { return null; }}, pageToolState: {},
+      whenReady(id, fn) { if (ready) fn(); else queued.push(fn); },
+    });
+    vm.runInContext(script.slice(script.indexOf('var browserShortcutsScript ='), script.indexOf('window.__libroOpenConsole =')), host);
+    vm.runInContext(script.slice(script.indexOf('function pageToolButtonState('), script.indexOf('function pageToolURL(')), host);
+    // A shortcut queued before dom-ready must install its own guest handlers.
+    const pending = host.window.__libroTogglePageTool('test', 'annotate');
+    assert.equal(executions, 0);
+    assert.deepEqual(toasts, [], 'do not report success before execution');
+    ready = true;
+    queued.splice(0).forEach(fn => fn());
+    await pending;
+    assert.equal(guest.window.__libroGetPageToolMode(), 'annotate');
+    assert.equal(typeof listeners.click, 'function');
+    assert.deepEqual(toasts, ['Annotate mode']);
+    await host.executePageToolMode('test', 'annotate');
+    assert.equal(guest.window.__libroGetPageToolMode(), 'annotate', 'setting the same mode must not disable it');
+    await host.window.__libroTogglePageTool('test', 'annotate');
+    assert.equal(guest.window.__libroGetPageToolMode(), '');
+    assert.equal(toasts.at(-1), 'Page tool off');
+    // Full navigation discards guest scripts; activation must recover.
+    navigate();
+    await host.window.__libroTogglePageTool('test', 'area');
+    assert.equal(guest.window.__libroGetPageToolMode(), 'area');
+    fail = true;
+    await host.window.__libroTogglePageTool('test', 'annotate');
+    assert.equal(toasts.at(-1), 'Page tool unavailable');
+    assert.equal(host.pageToolState.test, '');
+    delete host.window.__libroWebviews.test;
+    await host.window.__libroTogglePageTool('test', 'annotate');
+    assert.equal(toasts.at(-1), 'Page tool unavailable');
+    assert.equal(host.pageToolState.test, '');
+  } catch (error) { console.error(error); process.exitCode = 1; }
+});
+`
+	cmd := exec.Command(node, "-e", harness)
+	cmd.Stdin = strings.NewReader(BrowserJS())
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("page tool activation failed: %v\n%s", err, output)
+	}
+}

@@ -286,7 +286,7 @@ var browserShortcutsScript = '(' + function(){
 			return;
 		}
 		if (mode !== 'annotate' && mode !== 'area') mode = '';
-		if (pageToolMode === mode) { pageToolStop(mode); return; }
+		if (pageToolMode === mode) return;
 		if (pageToolMode) pageToolStop(pageToolMode);
 		pageToolMode = mode;
 		if (mode) {
@@ -578,15 +578,19 @@ function pageToolWebview(appID) {
 
 function executePageToolMode(appID, mode) {
 	var wv = pageToolWebview(appID);
-	if (!wv) return;
-	var js = 'if(window.__libroSetPageToolMode)window.__libroSetPageToolMode(' + JSON.stringify(mode || '') + ');';
+	if (!wv) return Promise.reject(new Error('Browser page is unavailable.'));
+	// Install and activate in one execution: a navigation or an early shortcut
+	// can run before the normal dom-ready injection has installed the tools.
+	var js = browserShortcutsScript + ';window.__libroSetPageToolMode(' + JSON.stringify(mode || '') + ');true;';
 	if (wv.executeJavaScript) {
-		whenReady(appID, function() { try { wv.executeJavaScript(js); } catch (err) {} });
-		return;
+		return new Promise(function(resolve, reject) {
+			whenReady(appID, function() {
+				try { Promise.resolve(wv.executeJavaScript(js)).then(resolve, reject); }
+				catch (err) { reject(err); }
+			});
+		});
 	}
-	try {
-		if (wv.contentWindow && wv.contentWindow.eval) wv.contentWindow.eval(js);
-	} catch (err) {}
+	return Promise.reject(new Error('Open Libro desktop to use page tools.'));
 }
 
 window.__libroTogglePageTool = function(appID, mode) {
@@ -595,11 +599,15 @@ window.__libroTogglePageTool = function(appID, mode) {
 	var next = pageToolState[appID] === mode ? '' : mode;
 	if (next && window.__libroEnsurePageToolAgent && !window.__libroEnsurePageToolAgent(appID, mode)) return;
 	pageToolButtonState(appID, next);
-	executePageToolMode(appID, next);
-	if (next === 'page') return;
-	var label = next === 'annotate' ? 'Annotate mode' : next === 'area' ? 'Area select mode' : 'Page tool off';
-	var hint = next === 'annotate' ? 'Hover and click an element' : next === 'area' ? 'Drag a rectangle over the page' : 'Ready';
-	if (window.__libroShowToast) window.__libroShowToast(label, hint, 1200);
+	return executePageToolMode(appID, next).then(function() {
+		if (next === 'page' || pageToolState[appID] !== next) return;
+		var label = next === 'annotate' ? 'Annotate mode' : next === 'area' ? 'Area select mode' : 'Page tool off';
+		var hint = next === 'annotate' ? 'Hover and click an element' : next === 'area' ? 'Drag a rectangle over the page' : 'Ready';
+		if (window.__libroShowToast) window.__libroShowToast(label, hint, 1200);
+	}).catch(function(err) {
+		pageToolButtonState(appID, '');
+		if (window.__libroShowToast) window.__libroShowToast('Page tool unavailable', err.message || 'Reload the page and try again.', 2600);
+	});
 };
 
 
@@ -810,7 +818,7 @@ window.__libroRotateSelectedBrowserViewport = function(appID) {
 };
 
 function injectBrowserShortcuts(wv, appID) {
-	try { wv.executeJavaScript(browserShortcutsScript); } catch(err) {}
+	try { Promise.resolve(wv.executeJavaScript(browserShortcutsScript)).catch(function() {}); } catch(err) {}
 }
 
 function refocusWebview(appID, wv) {
