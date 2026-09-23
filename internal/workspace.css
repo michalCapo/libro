@@ -429,7 +429,9 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-status=done],html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-status=done] .ws-thread-status{color:#4ade80}
 @media(prefers-reduced-motion:reduce){:is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-status=working] .material-icons-round{animation:none}}
 
-.ws-navigation{flex:1;min-height:0;overflow:auto;scrollbar-width:thin}
+.ws-navigation{display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto;scrollbar-width:thin}
+.ws-navigation>*{flex-shrink:0}
+.ws-navigation .ws-project-list+.ws-sidebar-heading{margin-top:auto;padding-top:14px}
 .ws-navigation .ws-project-list{overflow:visible;flex:none}
 #workspace-thread-list .ws-no-threads{padding-left:16px}
 #workspace-thread-list .ws-project-item{margin-bottom:0}
