@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	r "github.com/michalCapo/g-sui/ui"
 	"libro/internal/components"
@@ -14,7 +15,8 @@ import (
 
 const applicationHelp = components.ApplicationInstructions + "\n\n" + `Control the application's saved project command in Libro. Actions: status, start, restart, stop.
 Use the application MCP tool or: libro application status|start|restart|stop [project-path].
-The project defaults to the agent's working directory and must match Libro's active project path.
+The project defaults to the agent's working directory. Libro resolves registered projects, including subdirectories and symlinked paths.
+Status works without changing the visible project. Start, restart, and stop select the matching project when needed.
 All threads in the same project share one application process. Browsers remain independent per thread.
 Start is idempotent. Restart replaces the shared project command terminal. Stop stops that shared terminal for all project threads.
 Set the start command in project settings first. Commands cannot be supplied or changed through this tool.
@@ -93,37 +95,89 @@ func registerApplicationControl(app *r.App) {
 	})
 }
 
-func controlApplication(sid, project, operation string) (string, map[string]any, error) {
-	path := sm.GetActiveProjectPath(sid)
-	if sm.Get(sid).ActiveProject == "" || project == "" || path == "" || filepath.Clean(project) != filepath.Clean(path) {
-		return "", nil, errors.New("switch Libro to the requested project first")
+func applicationPath(path string) string {
+	path = filepath.Clean(path)
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
 	}
+	return path
+}
+
+// applicationProject resolves the most specific registered root, preserving the
+// active thread when several workspaces share the same application directory.
+func applicationProject(state *AppState, requested string) (string, string, error) {
+	if requested == "" {
+		return "", "", errors.New("application project path is required")
+	}
+	requested = applicationPath(requested)
+	name, path, best := "", "", -1
+	consider := func(workspace, root string) {
+		if root == "" {
+			return
+		}
+		resolved := applicationPath(root)
+		relative, err := filepath.Rel(resolved, requested)
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return
+		}
+		if len(resolved) > best || (len(resolved) == best && workspace == state.ActiveProject) {
+			name, path, best = workspace, root, len(resolved)
+		}
+	}
+	for _, project := range state.Projects {
+		consider(project.Name, project.Path)
+	}
+	for _, thread := range state.Threads {
+		if !thread.Archived {
+			consider(thread.ID, thread.Path)
+		}
+	}
+	if name == "" {
+		return "", "", fmt.Errorf("no Libro project matches %q; open the project in Libro first", requested)
+	}
+	return name, path, nil
+}
+
+func controlApplication(sid, project, operation string) (string, map[string]any, error) {
 	if operation != "status" && operation != "start" && operation != "restart" && operation != "stop" {
 		return "", nil, errors.New("unknown application action")
 	}
+	workspace, path, err := applicationProject(sm.Get(sid), project)
+	if err != nil {
+		return "", nil, err
+	}
 	command := projectCommand(path)
+	if (operation == "start" || operation == "restart") && command == "" {
+		return "", nil, errors.New("set a start command in project settings first")
+	}
 	status := "stopped"
-	for _, app := range sm.Get(sid).Apps {
-		if app.PluginID == "project-command" {
-			if !app.TerminalReady {
-				status = "starting"
-			} else if tm.IsRunning(app.ID) {
-				status = "running"
+	for _, running := range sm.GetAllRunningApps(sid) {
+		_, root := threadProjectContext(sm.Get(sid), running.Name)
+		if root == "" || applicationPath(root) != applicationPath(path) {
+			continue
+		}
+		for _, app := range running.Apps {
+			if app.PluginID == "project-command" {
+				if !app.TerminalReady {
+					status = "starting"
+				} else if tm.IsRunning(app.ID) {
+					status = "running"
+				}
 			}
 		}
 	}
 	js := ""
+	if operation != "status" && (operation != "start" || status == "stopped") && sm.Get(sid).ActiveProject != workspace {
+		js = switchToProjectName(sid, workspace)
+	}
 	switch operation {
 	case "start", "restart":
-		if command == "" {
-			return "", nil, errors.New("set a start command in project settings first")
-		}
 		if operation == "restart" || status == "stopped" {
-			js = runProjectCommand(sid, command)
+			js += runProjectCommand(sid, command)
 			status = "starting"
 		}
 	case "stop":
-		js = stopProjectCommand(sid) + navigateJS(sm.Get(sid), sid) + projectsJS(sm.Get(sid))
+		js += stopProjectCommand(sid) + navigateJS(sm.Get(sid), sid) + projectsJS(sm.Get(sid))
 		status = "stopped"
 	}
 	return js, map[string]any{"project": path, "configured": command != "", "status": status}, nil

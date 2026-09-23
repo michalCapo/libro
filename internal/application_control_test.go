@@ -3,6 +3,7 @@ package libro
 import (
 	"bytes"
 	"database/sql"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -22,7 +23,7 @@ func TestApplicationControlLifecycle(t *testing.T) {
 	t.Cleanup(func() { tm.StopAll(); _ = db.Close(); db, sm, tm = oldDB, oldSM, oldTM })
 	createTables()
 	path := t.TempDir()
-	sm.states["test"] = &AppState{ActiveProject: "project", Projects: []Project{{Name: "project", Path: path}}, Apps: []Application{{ID: "agent", PluginID: "codex"}}}
+	sm.states["test"] = &AppState{ActiveProject: "project", Projects: []Project{{Name: "project", Path: path}, {Name: "other", Path: t.TempDir()}}, Apps: []Application{{ID: "agent", PluginID: "codex"}}}
 	if _, _, err = controlApplication("test", path, "start"); err == nil {
 		t.Fatal("started without configured command")
 	}
@@ -35,11 +36,22 @@ func TestApplicationControlLifecycle(t *testing.T) {
 	if _, _, err = controlApplication("test", path, "shell"); err == nil {
 		t.Fatal("accepted unknown action")
 	}
-	js, result, err := controlApplication("test", path, "start")
+	switchToProjectName("test", "other")
+	js, result, err := controlApplication("test", path, "status")
+	if err != nil || js != "" || result["status"] != "stopped" || sm.Get("test").ActiveProject != "other" {
+		t.Fatalf("background status: %v %v", result, err)
+	}
+	js, result, err = controlApplication("test", path, "start")
 	if err != nil || js == "" || result["status"] != "starting" {
 		t.Fatalf("start: %v %v", result, err)
 	}
 	first := sm.Get("test").Apps[1].ID
+	switchToProjectName("test", "other")
+	js, result, err = controlApplication("test", path, "start")
+	if err != nil || js != "" || result["status"] != "starting" || sm.Get("test").ActiveProject != "other" {
+		t.Fatalf("background idempotent start: %v %v", result, err)
+	}
+	switchToProjectName("test", "project")
 	js, result, err = controlApplication("test", path, "start")
 	if err != nil || js != "" || result["status"] != "starting" || len(sm.Get("test").Apps) != 2 {
 		t.Fatal("repeated start must preserve pending launch")
@@ -60,10 +72,12 @@ func TestApplicationControlLifecycle(t *testing.T) {
 			t.Fatal("exited process must report stopped")
 		}
 	}
+	switchToProjectName("test", "other")
 	_, result, err = controlApplication("test", path, "restart")
 	if err != nil || result["status"] != "starting" || sm.Get("test").Apps[1].ID == first {
 		t.Fatal("restart did not replace terminal")
 	}
+	switchToProjectName("test", "other")
 	_, result, err = controlApplication("test", path, "stop")
 	if err != nil || result["status"] != "stopped" || len(sm.Get("test").Apps) != 1 || sm.Get("test").Apps[0].ID != "agent" {
 		t.Fatal("stop must preserve agent")
@@ -178,5 +192,37 @@ func TestProjectThreadsShareApplicationProcessButNotBrowsers(t *testing.T) {
 	_, result, err = controlApplication("test", path, "status")
 	if err != nil || result["status"] != "stopped" || len(state.Apps) != 1 || state.Apps[0].ID != "browser-two" {
 		t.Fatal("stop was not shared or removed the thread browser")
+	}
+}
+
+func TestApplicationProjectResolution(t *testing.T) {
+	root := t.TempDir()
+	nested := filepath.Join(root, "nested")
+	if err := os.MkdirAll(filepath.Join(nested, "src"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	state := &AppState{ActiveProject: "thread:one", Projects: []Project{{Name: "main", Path: root}, {Name: "nested", Path: nested}}, Threads: []Thread{{ID: "thread:one", Project: "main", Path: root}}}
+	for _, test := range []struct{ path, workspace, root string }{
+		{root, "thread:one", root},
+		{filepath.Join(root, "src"), "thread:one", root},
+		{filepath.Join(nested, "src"), "nested", nested},
+	} {
+		name, path, err := applicationProject(state, test.path)
+		if err != nil || name != test.workspace || path != test.root {
+			t.Fatalf("resolve %q: %q %q %v", test.path, name, path, err)
+		}
+	}
+	for _, path := range []string{"", root + "-other", filepath.Dir(root)} {
+		if _, _, err := applicationProject(state, path); err == nil {
+			t.Fatalf("accepted unrelated path %q", path)
+		}
+	}
+	alias := filepath.Join(t.TempDir(), "alias")
+	if err := os.Symlink(root, alias); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	name, path, err := applicationProject(state, filepath.Join(alias, "nested", "src"))
+	if err != nil || name != "nested" || path != nested {
+		t.Fatalf("resolve symlink: %q %q %v", name, path, err)
 	}
 }

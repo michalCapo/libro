@@ -278,8 +278,10 @@ libro application stop
 ```
 
 The project path defaults to the agent's working directory. Pass an explicit
-path as the second argument (or `project` in MCP) if needed. Libro must have
-that project active. `start` preserves a running or starting application;
+path as the second argument (or `project` in MCP) if needed. Libro resolves the
+closest registered project root, including subdirectories and symlinked paths.
+Status checks work without changing the visible project. Lifecycle actions select
+the matching project when needed. `start` preserves a running or starting application;
 `restart` replaces it. A `starting` response confirms a launch request, while
 `status` reports whether the process is running; it does not test server readiness.
 Only the saved command can be run. This uses the desktop browser bridge and
