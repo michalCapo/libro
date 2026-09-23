@@ -379,3 +379,33 @@ func TestCloseProjectPreservesPanelsOnArchiveFailure(t *testing.T) {
 		t.Fatal("archive failure changed the workspace")
 	}
 }
+
+func TestAdjacentProjectThread(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		active string
+		want   string
+	}{
+		{"previous", "third", "second"},
+		{"prefer previous", "second", "first"},
+		{"next", "first", "second"},
+		{"only thread", "other", ""},
+		{"project without thread", "project", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			state := &AppState{
+				ActiveProject: tc.active,
+				Threads: []Thread{
+					{ID: "first", Project: "project"},
+					{ID: "second", Project: "project"},
+					{ID: "archived", Project: "project", Archived: true},
+					{ID: "other", Project: "another"},
+					{ID: "third", Project: "project"},
+				},
+			}
+			if got := state.adjacentProjectThread(); got != tc.want {
+				t.Fatalf("adjacent thread = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

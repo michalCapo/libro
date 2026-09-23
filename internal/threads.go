@@ -201,6 +201,33 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) stri
 	})
 }
 
+// adjacentProjectThread prefers the previous open thread in the same project.
+func (s *AppState) adjacentProjectThread() string {
+	active := s.thread(s.ActiveProject)
+	if active == nil {
+		return ""
+	}
+	previous := ""
+	found := false
+	for _, thread := range s.Threads {
+		if thread.ID == active.ID {
+			if previous != "" {
+				return previous
+			}
+			found = true
+			continue
+		}
+		if thread.Archived || thread.Project != active.Project {
+			continue
+		}
+		if found {
+			return thread.ID
+		}
+		previous = thread.ID
+	}
+	return ""
+}
+
 // Selecting a project returns to an open thread instead of creating another.
 func (s *AppState) projectWorkspace(project string) string {
 	if s.thread(project) != nil {
