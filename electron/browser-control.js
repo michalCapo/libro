@@ -2,6 +2,7 @@ const http = require('node:http')
 const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
+const {setTimeout: delay} = require('node:timers/promises')
 const page = require('./browser-page')
 
 // Run in an isolated world so page scripts cannot replace the cursor controller.
@@ -86,19 +87,23 @@ async function performAction(target, command, signal) {
     if (action === 'scroll' && (!Number.isFinite(command.deltaY) || Math.abs(command.deltaY) > 10000 || !Number.isFinite(command.deltaX || 0) || Math.abs(command.deltaX || 0) > 10000)) throw new Error('Invalid scroll delta')
     page.check(signal)
     await target.executeJavaScriptInIsolatedWorld(998, [{code:cursorScript(x, y, action === 'down' || action === 'click')}])
-    // Electron input coordinates are device-independent pixels, including page zoom.
-    page.check(signal)
-    const zoom = target.getZoomFactor()
-    const point = { x: Math.round(x * zoom), y: Math.round(y * zoom) }
-    if (action === 'scroll') target.sendInputEvent({type:'mouseWheel', ...point, deltaX:command.deltaX || 0, deltaY:command.deltaY})
+    // CDP acknowledges delivery to this guest, even if host focus/layout changes.
+    // Coordinates are CSS pixels; Chromium applies the page zoom.
+    const point = {x, y}
+    const send = async event => {
+      page.check(signal)
+      await target.debugger.sendCommand('Input.dispatchMouseEvent', event)
+    }
+    if (action === 'scroll') await send({type:'mouseWheel', ...point, deltaX:-(command.deltaX || 0), deltaY:-command.deltaY})
     else {
-      target.sendInputEvent({type:'mouseMove', ...point, ...(action === 'move' && command.button ? {button, modifiers:[button + 'ButtonDown']} : {})})
+      const buttons = {left:1, right:2, middle:4}
+      await send({type:'mouseMoved', ...point, ...(action === 'move' && command.button ? {button, buttons:buttons[button]} : {})})
       if (action === 'click' || action === 'down') {
         target.__libroAgentPointer = {...point,button}
-        target.sendInputEvent({type:'mouseDown', ...point, button, clickCount:1})
+        await send({type:'mousePressed', ...point, button, buttons:buttons[button], clickCount:1})
       }
       if (action === 'click' || action === 'up') {
-        target.sendInputEvent({type:'mouseUp', ...point, button, clickCount:1})
+        await send({type:'mouseReleased', ...point, button, buttons:0, clickCount:1})
         delete target.__libroAgentPointer
       }
     }
@@ -122,7 +127,7 @@ function createController(getWindow, fromId, options = {}) {
       for (const target of targets) {
         if (target.isDestroyed()) continue
         if (target.__libroAgentPointer) {
-          target.sendInputEvent({type:'mouseUp',...target.__libroAgentPointer,clickCount:1})
+          target.debugger.sendCommand('Input.dispatchMouseEvent', {type:'mouseReleased',...target.__libroAgentPointer,buttons:0,clickCount:1}).catch(()=>{})
           delete target.__libroAgentPointer
         }
         target.executeJavaScriptInIsolatedWorld(998,[{code:'globalThis.libroAgentCursor?.remove()'}]).catch(()=>{})
@@ -156,21 +161,21 @@ function createController(getWindow, fromId, options = {}) {
           if (!['status', 'start', 'restart', 'stop'].includes(command.operation) || typeof command.project !== 'string' || !command.project) throw new Error('Invalid application command')
           return win.webContents.executeJavaScript(`window.libroWorkspace.applicationControl(${JSON.stringify({operation:command.operation, project:command.project})})`)
         }
-        const allPanels = await win.webContents.executeJavaScript(`Object.entries(window.__libroWebviews || {}).flatMap(([id, wv]) => {
-          try { const rect = wv.getBoundingClientRect(); return [{id, sid:wv.getAttribute('data-sid'), scope:wv.getAttribute('data-browser-scope'), title:wv.getTitle(), url:wv.getURL(), contentsId:wv.getWebContentsId(), visible:rect.width>0 && rect.height>0 && wv.checkVisibility({checkVisibilityCSS:true})}]; } catch (_) { return []; }
-        })`)
-        page.check(signal)
-        const panels = options.scope ? allPanels.filter(panel => panel.scope === options.scope) : allPanels
-        if (command.action === 'list') return panels.map(({contentsId, ...panel}) => ({...panel,paused}))
-        const panel = panels.find(panel => panel.id === command.panel)
-        if (!panel) throw new Error('Browser panel not found; use list first')
-        const target = fromId(panel.contentsId)
-        if (!target || target.isDestroyed() || target.getType() !== 'webview' || target.hostWebContents !== win.webContents) throw new Error('Browser panel is no longer available')
-        if (!targets.has(target)) {
-          targets.add(target)
-          target.once('destroyed', () => targets.delete(target))
+        const readPanels = async () => {
+          const allPanels = await win.webContents.executeJavaScript(`Object.entries(window.__libroWebviews || {}).map(([id, wv]) => {
+            const rect = wv.getBoundingClientRect();
+            const panel = {id, sid:wv.getAttribute('data-sid'), scope:wv.getAttribute('data-browser-scope'), visible:wv.isConnected && rect.width>0 && rect.height>0 && wv.checkVisibility({checkVisibilityCSS:true})};
+            try { Object.assign(panel, {title:wv.getTitle(), url:wv.getURL(), contentsId:wv.getWebContentsId()}); } catch (_) {}
+            return panel;
+          })`)
+          page.check(signal)
+          return options.scope ? allPanels.filter(panel => panel.scope === options.scope) : allPanels
         }
-        if (command.action === 'select_panel') {
+        const panels = await readPanels()
+        if (command.action === 'list') return panels.map(({contentsId, ...panel}) => ({...panel,paused}))
+        let panel = panels.find(panel => panel.id === command.panel)
+        if (!panel) throw new Error('Browser panel not found; use list first')
+        if (command.action === 'select_panel' || !panel.visible) {
           const selected = await win.webContents.executeJavaScript(`(() => {
             const id=${JSON.stringify(command.panel)};
             const frame=document.getElementById('frame-'+id);
@@ -179,10 +184,29 @@ function createController(getWindow, fromId, options = {}) {
             if(project && project.dataset.workspaceProject!==window.__libroActiveProject) throw new Error('Switch to the panel project first');
             window.libroWorkspace.select(id);return true;
           })()`)
+          page.check(signal)
           if (!selected) throw new Error('Panel selection is unavailable')
-          return {ok:true}
+          panel = (await readPanels()).find(panel => panel.id === command.panel)
         }
-        if (!panel.visible) throw new Error('Show the browser panel before controlling it')
+        // Selection and application restarts can outlive one renderer layout.
+        // Re-resolve the guest on every poll: a restart may replace it.
+        const deadline = Date.now() + 5000
+        let target
+        for (;;) {
+          page.check(signal)
+          if (!panel) throw new Error('Browser panel not found; use list first')
+          target = panel.contentsId ? fromId(panel.contentsId) : null
+          if (target && !target.isDestroyed() && (target.getType() !== 'webview' || target.hostWebContents !== win.webContents)) throw new Error('Browser panel is no longer available')
+          if (panel.visible && target && !target.isDestroyed()) break
+          if (Date.now() >= deadline) throw new Error('Browser panel did not become available within 5 seconds')
+          await delay(100, undefined, {signal})
+          panel = (await readPanels()).find(panel => panel.id === command.panel)
+        }
+        if (!targets.has(target)) {
+          targets.add(target)
+          target.once('destroyed', () => targets.delete(target))
+        }
+        if (command.action === 'select_panel') return {ok:true}
         if (target.isLoadingMainFrame() && !['wait','diagnostics','downloads','cancel_download'].includes(command.action)) throw new Error('Page is loading; use wait to await readiness')
         await page.connect(target,signal)
         page.check(signal)

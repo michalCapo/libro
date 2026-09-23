@@ -177,8 +177,10 @@ tell it to call the `libro_browser` tool with `{"action":"list"}`, or run
 
 The agent first uses `list`, chooses the requested panel ID, then sends actions
 with that ID. The tool description tells it to use the existing panel to check
-work. Missing or closed panels return an error. Use `select_panel` to show a panel in
-the current project, and `wait` to wait for a page load. Switch projects in
+work. Missing or closed panels return an error. Actions show a hidden panel in
+the current project and wait up to five seconds for its layout and guest to become
+available. `visible` reports its current layout, not window focus. Use
+`select_panel` to show a panel explicitly, and `wait` to wait for a page load. Switch projects in
 Libro before selecting a panel in another project.
 
 Available actions:

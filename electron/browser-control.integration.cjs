@@ -50,7 +50,9 @@ app.whenReady().then(async()=>{
     const control=createController(()=>win,id=>webContents.fromId(id),{downloadDir:directory})
     assert.equal((await control({action:'list'}))[0].id,'panel')
     await win.webContents.executeJavaScript(`window.libroWorkspace={select:id=>{document.getElementById('frame-'+id).style.display='block'}};document.getElementById('frame-panel').style.display='none'`)
-    await assert.rejects(control({action:'screenshot',panel:'panel'}),/Show the browser/)
+    await control({action:'screenshot',panel:'panel'})
+    assert.equal((await control({action:'list'}))[0].visible,true)
+    await win.webContents.executeJavaScript("document.getElementById('frame-panel').style.display='none'")
     await control({action:'select_panel',panel:'panel'})
     assert.equal((await control({action:'list'}))[0].visible,true)
     for(const zoom of [1,1.5]) {

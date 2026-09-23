@@ -6,18 +6,19 @@ const os = require('node:os')
 const path = require('node:path')
 const {performAction, createController, startControlServer} = require('./browser-control')
 
-test('mouse validates bounds and accounts for zoom', async () => {
+test('mouse validates bounds and sends acknowledged CSS coordinates', async () => {
   const events = []
   const target = {
     executeJavaScriptInIsolatedWorld:async (_world, scripts) => scripts[0].code.includes('width:innerWidth') ? {width:300,height:200} : null,
-    getZoomFactor:() => 2,
-    sendInputEvent:event => events.push(event),
+    debugger:{sendCommand:async (method,event) => {assert.equal(method,'Input.dispatchMouseEvent');events.push(event)}},
   }
   await assert.rejects(performAction(target, {action:'click',x:300,y:10}), /viewport/)
   assert.equal(events.length,0)
   await performAction(target,{action:'click',x:20,y:30})
-  assert.deepEqual(events.map(e=>e.type),['mouseMove','mouseDown','mouseUp'])
-  assert.ok(events.every(e=>e.x===40 && e.y===60))
+  assert.deepEqual(events.map(e=>e.type),['mouseMoved','mousePressed','mouseReleased'])
+  assert.ok(events.every(e=>e.x===20 && e.y===30))
+  await performAction(target,{action:'scroll',x:20,y:30,deltaX:10,deltaY:50})
+  assert.deepEqual(events.at(-1),{type:'mouseWheel',x:20,y:30,deltaX:-10,deltaY:-50})
   await assert.rejects(performAction(target,{action:'navigate',url:'file:///tmp/test'}),/http/)
 })
 
@@ -199,4 +200,73 @@ test('thread browser scopes use the same project application controller', async 
   assert.equal(calls.length,2)
   assert.equal(calls[0],calls[1])
   assert.match(calls[0], /applicationControl/)
+})
+
+function panelFixture() {
+  let panels = [{id:'panel',scope:'a'.repeat(64),contentsId:4,visible:false}]
+  let selections = 0
+  const host = {executeJavaScript:async script => {
+    if (script.includes('window.libroWorkspace.select')) { selections++; return true }
+    return panels
+  }}
+  const target = Object.assign(new EventEmitter(), {
+    isDestroyed:()=>false, getType:()=> 'webview', hostWebContents:host,
+    isLoadingMainFrame:()=>false, focus:()=>{}, session:new EventEmitter(),
+    debugger:Object.assign(new EventEmitter(), {isAttached:()=>true, sendCommand:async()=>({})}),
+  })
+  const win = {isDestroyed:()=>false, webContents:host, focus:()=>{}}
+  return {target, control:createController(()=>win, id=>id===4?target:null, {scope:'a'.repeat(64)}),
+    get selections() {return selections}, set panels(value) {panels=value}}
+}
+
+test('hidden panel selection waits for layout and a replacement guest', async () => {
+  const fixture = panelFixture()
+  let delivered = false
+  fixture.target.insertText = async () => {delivered=true}
+  fixture.panels = [{id:'panel',scope:'a'.repeat(64),visible:false}]
+  const action = fixture.control({action:'text',panel:'panel',text:'hello'})
+  await new Promise(resolve=>setImmediate(resolve))
+  assert.equal(fixture.selections,1)
+  assert.equal(delivered,false)
+  fixture.panels = [{id:'panel',scope:'a'.repeat(64),contentsId:4,visible:true}]
+  assert.deepEqual(await action,{ok:true})
+  assert.equal(delivered,true)
+})
+
+test('select_panel works while hidden and waits until usable', async () => {
+  const fixture = panelFixture()
+  const action = fixture.control({action:'select_panel',panel:'panel'})
+  await new Promise(resolve=>setImmediate(resolve))
+  assert.equal(fixture.selections,1)
+  fixture.panels = [{id:'panel',scope:'a'.repeat(64),contentsId:4,visible:true}]
+  assert.deepEqual(await action,{ok:true})
+})
+
+test('pause cancels panel readiness without delivering input', async () => {
+  const fixture = panelFixture()
+  fixture.target.insertText = async () => {assert.fail('input after pause')}
+  const action = fixture.control({action:'text',panel:'panel',text:'hello'})
+  const rejected = assert.rejects(action,/cancelled|stopped|aborted/)
+  await new Promise(resolve=>setImmediate(resolve))
+  fixture.control.setPaused(true)
+  await rejected
+})
+
+test('mouse delivery failures do not return ok or send the remaining events', async () => {
+  const events = []
+  const target = {
+    executeJavaScriptInIsolatedWorld:async (_world,scripts) => scripts[0].code.includes('width:innerWidth') ? {width:300,height:200} : null,
+    debugger:{sendCommand:async (_method,event) => {
+      events.push(event.type)
+      if (event.type === 'mousePressed') throw new Error('guest unavailable')
+    }},
+  }
+  await assert.rejects(performAction(target,{action:'click',x:20,y:30}),/guest unavailable/)
+  assert.deepEqual(events,['mouseMoved','mousePressed'])
+})
+
+test('panel readiness has a bounded timeout', async () => {
+  const fixture = panelFixture()
+  await assert.rejects(fixture.control({action:'select_panel',panel:'panel'}),/did not become available within 5 seconds/)
+  assert.equal(fixture.selections,1)
 })
