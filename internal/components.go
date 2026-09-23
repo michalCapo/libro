@@ -971,14 +971,16 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		forwardBtn.Render(r.I("material-icons-round text-sm").Text("arrow_forward"))
 
 		// Copy button
+		copyURLScript := fmt.Sprintf(`var inp=document.getElementById('%s');if(inp){navigator.clipboard.writeText(inp.value);var btn=event.currentTarget;btn.style.color='rgb(20,184,166)';setTimeout(function(){btn.style.color='';},800);}`, urlInputID)
 		copyBtn := r.Button(btnCls).
 			Attr("title", "Copy URL").
-			OnClick(r.JS(fmt.Sprintf(`var inp=document.getElementById('%s');if(inp){navigator.clipboard.writeText(inp.value);var btn=event.currentTarget;btn.style.color='rgb(20,184,166)';setTimeout(function(){btn.style.color='';},800);}`, urlInputID)))
+			OnClick(r.JS(copyURLScript))
 		copyBtn.Render(r.I("material-icons-round text-sm").Text("content_copy"))
 
+		consoleScript := fmt.Sprintf(`if(window.__libroOpenConsole)window.__libroOpenConsole(%s)`, components.JSString(app.ID))
 		consoleBtn := r.Button(btnCls).
 			Attr("title", "Open browser console").Attr("aria-label", "Open browser console").
-			OnClick(r.JS(fmt.Sprintf(`if(window.__libroOpenConsole)window.__libroOpenConsole(%s)`, components.JSString(app.ID)))).
+			OnClick(r.JS(consoleScript)).
 			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("code"))
 
 		agentControl := r.Button(btnCls).Attr("type", "button").Attr("data-browser-control", "").
@@ -989,24 +991,33 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		menuID := "browser-actions-" + app.ID
 		menu := r.Div("ws-browser-menu").ID(menuID).Attr("popover", "auto").
 			Attr("role", "group").Attr("aria-label", "Browser actions")
+		var menuGroup *r.Node
+		lastGroup := ""
 		for _, action := range []struct {
-			label, shortcut, script, mode string
+			label, shortcut, script, mode, group string
 		}{
-			{"Stop agent browser work", "", `if(window.__libroBrowserControlPause)window.__libroBrowserControlPause('stop')`, ""},
-			{"Reload", "R", fmt.Sprintf(`window.__libroWvReload(%s)`, components.JSString(app.ID)), ""},
-			{"Annotate element", "A", fmt.Sprintf(`window.__libroTogglePageTool(%s,'annotate')`, components.JSString(app.ID)), "annotate"},
-			{"Select page area", "D", fmt.Sprintf(`window.__libroTogglePageTool(%s,'area')`, components.JSString(app.ID)), "area"},
-			{"Zoom out", "-", fmt.Sprintf(`window.__libroWvZoom(%s,-1)`, components.JSString(app.ID)), ""},
-			{"Reset zoom to 100%", "0", fmt.Sprintf(`window.__libroWvZoom(%s,0)`, components.JSString(app.ID)), ""},
-			{"Zoom in", "=", fmt.Sprintf(`window.__libroWvZoom(%s,1)`, components.JSString(app.ID)), ""},
+			{"Stop agent browser work", "", `if(window.__libroBrowserControlPause)window.__libroBrowserControlPause('stop')`, "", "Agent control"},
+			{"Reload", "R", fmt.Sprintf(`window.__libroWvReload(%s)`, components.JSString(app.ID)), "", "Browser"},
+			{"Copy URL", "", copyURLScript, "", "Browser"},
+			{"Open browser console", "", consoleScript, "", "Browser"},
+			{"Annotate element", "A", fmt.Sprintf(`window.__libroTogglePageTool(%s,'annotate')`, components.JSString(app.ID)), "annotate", "Annotation"},
+			{"Anotate area", "D", fmt.Sprintf(`window.__libroTogglePageTool(%s,'area')`, components.JSString(app.ID)), "area", "Annotation"},
+			{"Zoom out", "-", fmt.Sprintf(`window.__libroWvZoom(%s,-1)`, components.JSString(app.ID)), "", "Zoom"},
+			{"Reset zoom to 100%", "0", fmt.Sprintf(`window.__libroWvZoom(%s,0)`, components.JSString(app.ID)), "", "Zoom"},
+			{"Zoom in", "=", fmt.Sprintf(`window.__libroWvZoom(%s,1)`, components.JSString(app.ID)), "", "Zoom"},
 		} {
+			if action.group != lastGroup {
+				menuGroup = r.Div("ws-browser-menu-group").Attr("role", "group").Attr("aria-label", action.group)
+				menu.Render(menuGroup)
+				lastGroup = action.group
+			}
 			item := r.Button("ws-browser-menu-item").Attr("type", "button").
 				OnClick(r.JS(`this.closest('[popover]').hidePopover();`+action.script)).
 				Render(r.Span("").Text(action.label), r.Span("ws-browser-menu-key").Text(action.shortcut))
 			if action.mode != "" {
 				item.Attr("data-page-tool", action.mode).Attr("aria-pressed", "false")
 			}
-			menu.Render(item)
+			menuGroup.Render(item)
 		}
 		moreBtn := r.Button(btnCls).Attr("type", "button").
 			Attr("title", "Browser actions").Attr("aria-label", "Browser actions").

@@ -468,6 +468,7 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 #libro-workspace .ws-grid [data-app-toolbar] .ws-browser-menu-item{display:flex;align-items:center;justify-content:space-between;gap:24px;width:100%;min-height:32px;padding:6px 10px;border-radius:6px;background:transparent;color:var(--ws-fg);font-size:12px;text-align:left;cursor:pointer}
 #libro-workspace .ws-grid [data-app-toolbar] .ws-browser-menu-item:hover,#libro-workspace .ws-grid [data-app-toolbar] .ws-browser-menu-item[aria-pressed=true]{background:var(--ws-hover)}
 .ws-browser-menu-item:focus-visible{outline:2px solid var(--ws-accent);outline-offset:-2px}
+.ws-browser-menu-group + .ws-browser-menu-group{margin-top:6px;padding-top:6px;border-top:1px solid var(--ws-line)}
 .ws-browser-menu-key{color:var(--ws-muted);font-size:11px}
 
 .ws-notes{height:100%;overflow:auto;background:var(--ws-bg);color:var(--ws-fg);padding:16px;box-sizing:border-box;font-size:13px;scrollbar-width:thin}
