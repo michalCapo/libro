@@ -136,13 +136,62 @@ func (b *responseBuilder) Replace(id string, node *r.Node) *responseBuilder {
 
 func (b *responseBuilder) Build() string { return strings.Join(b.parts, "") }
 
+func switchToProjectName(sid, name string) string {
+	if name == "" {
+		return "/* noop */"
+	}
+
+	prevState := sm.Get(sid)
+	name = prevState.projectWorkspace(name)
+	closeDevtoolsJS := closeDevtoolsForAppsJS(prevState.Apps)
+	targetRendered := prevState.renderedProjects[name]
+
+	// Worktrees can exist before their virtual project has been created
+	// in the current session. Resolve the matching worktree lazily.
+	restoreWorktreeProject(sm, sid, name)
+
+	movedProjectApps := sm.MoveSharedProjectApps(sid, name)
+	if !sm.SwitchProject(sid, name) {
+		return "/* noop */"
+	}
+
+	state := sm.Get(sid)
+
+	var jsSwitch string
+	if targetRendered {
+		// Project div exists in DOM, just hide/show
+		jsSwitch = switchProjectJS(name, nil) + reparentProjectAppsJS(movedProjectApps, name)
+	} else {
+		// Project div doesn't exist yet, append new content and hide old
+		contentState := state
+		if len(movedProjectApps) > 0 {
+			contentState = stateWithoutApps(state, movedProjectApps)
+		}
+		jsSwitch = switchProjectJS(name, renderMainArea(contentState, sid)) + reparentProjectAppsJS(movedProjectApps, name)
+	}
+	sm.IsProjectRendered(sid, name)
+
+	resp := newResponse().
+		Add(projectsJS(state)).
+		Replace(TopBarID, renderTopBar(state, sid)).
+		Add(closeDevtoolsJS).
+		Add(jsSwitch).
+		Add(navigateJS(state, sid)).
+		Add(updateHashJS(name)).
+		Add(projectAutolaunchJS(state, sid)).
+		Add(focusSelectedAppJS(state))
+	return resp.Build()
+}
+
 // Closing a thread's agent archives the thread and closes thread-local tools.
 // Issues and the project command remain available to the other project threads.
 func closeWorkspaceApp(sid, appID string) string {
+	target := sm.Get(sid).adjacentProjectThread()
 	apps, err := sm.CloseThreadAgent(sid, appID)
 	if err != nil {
 		return r.Notify("error", "Could not archive thread")
 	}
+	closedThread := apps != nil
 	if apps == nil {
 		if removed := sm.RemoveAppByID(sid, appID); removed != nil {
 			apps = []Application{*removed}
@@ -157,6 +206,9 @@ func closeWorkspaceApp(sid, appID string) string {
 	}
 	if len(apps) == 0 {
 		js = removeAppJS(appID)
+	}
+	if closedThread && target != "" {
+		return js + switchToProjectName(sid, target)
 	}
 	state := sm.Get(sid)
 	return js + "if(window.libroWorkspace)libroWorkspace.restorePanelFocus();" + renderTopBar(state, sid).ToJSReplace(TopBarID) + projectsJS(state)
@@ -1203,53 +1255,6 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 		}
 		return finalizeProjectCreate(sid, path, name, false)
 	})
-
-	switchToProjectName := func(sid, name string) string {
-		if name == "" {
-			return "/* noop */"
-		}
-
-		prevState := sm.Get(sid)
-		name = prevState.projectWorkspace(name)
-		closeDevtoolsJS := closeDevtoolsForAppsJS(prevState.Apps)
-		targetRendered := prevState.renderedProjects[name]
-
-		// Worktrees can exist before their virtual project has been created
-		// in the current session. Resolve the matching worktree lazily.
-		restoreWorktreeProject(sm, sid, name)
-
-		movedProjectApps := sm.MoveSharedProjectApps(sid, name)
-		if !sm.SwitchProject(sid, name) {
-			return "/* noop */"
-		}
-
-		state := sm.Get(sid)
-
-		var jsSwitch string
-		if targetRendered {
-			// Project div exists in DOM, just hide/show
-			jsSwitch = switchProjectJS(name, nil) + reparentProjectAppsJS(movedProjectApps, name)
-		} else {
-			// Project div doesn't exist yet, append new content and hide old
-			contentState := state
-			if len(movedProjectApps) > 0 {
-				contentState = stateWithoutApps(state, movedProjectApps)
-			}
-			jsSwitch = switchProjectJS(name, renderMainArea(contentState, sid)) + reparentProjectAppsJS(movedProjectApps, name)
-		}
-		sm.IsProjectRendered(sid, name)
-
-		resp := newResponse().
-			Add(projectsJS(state)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(closeDevtoolsJS).
-			Add(jsSwitch).
-			Add(navigateJS(state, sid)).
-			Add(updateHashJS(name)).
-			Add(projectAutolaunchJS(state, sid)).
-			Add(focusSelectedAppJS(state))
-		return resp.Build()
-	}
 
 	// Close every panel and terminal in the active project.
 	registerAction(app, "project.close", func(ctx *r.Context) string {

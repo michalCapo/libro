@@ -409,3 +409,62 @@ func TestAdjacentProjectThread(t *testing.T) {
 		})
 	}
 }
+
+func TestCloseWorkspaceAppSelectsAdjacentThread(t *testing.T) {
+	oldDB, oldSM := db, sm
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "threads.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db, sm = oldDB, oldSM })
+	createTables()
+	for _, tc := range []struct {
+		name, active, closeID, want string
+	}{
+		{"previous", "second", "agent", "first"},
+		{"next", "first", "agent", "second"},
+		{"tool keeps thread", "second", "browser", "second"},
+		{"last thread stays in project", "other", "agent", "other"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sm = NewStateManager()
+			state := &AppState{
+				ActiveProject: tc.active,
+				Threads: []Thread{
+					{ID: "first", Project: "project"},
+					{ID: "other", Project: "another"},
+					{ID: "second", Project: "project"},
+				},
+				Apps: []Application{
+					{ID: "agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"},
+					{ID: "browser", Type: AppTypeURL, Dock: "right"},
+					{ID: "issues", PluginID: "notes", Dock: "right"},
+				},
+				snapshots: map[string]*projectSnapshot{},
+			}
+			if tc.active != tc.want {
+				state.snapshots[tc.want] = &projectSnapshot{Apps: []Application{{ID: "sibling-agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"}}}
+			}
+			sm.states["test"] = state
+			js := closeWorkspaceApp("test", tc.closeID)
+			if state.ActiveProject != tc.want {
+				t.Fatalf("active thread = %q, want %q", state.ActiveProject, tc.want)
+			}
+			if tc.closeID == "agent" && tc.active == tc.want {
+				if !state.thread(tc.active).Archived || len(state.Apps) != 1 || state.Apps[0].ID != "issues" {
+					t.Fatalf("last thread close changed shared panels: %+v", state.Apps)
+				}
+			} else if tc.closeID == "agent" {
+				if !state.thread(tc.active).Archived || len(state.Apps) != 2 || state.Apps[0].ID != "sibling-agent" || state.Apps[1].ID != "issues" {
+					t.Fatalf("thread switch lost sibling or shared panels: %+v", state.Apps)
+				}
+				if !strings.Contains(js, projectMainID(tc.want)) {
+					t.Fatal("response did not show the selected thread")
+				}
+			} else if state.thread(tc.active).Archived {
+				t.Fatal("closing a tool archived the thread")
+			}
+		})
+	}
+}
