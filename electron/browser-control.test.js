@@ -157,3 +157,46 @@ test('issues tool reaches the issue endpoint without a panel and propagates resu
   await assert.rejects(control({action:'issues',command}),/disabled/)
   assert.equal(requests.length,2)
 })
+
+test('thread controllers fail closed and isolate panel access and pause state', async () => {
+  const {createScopedController} = require('./browser-control')
+  const first = 'a'.repeat(64), second = 'b'.repeat(64)
+  const host = {executeJavaScript:async () => [
+    {id:'first',scope:first,contentsId:1,visible:true},
+    {id:'second',scope:second,contentsId:2,visible:true},
+  ]}
+  let targetLookups = 0
+  const control = createScopedController(()=>({isDestroyed:()=>false,webContents:host}),()=>{targetLookups++;return null})
+  await assert.rejects(control({action:'list'}), /requires a Libro thread/)
+  await assert.rejects(control({action:'list',scope:first}), /requires a Libro thread/)
+  assert.deepEqual((await control({action:'list'}, first)).map(p=>p.id), ['first'])
+  assert.deepEqual((await control({action:'list'}, second)).map(p=>p.id), ['second'])
+  for (const action of ['select_panel','screenshot','text','navigate','downloads','cancel_download']) {
+    await assert.rejects(control({action,panel:'second'},first), /not found/)
+  }
+  assert.equal(targetLookups,0)
+  await control({action:'stop'},first)
+  assert.equal((await control({action:'status'},first)).paused,true)
+  assert.equal((await control({action:'status'},second)).paused,false)
+  control.setPaused(true)
+  assert.equal((await control({action:'status'},second)).paused,true)
+  control.setPaused(false)
+  assert.equal((await control({action:'status'},first)).paused,false)
+  control.setEnabled(false)
+  await assert.rejects(control({action:'list'},second), /disabled/)
+})
+
+test('thread browser scopes use the same project application controller', async () => {
+  const {createScopedController} = require('./browser-control')
+  const calls = []
+  const host = {executeJavaScript:async script => {calls.push(script);return {status:'running'}}}
+  const control = createScopedController(()=>({isDestroyed:()=>false,webContents:host}),()=>null)
+  const command = {action:'application',operation:'start',project:'/shared-project'}
+  const first = 'a'.repeat(64), second = 'b'.repeat(64)
+  await control({action:'pause'},first)
+  assert.deepEqual(await control(command,first),{status:'running'})
+  assert.deepEqual(await control(command,second),{status:'running'})
+  assert.equal(calls.length,2)
+  assert.equal(calls[0],calls[1])
+  assert.match(calls[0], /applicationControl/)
+})

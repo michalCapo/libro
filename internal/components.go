@@ -1178,7 +1178,8 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			Attr("data-webview-app", app.ID).
 			Attr("data-sid", sid).
 			Attr("src", webviewSrc).
-			Attr("partition", "persist:libro").
+			Attr("partition", "persist:libro-"+browserScope(sid, app.ID)).
+			Attr("data-browser-scope", browserScope(sid, app.ID)).
 			Attr("allow", "microphone; camera; display-capture; speaker-selection; autoplay; clipboard-read; clipboard-write; fullscreen").
 			Attr("allowpopups", "").
 			Attr("style", "display:none;width:100%;height:100%")

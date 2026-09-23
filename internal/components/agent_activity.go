@@ -51,7 +51,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 	browserMCP := map[string]any{"command": executable, "args": []string{"browser-mcp"}}
 	a := &agentActivity{kind: kind}
 	if kind == "codex" {
-		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","session-id","thread-name"]'` + " -c " + shellQuote("mcp_servers.libro_browser.command="+string(executableJSON)) + " -c " + shellQuote(`mcp_servers.libro_browser.args=["browser-mcp"]`) + parts[2]), a, nil
+		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","session-id","thread-name"]'` + " -c " + shellQuote("mcp_servers.libro_browser.command="+string(executableJSON)) + " -c " + shellQuote(`mcp_servers.libro_browser.args=["browser-mcp"]`) + " -c " + shellQuote(`mcp_servers.libro_browser.env_vars=["LIBRO_BROWSER_SCOPE","LIBRO_INSTANCE","LIBRO_PORT"]`) + parts[2]), a, nil
 	}
 	dir, err := os.MkdirTemp("", "libro-agent-")
 	if err != nil {

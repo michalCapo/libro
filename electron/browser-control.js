@@ -156,10 +156,11 @@ function createController(getWindow, fromId, options = {}) {
           if (!['status', 'start', 'restart', 'stop'].includes(command.operation) || typeof command.project !== 'string' || !command.project) throw new Error('Invalid application command')
           return win.webContents.executeJavaScript(`window.libroWorkspace.applicationControl(${JSON.stringify({operation:command.operation, project:command.project})})`)
         }
-        const panels = await win.webContents.executeJavaScript(`Object.entries(window.__libroWebviews || {}).flatMap(([id, wv]) => {
-          try { const rect = wv.getBoundingClientRect(); return [{id, sid:wv.getAttribute('data-sid'), title:wv.getTitle(), url:wv.getURL(), contentsId:wv.getWebContentsId(), visible:rect.width>0 && rect.height>0 && wv.checkVisibility({checkVisibilityCSS:true})}]; } catch (_) { return []; }
+        const allPanels = await win.webContents.executeJavaScript(`Object.entries(window.__libroWebviews || {}).flatMap(([id, wv]) => {
+          try { const rect = wv.getBoundingClientRect(); return [{id, sid:wv.getAttribute('data-sid'), scope:wv.getAttribute('data-browser-scope'), title:wv.getTitle(), url:wv.getURL(), contentsId:wv.getWebContentsId(), visible:rect.width>0 && rect.height>0 && wv.checkVisibility({checkVisibilityCSS:true})}]; } catch (_) { return []; }
         })`)
         page.check(signal)
+        const panels = options.scope ? allPanels.filter(panel => panel.scope === options.scope) : allPanels
         if (command.action === 'list') return panels.map(({contentsId, ...panel}) => ({...panel,paused}))
         const panel = panels.find(panel => panel.id === command.panel)
         if (!panel) throw new Error('Browser panel not found; use list first')
@@ -217,6 +218,42 @@ function createController(getWindow, fromId, options = {}) {
   return dispatch
 }
 
+// Each thread has its own command queue, pause state and managed downloads.
+function createScopedController(getWindow, fromId, options = {}) {
+  const controllers = new Map()
+  let enabled = options.enabled !== false, paused = false
+  const getState = () => ({enabled, paused:paused || [...controllers.values()].some(controller => controller.getState().paused)})
+  const dispatch = (command, scope) => {
+    if (['application', 'issues'].includes(command.action)) return globalController(command)
+    if (typeof scope !== 'string' || !/^[a-f0-9]{64}$/.test(scope)) return Promise.reject(new Error('Browser control requires a Libro thread; restart the agent panel'))
+    if (!controllers.has(scope)) {
+      const controller = createController(getWindow, fromId, {...options, enabled, scope, onState:() => options.onState?.(getState())})
+      if (paused) controller.setPaused(true)
+      controllers.set(scope, controller)
+    }
+    return controllers.get(scope)(command)
+  }
+  const globalController = createController(getWindow, fromId, options)
+  dispatch.getState = getState
+  dispatch.setEnabled = value => {
+    globalController.setEnabled(value)
+    if (enabled === value) return getState()
+    enabled = value
+    paused = !enabled
+    for (const controller of controllers.values()) controller.setEnabled(value)
+    options.onState?.(getState())
+    return getState()
+  }
+  dispatch.setPaused = (value, cancelDownloads = false) => {
+    globalController.setPaused(value, cancelDownloads)
+    paused = value
+    for (const controller of controllers.values()) controller.setPaused(value, cancelDownloads)
+    options.onState?.(getState())
+    return getState()
+  }
+  return dispatch
+}
+
 async function startControlServer(directory, instance, dispatch) {
   const token = crypto.randomBytes(32).toString('hex')
   const descriptor = path.join(directory, `browser-control-${instance}.json`)
@@ -232,7 +269,7 @@ async function startControlServer(directory, instance, dispatch) {
       try {
         const command = JSON.parse(body)
         if (!command || typeof command !== 'object' || Array.isArray(command)) throw new Error('Expected a command object')
-        res.end(JSON.stringify({result:await dispatch(command)}))
+        res.end(JSON.stringify({result:await dispatch(command, req.headers['x-libro-browser-scope'])}))
       } catch (error) { res.writeHead(400).end(JSON.stringify({error:error.message})) }
     })
     req.on('error', () => {})
@@ -252,4 +289,4 @@ async function startControlServer(directory, instance, dispatch) {
   }
 }
 
-module.exports = { cursorScript, performAction, createController, startControlServer }
+module.exports = { cursorScript, performAction, createController, createScopedController, startControlServer }

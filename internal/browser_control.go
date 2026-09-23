@@ -3,6 +3,7 @@ package libro
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,19 @@ import (
 	"path/filepath"
 	"time"
 )
+
+// browserScope keeps profiles stable across restarts and distinct across threads.
+func browserScope(sid, appID string) string {
+	for _, project := range sm.GetAllRunningApps(sid) {
+		for _, app := range project.Apps {
+			if app.ID == appID {
+				return fmt.Sprintf("%x", sha256.Sum256([]byte(project.Name)))
+			}
+		}
+	}
+	// A detached panel must never inherit another thread's profile.
+	return fmt.Sprintf("%x", sha256.Sum256([]byte("panel:"+appID)))
+}
 
 // BrowserCommand controls an existing desktop browser panel through the local bridge.
 func BrowserCommand(command json.RawMessage) (json.RawMessage, error) {
@@ -40,6 +54,7 @@ func BrowserCommand(command json.RawMessage) (json.RawMessage, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+connection.Token)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Libro-Browser-Scope", os.Getenv("LIBRO_BROWSER_SCOPE"))
 	client := &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	defer client.CloseIdleConnections()
 	response, err := client.Do(req)
@@ -70,7 +85,8 @@ Run: libro browser list
 Run: libro browser '{"action":"click","panel":"PANEL_ID","x":120,"y":80}'
 Actions: list, status, select_panel, snapshot, wait, diagnostics, screenshot, move, click, down, up, scroll, text, key, navigate, back, forward, reload, select_option, check, upload, download, downloads, cancel_download, pause, stop.
 All actions except list/status/pause/stop require panel. Use an ID from list; never guess a panel.
-Select_panel shows an existing panel in the current project. Switch projects in Libro first if needed.
+Only browser panels belonging to your Libro thread are available. Other threads and their browser data are isolated.
+Select_panel shows an existing panel in your thread. The user must show that thread first.
 Snapshot returns accessibility roles/names and element refs; format:"dom" returns DOM structure. Refs expire on navigation. Selector/ref lookup is main-document scoped (including open shadow roots).
 Click/move/down/up/scroll accept a ref or CSS selector, or viewport x/y. Scroll also uses deltaY and optional deltaX; positive deltas scroll up/left.
 Wait accepts selector/ref with state visible/hidden/attached/detached, or exact url with state interactive/complete; timeoutMs is 0..20000 (default 10000).

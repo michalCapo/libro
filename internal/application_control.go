@@ -15,7 +15,8 @@ import (
 const applicationHelp = `Control the application's saved project command in Libro. Actions: status, start, restart, stop.
 Use the application MCP tool or: libro application status|start|restart|stop [project-path].
 The project defaults to the agent's working directory and must match Libro's active project path.
-Start is idempotent. Restart replaces the project command terminal. Stop stops only that terminal.
+All threads in the same project share one application process. Browsers remain independent per thread.
+Start is idempotent. Restart replaces the shared project command terminal. Stop stops that shared terminal for all project threads.
 Set the start command in project settings first. Commands cannot be supplied or changed through this tool.
 A starting response means launch was requested; use status to check the process. Running does not guarantee server readiness.
 `

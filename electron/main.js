@@ -49,7 +49,7 @@ let mainWindow = null
 let isQuitting = false
 let quitReady = false
 let goProcessForceKillTimer = null
-let webviewPreloadRegistered = false
+const webviewPreloadRegistered = new WeakSet()
 const devtoolsOverlays = new Map()
 const MAIN_WINDOW_ZOOM_STEP = 0.15
 let lastMainWindowZoomAction = { action: '', at: 0 }
@@ -562,14 +562,14 @@ function waitForServer(retries = 50) {
 }
 
 function registerLibroWebviewPreload(libroSession) {
-  if (webviewPreloadRegistered) return
+  if (webviewPreloadRegistered.has(libroSession)) return
 
   const id = 'libro-webview-quirks'
   try {
     if (typeof libroSession.getPreloadScripts === 'function') {
       const existing = libroSession.getPreloadScripts().some((script) => script.id === id)
       if (existing) {
-        webviewPreloadRegistered = true
+        webviewPreloadRegistered.add(libroSession)
         return
       }
     }
@@ -578,23 +578,24 @@ function registerLibroWebviewPreload(libroSession) {
       type: 'frame',
       filePath: path.join(__dirname, 'webview-preload.js'),
     })
-    webviewPreloadRegistered = true
+    webviewPreloadRegistered.add(libroSession)
   } catch (err) {
     console.error('Failed to register webview preload:', err.message)
   }
 }
 
 async function flushLibroSessionData() {
-  const libroSession = session.fromPartition('persist:libro')
-  try {
-    await libroSession.cookies.flushStore()
-  } catch (err) {
-    console.error('Failed to flush cookie store:', err.message)
-  }
-  try {
-    await libroSession.flushStorageData()
-  } catch (err) {
-    console.error('Failed to flush session storage:', err.message)
+  for (const libroSession of libroSessions) {
+    try {
+      await libroSession.cookies.flushStore()
+    } catch (err) {
+      console.error('Failed to flush cookie store:', err.message)
+    }
+    try {
+      await libroSession.flushStorageData()
+    } catch (err) {
+      console.error('Failed to flush session storage:', err.message)
+    }
   }
 }
 
@@ -616,9 +617,10 @@ async function quitApp() {
   app.quit()
 }
 
-function createWindow() {
-  // Persistent partition for webview sessions (shared cookies across webviews)
-  const libroSession = session.fromPartition('persist:libro')
+const libroSessions = new Set()
+function configureLibroSession(libroSession) {
+  if (libroSessions.has(libroSession)) return
+  libroSessions.add(libroSession)
   registerLibroWebviewPreload(libroSession)
 
   // Allow embedded browser apps to use media devices and related browser APIs.
@@ -641,7 +643,9 @@ function createWindow() {
     // this handler, grant the requesting tab/window for app-based screen share.
     callback({ video: request.frame })
   }, { useSystemPicker: true })
+}
 
+function createWindow() {
   mainWindow = new BrowserWindow({
     width: instance ? 1200 : 1920,
     height: instance ? 800 : 1080,
@@ -656,6 +660,10 @@ function createWindow() {
       backgroundThrottling: false,
       preload: path.join(__dirname, 'preload.js'),
     },
+  })
+
+  mainWindow.webContents.on('will-attach-webview', (_event, preferences, params) => {
+    configureLibroSession(session.fromPartition(params.partition || preferences.partition))
   })
 
   if (!instance) mainWindow.maximize()
@@ -1273,8 +1281,8 @@ app.on('ready', async () => {
   }
   createWindow()
   try {
-    const { startControlServer, createController } = require('./browser-control')
-    browserController = createController(() => mainWindow, id => webContents.fromId(id), {
+    const { startControlServer, createScopedController } = require('./browser-control')
+    browserController = createScopedController(() => mainWindow, id => webContents.fromId(id), {
       // The workspace applies its persisted setting when the trusted host loads.
       enabled: false,
       downloadDir: path.join(app.getPath('downloads'), 'Libro'),

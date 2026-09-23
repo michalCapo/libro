@@ -27,10 +27,26 @@ app.whenReady().then(async()=>{
   try {
     const page=origin
 
-    await win.loadURL('data:text/html,'+encodeURIComponent('<div id="frame-panel"><webview data-sid="test" style="width:500px;height:400px"></webview></div>'))
+    await win.loadURL('data:text/html,'+encodeURIComponent('<div id="frame-panel"><webview partition="libro-thread-first" data-sid="test" style="width:500px;height:400px"></webview></div>'))
     await win.webContents.executeJavaScript(`new Promise(resolve=>{const wv=document.querySelector('webview');window.__libroWebviews={panel:wv};wv.addEventListener('dom-ready',resolve,{once:true});wv.src=${JSON.stringify(page)}})`)
     const id=await win.webContents.executeJavaScript("document.querySelector('webview').getWebContentsId()")
     const target=webContents.fromId(id)
+    // Two threads visiting the same origin must have independent cookies and storage.
+    await target.executeJavaScript("localStorage.setItem('thread','first');document.cookie='thread=first;path=/'")
+    const secondID = await win.webContents.executeJavaScript(`new Promise(resolve=>{
+      const wv=document.createElement('webview');
+      wv.setAttribute('partition','libro-thread-second');
+      wv.style='width:100px;height:100px';
+      wv.addEventListener('dom-ready',()=>resolve(wv.getWebContentsId()),{once:true});
+      wv.src=${JSON.stringify(page)};document.body.appendChild(wv);
+    })`)
+    const second=webContents.fromId(secondID)
+    assert.equal(await second.executeJavaScript("localStorage.getItem('thread')"),null)
+    assert.equal(await second.executeJavaScript('document.cookie'),'')
+    await second.executeJavaScript("localStorage.setItem('thread','second');document.cookie='thread=second;path=/'")
+    assert.equal(await target.executeJavaScript("localStorage.getItem('thread')"),'first')
+    assert.equal(await target.executeJavaScript('document.cookie'),'thread=first')
+    await win.webContents.executeJavaScript("document.querySelectorAll('webview')[1].remove()")
     const control=createController(()=>win,id=>webContents.fromId(id),{downloadDir:directory})
     assert.equal((await control({action:'list'}))[0].id,'panel')
     await win.webContents.executeJavaScript(`window.libroWorkspace={select:id=>{document.getElementById('frame-'+id).style.display='block'}};document.getElementById('frame-panel').style.display='none'`)
