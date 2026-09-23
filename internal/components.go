@@ -1002,6 +1002,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			{"Open browser console", "", consoleScript, "", "Browser"},
 			{"Annotate element", "A", fmt.Sprintf(`window.__libroTogglePageTool(%s,'annotate')`, components.JSString(app.ID)), "annotate", "Annotation"},
 			{"Anotate area", "D", fmt.Sprintf(`window.__libroTogglePageTool(%s,'area')`, components.JSString(app.ID)), "area", "Annotation"},
+			{"Annotate page", "P", fmt.Sprintf(`window.__libroTogglePageTool(%s,'page')`, components.JSString(app.ID)), "page", "Annotation"},
 			{"Zoom out", "-", fmt.Sprintf(`window.__libroWvZoom(%s,-1)`, components.JSString(app.ID)), "", "Zoom"},
 			{"Reset zoom to 100%", "0", fmt.Sprintf(`window.__libroWvZoom(%s,0)`, components.JSString(app.ID)), "", "Zoom"},
 			{"Zoom in", "=", fmt.Sprintf(`window.__libroWvZoom(%s,1)`, components.JSString(app.ID)), "", "Zoom"},

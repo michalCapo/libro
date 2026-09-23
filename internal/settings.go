@@ -575,7 +575,7 @@ func renderWorkspaceSettings() *r.Node {
 				r.Div("ws-settings-row").Render(
 					r.Div("ws-settings-copy").Render(
 						r.El("label", "").Attr("for", "page-tools-autoexecute").Text("Autoexecute page tool prompts"),
-						r.P("").ID("page-tools-autoexecute-help").Text("Use A to annotate an element or D to select a rectangle, then send the prompt to the active agent. When on, it is submitted immediately."),
+						r.P("").ID("page-tools-autoexecute-help").Text("Use A to annotate an element, D to annotate an area, or P to annotate the whole page, then send the prompt to the active agent. When on, it is submitted immediately."),
 					),
 					r.El("select", "ws-settings-select").ID("page-tools-autoexecute").Attr("aria-describedby", "page-tools-autoexecute-help").On("change", r.JS("libroWorkspace.savePageTools(event.target.value === 'on')")).Render(
 						r.El("option", "").Attr("value", "off").Text("Off — paste only"),

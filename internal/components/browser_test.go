@@ -37,12 +37,13 @@ process.stdin.on('end', () => {
     });
     return handled;
   }
-  for (const key of ['/', 'n', 'N', 'p', 'Escape', 'b', 'f', 'y', 'c', 'Enter']) {
+  for (const key of ['/', 'n', 'N', 'Escape', 'b', 'f', 'y', 'c', 'Enter']) {
     assert.equal(press(key), false, key + ' must pass through');
   }
   assert.equal(press('j'), true);
   assert.equal(scrolls, 1);
   assert.equal(press('o'), true);
+  assert.equal(press('p'), true);
   let blurred = false;
   context.document.activeElement = { tagName: 'TEXTAREA', blur() { blurred = true; } };
   assert.equal(press('Escape'), false);
@@ -270,6 +271,31 @@ process.stdin.on('end', async () => {
   await context.receivePageToolMessage('app', 'selection', JSON.stringify(elementPayload));
   for (const text of [elementPayload.url, elementPayload.request, elementPayload.element.selector, elementPayload.screenshot]) assert.ok(sent.includes(text));
   for (const text of ['unwanted', 'Outer HTML', 'Attributes:', 'Viewport rectangle', '- Tag:', '- ID:', '- Classes:']) assert.ok(!sent.includes(text));
+  const pagePayload = {kind: 'page', url: payload.url, request: 'Improve the whole page'};
+  sent = undefined;
+  await context.receivePageToolMessage('app', 'selection', JSON.stringify(pagePayload));
+  assert.equal(sent, undefined, 'whole page annotation requires its screenshot');
+  context.window.libroElectron.capturePageArea = async (id, area) => {
+    assert.equal(id, 7); assert.equal(area.fullPage, true); return '/tmp/page.png';
+  };
+  await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(pagePayload));
+  assert.ok(opened.includes('/tmp/page.png'));
+  pagePayload.screenshot = '/tmp/page.png';
+  await context.receivePageToolMessage('app', 'selection', JSON.stringify(pagePayload));
+  for (const text of [pagePayload.url, pagePayload.request, pagePayload.screenshot, 'Whole-page screenshot:']) assert.ok(sent.includes(text));
+  assert.ok(!sent.includes('Target element path:'));
+  pagePayload.images = ['data:image/png;base64,example'];
+  context.window.libroElectron.savePageToolImages = async (id, images) => {
+    assert.equal(id, 7); assert.equal(images.length, 1); return ['/tmp/pasted.png'];
+  };
+  await context.receivePageToolMessage('app', 'selection', JSON.stringify(pagePayload));
+  assert.ok(sent.includes('Additional image: "/tmp/pasted.png"'));
+  sent = undefined;
+  context.window.libroElectron.savePageToolImages = async () => { throw new Error('failed'); };
+  await context.receivePageToolMessage('app', 'selection', JSON.stringify(pagePayload));
+  assert.equal(sent, undefined, 'attachment failure keeps the prompt for retry');
+  assert.ok(opened.includes('Could not attach images'));
+
   opened = undefined;
   context.window.libroElectron.capturePageArea = async () => { throw new Error('failed'); };
   await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(payload));

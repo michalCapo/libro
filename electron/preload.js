@@ -16,6 +16,9 @@ contextBridge.exposeInMainWorld('libroElectron', {
   capturePageArea: function (webContentsId, area) {
     return ipcRenderer.invoke('libro-capture-page-area', webContentsId, area)
   },
+  savePageToolImages: function (webContentsId, images) {
+    return ipcRenderer.invoke('libro-save-page-tool-images', webContentsId, images)
+  },
   focusWorkspace: function () {
     return ipcRenderer.invoke('libro-focus-workspace')
   },

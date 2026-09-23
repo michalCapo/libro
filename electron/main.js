@@ -777,6 +777,13 @@ function createWindow() {
     return require('./page-area').capturePageArea(target, area, app.getPath('temp'))
   })
 
+  ipcMain.handle('libro-save-page-tool-images', async (event, targetId, images) => {
+    if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error('Invalid sender')
+    const target = withWebContents(targetId)
+    if (!target || target.hostWebContents !== event.sender) throw new Error('Invalid browser')
+    return require('./page-area').savePageToolImages(images, app.getPath('temp'))
+  })
+
   ipcMain.on('libro-copy-clipboard', (event, text) => {
     if (text) {
       clipboard.writeText(text).catch((err) => {
@@ -1196,6 +1203,7 @@ app.on('web-contents-created', (event, contents) => {
       if (currentMode === 'insert' && key === 'escape') {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
+        contents.executeJavaScript('window.__libroPageToolPromptClose?.()').catch(() => {})
         setWebviewBrowserMode('normal')
         return
       }
@@ -1225,16 +1233,17 @@ app.on('web-contents-created', (event, contents) => {
         contents.executeJavaScript(browserKeyActions[key]).catch(() => {})
         return
       }
-      // Bare 'a' annotates an element, 'd' draws a page area, 'o' opens URL popup,
+      // Bare 'a' annotates an element, 'd' draws a page area, 'p' annotates the whole page, 'o' opens URL popup,
       // 'r' reloads, 'm' cycles viewport size, and -/= /0 control page zoom.
       // Shift+M rotates the viewport.
-      if ((!input.shift && (key === 'a' || key === 'd' || key === 'o' || key === 'r' || key === 'm' || key === '-' || key === '=' || key === '0')) || (input.shift && key === 'm')) {
+      if ((!input.shift && (key === 'a' || key === 'd' || key === 'p' || key === 'o' || key === 'r' || key === 'm' || key === '-' || key === '=' || key === '0')) || (input.shift && key === 'm')) {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         if (mainWindow) {
           let js = ''
           if (!input.shift && key === 'a') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroTogglePageTool) window.__libroTogglePageTool(a,'annotate');})();`
           else if (!input.shift && key === 'd') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroTogglePageTool) window.__libroTogglePageTool(a,'area');})();`
+          else if (!input.shift && key === 'p') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroTogglePageTool) window.__libroTogglePageTool(a,'page');})();`
           else if (!input.shift && key === 'o') js = `if (window.__libroOpenURLPopup) window.__libroOpenURLPopup();`
           else if (!input.shift && key === 'r') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroWvReload) window.__libroWvReload(a);})();`
           else if (key === '-' || key === '=' || key === '0') js = `(function(){var a=window.__libroSelectedApp||'';if(a && window.__libroWvZoom) window.__libroWvZoom(a,${key === '0' ? 0 : key === '-' ? -1 : 1});})();`

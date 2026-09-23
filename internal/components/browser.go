@@ -129,6 +129,7 @@ var browserShortcutsScript = '(' + function(){
 		if (pageToolPrompt && pageToolPrompt.parentNode) pageToolPrompt.parentNode.removeChild(pageToolPrompt);
 		pageToolPrompt = null;
 	}
+	window.__libroPageToolPromptClose = pageToolPromptClose;
 	function pageToolPromptAnchor(payload) {
 		var rect = payload && payload.kind === 'element' && payload.element ? payload.element.viewportRect : payload && payload.area;
 		if (!rect) return {left: window.innerWidth / 2, top: window.innerHeight / 2, right: window.innerWidth / 2, bottom: window.innerHeight / 2};
@@ -143,7 +144,7 @@ var browserShortcutsScript = '(' + function(){
 		var panel = document.createElement('div');
 		panel.setAttribute('popover', 'manual');
 		panel.setAttribute('role', 'dialog');
-		panel.setAttribute('aria-label', payload && payload.kind === 'area' ? 'Describe selected page area' : 'Describe selected page element');
+		panel.setAttribute('aria-label', payload && payload.kind === 'page' ? 'Describe whole page' : payload && payload.kind === 'area' ? 'Describe selected page area' : 'Describe selected page element');
 		panel.style.position = 'fixed';
 		panel.style.inset = 'auto';
 		panel.style.margin = '0';
@@ -165,27 +166,32 @@ var browserShortcutsScript = '(' + function(){
 			'.close{width:26px;height:26px;padding:0;border:0;border-radius:6px;background:transparent;color:#64748b;font-size:20px;line-height:1;cursor:pointer}' +
 			'.close:hover{background:#f1f5f9;color:#1f2937}' +
 			'.summary{margin-bottom:8px;color:#64748b;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-			'input[type=text]{display:block;box-sizing:border-box;width:100%;height:44px;margin:0;padding:9px 10px;border:1px solid #94a3b8;border-radius:7px;background:#fff;color:#1f2937;font:inherit;font-size:16px;line-height:1.45;outline:none}' +
-			'input[type=text]:focus{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18)}' +
+			'textarea{display:block;box-sizing:border-box;width:100%;min-height:96px;max-height:240px;resize:vertical;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;padding:9px 10px;border:1px solid #94a3b8;border-radius:7px;background:#fff;color:#1f2937;font:inherit;font-size:16px;line-height:1.45;outline:none}' +
+			'textarea:focus{border-color:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.18)}' +
+			'.attachments{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.attachment{position:relative}.attachment img{display:block;width:64px;height:64px;object-fit:cover;border-radius:6px}.attachment button{position:absolute;top:0;right:0;border:0;border-radius:4px;background:#fff;color:#1f2937;cursor:pointer}' +
 			'.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:9px}' +
 			'button.action{padding:7px 11px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#334155;font:inherit;cursor:pointer}' +
 			'button.action.primary{border-color:#2563eb;background:#2563eb;color:#fff}' +
 			'button.action:hover{filter:brightness(.97)}' +
-			'@media (prefers-color-scheme: dark){.card{border-color:#4b5563;background:#202124;color:#f8fafc;box-shadow:0 8px 28px rgba(0,0,0,.5)}.close{color:#cbd5e1}.close:hover{background:#374151;color:#fff}.summary{color:#cbd5e1}input[type=text]{border-color:#64748b;background:#111827;color:#f8fafc}button.action{border-color:#64748b;background:#374151;color:#f8fafc}}';
+			'@media (prefers-color-scheme: dark){.card{border-color:#4b5563;background:#202124;color:#f8fafc;box-shadow:0 8px 28px rgba(0,0,0,.5)}.close{color:#cbd5e1}.close:hover{background:#374151;color:#fff}.summary{color:#cbd5e1}textarea{border-color:#64748b;background:#111827;color:#f8fafc}button.action{border-color:#64748b;background:#374151;color:#f8fafc}}';
 		root.appendChild(style);
 		var card = document.createElement('div'); card.className = 'card';
 		var header = document.createElement('div'); header.className = 'header';
-		var title = document.createElement('span'); title.textContent = payload && payload.kind === 'area' ? 'Describe this page area' : 'Describe this element';
+		var title = document.createElement('span'); title.textContent = payload && payload.kind === 'page' ? 'Describe this page' : payload && payload.kind === 'area' ? 'Describe this page area' : 'Describe this element';
 		var close = document.createElement('button'); close.type = 'button'; close.className = 'close'; close.textContent = '×'; close.setAttribute('aria-label', 'Close prompt');
 		var summary = document.createElement('div'); summary.className = 'summary';
-		if (payload && payload.kind === 'area') summary.textContent = 'Selected rectangle · Screenshot attached';
+		if (payload && payload.kind === 'page') summary.textContent = 'Whole page · Screenshot attached';
+		else if (payload && payload.kind === 'area') summary.textContent = 'Selected rectangle · Screenshot attached';
 		else if (payload && payload.element) summary.textContent = 'Selected ' + (payload.element.selector || 'element') + (payload.screenshot ? ' · Screenshot attached' : '');
 		else summary.textContent = appURL || 'Selected page element';
-		var input = document.createElement('input'); input.type = 'text'; input.placeholder = 'What should the agent do with this?'; input.setAttribute('aria-label', 'Page tool prompt'); input.autocomplete = 'off';
+		var input = document.createElement('textarea'); input.rows = 3; input.placeholder = 'What should the agent do with this?'; input.setAttribute('aria-label', 'Page tool prompt'); input.autocomplete = 'off';
+		var images = [];
+		var pendingImages = 0;
+		var attachments = document.createElement('div'); attachments.className = 'attachments';
 		var actions = document.createElement('div'); actions.className = 'actions';
 		var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'action'; cancel.textContent = 'Cancel';
 		var send = document.createElement('button'); send.type = 'button'; send.className = 'action primary'; send.textContent = 'Send to agent';
-		header.append(title, close); actions.append(cancel, send); card.append(header, summary, input, actions); root.appendChild(card);
+		header.append(title, close); actions.append(cancel, send); card.append(header, summary, input, attachments, actions); root.appendChild(card);
 		// Popovers paint above page dialogs. Keep the prompt inside the active
 		// modal as well, so the browser does not make its input inert.
 		var modals = document.querySelectorAll('dialog:modal');
@@ -206,24 +212,53 @@ var browserShortcutsScript = '(' + function(){
 			panel.style.left = Math.round(left) + 'px';
 			panel.style.top = Math.round(top) + 'px';
 		}
+		input.addEventListener('paste', function(event) {
+			var files = Array.from(event.clipboardData && event.clipboardData.items || []).filter(function(item) { return item.kind === 'file' && item.type.indexOf('image/') === 0; }).map(function(item) { return item.getAsFile(); }).filter(Boolean);
+			if (!files.length) return;
+			event.preventDefault(); event.stopPropagation();
+			files.forEach(function(file) {
+				if (images.length + pendingImages >= 8 || file.size > 10 * 1024 * 1024) { summary.textContent = 'Attach up to 8 images, each under 10 MB.'; return; }
+				pendingImages++; send.disabled = true;
+				var reader = new FileReader();
+				reader.onload = function() {
+					var attachment = {data: String(reader.result)};
+					images.push(attachment);
+					var preview = document.createElement('div'); preview.className = 'attachment';
+					var image = document.createElement('img'); image.src = attachment.data; image.alt = 'Pasted image';
+					var remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.setAttribute('aria-label', 'Remove pasted image');
+					remove.onclick = function() { images.splice(images.indexOf(attachment), 1); preview.remove(); input.focus(); };
+					preview.append(image, remove); attachments.appendChild(preview); position();
+				};
+				reader.onerror = function() { summary.textContent = 'Could not read the pasted image. Try again.'; };
+				reader.onloadend = function() { pendingImages--; send.disabled = pendingImages > 0; };
+				reader.readAsDataURL(file);
+			});
+		});
 		function stopEvent(event) { event.stopPropagation(); }
 		panel.addEventListener('pointerdown', stopEvent);
 		panel.addEventListener('click', stopEvent);
-		panel.addEventListener('keydown', function(event) { if (event.key === 'Escape') { event.preventDefault(); pageToolPromptClose(); } });
+		panel.addEventListener('keydown', function(event) { event.stopPropagation(); if (event.key === 'Escape') { event.preventDefault(); pageToolPromptClose(); } });
 		close.onclick = function() { pageToolPromptClose(); };
 		cancel.onclick = function() { pageToolPromptClose(); };
 		send.onclick = function(event) {
 			event.preventDefault();
+			if (pendingImages) return;
 			var request = String(input.value || '').trim();
 			if (!request) { input.focus(); return; }
-			pageToolMessage('selection', {kind: payload && payload.kind || 'element', url: appURL || window.location.href, request: request, element: payload && payload.element || null, area: payload && payload.area || null, screenshot: payload && payload.screenshot || ''});
+			pageToolMessage('selection', {kind: payload && payload.kind || 'element', url: appURL || window.location.href, request: request, element: payload && payload.element || null, area: payload && payload.area || null, screenshot: payload && payload.screenshot || '', images: images.map(function(image) { return image.data; })});
 		};
-		window.__libroPageToolResult = function(sent) {
+		window.__libroPageToolResult = function(sent, error) {
 			if (sent) pageToolPromptClose();
-			else { summary.textContent = 'Agent is not ready. Your prompt is saved here; try again.'; input.focus(); }
+			else { summary.textContent = error || 'Agent is not ready. Your prompt is saved here; try again.'; input.focus(); }
 		};
 		input.addEventListener('keydown', function(event) {
-			if (event.key !== 'Enter' || event.isComposing) return;
+			if (event.isComposing) return;
+			if (event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === 'j') {
+				event.preventDefault();
+				input.setRangeText('\n', input.selectionStart, input.selectionEnd, 'end');
+				return;
+			}
+			if (event.key !== 'Enter') return;
 			event.preventDefault();
 			send.click();
 		});
@@ -242,6 +277,14 @@ var browserShortcutsScript = '(' + function(){
 		pageToolMessage('mode', {mode: '', previous: mode || ''});
 	}
 	function pageToolSetMode(mode) {
+		if (mode === 'page') {
+			pageToolStop(pageToolMode);
+			pageToolPromptClose();
+			requestAnimationFrame(function() { requestAnimationFrame(function() {
+				pageToolMessage('capture-area', {kind: 'page', url: window.location.href});
+			}); });
+			return;
+		}
 		if (mode !== 'annotate' && mode !== 'area') mode = '';
 		if (pageToolMode === mode) { pageToolStop(mode); return; }
 		if (pageToolMode) pageToolStop(pageToolMode);
@@ -391,6 +434,7 @@ var browserShortcutsScript = '(' + function(){
 		switch(e.key) {
 			case 'a': pageToolMessage('activate', {mode:'annotate'}); break;
 			case 'd': pageToolMessage('activate', {mode:'area'}); break;
+			case 'p': pageToolMessage('activate', {mode:'page'}); break;
 			case 'Escape':
 				if (pageToolMode) pageToolStop(pageToolMode);
 				else handled = false;
@@ -552,6 +596,7 @@ window.__libroTogglePageTool = function(appID, mode) {
 	if (next && window.__libroEnsurePageToolAgent && !window.__libroEnsurePageToolAgent(appID, mode)) return;
 	pageToolButtonState(appID, next);
 	executePageToolMode(appID, next);
+	if (next === 'page') return;
 	var label = next === 'annotate' ? 'Annotate mode' : next === 'area' ? 'Area select mode' : 'Page tool off';
 	var hint = next === 'annotate' ? 'Hover and click an element' : next === 'area' ? 'Drag a rectangle over the page' : 'Ready';
 	if (window.__libroShowToast) window.__libroShowToast(label, hint, 1200);
@@ -568,14 +613,15 @@ function pageToolURL(appID, payload) {
 function pageToolContext(payload, appID) {
 	var url = pageToolURL(appID, payload);
 	var lines = [
-		'Please make the requested change to the page element or region below.',
+		payload && payload.kind === 'page' ? 'Please make the requested change to the whole page below.' : 'Please make the requested change to the page element or region below.',
 		'',
 		'Page URL: ' + url
 	];
 	if (payload && payload.kind === 'element' && payload.element) {
 		lines.push('Target element path: ' + (payload.element.selector || '(none)'));
 	}
-	if (payload && payload.screenshot) lines.push((payload.kind === 'element' ? 'Selected-element screenshot: ' : 'Selected-area screenshot: ') + JSON.stringify(payload.screenshot), 'Open this image and use it with the user request and page URL.');
+	if (payload && payload.screenshot) lines.push((payload.kind === 'page' ? 'Whole-page screenshot: ' : payload.kind === 'element' ? 'Selected-element screenshot: ' : 'Selected-area screenshot: ') + JSON.stringify(payload.screenshot), 'Open this image and use it with the user request and page URL.');
+	if (payload && payload.attachments) payload.attachments.forEach(function(filename) { lines.push('Additional image: ' + JSON.stringify(filename)); });
 	return lines.join('\n');
 }
 
@@ -584,7 +630,7 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 	var payload = {};
 	try { payload = JSON.parse(rawPayload || '{}') || {}; } catch (err) { return; }
 	if (kind === 'activate') {
-		if (payload.mode === 'annotate' || payload.mode === 'area') window.__libroTogglePageTool(appID, payload.mode);
+		if (payload.mode === 'annotate' || payload.mode === 'area' || payload.mode === 'page') window.__libroTogglePageTool(appID, payload.mode);
 		return;
 	}
 	if (kind === 'mode') {
@@ -595,11 +641,11 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 		var guest = pageToolWebview(appID);
 		try {
 			if (!guest || !window.libroElectron || !window.libroElectron.capturePageArea) throw new Error('Open Libro desktop to capture page areas.');
-			var rect = payload.kind === 'element' ? payload.element && payload.element.viewportRect : payload.area;
+			var rect = payload.kind === 'page' ? {fullPage:true} : payload.kind === 'element' ? payload.element && payload.element.viewportRect : payload.area;
 			payload.screenshot = await window.libroElectron.capturePageArea(guest.getWebContentsId(), rect);
 			await guest.executeJavaScript('window.__libroPageToolPromptOpen(' + JSON.stringify(payload) + ', ' + JSON.stringify(payload.url) + ')');
 		} catch (err) {
-			if (window.__libroShowToast) window.__libroShowToast('Screenshot failed', 'Select the element or area again in Libro desktop.', 2400);
+			if (window.__libroShowToast) window.__libroShowToast('Screenshot failed', err.message || 'Try the annotation again in Libro desktop.', 2400);
 		}
 		return;
 	}
@@ -607,8 +653,17 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 		pageToolButtonState(appID, '');
 		var request = String(payload.request || '').trim();
 		if (!request) return;
-		if ((payload.kind === 'area' || payload.kind === 'element') && !payload.screenshot) return;
-		var targetLabel = payload.kind === 'area' ? 'Page area annotation' : 'HTML element annotation';
+		if ((payload.kind === 'area' || payload.kind === 'element' || payload.kind === 'page') && !payload.screenshot) return;
+		if (payload.images && payload.images.length) {
+			try {
+				payload.attachments = await window.libroElectron.savePageToolImages(pageToolWebview(appID).getWebContentsId(), payload.images);
+			} catch (err) {
+				var guest = pageToolWebview(appID);
+				if (guest && guest.executeJavaScript) await guest.executeJavaScript('window.__libroPageToolResult(false, "Could not attach images. Try again.")');
+				return;
+			}
+		}
+		var targetLabel = payload.kind === 'page' ? 'Whole page annotation' : payload.kind === 'area' ? 'Page area annotation' : 'HTML element annotation';
 		var prompt = '\n\n--- BEGIN ' + targetLabel + ' ---\nUser request: ' + request + '\n\n' + pageToolContext(payload, appID) + '\n--- END ' + targetLabel + ' ---\n\n';
 		var sent = window.__libroSendPageToolPrompt && window.__libroSendPageToolPrompt(prompt, !!window.__libroPageToolsAutoExecute);
 		var wv = pageToolWebview(appID);
