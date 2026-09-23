@@ -12,7 +12,7 @@ import (
 	"libro/internal/components"
 )
 
-const applicationHelp = `Control the application's saved project command in Libro. Actions: status, start, restart, stop.
+const applicationHelp = components.ApplicationInstructions + "\n\n" + `Control the application's saved project command in Libro. Actions: status, start, restart, stop.
 Use the application MCP tool or: libro application status|start|restart|stop [project-path].
 The project defaults to the agent's working directory and must match Libro's active project path.
 All threads in the same project share one application process. Browsers remain independent per thread.

@@ -38,7 +38,7 @@ func TestAgentActivityStartupAndExit(t *testing.T) {
 func TestAgentLaunchIntegration(t *testing.T) {
 	for _, kind := range []string{"codex", "claude", "pi", "opencode"} {
 		t.Run(kind, func(t *testing.T) {
-			t.Setenv("OPENCODE_CONFIG_CONTENT", `{"theme":"existing","plugin":["existing-plugin"]}`)
+			t.Setenv("OPENCODE_CONFIG_CONTENT", `{"theme":"existing","plugin":["existing-plugin"],"instructions":["existing.md"]}`)
 			command, activity, err := prepareAgentActivity(kind + " --help")
 			if err != nil {
 				t.Fatal(err)
@@ -53,6 +53,9 @@ func TestAgentLaunchIntegration(t *testing.T) {
 			if kind == "codex" && !strings.Contains(command, `tui.terminal_title=["run-state","session-id","thread-name"]`) {
 				t.Fatal("Codex titles must include the session ID for resume")
 			}
+			if kind != "opencode" && !strings.Contains(command, "Do not launch a separate application server") {
+				t.Fatal("application ownership instructions missing at startup")
+			}
 			if kind == "opencode" {
 				var config map[string]any
 				if err := json.Unmarshal([]byte(strings.TrimPrefix(activity.env[0], "OPENCODE_CONFIG_CONTENT=")), &config); err != nil {
@@ -60,6 +63,14 @@ func TestAgentLaunchIntegration(t *testing.T) {
 				}
 				if config["mcp"].(map[string]any)["libro_browser"] == nil {
 					t.Fatal("browser MCP missing")
+				}
+				instructions := config["instructions"].([]any)
+				if len(instructions) != 2 || instructions[0] != "existing.md" {
+					t.Fatal("existing instructions lost")
+				}
+				data, err := os.ReadFile(instructions[1].(string))
+				if err != nil || string(data) != ApplicationInstructions {
+					t.Fatal("application startup instructions missing")
 				}
 				if config["theme"] != "existing" || len(config["plugin"].([]any)) != 2 {
 					t.Fatal("existing config lost")
@@ -119,7 +130,7 @@ func TestOllamaClaudeActivity(t *testing.T) {
 			defer activity.cleanup()
 			executable, _ := os.Executable()
 			mcp, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"libro_browser": map[string]any{"command": executable, "args": []string{"browser-mcp"}}}})
-			want := agentExitCommand(test.prefix + " --settings " + shellQuote(filepath.Join(activity.dir, "claude.json")) + " --mcp-config " + shellQuote(string(mcp)) + test.suffix)
+			want := agentExitCommand(test.prefix + " --settings " + shellQuote(filepath.Join(activity.dir, "claude.json")) + " --mcp-config " + shellQuote(string(mcp)) + " --append-system-prompt " + shellQuote(ApplicationInstructions) + test.suffix)
 			if command != want || activity.kind != "claude" {
 				t.Fatalf("launch = %q, want %q", command, want)
 			}

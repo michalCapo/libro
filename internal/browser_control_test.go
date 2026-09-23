@@ -39,6 +39,9 @@ func TestBrowserMCPDiscovery(t *testing.T) {
 	if application.Name != "application" || application.InputSchema.Properties["project"] == nil || !strings.Contains(application.Description, "project settings") {
 		t.Fatal("application tool must explain the configured project command")
 	}
+	if !strings.Contains(application.Description, "Do not launch a separate application server") || !strings.Contains(lines[1], "Do not launch a separate application server") {
+		t.Fatal("MCP initialization and application discovery must explain process ownership")
+	}
 	issues := discovery.Result.Tools[2]
 	if issues.Name != "issues" || issues.InputSchema.Properties["status"] == nil || issues.InputSchema.Properties["id"] == nil {
 		t.Fatal("issues tool missing status or id")
