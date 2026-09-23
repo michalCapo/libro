@@ -1284,7 +1284,16 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 		if resp == "/* noop */" {
 			return r.Notify("error", "Project not found")
 		}
-		if id, _ := data["appId"].(string); id != "" {
+		id, _ := data["appId"].(string)
+		if focusAgent, _ := data["focusAgent"].(bool); focusAgent && id == "" {
+			for _, panel := range sm.Get(sid).Apps {
+				if panel.Dock == "center" {
+					id = panel.ID
+					break
+				}
+			}
+		}
+		if id != "" {
 			for index, panel := range sm.Get(sid).Apps {
 				if panel.ID == id {
 					sm.SelectApp(sid, index)

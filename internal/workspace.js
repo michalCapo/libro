@@ -300,7 +300,7 @@
         closeSettings();
         if (innerWidth <= 760) { prefs.projects = false; save(); }
         if (thread.id !== window.__libroActiveProject) {
-          call('project.switch', {name:thread.id});
+          call('project.switch', {name:thread.id, focusAgent:true});
           return;
         }
         const grid = [...document.querySelectorAll('[data-workspace-project]')].find(grid => grid.dataset.workspaceProject === thread.id);
@@ -406,7 +406,7 @@
           closeSettings();
           if (innerWidth <= 760) { prefs.projects = false; save(); }
           if (grid.dataset.workspaceProject !== window.__libroActiveProject) {
-            call('project.switch', {name:grid.dataset.workspaceProject});
+            call('project.switch', {name:grid.dataset.workspaceProject, appId:entry.id});
             return;
           }
           const frame = agents.find(frame => frame.dataset.appId === entry.id);
