@@ -275,11 +275,17 @@ install: ## Build and install Libro locally
 	    mkdir -p "$$ICON_DIR" "$$DESKTOP_DIR"
 	    cp "$$SCRIPT_DIR/assets/logo.svg" "$$ICON_DIR/libro.svg"
 	
+	    # Keep the backend and Electron helpers alive when the app launcher restarts.
+	    DESKTOP_EXEC="\"$$LIBRO_DIR/libro\""
+	    if command -v systemd-run >/dev/null && systemctl --user is-active --quiet default.target; then
+	        DESKTOP_EXEC="systemd-run --user --scope --collect --quiet $$DESKTOP_EXEC"
+	    fi
+
 	    cat >"$$DESKTOP_DIR/libro.desktop" <<DESKTOP
 	[Desktop Entry]
 	Name=Libro
 	Comment=Application Manager
-	Exec=$$LIBRO_DIR/libro
+	Exec=$$DESKTOP_EXEC
 	Icon=$$ICON_DIR/libro.svg
 	Type=Application
 	Categories=Utility;Development;
