@@ -918,48 +918,58 @@
     if (host.querySelector(':scope > .ws-resizer')) return;
     const handle = node('div', 'ws-resizer ws-resizer-' + kind);
     const sidebar = kind === 'sidebar';
+    const tools = kind === 'tools';
+    const horizontal = sidebar || tools;
     handle.tabIndex = 0;
     handle.setAttribute('role', 'separator');
-    handle.setAttribute('aria-label', sidebar ? 'Resize sidebar' : 'Resize terminal');
-    handle.setAttribute('aria-orientation', sidebar ? 'vertical' : 'horizontal');
-    function size() { return sidebar ? host.offsetWidth : host.offsetHeight; }
+    handle.setAttribute('aria-label', sidebar ? 'Resize sidebar' : tools ? 'Resize tools' : 'Resize terminal');
+    handle.setAttribute('aria-orientation', horizontal ? 'vertical' : 'horizontal');
+    function size() { return horizontal ? host.offsetWidth : host.offsetHeight; }
     function apply(value) {
       if (sidebar) {
         prefs.sidebarWidth = Math.round(Math.max(180, Math.min(value, Math.min(480, innerWidth - 48))));
         root.style.setProperty('--ws-projects', prefs.sidebarWidth + 'px');
+      } else if (tools) {
+        const width = Math.round(Math.max(320, Math.min(value, host.parentElement.clientWidth, window.__libroAppWidthMaxPixel() || 2560)));
+        host.style.width = width + 'px';
+        host.style.flex = '0 0 ' + width + 'px';
       } else {
         prefs.terminalHeight = Math.round(Math.max(80, Math.min(value, host.parentElement.clientHeight - 120)));
       }
-      handle.setAttribute('aria-valuenow', String(sidebar ? prefs.sidebarWidth : prefs.terminalHeight));
+      handle.setAttribute('aria-valuenow', String(tools ? parseFloat(host.style.width) : sidebar ? prefs.sidebarWidth : prefs.terminalHeight));
       schedule();
+    }
+    function commit() {
+      if (tools) window.__libroResizeApp(host.dataset.appId, host.style.width, sid);
+      else save();
     }
     handle.onpointerdown = event => {
       if (event.button !== 0) return;
       event.preventDefault();
       event.stopPropagation();
-      const start = sidebar ? event.clientX : event.clientY;
+      const start = horizontal ? event.clientX : event.clientY;
       const initial = size();
       const shield = node('div', 'ws-resize-shield');
-      shield.style.cursor = sidebar ? 'col-resize' : 'row-resize';
+      shield.style.cursor = horizontal ? 'col-resize' : 'row-resize';
       document.body.append(shield);
       handle.setPointerCapture(event.pointerId);
-      handle.onpointermove = move => apply(initial + (sidebar ? move.clientX - start : start - move.clientY));
+      handle.onpointermove = move => apply(initial + (sidebar ? move.clientX - start : tools ? start - move.clientX : start - move.clientY));
       const finish = () => {
         shield.remove();
         handle.onpointermove = null;
         handle.onpointerup = null;
         handle.onpointercancel = null;
         handle.onlostpointercapture = null;
-        save();
+        commit();
       };
       handle.onpointerup = handle.onpointercancel = handle.onlostpointercapture = finish;
     };
     handle.onkeydown = event => {
-      const delta = sidebar ? {ArrowLeft:-16, ArrowRight:16}[event.key] : {ArrowDown:-16, ArrowUp:16}[event.key];
+      const delta = sidebar ? {ArrowLeft:-16, ArrowRight:16}[event.key] : tools ? {ArrowLeft:16, ArrowRight:-16}[event.key] : {ArrowDown:-16, ArrowUp:16}[event.key];
       if (!delta) return;
       event.preventDefault();
       apply(size() + delta);
-      save();
+      commit();
     };
     host.append(handle);
   }
@@ -1004,6 +1014,7 @@
     const terminalHeight = Number.isFinite(prefs.terminalHeight) ? Math.max(80, Math.min(prefs.terminalHeight, grid.clientHeight - 120)) + 'px' : 'minmax(80px, 25.2875%)';
     grid.style.gridTemplateRows = bottomVisible ? 'minmax(0, 1fr) ' + terminalHeight : 'minmax(0, 1fr)';
     if (terminal) resizeHandle(terminal, 'terminal');
+    tools.forEach(frame => resizeHandle(frame, 'tools'));
     all.forEach(frame => {
       const index = visible.indexOf(frame);
       const show = index >= 0 || (frame === terminal && bottomVisible);

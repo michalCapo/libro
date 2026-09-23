@@ -575,3 +575,6 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 #libro-workspace[data-projects=false] .ws-resizer-sidebar{display:none}
 .ws-resize-shield{position:fixed;inset:0;z-index:99999;user-select:none}
 @media(max-width:760px){.ws-sidebar{position:absolute}}
+
+.ws-resizer-tools{top:0;left:0;bottom:0;width:6px;cursor:col-resize}
+.ws-grid>[data-maximized=true]>.ws-resizer-tools{display:none}

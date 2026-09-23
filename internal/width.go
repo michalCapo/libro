@@ -1,6 +1,9 @@
 package libro
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // Width represents the configurable width of an application
 type Width string
@@ -25,6 +28,17 @@ func AllWidths() []Width {
 func (w Width) Step(delta int) Width {
 	widths := AllWidths()
 	idx := 0
+	if pixels := w.customPixels(); pixels > 0 {
+		for i, candidate := range widths {
+			if candidate == WidthFull || candidate.PixelWidthInt() >= pixels {
+				idx = i
+				if delta > 0 && candidate.PixelWidthInt() != pixels {
+					idx--
+				}
+				break
+			}
+		}
+	}
 	for i, candidate := range widths {
 		if candidate == w {
 			idx = i
@@ -73,8 +87,23 @@ func (w Width) Label() string {
 	}
 }
 
+// customPixels accepts bounded pixel widths produced by dragging a panel edge.
+func (w Width) customPixels() int {
+	if !strings.HasSuffix(string(w), "px") {
+		return 0
+	}
+	pixels, err := strconv.Atoi(strings.TrimSuffix(string(w), "px"))
+	if err != nil || pixels < 320 || pixels > 2560 {
+		return 0
+	}
+	return pixels
+}
+
 // PixelWidth returns the fixed pixel width for the given width tier
 func (w Width) PixelWidth() string {
+	if pixels := w.customPixels(); pixels > 0 {
+		return strconv.Itoa(pixels) + "px"
+	}
 	switch w {
 	case WidthXS:
 		return "320px"
@@ -99,6 +128,9 @@ func (w Width) PixelWidth() string {
 
 // PixelWidthInt returns the fixed pixel width as an integer
 func (w Width) PixelWidthInt() int {
+	if pixels := w.customPixels(); pixels > 0 {
+		return pixels
+	}
 	switch w {
 	case WidthXS:
 		return 320
@@ -143,6 +175,9 @@ func (w Width) ClampFixedPixel(maxPixels int) Width {
 // ContainerClasses returns Tailwind classes for the iframe container
 // using the fixed pixel width the user selected.
 func (w Width) ContainerClasses() string {
+	if w.customPixels() > 0 {
+		return "shrink-0" // Custom widths are applied through the inline style.
+	}
 	if w == WidthFull {
 		return "w-full shrink-0"
 	}

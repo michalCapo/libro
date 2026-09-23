@@ -26,7 +26,7 @@ func TestFixedPanelWidths(t *testing.T) {
 }
 
 func TestToggleMaxWidthRestoresPreviousSize(t *testing.T) {
-	for _, initial := range []Width{WidthXS, WidthSM, WidthMD, WidthLG, WidthXL, Width2XL} {
+	for _, initial := range []Width{WidthXS, WidthSM, WidthMD, WidthLG, WidthXL, Width2XL, Width("753px")} {
 		t.Run(string(initial), func(t *testing.T) {
 			sm := NewStateManager()
 			s := &AppState{Apps: []Application{{ID: "panel", Width: initial}, {ID: "other", Width: WidthSM}}}
@@ -43,5 +43,23 @@ func TestToggleMaxWidthRestoresPreviousSize(t *testing.T) {
 				t.Fatal("toggle changed another panel's width")
 			}
 		})
+	}
+}
+
+func TestCustomPanelWidth(t *testing.T) {
+	width := Width("753px")
+	if width.PixelWidth() != "753px" || width.PixelWidthInt() != 753 {
+		t.Fatal("custom width must retain exact pixels")
+	}
+	if width.Step(-1) != WidthMD || width.Step(1) != WidthLG {
+		t.Fatal("custom width shortcuts must choose adjacent presets")
+	}
+	if width.ClampFixedPixel(1920) != width || Width("2100px").ClampFixedPixel(1920) != Width2XL {
+		t.Fatal("custom widths must respect screen limits")
+	}
+	for _, invalid := range []Width{"319px", "2561px", "-1px", "abcpx"} {
+		if invalid.PixelWidth() != "960px" {
+			t.Fatalf("invalid width %q accepted", invalid)
+		}
 	}
 }

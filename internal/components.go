@@ -2034,7 +2034,11 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 	// Build a map of width value -> container classes
 	widthMap := ""
 	pixelMap := ""
-	for _, w := range AllWidths() {
+	widths := AllWidths()
+	if width.customPixels() > 0 {
+		widths = append(widths, width)
+	}
+	for _, w := range widths {
 		if widthMap != "" {
 			widthMap += ","
 		}
