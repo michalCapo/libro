@@ -565,3 +565,13 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 /* Keep terminal activity in the row, before the trailing shortcut. */
 .ws-project-item:has(.ws-thread-row) .ws-thread-row .ws-project-terminal{position:static;order:1}
 .ws-project-item .ws-thread-row .ws-project-shortcut{order:2}
+
+/* Wide hit targets keep the existing one-pixel panel dividers quiet. */
+.ws-sidebar{position:relative}
+.ws-resizer{position:absolute;z-index:20;touch-action:none;user-select:none}
+.ws-resizer-sidebar{top:0;right:0;bottom:0;width:6px;cursor:col-resize}
+.ws-resizer-terminal{top:0;left:0;right:0;height:6px;cursor:row-resize}
+.ws-resizer:hover,.ws-resizer:focus-visible{background:var(--ws-accent);outline:none}
+#libro-workspace[data-projects=false] .ws-resizer-sidebar{display:none}
+.ws-resize-shield{position:fixed;inset:0;z-index:99999;user-select:none}
+@media(max-width:760px){.ws-sidebar{position:absolute}}

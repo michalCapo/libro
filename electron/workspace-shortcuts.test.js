@@ -74,7 +74,7 @@ test('project switches preserve bottom terminal visibility when restoring select
       style: {}, querySelector: () => ({}),
     }
     const window = { __libroSelectedApp: 'shell' }
-    const context = { grid, shell, window, dockState: () => state, keepBottomHidden: false }
+    const context = { grid, shell, window, prefs: {}, resizeHandle() {}, dockState: () => state, keepBottomHidden: false }
     // The inactive project's layout clears lastSelected before switching back.
     vm.runInNewContext(layout + ';layoutDocks(grid, [shell]);', context)
     window.__libroSelectedApp = 'other-project-agent'
@@ -896,4 +896,37 @@ test('new thread uses the active project context, while standalone creation rema
     call: (action, data) => calls.push([action, data.project]),
   })
   assert.deepEqual(calls, [['thread.create', 'thread:project'], ['thread.create', ''], ['thread.create', 'other']])
+})
+
+test('workspace dividers resize, clamp, persist, and clean up cancelled drags', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('  function resizeHandle('), source.indexOf('  function layoutDocks('))
+  for (const kind of ['sidebar', 'terminal']) {
+    const prefs = {}
+    let handle, shield, saved = 0
+    const host = {
+      offsetWidth: 216, offsetHeight: 200, parentElement: {clientHeight: 800},
+      querySelector: () => handle,
+      append: value => { handle = value },
+    }
+    const context = {
+      host, kind, prefs, innerWidth: 1200, schedule() {}, save() { saved++ },
+      root: {style: {setProperty() {}}},
+      document: {body: {append(value) { shield = value }}},
+      node: () => ({style: {}, setAttribute() {}, setPointerCapture() {}, remove() { this.removed = true }}),
+    }
+    vm.runInNewContext(handler + ';resizeHandle(host, kind)', context)
+    handle.onpointerdown({button: 0, pointerId: 1, clientX: 216, clientY: 600, preventDefault() {}, stopPropagation() {}})
+    handle.onpointermove({clientX: 300, clientY: 500})
+    assert.equal(prefs[kind === 'sidebar' ? 'sidebarWidth' : 'terminalHeight'], 300)
+    handle.onpointermove({clientX: 2000, clientY: -2000})
+    assert.equal(prefs[kind === 'sidebar' ? 'sidebarWidth' : 'terminalHeight'], kind === 'sidebar' ? 480 : 680)
+    handle.onpointercancel()
+    assert.equal(shield.removed, true)
+    assert.equal(handle.onpointermove, null)
+    assert.equal(saved, 1)
+    handle.onkeydown({key: kind === 'sidebar' ? 'ArrowRight' : 'ArrowUp', preventDefault() {}})
+    assert.equal(prefs[kind === 'sidebar' ? 'sidebarWidth' : 'terminalHeight'], kind === 'sidebar' ? 232 : 216)
+    assert.equal(saved, 2)
+  }
 })
