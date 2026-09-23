@@ -223,7 +223,9 @@ func TestThreadSessionSurvivesRestartAndDefaultAgentChange(t *testing.T) {
 	createTables() // Migration must be safe on subsequent launches.
 	manager := NewStateManager()
 	sid := manager.NewSession()
-	manager.saveThreadSession(sid, "thread:test", "pi", "pi --model example", "saved-session")
+	manager.SwitchProject(sid, "thread:test")
+	manager.AddTerminalApp(sid, "agent", "pi --model example", 0, true, WidthFull, "Pi", "")
+	manager.saveThreadSession(sid, "thread:test", "agent", "pi", "pi --model example", "saved-session")
 	state := newAppStateFromDB()
 	thread := state.thread("thread:test")
 	if thread == nil || thread.Name != "Existing" || !thread.Archived || thread.SessionID != "saved-session" || thread.AgentID != "pi" || thread.AgentCommand != "pi --model example" {
@@ -240,7 +242,7 @@ func TestThreadSessionSurvivesRestartAndDefaultAgentChange(t *testing.T) {
 	if projectAutolaunchJS(state, sid) != "" {
 		t.Fatal("reopening a running thread started a second agent")
 	}
-	manager.saveThreadSession(sid, "thread:test", "pi", "pi --model example", "next-session")
+	manager.saveThreadSession(sid, "thread:test", "agent", "pi", "pi --model example", "next-session")
 	if loadThreads()[0].SessionID != "next-session" {
 		t.Fatal("in-agent session switch was not persisted")
 	}
@@ -466,5 +468,44 @@ func TestCloseWorkspaceAppSelectsAdjacentThread(t *testing.T) {
 				t.Fatal("closing a tool archived the thread")
 			}
 		})
+	}
+}
+
+func TestReplaceThreadAgentStartsFreshAndKeepsTools(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "threads.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	if _, err := db.Exec("INSERT INTO threads (id, name, session_id, agent_id, archived) VALUES ('thread:test', 'Test', 'missing-session', 'pi', 1)"); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewStateManager()
+	sid := manager.NewSession()
+	manager.SwitchProject(sid, "thread:test")
+	manager.AddTerminalApp(sid, "old", "pi", 0, true, WidthFull, "Pi", "")
+	manager.SetAppPlugin(sid, "old", "pi", "center")
+	manager.AddApp(sid, "https://example.com", WidthMD, "Browser")
+	state := manager.Get(sid)
+	browserID := state.Apps[state.SelectedIndex].ID
+	removed, err := manager.ReplaceThreadAgent(sid, "pi", "pi --model new")
+	if err != nil || len(removed) != 1 || removed[0].ID != "old" {
+		t.Fatalf("replacement = %v, %v", removed, err)
+	}
+	if len(state.Apps) != 1 || state.Apps[0].ID != browserID || !state.canStartThreadApp(removed[0]) {
+		t.Fatal("replacement lost tools or blocked the new agent")
+	}
+	manager.saveThreadSession(sid, "thread:test", "old", "pi", "pi", "stale-session")
+	thread := loadThreads()[0]
+	if thread.SessionID != "" || thread.AgentCommand != "pi --model new" || thread.Archived {
+		t.Fatalf("replacement retained resume metadata: %+v", thread)
+	}
+	manager.AddTerminalApp(sid, "new", "pi --model new", 0, true, WidthFull, "Pi", "")
+	manager.saveThreadSession(sid, "thread:test", "new", "pi", "pi --model new", "new-session")
+	if loadThreads()[0].SessionID != "new-session" {
+		t.Fatal("new panel session was not saved")
 	}
 }

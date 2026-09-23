@@ -270,6 +270,36 @@ func (s *AppState) canStartThreadApp(app Application) bool {
 	return true
 }
 
+// ReplaceThreadAgent starts a fresh conversation while keeping the thread's tools.
+func (sm *StateManager) ReplaceThreadAgent(sid, agentID, command string) ([]Application, error) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	state := sm.states[sid]
+	if state == nil {
+		return nil, nil
+	}
+	thread := state.thread(state.ActiveProject)
+	if thread == nil {
+		return nil, nil
+	}
+	if _, err := db.Exec("UPDATE threads SET session_id = '', agent_id = ?, agent_command = ?, archived = 0 WHERE id = ?", agentID, command, thread.ID); err != nil {
+		return nil, err
+	}
+	thread.SessionID, thread.AgentID, thread.AgentCommand = "", agentID, command
+	thread.Archived = false
+	var removed, kept []Application
+	for _, app := range state.Apps {
+		if isAgentApp(app) {
+			removed = append(removed, app)
+		} else {
+			kept = append(kept, app)
+		}
+	}
+	state.Apps = kept
+	state.SelectedIndex = 0
+	return removed, nil
+}
+
 // CloseThreadAgent persists the archive before clearing the active thread.
 // A nil result leaves normal panel closing to the caller.
 func (sm *StateManager) CloseThreadAgent(sid, appID string) ([]Application, error) {
@@ -307,12 +337,23 @@ func (sm *StateManager) CloseThreadAgent(sid, appID string) ([]Application, erro
 	return nil, nil
 }
 
-// Record the session against the launching thread, even after workspace switches.
-func (sm *StateManager) saveThreadSession(sid, threadID, agentID, command, sessionID string) {
+// Ignore late session reports from a panel that has been replaced.
+func (sm *StateManager) saveThreadSession(sid, threadID, appID, agentID, command, sessionID string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	state := sm.states[sid]
 	if state == nil {
+		return
+	}
+	apps := state.Apps
+	if state.ActiveProject != threadID {
+		snapshot := state.snapshots[threadID]
+		if snapshot == nil {
+			return
+		}
+		apps = snapshot.Apps
+	}
+	if !slices.ContainsFunc(apps, func(app Application) bool { return app.ID == appID }) {
 		return
 	}
 	thread := state.thread(threadID)

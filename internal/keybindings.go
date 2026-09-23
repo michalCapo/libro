@@ -31,7 +31,8 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"settings", "Settings", "Ctrl+Shift+S"},
 	{"project-picker", "Switch project", "Ctrl+P"},
 	{"new-agent", "New agent", "Ctrl+N"},
-	{"new-thread", "New thread", "Ctrl+Shift+N"},
+	{"new-thread", "New thread", ""},
+	{"replace-agent", "Replace agent", "Ctrl+Shift+N"},
 	{"previous-agent", "Previous panel", "Ctrl+H"},
 	{"next-agent", "Next panel", "Ctrl+L"},
 	{"toggle-projects", "Toggle project sidebar", "Ctrl+Shift+P"},
@@ -116,6 +117,14 @@ func toolKeybindings() map[string]string {
 						break
 					}
 				}
+			}
+			if _, exists := saved["replace-agent"]; !exists {
+				for id, key := range saved {
+					if key == "Ctrl+Shift+N" {
+						saved[id] = ""
+					}
+				}
+				saved["replace-agent"] = "Ctrl+Shift+N"
 			}
 			for _, shortcut := range toolKeys {
 				if _, exists := saved[shortcut.ID]; exists {

@@ -529,3 +529,31 @@ func TestBrowserControlSettingPersistence(t *testing.T) {
 		t.Fatal("browser control did not re-enable")
 	}
 }
+
+func TestReplaceAgentShortcutMigration(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "settings.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	if _, err := db.Exec(`INSERT INTO settings (key, value) VALUES ('tool_keybindings', '{"new-agent":"Ctrl+N","new-thread":"Ctrl+Shift+N","terminal":"Ctrl+Alt+T"}')`); err != nil {
+		t.Fatal(err)
+	}
+	keys := toolKeybindings()
+	if keys["new-agent"] != "Ctrl+N" || keys["replace-agent"] != "Ctrl+Shift+N" || keys["new-thread"] != "" || keys["terminal"] != "Ctrl+Alt+T" {
+		t.Fatalf("incorrect shortcut migration: %v", keys)
+	}
+	if err := validateToolKeybindings(keys); err != nil {
+		t.Fatal(err)
+	}
+	keys["replace-agent"] = "Ctrl+Alt+N"
+	if err := setToolKeybindings(keys); err != nil {
+		t.Fatal(err)
+	}
+	if toolKeybindings()["replace-agent"] != "Ctrl+Alt+N" {
+		t.Fatal("migration overwrote a customized replacement shortcut")
+	}
+}

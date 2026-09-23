@@ -625,6 +625,19 @@ func Run(assets embed.FS, desktop bool) error {
 		command, _ := data["command"].(string)
 		threadState := sm.Get(sid)
 		candidate := Application{Type: AppType(appType), Command: command, PluginID: pluginID, Dock: dock}
+		var replacedJS strings.Builder
+		_, autolaunch := data["autolaunchProject"]
+		replaceAgent, _ := data["replaceAgent"].(bool)
+		if !autolaunch && isAgentApp(candidate) && threadState.thread(threadState.ActiveProject) != nil && (replaceAgent || !slices.ContainsFunc(threadState.Apps, isAgentApp)) {
+			removed, err := sm.ReplaceThreadAgent(sid, pluginID, command)
+			if err != nil {
+				return r.Notify("error", "Could not replace agent")
+			}
+			for _, existing := range removed {
+				tm.Stop(existing.ID)
+				replacedJS.WriteString(removeAppJS(existing.ID))
+			}
+		}
 		if threadState.needsProjectThread(candidate) {
 			payload, _ := json.Marshal(sidData(sid, "agent", pluginID, "project", threadState.ActiveProject))
 			return fmt.Sprintf("__ws.call('thread.create',%s);", payload)
@@ -696,10 +709,10 @@ func Run(assets embed.FS, desktop bool) error {
 			hydrateJS := hydrateAppAfterScrollJS(newApp.ID, sidData(sid, "id", newApp.ID))
 			if hadApps > 0 {
 				frame := renderAppFramePlaceholder(*newApp, state.SelectedIndex, true, sid)
-				return insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
+				return replacedJS.String() + insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + topBarJS + projJS + hydrateJS
 			}
 
-			return renderMainAreaWithPlaceholder(state, sid, newApp.ID).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS + navigateJS(state, sid) + hydrateJS
+			return replacedJS.String() + renderMainAreaWithPlaceholder(state, sid, newApp.ID).ToJSReplace(projectMainID(state.ActiveProject)) + topBarJS + projJS + navigateJS(state, sid) + hydrateJS
 		}
 
 		// URL app
@@ -784,7 +797,9 @@ func Run(assets embed.FS, desktop bool) error {
 					baseCommand = thread.AgentCommand
 					command = components.ResumeAgentCommand(baseCommand, thread.SessionID)
 				}
-				reportSession = func(id string) { sm.saveThreadSession(sid, threadID, term.PluginID, baseCommand, id) }
+				reportSession = func(id string) {
+					sm.saveThreadSession(sid, threadID, term.ID, term.PluginID, baseCommand, id)
+				}
 			}
 			session, err := tm.StartWithSessionReporter(term.ID, command, pwd, term.Writable, environment, reportSession)
 			if err != nil {

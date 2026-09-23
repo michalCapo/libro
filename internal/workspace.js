@@ -111,7 +111,7 @@
   function activeGrid() { return [...document.querySelectorAll('[data-workspace-project]')].find(el => el.parentElement.style.display !== 'none'); }
   function frames(grid) { return [...grid.querySelectorAll(':scope > [data-app-id]')].sort((a, b) => Number(a.style.order) - Number(b.style.order)); }
   function isThread(grid = activeGrid()) { return grid?.dataset.thread === 'true'; }
-  function openPlugin(id, dock, trigger) {
+  function openPlugin(id, dock, trigger, replace = false) {
     const plugin = window.__libroPlugins.find(candidate => candidate.id === id);
     if (!plugin || plugin.disabled || plugin.removed || trigger?.disabled) return;
     if (trigger) {
@@ -119,32 +119,18 @@
       trigger.setAttribute('aria-busy', 'true');
     }
     const targetDock = dock || plugin.dock;
-    if (targetDock === 'center' && isThread()) {
-      const grid = activeGrid();
-      const emptyThread = !frames(grid).some(frame => frame.dataset.dock === 'center');
-      if (emptyThread) {
-        call('app.start', {
-          type: plugin.type,
-          command: plugin.command || '',
-          name: plugin.name,
-          plugin: plugin.id,
-          dock: targetDock,
-          writable: true
-        });
-      } else {
-        call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''});
-      }
-    } else {
-      call('app.start', {
-        type: plugin.type,
-        command: plugin.command || '',
-        url: plugin.url || '',
-        name: plugin.name,
-        plugin: plugin.id,
-        dock: targetDock,
-        writable: true
-      });
-    }
+    if (targetDock === 'center' && isThread() && !replace) {
+      call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''});
+    } else call('app.start', {
+      replaceAgent: replace,
+      type: plugin.type,
+      command: plugin.command || '',
+      url: plugin.url || '',
+      name: plugin.name,
+      plugin: plugin.id,
+      dock: targetDock,
+      writable: true
+    });
     if (trigger) setTimeout(() => {
       if (!trigger.isConnected) return;
       trigger.disabled = false;
@@ -193,11 +179,11 @@
     });
     return false;
   };
-  function launcher(dock, onLaunch) {
+  function launcher(dock, onLaunch, replace = false) {
     if (dock === 'bottom') { bottom(); return; }
     let dialog = document.getElementById('workspace-plugin-dialog');
     if (dialog) dialog.remove();
-    dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-plugin-dialog'; dialog.setAttribute('aria-label', dock === 'center' ? 'New agent session' : 'Open an app');
+    dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-plugin-dialog'; dialog.setAttribute('aria-label', dock === 'center' ? (replace ? 'Replace agent' : 'New agent session') : 'Open an app');
     const searchBar = node('div', 'ws-command-search');
     const search = node('input', 'ws-palette-search'); search.placeholder = dock === 'center' ? 'Search agents…' : 'Search apps…'; search.setAttribute('aria-label', dock === 'center' ? 'Search agents' : 'Search apps'); search.autocomplete = 'off'; search.spellcheck = false;
     const dismiss = node('button', 'ws-command-dismiss'); dismiss.append(node('i', 'material-icons-round', 'close')); dismiss.firstChild.setAttribute('aria-hidden', 'true'); dismiss.type = 'button'; dismiss.setAttribute('aria-label', 'Close app launcher'); dismiss.onclick = () => dialog.close();
@@ -211,7 +197,7 @@
     const entries = node('div', 'ws-plugin-list');
     list.forEach(plugin => {
       const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; const icon = node('i', 'material-icons-round', plugin.type === 'url' ? 'language' : 'terminal'); icon.setAttribute('aria-hidden', 'true'); const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', plugin.name), node('small', '', plugin.description || plugin.command || 'Browser app')); entry.append(icon, copy); applyToolIcon(entry, plugin);
-      entry.onclick = () => { dialog.close(); openPlugin(plugin.id, dock, entry); onLaunch?.(); }; entries.append(entry);
+      entry.onclick = () => { dialog.close(); openPlugin(plugin.id, dock, entry, replace); onLaunch?.(); }; entries.append(entry);
     });
     dialog.append(entries);
     let active = 0;
@@ -249,10 +235,10 @@
       if (!plugin || plugin.disabled || plugin.removed) return;
       const launch = node('button', 'ws-launch', plugin.name);
       launch.type = 'button';
-      launch.onclick = () => openPlugin(id, zone, launch);
+      launch.onclick = () => openPlugin(id, zone, launch, center);
       actions.append(launch);
     });
-    const more = node('button', 'ws-launch', center ? 'Other agent…' : 'More…'); more.type = 'button'; more.onclick = () => launcher(zone); actions.append(more); el.append(actions); return el;
+    const more = node('button', 'ws-launch', center ? 'Other agent…' : 'More…'); more.type = 'button'; more.onclick = () => launcher(zone, undefined, center); actions.append(more); el.append(actions); return el;
   }
   function projectSettings(name) {
     const project = (window.__libroProjects || []).find(p => (p.kind === 'worktree' ? p.name + '/' + p.branch : p.name) === name);
@@ -826,6 +812,11 @@
     if (binding && binding === toolKeys['new-thread']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) newThread('');
+      return;
+    }
+    if (binding && binding === toolKeys['replace-agent']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) launcher('center', undefined, true);
       return;
     }
     if (binding && binding === toolKeys['new-agent']) {
