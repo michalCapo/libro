@@ -822,7 +822,7 @@
     }
     if (binding && binding === toolKeys['new-thread']) {
       event.preventDefault(); event.stopImmediatePropagation();
-      if (!event.repeat) newThread();
+      if (!event.repeat) newThread('');
       return;
     }
     if (binding && binding === toolKeys['new-agent']) {

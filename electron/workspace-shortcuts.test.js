@@ -608,19 +608,19 @@ test('address popup reclaims native focus only for the workspace sender', () => 
 })
 
 
-test('new thread shortcut uses the same action as the sidebar and ignores repeats', () => {
+test('new thread shortcut creates a general thread and ignores repeats', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const create = source.slice(source.indexOf('  function newThread('), source.indexOf('  function threadArchived()'))
   const handler = source.slice(source.indexOf("    if (binding && binding === toolKeys['new-thread'])"), source.indexOf("    if (binding && binding === toolKeys['new-agent'])"))
-  for (const binding of ['Ctrl+Shift+N', 'Alt+N']) for (const repeat of [false, true]) {
+  for (const project of ['', 'project', 'thread:project']) for (const binding of ['Ctrl+Shift+N', 'Alt+N']) for (const repeat of [false, true]) {
     const calls = []
     vm.runInNewContext(create + '(function(){' + handler + '})()', {
-      window: { __libroActiveProject: 'thread:project' },
+      window: { __libroActiveProject: project },
       binding, toolKeys: { 'new-thread': binding },
       event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
-      call(action) { calls.push(action) },
+      call(action, data) { calls.push([action, data.project]) },
     })
-    assert.deepEqual(calls, repeat ? [] : ['thread.create'])
+    assert.deepEqual(calls, repeat ? [] : [['thread.create', '']])
   }
 })
 
