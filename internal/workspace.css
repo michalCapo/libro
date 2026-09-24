@@ -405,6 +405,8 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 /* A project owns its original branch first, then its worktrees. */
 .ws-project-group{position:relative;margin-bottom:8px;border:1px solid var(--ws-line);border-radius:10px;background:var(--ws-raised);overflow:hidden}
 .ws-project-group:has(.ws-project-row[aria-current=true]){border-color:var(--ws-accent)}
+.ws-project-group:not(:has(.ws-thread-row)){border-color:transparent;background:transparent}
+.ws-project-group:not(:has(.ws-thread-row))>.ws-project-threads{border-top:0}
 .ws-project-group>.ws-project-item{margin:0;border-radius:0}
 .ws-project-group>.ws-project-item>.ws-project-row{border-radius:0;background:transparent}
 .ws-project-group>.ws-project-threads{border-top:1px solid var(--ws-line)}
@@ -412,7 +414,7 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 /* Keep the timeline aligned with the project and thread icon centers. */
 .ws-project-group .ws-project-row{position:relative}
 .ws-project-group .ws-thread-row>.material-icons-round{width:18px;text-align:center}
-.ws-project-group .ws-project-row::before{content:"";position:absolute;left:20px;top:-1px;bottom:0;width:2px;z-index:1;background:linear-gradient(to bottom,var(--ws-muted) 0 calc(50% - 10px),transparent calc(50% - 10px) calc(50% + 10px),var(--ws-muted) calc(50% + 10px));pointer-events:none}
+.ws-project-group:has(.ws-thread-row) .ws-project-row::before{content:"";position:absolute;left:20px;top:-1px;bottom:0;width:2px;z-index:1;background:linear-gradient(to bottom,var(--ws-muted) 0 calc(50% - 10px),transparent calc(50% - 10px) calc(50% + 10px),var(--ws-muted) calc(50% + 10px));pointer-events:none}
 .ws-project-group>.ws-project-item>.ws-project-row::before{background:linear-gradient(to bottom,transparent calc(50% + 12px),var(--ws-muted) calc(50% + 12px))}
 .ws-project-group>.ws-project-threads>.ws-project-item:last-child .ws-thread-row::before,.ws-project-group>.ws-project-threads>.ws-project-threads:last-child>.ws-project-item:last-child .ws-thread-row::before,.ws-project-group>.ws-project-threads>.ws-project-item:has(+.ws-project-threads:empty:last-child) .ws-thread-row::before{background:linear-gradient(to bottom,var(--ws-muted) calc(50% - 10px),transparent calc(50% - 10px))}
 #libro-workspace[data-projects=false] .ws-project-group .ws-project-row::before{display:none}
