@@ -142,7 +142,6 @@ func switchToProjectName(sid, name string) string {
 	}
 
 	prevState := sm.Get(sid)
-	name = prevState.projectWorkspace(name)
 	closeDevtoolsJS := closeDevtoolsForAppsJS(prevState.Apps)
 	targetRendered := prevState.renderedProjects[name]
 
@@ -216,7 +215,7 @@ func closeWorkspaceApp(sid, appID string) string {
 
 // Autolaunch starts an agent panel directly in the active workspace.
 func projectAutolaunchJS(state *AppState, sid string) string {
-	if state.ActiveProject == "" {
+	if state.ActiveProject == "" || state.thread(state.ActiveProject) == nil {
 		return ""
 	}
 	if slices.ContainsFunc(state.Apps, isAgentApp) {
@@ -789,7 +788,7 @@ func Run(assets embed.FS, desktop bool) error {
 			pwd := sm.GetActiveProjectPath(sid)
 			var environment []string
 			if isAgentApp(term) {
-				environment = agentEnvironmentList()
+				environment = append(agentEnvironmentList(), "LIBRO_APPLICATION_PATH="+pwd)
 			}
 			command := term.Command
 			var reportSession func(string)
@@ -896,10 +895,21 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 			return r.Notify("error", "Selected app is not a running terminal")
 		}
 
+		if term.PluginID == "project-command" {
+			path := term.ApplicationPath
+			if path == "" {
+				path = sm.GetActiveProjectPath(sid)
+			}
+			js, _, err := controlApplication(sid, path, "restart")
+			if err != nil {
+				return js + r.Notify("error", err.Error())
+			}
+			return js
+		}
 		pwd := sm.GetActiveProjectPath(sid)
 		var environment []string
 		if isAgentApp(*term) {
-			environment = agentEnvironmentList()
+			environment = append(agentEnvironmentList(), "LIBRO_APPLICATION_PATH="+pwd)
 		}
 		if err := tm.RestartWithEnvironment(term.ID, term.Command, term.Writable, pwd, environment); err != nil {
 			return r.Notify("error", "Failed to restart terminal: "+err.Error())
@@ -1303,6 +1313,7 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 	})
 
 	registerThreadActions(app, switchToProjectName)
+	registerFinishThreadActions(app)
 
 	// Switch active project
 	registerAction(app, "project.switch", func(ctx *r.Context) string {
@@ -1475,47 +1486,13 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 			return ""
 		}
 
-		var parentName, repoPath string
-		for _, p := range state.Projects {
-			if p.Name != state.ActiveProject {
-				continue
-			}
-			if p.Virtual {
-				parentName = p.ParentProject
-				for _, pp := range state.Projects {
-					if pp.Name == parentName {
-						repoPath = pp.Path
-						break
-					}
-				}
-			} else {
-				parentName = p.Name
-				repoPath = p.Path
-			}
-			break
-		}
-		if repoPath == "" || !GitIsRepo(repoPath) {
-			return r.Notify("error", "Current project is not a git repository")
-		}
-
-		vtName := parentName + "/" + branch
-		for _, p := range state.Projects {
-			if p.Name == vtName {
-				return r.Notify("error", "Worktree for this branch already exists")
-			}
-		}
-
-		safeBranch := strings.ReplaceAll(branch, "/", "-")
-		wtPath := filepath.Join(filepath.Dir(repoPath), filepath.Base(repoPath)+"-"+safeBranch)
-
-		if err := GitCreateWorktree(repoPath, branch, wtPath); err != nil {
+		vtName, err := sm.createProjectWorktree(sid, state.ActiveProject, branch)
+		if err != nil {
 			return r.Notify("error", "Failed to create worktree: "+err.Error())
 		}
 
 		prevState := sm.Get(sid)
 		closeDevtoolsJS := closeDevtoolsForAppsJS(prevState.Apps)
-
-		sm.AddVirtualProject(sid, vtName, wtPath, parentName)
 
 		if !sm.SwitchProject(sid, vtName) {
 			return r.Notify("error", "Worktree created but failed to switch")

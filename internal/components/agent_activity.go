@@ -10,11 +10,12 @@ import (
 )
 
 // ApplicationInstructions is shared by startup prompts and application tool help.
-const ApplicationInstructions = `Libro owns the application server for this project. All project threads share one application process.
+const ApplicationInstructions = `Libro owns the application processes. Project settings choose shared or per-thread mode; status reports the mode and assigned URL.
+Your application MCP tool and CLI are scoped to your assigned workspace. Only control that application; do not target another thread, project, PID, or port. In shared mode, that assigned application is shared with the project.
 Before running or testing the app, call the Libro application tool with action status (CLI: libro application status).
 If running, reuse it. If starting, wait and check status again. If stopped, use action start (CLI: libro application start), then check readiness.
 Do not launch a separate application server from a shell, background task, subprocess, or another port. This includes npm/pnpm/bun dev or start, framework dev servers, and equivalent project commands. Do not kill a port owner to make room for your own server.
-Use Libro application restart only when needed; it restarts the shared process for every project thread. Use stop only when requested or required by the task.
+Use Libro application restart only when needed; it restarts only your assigned application (affecting other threads only in shared mode). Use stop only when requested or required by the task.
 If Libro is unavailable or the start command is missing, report the problem and ask the user to configure it in Libro project settings; do not fall back to a separate server.
 One-shot builds, lint checks, and tests that do not launch another application server can run normally.`
 
@@ -71,7 +72,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 	libroMCP := map[string]any{"command": executable, "args": []string{"mcp"}}
 	a := &agentActivity{kind: kind}
 	if kind == "codex" {
-		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","session-id","thread-name"]'` + " -c " + shellQuote("mcp_servers.libro.command="+string(executableJSON)) + " -c " + shellQuote(`mcp_servers.libro.args=["mcp"]`) + " -c " + shellQuote(`mcp_servers.libro.env_vars=["LIBRO_INSTANCE","LIBRO_PORT"]`) + " -c " + shellQuote("developer_instructions="+string(instructionsJSON)) + parts[2]), a, nil
+		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","session-id","thread-name"]'` + " -c " + shellQuote("mcp_servers.libro.command="+string(executableJSON)) + " -c " + shellQuote(`mcp_servers.libro.args=["mcp"]`) + " -c " + shellQuote(`mcp_servers.libro.env_vars=["LIBRO_INSTANCE","LIBRO_PORT","LIBRO_APPLICATION_PATH"]`) + " -c " + shellQuote("developer_instructions="+string(instructionsJSON)) + parts[2]), a, nil
 	}
 	dir, err := os.MkdirTemp("", "libro-agent-")
 	if err != nil {

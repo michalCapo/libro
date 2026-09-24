@@ -402,13 +402,21 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 #agent-command-rows .ws-agent-config-row{grid-template-columns:20px minmax(90px,1fr) minmax(0,3fr) auto auto}
 @media(max-width:700px){#agent-command-rows .ws-agent-config-row{grid-template-columns:20px minmax(0,1fr) auto}#agent-command-rows [data-agent-command]{grid-column:2}#agent-command-rows .ws-button{grid-column:3;grid-row:1}}
 
-.ws-project-item:has(+ :is(.ws-project-agents,.ws-project-threads:not(:empty))){margin-bottom:1px;background:var(--ws-raised);border-radius:10px 10px 0 0}
-.ws-project-item:has(+ :is(.ws-project-agents,.ws-project-threads:not(:empty))) .ws-project-row{background:transparent;border-radius:10px 10px 0 0}
-.ws-project-item:has(+ :is(.ws-project-agents,.ws-project-threads:not(:empty))) + :is(.ws-project-agents,.ws-project-threads:not(:empty)){margin:0 0 8px;padding:0;background:var(--ws-raised);border-radius:0 0 10px 10px;display:flex;flex-direction:column;gap:1px;overflow:hidden}
-#workspace-project-list > .ws-project-item:has(.ws-project-row[aria-current=true])::after{content:"";position:absolute;inset:0;border:1px solid var(--ws-accent);border-radius:inherit;pointer-events:none;z-index:1}
-#libro-workspace[data-projects=true] .ws-project-item:has(.ws-project-row[aria-current=true]):has(+ :is(.ws-project-agents,.ws-project-threads:not(:empty)))::after{bottom:-1px;border-bottom:0}
-.ws-project-item:has(.ws-project-row[aria-current=true]) + :is(.ws-project-agents,.ws-project-threads:not(:empty)){position:relative}
-.ws-project-item:has(.ws-project-row[aria-current=true]) + :is(.ws-project-agents,.ws-project-threads:not(:empty))::after{content:"";position:absolute;inset:0;border:1px solid var(--ws-accent);border-top:0;border-radius:inherit;pointer-events:none;z-index:1}
+/* A project owns its original branch first, then its worktrees. */
+.ws-project-group{position:relative;margin-bottom:8px;border:1px solid var(--ws-line);border-radius:10px;background:var(--ws-raised);overflow:hidden}
+.ws-project-group:has(.ws-project-row[aria-current=true]){border-color:var(--ws-accent)}
+.ws-project-group>.ws-project-item{margin:0;border-radius:0}
+.ws-project-group>.ws-project-item>.ws-project-row{border-radius:0;background:transparent}
+.ws-project-group>.ws-project-threads{border-top:1px solid var(--ws-line)}
+.ws-project-group .ws-project-threads .ws-project-item .ws-thread-row{padding:9px 12px;min-height:38px}
+/* Keep the timeline aligned with the project and thread icon centers. */
+.ws-project-group .ws-project-row{position:relative}
+.ws-project-group .ws-thread-row>.material-icons-round{width:18px;text-align:center}
+.ws-project-group .ws-project-row::before{content:"";position:absolute;left:20px;top:-1px;bottom:0;width:2px;z-index:1;background:linear-gradient(to bottom,var(--ws-muted) 0 calc(50% - 10px),transparent calc(50% - 10px) calc(50% + 10px),var(--ws-muted) calc(50% + 10px));pointer-events:none}
+.ws-project-group>.ws-project-item>.ws-project-row::before{background:linear-gradient(to bottom,transparent calc(50% + 12px),var(--ws-muted) calc(50% + 12px))}
+.ws-project-group>.ws-project-threads>.ws-project-item:last-child .ws-thread-row::before,.ws-project-group>.ws-project-threads>.ws-project-threads:last-child>.ws-project-item:last-child .ws-thread-row::before,.ws-project-group>.ws-project-threads>.ws-project-item:has(+.ws-project-threads:empty:last-child) .ws-thread-row::before{background:linear-gradient(to bottom,var(--ws-muted) calc(50% - 10px),transparent calc(50% - 10px))}
+#libro-workspace[data-projects=false] .ws-project-group .ws-project-row::before{display:none}
+.ws-project-group .ws-project-threads .ws-project-item .ws-thread-row .ws-project-shortcut{position:static;flex-shrink:0;width:24px;height:24px}
 :is(.ws-project-agent,.ws-project-threads .ws-thread-row){box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;min-width:0;min-height:34px;padding:7px 8px 7px 12px;border:0;border-radius:0;background:transparent;color:var(--ws-muted);text-align:left;font:inherit;font-size:12px;line-height:1;cursor:pointer}
 :is(.ws-project-agent,.ws-project-threads .ws-thread-row) .material-icons-round{font-size:15px;flex-shrink:0}
 :is(.ws-project-agent,.ws-project-threads .ws-thread-row) span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -578,3 +586,29 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 
 .ws-resizer-tools{top:0;left:0;bottom:0;width:6px;cursor:col-resize}
 .ws-grid>[data-maximized=true]>.ws-resizer-tools{display:none}
+
+.ws-project-item:has(.ws-project-new-thread) .ws-project-row{padding-right:96px}
+.ws-project-new-thread{position:absolute;right:66px;width:26px;height:26px;opacity:0}
+.ws-project-new-thread .material-icons-round{font-size:15px}
+.ws-project-item:focus-within .ws-project-new-thread,.ws-project-item:hover .ws-project-new-thread{opacity:1}
+.ws-project-new-thread:disabled{cursor:not-allowed;color:var(--ws-muted)}
+@media(hover:none){.ws-project-new-thread{opacity:1}}
+#libro-workspace[data-projects=false] .ws-project-new-thread{display:none}
+
+.ws-project-group .ws-project-threads .ws-project-item:has(.ws-project-settings) .ws-thread-row{padding-right:72px}
+.ws-project-group .ws-project-threads .ws-project-item:has(.ws-project-settings) .ws-thread-row .ws-project-shortcut{position:absolute;right:12px}
+
+/* Thread completion keeps destructive work behind a reviewed dialog. */
+.ws-finish-dialog{width:min(600px,calc(100vw - 32px));max-height:calc(100dvh - 48px);overflow:auto;padding:20px}
+.ws-finish-dialog h2{margin:0;font-size:18px}
+.ws-finish-source{margin:6px 0 18px;color:var(--ws-muted);overflow-wrap:anywhere}
+.ws-finish-dialog form{display:flex;flex-direction:column;gap:10px}
+.ws-finish-dialog .ws-agent-command{box-sizing:border-box;width:100%;min-width:0}
+.ws-finish-summary{max-height:220px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;margin:4px 0;background:var(--ws-chrome);border:1px solid var(--ws-line);border-radius:6px;font-size:12px}
+.ws-finish-status{margin:0;overflow-wrap:anywhere}
+.ws-finish-dialog .ws-agent-actions{justify-content:flex-end;flex-wrap:wrap}
+.ws-finish-dialog [hidden]{display:none}
+.ws-thread-menu-item{display:block;width:100%;padding:9px 10px;border:0;border-radius:6px;background:transparent;color:var(--ws-fg);font:inherit;text-align:left;cursor:pointer}
+.ws-thread-menu-item:hover{background:var(--ws-hover)}
+.ws-thread-menu-item:focus-visible{outline:2px solid var(--ws-accent);outline-offset:-2px}
+.ws-thread-discard{margin-top:6px;border-top:1px solid var(--ws-line);border-radius:0}

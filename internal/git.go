@@ -113,9 +113,13 @@ func GitCreateWorktree(repoPath, branch, wtPath string) error {
 	if !GitAvailable() {
 		return fmt.Errorf("git is not available")
 	}
+	base := GitCurrentBranch(repoPath)
+	if base == "" {
+		return fmt.Errorf("a committed source branch is required")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "worktree", "add", "-b", branch, wtPath)
+	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "worktree", "add", "-b", branch, wtPath, "refs/heads/"+base)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
@@ -123,6 +127,9 @@ func GitCreateWorktree(repoPath, branch, wtPath string) error {
 			return err
 		}
 		return fmt.Errorf("%s", msg)
+	}
+	if _, err := worktreeGit(repoPath, "config", "branch."+branch+".libro-base", base); err != nil {
+		return fmt.Errorf("worktree created, but could not record its source branch: %w", err)
 	}
 	return nil
 }

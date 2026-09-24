@@ -119,7 +119,7 @@
       trigger.setAttribute('aria-busy', 'true');
     }
     const targetDock = dock || plugin.dock;
-    if (targetDock === 'center' && isThread() && !replace) {
+    if (targetDock === 'center' && isThread() && !replace && frames(activeGrid()).some(frame => frame.dataset.dock === 'center')) {
       call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''});
     } else call('app.start', {
       replaceAgent: replace,
@@ -240,6 +240,18 @@
     });
     const more = node('button', 'ws-launch', center ? 'Other agent…' : 'More…'); more.type = 'button'; more.onclick = () => launcher(zone, undefined, center); actions.append(more); el.append(actions); return el;
   }
+  function dialogKeys(dialog, form, submit, cancel) {
+    dialog.addEventListener('keydown', event => {
+      if (event.isComposing || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+      if (event.key === 'Escape') {
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (!event.repeat && !cancel.disabled) cancel.click();
+      } else if (event.key === 'Enter' && !['TEXTAREA', 'SELECT'].includes(event.target.tagName)) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (!event.repeat && !submit.disabled) form.requestSubmit(submit);
+      }
+    }, true);
+  }
   function projectSettings(name) {
     const project = (window.__libroProjects || []).find(p => (p.kind === 'worktree' ? p.name + '/' + p.branch : p.name) === name);
     if (!project) return;
@@ -248,15 +260,170 @@
     dialog.setAttribute('aria-labelledby', 'project-command-title');
     const heading = node('h2', '', project.displayName || project.name); heading.id = 'project-command-title';
     const form = node('form', '');
+    const inheritedCommand = project.kind === 'worktree' && project.applicationMode === 'thread' && !project.command
+      ? (window.__libroProjects || []).find(p => p.kind === 'project' && p.name === project.name)?.command || '' : '';
     const label = node('label', '', 'Start command'); label.htmlFor = 'project-command-input';
-    const input = node('input', 'ws-agent-command'); input.id = 'project-command-input'; input.value = project.command || ''; input.placeholder = 'air or bun src/dev.ts'; input.autocomplete = 'off'; input.spellcheck = false;
-    const help = node('p', 'ws-settings-status', 'Runs in this project folder. ' + (toolKeys['run-project'] || 'Start / restart project') + ' starts or restarts it; ' + (toolKeys['stop-project'] || 'Stop project command') + ' stops it. You can also use Ctrl+C in the terminal.'); help.id = 'project-command-help'; input.setAttribute('aria-describedby', help.id);
+    const input = node('input', 'ws-agent-command'); input.id = 'project-command-input'; input.value = project.command || inheritedCommand; input.placeholder = project.kind === 'worktree' && project.applicationMode === 'thread' ? 'Inherit project start command' : 'air or bun src/dev.ts'; input.autocomplete = 'off'; input.spellcheck = false;
+    const help = node('p', 'ws-settings-status', 'Per-thread apps run in their worktree. Use $PORT in the command (for example: npm run dev -- --port "$PORT"). Blank thread commands inherit the project command. ' + (toolKeys['run-project'] || 'Start / restart project') + ' starts or restarts it; ' + (toolKeys['stop-project'] || 'Stop project command') + ' stops it. You can also use Ctrl+C in the terminal.'); help.id = 'project-command-help'; input.setAttribute('aria-describedby', help.id);
+    const modeLabel = node('label', '', 'Application mode (all project threads)'); modeLabel.htmlFor = 'project-application-mode';
+    const mode = node('select', 'ws-agent-command'); mode.id = 'project-application-mode';
+    [['shared', 'Shared application'], ['thread', 'Application per thread']].forEach(([value, text]) => { const option = node('option', '', text); option.value = value; mode.append(option); });
+    mode.value = project.applicationMode || 'thread';
+    const portLabel = node('label', '', 'Port for this thread'); portLabel.htmlFor = 'project-application-port';
+    const port = node('input', 'ws-agent-command'); port.id = 'project-application-port'; port.type = 'number'; port.min = '1'; port.max = '65535'; port.placeholder = 'Automatic'; port.value = project.applicationPort || '';
+    const syncMode = () => { portLabel.hidden = port.hidden = mode.value !== 'thread'; port.disabled = mode.value !== 'thread'; }; mode.onchange = syncMode; syncMode();
     const actions = node('div', 'ws-agent-actions');
     const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
     const submit = node('button', 'ws-launch', 'Save'); submit.type = 'submit';
-    actions.append(cancel, submit); form.append(label, input, help, actions);
-    form.onsubmit = event => { event.preventDefault(); call('project.command.save', {name, command:input.value}); };
+    actions.append(cancel, submit); form.append(modeLabel, mode, label, input, help, portLabel, port);
+    if (project.applicationURL) { const link = node('a', '', project.applicationURL); link.href = project.applicationURL; link.target = '_blank'; link.rel = 'noopener'; form.append(link); }
+    form.append(actions);
+    form.onsubmit = event => { event.preventDefault(); call('project.command.save', {name, command:mode.value === 'thread' && inheritedCommand && input.value === inheritedCommand ? '' : input.value, mode:mode.value, port:port.value}); };
+    dialogKeys(dialog, form, submit, cancel);
     dialog.append(heading, form); root.append(dialog); dialog.showModal(); input.focus();
+  }
+  let finishDialog = null;
+  function finishThread(name = window.__libroActiveProject, discard = false, method = 'merge') {
+    const project = (window.__libroProjects || []).find(p => p.kind === 'worktree' && p.name + '/' + p.branch === name);
+    if (!project) { window.__libroShowToast?.('Select a worktree thread first', '', 2000); return; }
+    if (finishDialog?.busy) return;
+    finishDialog?.dialog.remove();
+    const dialog = node('dialog', 'ws-plugin-dialog ws-finish-dialog'); dialog.setAttribute('aria-labelledby', 'finish-thread-title');
+    const title = node('h2', '', discard ? 'Discard thread' : method === 'pr' ? 'Create draft PR' : method === 'squash' ? 'Squash thread' : 'Merge thread'); title.id = 'finish-thread-title';
+    const source = node('p', 'ws-finish-source', project.branch);
+    const form = node('form', '');
+    const field = (text, input, id) => { input.id = id; const label = node('label', '', text); label.htmlFor = id; form.append(label, input); return label; };
+    const base = node('select', 'ws-agent-command'); const baseLabel = field('Destination branch', base, 'finish-thread-base');
+    const summary = node('pre', 'ws-finish-summary', 'Loading changes…'); summary.setAttribute('aria-label', 'Changes to integrate'); form.append(summary);
+    const message = node('input', 'ws-agent-command'); message.value = project.branch; message.maxLength = 200;
+    const messageLabel = field('Commit message', message, 'finish-thread-message');
+    const body = node('textarea', 'ws-agent-command'); body.rows = 3; const bodyLabel = field('Pull request description', body, 'finish-thread-body');
+    const note = node('p', 'ws-settings-status');
+    const status = node('p', 'ws-finish-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+    const actions = node('div', 'ws-agent-actions');
+    const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
+    const submit = node('button', 'ws-launch', discard ? 'Discard and remove thread' : 'Merge and remove thread'); submit.type = 'submit'; submit.disabled = true;
+    actions.append(cancel, submit); form.append(note, status, actions); dialog.append(title, source, form); root.append(dialog);
+    const state = {name, dialog, form, base, method, summary, status, submit, cancel, info:null, busy:false, request:'', discard}; finishDialog = state;
+    function update() {
+      const pr = !discard && method === 'pr';
+      base.hidden = baseLabel.hidden = discard;
+      message.hidden = messageLabel.hidden = discard || method === 'merge'; messageLabel.textContent = pr ? 'Pull request title' : 'Commit message';
+      body.hidden = bodyLabel.hidden = !pr;
+      note.textContent = pr ? 'Pushes this branch to origin and creates a draft PR using GitHub CLI. The thread and worktree stay open.' : discard ? 'Permanently deletes this thread, its branch, and its worktree folder, including uncommitted and ignored files. Stops its processes. Shared applications stay running.' : 'After a successful merge, stops this thread’s processes and removes the thread, its branch, and its worktree folder, including ignored files. Shared applications stay running. Conflicts keep the thread open.';
+      const info = state.info;
+      const blocker = !info ? 'Loading changes…' : discard ? '' : pr ? (info.dirty ? 'Commit or stash this thread’s changes first.' : !info.targetHead ? 'Choose a destination branch.' : '') : info.blocker;
+      status.textContent = [state.error, blocker].filter(Boolean).join(" ");
+      submit.textContent = discard ? 'Discard and remove thread' : pr ? 'Push branch and create draft PR' : method === 'squash' ? 'Squash and remove thread' : 'Merge and remove thread';
+      submit.disabled = state.busy || !info || !!blocker || (pr && !message.value.trim());
+    }
+    function preview() {
+      state.info = null; state.request = crypto.randomUUID(); update();
+      call('thread.finish.preview', {name, base:base.value, request:state.request});
+    }
+    state.update = update; state.preview = preview;
+    base.onchange = preview; message.oninput = update;
+    dialog.addEventListener('cancel', event => { if (state.busy) event.preventDefault(); });
+    dialog.addEventListener('close', () => { if (finishDialog === state) finishDialog = null; dialog.remove(); });
+    form.onsubmit = event => {
+      event.preventDefault(); if (submit.disabled || state.busy) return;
+      state.busy = true; state.error = "";
+      const info = state.info;
+      form.querySelectorAll('input,select,textarea,button').forEach(control => { control.disabled = true; });
+      status.textContent = discard ? 'Removing thread…' : method === 'pr' ? 'Pushing branch and creating draft PR…' : 'Merging and removing thread…';
+      call('thread.finish', {name, base:info.base, method:discard ? 'discard' : method, sourceHead:info.sourceHead, targetHead:info.targetHead, message:message.value, body:body.value});
+    };
+    dialogKeys(dialog, form, submit, cancel);
+    dialog.showModal(); preview(); cancel.focus();
+  }
+  function finishThreadPreview(request, reply) {
+    const state = finishDialog; if (!state || state.request !== request || state.busy) return;
+    if (reply.error) { state.status.textContent = reply.error; state.summary.textContent = ''; return; }
+    state.info = reply.info;
+    state.base.replaceChildren();
+    const placeholder = node('option', '', 'Choose a destination…'); placeholder.value = ''; state.base.append(placeholder);
+    (reply.info.branches || []).forEach(branch => { const option = node('option', '', branch); option.value = branch; state.base.append(option); });
+    state.base.value = reply.info.base;
+    state.summary.textContent = state.discard ? (reply.info.dirty || 'No uncommitted changes. Committed work will not be merged.') : (reply.info.summary || 'No commits to merge.');
+    state.update();
+  }
+  function finishThreadResult(name, reply) {
+    const state = finishDialog; if (!state || state.name !== name) return;
+    state.busy = false;
+    if (reply.error) {
+      state.form.querySelectorAll('input,select,textarea,button').forEach(control => { control.disabled = false; });
+      state.error = reply.error; state.preview(); return;
+    }
+    if (reply.url) {
+      state.status.replaceChildren(node('span', '', 'Draft PR created. Thread kept open. '));
+      const url = reply.url.split('\n').find(line => /^https:\/\//.test(line));
+      if (url) { const link = node('a', '', 'Open pull request'); link.href = url; link.target = '_blank'; link.rel = 'noopener'; state.status.append(link); }
+      state.cancel.disabled = false; state.cancel.textContent = 'Done'; return;
+    }
+    state.dialog.close();
+    window.__libroShowToast?.(reply.warning || 'Thread removed', '', reply.warning ? 6000 : 2000);
+  }
+  function threadActions(project) {
+    const name = project.name + '/' + project.branch;
+    return [
+      {label:'Merge thread…', icon:'merge', run:() => finishThread(name)},
+      {label:'Squash thread…', icon:'compress', run:() => finishThread(name, false, 'squash')},
+      {label:'Create draft PR…', icon:'open_in_new', run:() => finishThread(name, false, 'pr')},
+      {label:'Thread settings', icon:'settings', run:() => projectSettings(name)},
+      {label:'Discard thread…', icon:'delete_outline', run:() => finishThread(name, true), danger:true},
+    ];
+  }
+  function threadActionPalette() {
+    const project = (window.__libroProjects || []).find(p => p.kind === 'worktree' && p.name + '/' + p.branch === window.__libroActiveProject);
+    if (!project) { window.__libroShowToast?.('Select a worktree thread first', '', 2000); return; }
+    document.getElementById('thread-action-dialog')?.remove();
+    const dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'thread-action-dialog'; dialog.setAttribute('aria-label', 'Thread actions');
+    const searchBar = node('div', 'ws-command-search');
+    const search = node('input', 'ws-palette-search'); search.placeholder = 'Search thread actions…'; search.setAttribute('aria-label', 'Search thread actions'); search.autocomplete = 'off';
+    const dismiss = button('Close thread actions', 'close', () => dialog.close()); dismiss.className = 'ws-command-dismiss';
+    const icon = node('i', 'material-icons-round', 'search'); icon.setAttribute('aria-hidden', 'true');
+    searchBar.append(icon, search, dismiss); dialog.append(searchBar);
+    const entries = node('div', 'ws-plugin-list');
+    threadActions(project).forEach(action => {
+      const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; entry.dataset.label = action.label.toLowerCase();
+      const glyph = node('i', 'material-icons-round', action.icon); glyph.setAttribute('aria-hidden', 'true');
+      const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', action.label), node('small', '', project.branch)); entry.append(glyph, copy);
+      entry.onclick = () => { dialog.close(); action.run(); }; entries.append(entry);
+    });
+    const empty = node('p', 'ws-palette-empty', 'No matching actions'); empty.hidden = true;
+    dialog.append(entries, empty, node('div', 'ws-command-footer', '↑ ↓ Navigate · Enter open · Esc close'));
+    let active = 0;
+    const visible = () => [...entries.children].filter(entry => !entry.hidden);
+    const highlight = () => visible().forEach((entry, index) => entry.dataset.selected = String(index === active));
+    search.oninput = () => {
+      const query = search.value.trim().toLowerCase();
+      [...entries.children].forEach(entry => { entry.hidden = !entry.dataset.label.includes(query); });
+      active = 0; empty.hidden = visible().length > 0; highlight();
+    };
+    search.onkeydown = event => {
+      if (event.isComposing) return;
+      const rows = visible();
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault(); active = Math.max(0, Math.min(rows.length - 1, active + (event.key === 'ArrowDown' ? 1 : -1))); highlight(); rows[active]?.scrollIntoView({block:'nearest'});
+      } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) rows[active]?.click(); }
+    };
+    dialog.addEventListener('close', () => dialog.remove());
+    highlight(); root.append(dialog); dialog.showModal(); search.focus();
+  }
+  function threadMenu(project, trigger, point) {
+    document.getElementById('thread-actions-menu')?.remove();
+    const menu = node('div', 'ws-browser-menu ws-thread-menu'); menu.id = 'thread-actions-menu'; menu.setAttribute('popover', 'auto'); menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', 'Thread actions');
+    const add = (label, run, danger = false) => {
+      const item = node('button', 'ws-thread-menu-item' + (danger ? ' ws-thread-discard' : ''), label); item.type = 'button'; item.setAttribute('role', 'menuitem');
+      item.onclick = () => { menu.hidePopover(); run(); }; menu.append(item);
+    };
+    threadActions(project).forEach(action => add(action.label, action.run, action.danger));
+    root.append(menu); menu.showPopover();
+    const rect = trigger.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(point?.x ?? rect.left, innerWidth - menu.offsetWidth - 8)) + 'px';
+    menu.style.top = Math.max(8, Math.min(point?.y ?? rect.bottom, innerHeight - menu.offsetHeight - 8)) + 'px';
+    menu.addEventListener('toggle', event => { if (event.newState === 'closed') { menu.remove(); if (!document.querySelector('dialog[open]')) trigger.focus(); } });
+    menu.querySelector('button').focus();
   }
   function newThread(project = window.__libroActiveProject || '') {
     call('thread.create', {project});
@@ -313,7 +480,8 @@
     const list = document.getElementById('workspace-project-list'); if (!list) return;
     const projects = window.__libroProjects || []; const signature = JSON.stringify(projects);
     if (list.dataset.signature === signature) return; list.dataset.signature = signature; list.replaceChildren();
-    projects.forEach(project => {
+    const groups = new Map();
+    projects.filter(project => project.kind !== 'worktree').forEach(project => {
       const item = node('div', 'ws-project-item'); item.dataset.kind = project.kind;
       const row = node('button', 'ws-project-row'); row.type = 'button'; row.dataset.kind = project.kind;
       row.dataset.projectKey = project.kind === 'worktree' ? project.name + '/' + project.branch : project.name;
@@ -328,6 +496,11 @@
       const settings = button('Settings for ' + projectName, 'settings', event => { event.stopPropagation(); projectSettings(row.dataset.projectKey); });
       settings.classList.add('ws-project-settings'); item.append(settings);
       if (project.kind !== 'worktree') {
+        const create = button('New project thread', 'add', event => { event.stopPropagation(); newThread(project.name); });
+        create.disabled = !project.isGit || !project.currentBranch;
+        if (create.disabled) create.title = 'Project threads require a Git repository with a committed branch';
+        create.classList.add('ws-project-new-thread'); item.append(create);
+
         const label = project.displayName || project.name;
         const remove = button('Remove ' + label + ' from Libro', 'close', event => {
           event.stopPropagation();
@@ -337,12 +510,46 @@
         });
         remove.classList.add('ws-project-remove'); item.append(remove);
       }
-      list.append(item);
+      const group = node('div', 'ws-project-group');
+      const branches = node('div', 'ws-project-threads');
+      branches.setAttribute('role', 'group');
+      branches.setAttribute('aria-label', projectName + ' threads');
+      group.append(item, branches); list.append(group);
+      groups.set(project.name, branches);
+      if (project.kind !== 'worktree') {
+        const baseList = node('div', 'ws-project-item');
+        const base = node('button', 'ws-project-row ws-thread-row'); base.type = 'button';
+        base.dataset.kind = 'base'; base.dataset.projectKey = project.name;
+        base.setAttribute('aria-current', String(!!project.isActive));
+        const baseLabel = project.currentBranch || projectName;
+        base.title = baseLabel + ' — ' + project.path;
+        const baseIcon = node('i', 'material-icons-round', 'chat_bubble_outline'); baseIcon.setAttribute('aria-hidden', 'true');
+        base.append(baseIcon, node('span', '', baseLabel));
+        base.onclick = row.onclick;
+        baseList.append(base); branches.append(baseList);
+      }
       const threadList = node('div', 'ws-project-threads');
       threadList.dataset.projectThreads = row.dataset.projectKey;
       threadList.setAttribute('role', 'group');
       threadList.setAttribute('aria-label', projectName + ' threads');
-      list.append(threadList);
+      branches.append(threadList);
+    });
+    projects.filter(project => project.kind === 'worktree').forEach(project => {
+      const branches = groups.get(project.name);
+      if (!branches) return;
+      const item = node('div', 'ws-project-item');
+      const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button';
+      row.dataset.kind = 'worktree'; row.dataset.projectKey = project.name + '/' + project.branch;
+      row.setAttribute('aria-current', String(!!project.isActive));
+      row.title = project.branch + ' — ' + project.path;
+      const icon = node('i', 'material-icons-round', 'account_tree'); icon.setAttribute('aria-hidden', 'true');
+      row.append(icon, node('span', '', project.branch));
+      row.onclick = () => { closeSettings(); if (innerWidth <= 760) { prefs.projects = false; save(); } call('worktree.switch', {project:project.name, path:project.path, branch:project.branch}); };
+      const settings = button('Thread actions for ' + project.branch, 'more_horiz', event => { event.stopPropagation(); threadMenu(project, settings); });
+      settings.setAttribute('aria-haspopup', 'menu');
+      row.oncontextmenu = event => { event.preventDefault(); threadMenu(project, row, {x:event.clientX, y:event.clientY}); };
+      settings.classList.add('ws-project-settings');
+      item.append(row, settings); branches.append(item);
     });
   }
   function toolOverlapsFrame(grid, frame) {
@@ -355,61 +562,9 @@
     if (!toolRect.width || !frameRect.width) return false;
     return toolRect.left < frameRect.right && toolRect.right > frameRect.left;
   }
-  function renderProjectAgents() {
-    const grids = new Map([...document.querySelectorAll('[data-workspace-project]')].map(grid => [grid.dataset.workspaceProject, grid]));
-    document.querySelectorAll('.ws-project-row:not([data-kind=thread])').forEach(row => {
-      const grid = grids.get(row.dataset.projectKey);
-      const agents = grid ? frames(grid).filter(frame => frame.dataset.dock === 'center') : [];
-      let tree = row.parentElement.nextElementSibling;
-      if (!tree?.classList.contains('ws-project-agents')) tree = null;
-      if (!agents.length) { tree?.remove(); return; }
-      if (!tree) {
-        tree = node('div', 'ws-project-agents');
-        tree.setAttribute('role', 'group');
-        tree.setAttribute('aria-label', row.querySelector('span').textContent + ' agents');
-        row.parentElement.after(tree);
-      }
-      const entries = agents.map(frame => ({id:frame.dataset.appId, name:frame.dataset.appName || 'Agent', title:frame.dataset.taskTitle || '', selected:grid.dataset.workspaceProject === window.__libroActiveProject && frame.dataset.appId === window.__libroSelectedApp}));
-      const signature = JSON.stringify(entries);
-      if (tree.dataset.signature === signature) return;
-      tree.dataset.signature = signature;
-      const tabs = new Map([...tree.children].map(tab => [tab.dataset.agentId, tab]));
-      entries.forEach((entry, index) => {
-        const label = entry.title || entry.name + ' session ' + (index + 1);
-        let tab = tabs.get(entry.id);
-        if (!tab) {
-          tab = node('button', 'ws-project-agent'); tab.type = 'button';
-          tab.dataset.agentId = entry.id;
-          const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
-          tab.append(icon, node('span', '', label));
-        }
-        tabs.delete(entry.id);
-        tab.setAttribute('aria-current', String(entry.selected));
-        tab.title = entry.name + ': ' + label;
-        const text = tab.querySelector('span');
-        if (text.textContent !== label) text.textContent = label;
-        tab.onclick = () => {
-          closeSettings();
-          if (innerWidth <= 760) { prefs.projects = false; save(); }
-          if (grid.dataset.workspaceProject !== window.__libroActiveProject) {
-            call('project.switch', {name:grid.dataset.workspaceProject, appId:entry.id});
-            return;
-          }
-          const frame = agents.find(frame => frame.dataset.appId === entry.id);
-          if (toolOverlapsFrame(grid, frame)) {
-            frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => dockState(grid).hidden.add(frame.dataset.appId));
-          }
-          select(entry.id);
-        };
-        // Keep the button mounted while terminal titles animate, including during a click.
-        if (tree.children[index] !== tab) tree.insertBefore(tab, tree.children[index] || null);
-      });
-      tabs.forEach(tab => tab.remove());
-    });
-  }
   function renderThreadShortcuts() {
     let index = 0;
-    document.querySelectorAll('.ws-project-agent, .ws-thread-row').forEach(row => {
+    document.querySelectorAll('.ws-project-row:not([data-kind=project])').forEach(row => {
       const thread = row.dataset.kind === 'thread';
       const available = !thread || row.parentElement.dataset.archived !== 'true';
       const number = available && index < 9 ? String(++index) : '';
@@ -542,7 +697,7 @@
       const state = projects.get(row.dataset.projectKey) || '';
       if (row.dataset.agentStatus === state) return;
       row.dataset.agentStatus = state;
-      row.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle_outline' : row.dataset.kind === 'worktree' ? 'account_tree' : row.dataset.kind === 'thread' ? 'chat_bubble_outline' : 'folder_open';
+      row.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle_outline' : row.dataset.kind === 'worktree' ? 'account_tree' : ['thread', 'base'].includes(row.dataset.kind) ? 'chat_bubble_outline' : 'folder_open';
       const label = row.querySelector('span').textContent;
       row.setAttribute('aria-label', label + (state === 'working' ? ': agents working' : state === 'done' ? ': all agents done' : ''));
     });
@@ -591,7 +746,6 @@
     renderToolRail();
     renderProjects();
     renderThreads();
-    renderProjectAgents();
     renderThreadShortcuts();
     renderProjectActivity();
     renderProjectTerminals();
@@ -679,7 +833,7 @@
   syncWorkspaceShortcuts();
   function shortcut(event) {
     const key = event.key === '+' ? '=' : event.key;
-    if (!/^[a-z0-9=,.\[\]\-]$/i.test(key) || !(event.ctrlKey || event.altKey || event.metaKey)) return '';
+    if (!/^[a-z0-9=,.;\[\]\-]$/i.test(key) || !(event.ctrlKey || event.altKey || event.metaKey)) return '';
     return (event.ctrlKey ? 'Ctrl+' : '') + (event.altKey ? 'Alt+' : '') + (event.shiftKey && event.key !== '+' ? 'Shift+' : '') + (event.metaKey ? 'Meta+' : '') + key.toUpperCase();
   }
   function zoom(action) {
@@ -809,9 +963,19 @@
       if (!event.repeat) navigateBrowser(binding === toolKeys['previous-browser'] ? -1 : 1);
       return;
     }
+    if (binding && binding === toolKeys['thread-actions']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) threadActionPalette();
+      return;
+    }
+    if (binding && binding === toolKeys['finish-thread']) {
+      event.preventDefault(); event.stopPropagation();
+      if (!event.repeat) finishThread();
+      return;
+    }
     if (binding && binding === toolKeys['new-thread']) {
       event.preventDefault(); event.stopImmediatePropagation();
-      if (!event.repeat) newThread('');
+      if (!event.repeat) newThread();
       return;
     }
     if (binding && binding === toolKeys['replace-agent']) {
@@ -1393,7 +1557,7 @@
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
   }
-  window.libroWorkspace = {applicationControl, applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;

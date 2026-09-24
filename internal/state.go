@@ -18,19 +18,22 @@ const (
 
 // Application represents a single web application displayed in an iframe
 type Application struct {
-	PluginID      string
-	Dock          string
-	ID            string
-	Type          AppType
-	URL           string // iframe source URL (for terminal apps, this is http://localhost:<port>)
-	Command       string // original command (only for terminal apps)
-	Width         Width
-	PreviousWidth Width  // width before toggling to full (for ⌘+F maximize toggle)
-	Writable      bool   // whether terminal input is accepted
-	Name          string // optional display name
-	IconURL       string // cached icon URL from DB (only for terminal apps)
-	TerminalID    string // native PTY terminal ID (usually same as ID)
-	TerminalReady bool   // native PTY session is running
+	ApplicationPort      int
+	ApplicationPerThread bool
+	ApplicationPath      string
+	PluginID             string
+	Dock                 string
+	ID                   string
+	Type                 AppType
+	URL                  string // iframe source URL (for terminal apps, this is http://localhost:<port>)
+	Command              string // original command (only for terminal apps)
+	Width                Width
+	PreviousWidth        Width  // width before toggling to full (for ⌘+F maximize toggle)
+	Writable             bool   // whether terminal input is accepted
+	Name                 string // optional display name
+	IconURL              string // cached icon URL from DB (only for terminal apps)
+	TerminalID           string // native PTY terminal ID (usually same as ID)
+	TerminalReady        bool   // native PTY session is running
 }
 
 // Project represents a named working directory
@@ -861,14 +864,18 @@ func (sm *StateManager) MoveSharedProjectApps(sessionID, target string) []Applic
 		existing[sharedKey(app)] = true
 	}
 	var moved []Application
-	moveFrom := func(apps *[]Application, selectedIndex *int) {
+	moveFrom := func(workspace string, apps *[]Application, selectedIndex *int) {
 		selectedID := ""
 		if *selectedIndex >= 0 && *selectedIndex < len(*apps) {
 			selectedID = (*apps)[*selectedIndex].ID
 		}
 		kept := make([]Application, 0, len(*apps))
 		for _, app := range *apps {
-			if isSharedProjectApp(app) && !existing[sharedKey(app)] {
+			sameProject := s.projectScope(workspace) == targetProject
+			if app.PluginID == "project-command" {
+				sameProject = applicationRoot(s, workspace) == applicationRoot(s, target)
+			}
+			if sameProject && isSharedProjectApp(app) && !existing[sharedKey(app)] {
 				moved = append(moved, app)
 				targetSnapshot.Apps = append(targetSnapshot.Apps, app)
 				existing[sharedKey(app)] = true
@@ -888,14 +895,12 @@ func (sm *StateManager) MoveSharedProjectApps(sessionID, target string) []Applic
 			}
 		}
 	}
-	if s.projectScope(s.ActiveProject) == targetProject {
-		moveFrom(&s.Apps, &s.SelectedIndex)
-	}
+	moveFrom(s.ActiveProject, &s.Apps, &s.SelectedIndex)
 	for workspace, snapshot := range s.snapshots {
-		if workspace == target || snapshot == nil || s.projectScope(workspace) != targetProject {
+		if workspace == target || snapshot == nil {
 			continue
 		}
-		moveFrom(&snapshot.Apps, &snapshot.SelectedIndex)
+		moveFrom(workspace, &snapshot.Apps, &snapshot.SelectedIndex)
 	}
 	return moved
 }
@@ -1043,7 +1048,7 @@ func (sm *StateManager) GetProjectPath(sessionID, projectName string) string {
 }
 
 // insertProjectCommand keeps the user's workspace and selection unchanged.
-func (sm *StateManager) insertProjectCommand(sid, workspace, command string) (Application, int) {
+func (sm *StateManager) insertProjectCommand(sid, workspace, command string, port int, perThread bool, path string) (Application, int) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	state := sm.states[sid]
@@ -1059,7 +1064,7 @@ func (sm *StateManager) insertProjectCommand(sid, workspace, command string) (Ap
 	}
 	sm.nextID++
 	id := fmt.Sprintf("app-%d", sm.nextID)
-	panel := Application{ID: id, TerminalID: id, Type: AppTypeTerminal, PluginID: "project-command", Dock: "bottom", Width: WidthFull, Command: command, Writable: true, Name: "Project command"}
+	panel := Application{ApplicationPort: port, ApplicationPerThread: perThread, ApplicationPath: path, ID: id, TerminalID: id, Type: AppTypeTerminal, PluginID: "project-command", Dock: "bottom", Width: WidthFull, Command: command, Writable: true, Name: "Project command"}
 	index := len(*apps)
 	*apps = append(*apps, panel)
 	return panel, index

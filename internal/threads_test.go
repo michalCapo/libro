@@ -2,7 +2,6 @@ package libro
 
 import (
 	"database/sql"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -261,7 +260,7 @@ func TestProjectAgentLaunchCreatesSiblingThreads(t *testing.T) {
 			if occupied {
 				state.Apps = append(state.Apps, agent)
 			}
-			want := workspace == "project" || workspace == "thread:project" && occupied
+			want := (workspace == "project" || workspace == "thread:project") && occupied
 			if state.needsProjectThread(agent) != want {
 				t.Fatalf("workspace=%s occupied=%t: wrong agent destination", workspace, occupied)
 			}
@@ -269,57 +268,6 @@ func TestProjectAgentLaunchCreatesSiblingThreads(t *testing.T) {
 				t.Fatal("opening a browser must stay in its thread")
 			}
 		}
-	}
-}
-
-func TestSelectingProjectReusesOpenThread(t *testing.T) {
-	state := &AppState{ActiveProject: "other", Threads: []Thread{
-		{ID: "thread:one", Project: "project"},
-		{ID: "thread:two", Project: "project"},
-		{ID: "thread:archived", Project: "project", Archived: true},
-	}}
-	if state.projectWorkspace("project") != "thread:two" {
-		t.Fatal("project should select its newest open thread")
-	}
-	state.ActiveProject = "thread:one"
-	if state.projectWorkspace("project") != "thread:one" {
-		t.Fatal("selecting the active project should keep its thread")
-	}
-	if state.projectWorkspace("thread:archived") != "thread:archived" || state.projectWorkspace("other") != "other" {
-		t.Fatal("explicit workspace selection changed")
-	}
-}
-
-func TestProjectThreadChoosesInstalledAgentWithoutChangingStandaloneDefault(t *testing.T) {
-	original := db
-	var err error
-	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "threads.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close(); db = original })
-	createTables()
-	bin := t.TempDir()
-	t.Setenv("PATH", bin)
-	if got := defaultProjectThreadAgent(); got != "" {
-		t.Fatalf("selected an unavailable agent: %s", got)
-	}
-	for _, name := range []string{"codex", "pi"} {
-		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if got := defaultProjectThreadAgent(); got == "" {
-		t.Fatal("new project threads need an installed agent even without a configured default")
-	}
-	if defaultThreadAgent() != "" {
-		t.Fatal("project fallback changed the standalone default")
-	}
-	if err := setDefaultThreadAgent("pi"); err != nil {
-		t.Fatal(err)
-	}
-	if got := defaultProjectThreadAgent(); got != "pi" {
-		t.Fatalf("configured agent was not preferred: %s", got)
 	}
 }
 

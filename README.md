@@ -63,7 +63,7 @@ bundle matches its source. Run the editor integration tests with
 
 ### AI assistants
 
-- Each project thread has one agent and its own browser and tool state. Starting another agent creates a new thread under the same project. Issues and the running application are shared across that project. Standalone threads are unchanged.
+- Each project thread has one agent and its own browser and tool state. Starting another agent creates a new thread under the same project. Issues are shared across that project. Applications can be shared or run separately in each thread. Standalone threads are unchanged.
 - Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
@@ -84,7 +84,7 @@ bundle matches its source. Run the editor integration tests with
 - A project is a folder on your computer. Add as many as you like.
 - Switch projects with `Ctrl + P`, or with `Ctrl + 1` to `Ctrl + 9`.
 - Project-backed threads keep the project folder as their working directory.
-- Each thread remembers its own browser, files, terminal, and other thread-local tools. Threads in the same project share Issues and the running project start/stop application.
+- Each thread remembers its own browser, files, terminal, and other thread-local tools. Threads in the same project share Issues. Project settings choose a shared application or one application per thread.
 
 ![Project sidebar: projects with their running assistants listed underneath](demo/projects-sidebar.png)
 
@@ -162,6 +162,40 @@ CLI for browser testing, with a unique session per agent/thread. Libro does not
 install agent-browser or share its browser panel logins with it.
 Restart existing agent sessions to load the updated tools and instructions.
 
+### Finish a project thread
+
+Press **Ctrl+;** for a searchable dialog with the current thread’s actions.
+You can also right-click a worktree thread or open its **⋯** menu, then choose
+**Merge thread…**, **Squash thread…**, or **Create draft PR…**. Each opens its
+own confirmation dialog. In Ctrl+;, search for “merge” and press Enter to open
+Merge thread. The command palette also has **Finish current thread…**, which
+opens Merge thread.
+You can assign a shortcut in Settings; it opens the review dialog and never
+merges immediately.
+
+The dialog shows the destination branch, recent commits, and changed-file
+summary. The original branch is preselected. Older worktrees without a recorded
+source default to the Base project’s current branch. You can change the destination.
+
+- **Merge** preserves commits. **Merge and remove thread** integrates locally,
+  stops the thread's processes, removes the worktree, and returns to Base.
+- **Squash** creates one commit with the message you enter, then performs the
+  same cleanup.
+- **Create draft PR** pushes the reviewed commit to `origin` and creates a draft
+  using GitHub CLI (`gh auth login` must already be configured). It keeps the
+  thread and worktree open. This requires a GitHub-compatible remote.
+
+Local merges require committed thread changes and a clean destination checked
+out in another worktree. If either branch changes after review, the dialog
+reloads the preview after reporting the error. Conflicts and failed commits keep the thread open; resolve or abort the
+Git operation in the destination worktree before retrying. Failed cleanup keeps
+the worktree and reports the error. Shared applications are preserved.
+
+Successful local merges and squashes remove the thread, branch, and worktree
+automatically. Removing a worktree also removes ignored files in its folder. **Discard thread…** is a
+separate menu action: its final button removes the thread, branch, and worktree,
+including uncommitted and untracked files, without a typed confirmation.
+
 ### Agent application control
 
 Agents can use the `application` tool on the `libro` MCP
@@ -178,14 +212,41 @@ libro application restart
 libro application stop
 ```
 
-The project path defaults to the agent's working directory. Pass an explicit
-path as the second argument (or `project` in MCP) if needed. Libro resolves the
-closest registered project root, including subdirectories and symlinked paths.
-Status checks work without changing the visible project. Lifecycle actions select
-the matching project when needed. `start` preserves a running or starting application;
-`restart` replaces it. A `starting` response confirms a launch request, while
-`status` reports whether the process is running; it does not test server readiness.
-Only the saved command can be run. Commands use the local desktop bridge.
+In project settings, choose **Application per thread** (the default) or
+**Shared application**. Stop existing application terminals before changing
+mode. Shared mode runs one process in the original project folder. Per-thread
+mode runs each process in its own worktree, inherits the project's start command
+unless overridden, and assigns a free port through `PORT`. The command must use
+that port, for example:
+
+```sh
+npm run dev -- --port "$PORT"
+```
+
+Leave **Port for this thread** blank for automatic allocation, or enter a port
+from 1 to 65535. Libro rejects occupied ports and ports assigned to another
+pending application. Automatic ports remain stable during restart when available.
+An arbitrary start command must bind its port itself, so an unrelated process
+can still take the port between allocation and startup. The localhost URL appears
+in the thread's settings and in application status. Port assignment does not
+isolate databases, files, or background jobs.
+
+The application MCP tool accepts only `action`: `status`, `start`, `restart`, or
+`stop`. Its workspace is fixed when the MCP server starts. It rejects project,
+PID, command, and port arguments. Libro sets `LIBRO_APPLICATION_PATH` for agent
+sessions; CLI application calls stay bound to that workspace even if the agent
+changes directory, and reject a different explicit project path. Outside agent
+sessions, the CLI can take an optional project path after the action.
+
+In per-thread mode, start, stop, and restart affect only the assigned thread's
+application. In shared mode they affect the project's shared application.
+No lifecycle action changes the visible workspace or touches agent terminals.
+`start` preserves a running or starting process; `restart` replaces it. Status
+includes `mode`, `port`, and `url` (port 0 and an empty URL when unassigned).
+A `starting` response confirms a launch request; `running` does not guarantee
+HTTP readiness. Agents must check status first and use the returned URL rather
+than starting an unmanaged server. Only the saved command can be run.
+Restart existing agent sessions to load the scoped MCP schema and instructions.
 
 ### Agent issue management
 
@@ -217,3 +278,6 @@ libro issues '{"action":"read","id":"ISSUE_ID"}'
 libro issues '{"action":"set_status","id":"ISSUE_ID","status":"archived"}'
 libro issues '{"action":"delete","id":"ISSUE_ID"}'
 ```
+
+Ctrl+N creates a new thread directly. Ctrl+Shift+A opens Replace agent for the
+current thread. Both shortcuts can be changed in Settings.

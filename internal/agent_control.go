@@ -64,6 +64,10 @@ func desktopCommand(command json.RawMessage) (json.RawMessage, error) {
 
 // RunMCP exposes application and issue tools over stdio.
 func RunMCP(in io.Reader, out io.Writer) error {
+	applicationScope := os.Getenv("LIBRO_APPLICATION_PATH")
+	if applicationScope == "" {
+		applicationScope, _ = os.Getwd()
+	}
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 4096), 1<<20)
 	encoder := json.NewEncoder(out)
@@ -92,7 +96,7 @@ func RunMCP(in io.Reader, out io.Writer) error {
 		case "ping":
 			reply["result"] = map[string]any{}
 		case "tools/list":
-			reply["result"] = map[string]any{"tools": []any{map[string]any{"name": "application", "description": applicationHelp, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "start", "restart", "stop"}}, "project": map[string]any{"type": "string", "description": "Absolute project path; defaults to the agent working directory"}}, "required": []string{"action"}, "additionalProperties": false}}, issuesTool()}}
+			reply["result"] = map[string]any{"tools": []any{map[string]any{"name": "application", "description": applicationHelp, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "start", "restart", "stop"}}}, "required": []string{"action"}, "additionalProperties": false}}, issuesTool()}}
 		case "tools/call":
 			var result json.RawMessage
 			var err error
@@ -100,7 +104,7 @@ func RunMCP(in io.Reader, out io.Writer) error {
 			case "issues":
 				result, err = IssuesCommand(request.Params.Arguments)
 			case "application":
-				result, err = ApplicationCommand(request.Params.Arguments)
+				result, err = scopedApplicationCommand(request.Params.Arguments, applicationScope)
 			default:
 				err = errors.New("unknown tool")
 			}

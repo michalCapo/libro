@@ -12,9 +12,9 @@ Libro is a Go and Electron desktop workspace for CLI coding agents. The main are
 
 ## Capabilities and Constraints
 
-Project agents run in project threads, with one agent per thread. Ctrl+N opens the agent picker for a new project thread. Ctrl+Shift+N opens Replace agent, which starts a fresh session in the current thread and keeps its tools open. Project autolaunch creates a project thread. Standalone threads keep their existing behavior.
+Each project has an empty Base thread in its original directory. New project threads create Git worktrees from the original directory’s current committed branch; non-Git directories only support Base. Base and worktree rows share Ctrl+1–9 navigation, whether or not an agent is open. Project agents run in these workspaces, with one agent per workspace. Ctrl+N creates a new thread directly without opening the agent picker. Ctrl+Shift+A opens Replace agent, which starts a fresh session in the current thread and keeps its tools open. Base and worktree workspaces start empty; users choose which agent or tools to open. Standalone threads keep their existing behavior.
 
-Collapsible project and thread navigation with one center agent panel per thread, a tabbed right tool dock, and a bottom project-terminal dock. Ctrl+N opens the agent picker for a new project thread. Ctrl+Shift+N opens Replace agent, which starts a fresh session in the current thread and keeps its tools open. Threads in the same project share Issues, one live project start/stop application, and bottom terminal processes without restarting them when switching threads. The selected right tool overlays the agent when the workspace is too narrow to show both. Browser and terminal tools use a shared plugin manifest and host-managed lifecycle. Show running bottom terminal activity on the project row; standalone threads show their own activity. Shortcut numbers trail all row indicators and actions. Keep existing project and worktree workflows.
+Collapsible project and thread navigation with one center agent panel per thread, a tabbed right tool dock, and a bottom project-terminal dock. Ctrl+N creates a new thread directly without opening the agent picker. Ctrl+Shift+A opens Replace agent, which starts a fresh session in the current thread and keeps its tools open. Threads in the same project share Issues and bottom terminal processes without restarting them when switching threads. Application processes can be shared or per-thread. The selected right tool overlays the agent when the workspace is too narrow to show both. Browser and terminal tools use a shared plugin manifest and host-managed lifecycle. Show running bottom terminal activity on the project row; standalone threads show their own activity. Shortcut numbers trail all row indicators and actions. Keep existing project and worktree workflows.
 
 ## Brand Commitments
 
@@ -23,3 +23,11 @@ The user requested the look and feel of Codex desktop or T3 Code. Use a quiet de
 ## Layout
 
 Projects and agent threads stay on the left. Each thread has one center agent, right-dock tools switch through a shared tab row, and project terminals open below the main row. Build directly from the supplied T3 Code screenshots: near-white content, softly tinted sidebar, subtle dividers, rounded selected rows, muted icons, and compact bordered controls. Keep the existing Go-rendered UI and Electron runtime.
+
+## Application instances
+
+Project settings choose Application per thread (default) or Shared application. Per-thread applications inherit the project start command, run in their worktree, and receive an automatic PORT with an optional per-thread override. Settings and application status expose the localhost URL. Agent MCP accepts only an action and binds to its launch workspace; agent CLI uses LIBRO_APPLICATION_PATH and rejects other workspace paths. Stop and restart affect only the assigned application scope.
+
+## Finish threads
+
+Worktree threads have a right-click / overflow menu with Merge thread, Squash thread, Create draft PR, Thread settings, and a separate Discard thread action. Finish thread is also in the command palette and supports an optional configurable shortcut. Merge, squash, and draft GitHub PR each have a dedicated review dialog showing the destination and changes. Successful local integration automatically removes the worktree, thread, and branch. PR creation keeps the thread. New worktrees record their source branch. Dirty checkouts, stale previews, and conflicts block cleanup. Discard removes the thread, branch, and worktree together, without a typed confirmation.

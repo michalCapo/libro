@@ -30,9 +30,11 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"panel-size-max", "Toggle panel size to MAX", "Ctrl+M"},
 	{"settings", "Settings", "Ctrl+Shift+S"},
 	{"project-picker", "Switch project", "Ctrl+P"},
-	{"new-agent", "New agent", "Ctrl+N"},
-	{"new-thread", "New thread", ""},
-	{"replace-agent", "Replace agent", "Ctrl+Shift+N"},
+	{"new-agent", "New agent", ""},
+	{"new-thread", "New thread", "Ctrl+N"},
+	{"finish-thread", "Finish current thread…", ""},
+	{"thread-actions", "Thread actions", "Ctrl+;"},
+	{"replace-agent", "Replace agent", "Ctrl+Shift+A"},
 	{"previous-agent", "Previous panel", "Ctrl+H"},
 	{"next-agent", "Next panel", "Ctrl+L"},
 	{"toggle-projects", "Toggle project sidebar", "Ctrl+Shift+P"},
@@ -40,7 +42,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"zoom-out", "Zoom out", "Ctrl+-"},
 	{"zoom-reset", "Reset zoom", "Ctrl+0"},
 }
-var shortcutPattern = regexp.MustCompile(`^(Ctrl\+)?(Alt\+)?(Shift\+)?(Meta\+)?[A-Z0-9=,.\[\]\-]$`)
+var shortcutPattern = regexp.MustCompile(`^(Ctrl\+)?(Alt\+)?(Shift\+)?(Meta\+)?[A-Z0-9=,.;\[\]\-]$`)
 
 var reservedNavigationShortcut = regexp.MustCompile(`^Ctrl\+(Shift\+)?[1-9]$`)
 
@@ -80,7 +82,7 @@ func validateToolKeybindings(bindings map[string]string) error {
 			return fmt.Errorf("%s is reserved for workspace navigation", key)
 		}
 		if !shortcutPattern.MatchString(key) || (!strings.Contains(key, "Ctrl+") && !strings.Contains(key, "Alt+") && !strings.Contains(key, "Meta+")) {
-			return fmt.Errorf("use Ctrl, Alt, or Meta with a letter, number, comma, period, brackets, = or -")
+			return fmt.Errorf("use Ctrl, Alt, or Meta with a letter, number, comma, period, semicolon, brackets, = or -")
 		}
 		if used[key] {
 			return fmt.Errorf("%s is assigned more than once", key)
@@ -125,6 +127,24 @@ func toolKeybindings() map[string]string {
 					}
 				}
 				saved["replace-agent"] = "Ctrl+Shift+N"
+			}
+			if saved["new-agent"] == "Ctrl+N" {
+				saved["new-agent"] = ""
+				if saved["new-thread"] == "" {
+					saved["new-thread"] = "Ctrl+N"
+				}
+			}
+			if saved["replace-agent"] == "Ctrl+Shift+N" {
+				saved["replace-agent"] = ""
+				available := true
+				for _, key := range saved {
+					if key == "Ctrl+Shift+A" {
+						available = false
+					}
+				}
+				if available {
+					saved["replace-agent"] = "Ctrl+Shift+A"
+				}
 			}
 			for _, shortcut := range toolKeys {
 				if _, exists := saved[shortcut.ID]; exists {
@@ -196,7 +216,7 @@ func renderToolKeybindings() *r.Node {
 	rows = append(rows, r.Div("ws-settings-row").Render(r.Button("ws-launch").Attr("type", "submit").Text("Save shortcuts"), r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.resetToolKeys()")).Text("Restore defaults")))
 	return r.El("form", "").ID("tool-key-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveToolKeys()")).Render(
 		r.El("h2", "ws-shortcut-heading").Text("Keyboard shortcuts"),
-		r.P("ws-settings-status").ID("tool-key-help").Text("Select a field and press Ctrl, Alt, or Meta with a letter, number, comma, period, brackets, = or -. Clear a field to disable its shortcut. Ctrl+1–9 switches project agent threads and unarchived standalone threads in sidebar order."),
+		r.P("ws-settings-status").ID("tool-key-help").Text("Select a field and press Ctrl, Alt, or Meta with a letter, number, comma, period, semicolon, brackets, = or -. Clear a field to disable its shortcut. Ctrl+1–9 switches project agent threads and unarchived standalone threads in sidebar order."),
 		r.Div("ws-settings-group").Render(rows...),
 		r.P("ws-settings-status").ID("tool-key-status").Attr("role", "status"),
 	)

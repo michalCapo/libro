@@ -355,7 +355,7 @@ test('close project asks for confirmation, uses saved binding and ignores repeat
   }
 })
 
-test('project agent threads are numbered instead of project rows', () => {
+test('base and worktree rows are numbered without requiring agents', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const render = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  let notificationAudio;'))
   const rows = Array.from({ length: 11 }, (_, i) => ({
@@ -367,7 +367,7 @@ test('project agent threads are numbered instead of project rows', () => {
   }))
   const context = vm.createContext({
     document: { querySelectorAll: selector => {
-      assert.equal(selector, '.ws-project-agent, .ws-thread-row')
+      assert.equal(selector, '.ws-project-row:not([data-kind=project])')
       return rows
     } },
     node: () => ({ setAttribute() {} }),
@@ -608,11 +608,11 @@ test('address popup reclaims native focus only for the workspace sender', () => 
 })
 
 
-test('new thread shortcut creates a general thread and ignores repeats', () => {
+test('new thread shortcut uses the current project and ignores repeats', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const create = source.slice(source.indexOf('  function newThread('), source.indexOf('  function threadArchived()'))
   const handler = source.slice(source.indexOf("    if (binding && binding === toolKeys['new-thread'])"), source.indexOf("    if (binding && binding === toolKeys['new-agent'])"))
-  for (const project of ['', 'project', 'thread:project']) for (const binding of ['Ctrl+Shift+N', 'Alt+N']) for (const repeat of [false, true]) {
+  for (const project of ['', 'project', 'thread:project']) for (const binding of ['Ctrl+N', 'Alt+N']) for (const repeat of [false, true]) {
     const calls = []
     vm.runInNewContext(create + '(function(){' + handler + '})()', {
       window: { __libroActiveProject: project },
@@ -620,7 +620,7 @@ test('new thread shortcut creates a general thread and ignores repeats', () => {
       event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
       call(action, data) { calls.push([action, data.project]) },
     })
-    assert.deepEqual(calls, repeat ? [] : [['thread.create', '']])
+    assert.deepEqual(calls, repeat ? [] : [['thread.create', project]])
   }
 })
 
@@ -673,7 +673,7 @@ test('thread titles ignore harness placeholders and extract task names', () => {
 test('standalone thread numbers continue after project agent threads and skip archived threads', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const render = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  let notificationAudio;'))
-  const rows = ['project', 'project', ...Array(10).fill('thread')].map((kind, i) => ({
+  const rows = ['base', 'worktree', ...Array(10).fill('thread')].map((kind, i) => ({
     dataset: { kind, projectKey: String(i) }, parentElement: { dataset: { archived: String(i === 3) } }, attributes: {}, badge: null,
     querySelector() { return this.badge },
     append(badge) { this.badge = badge; badge.remove = () => { this.badge = null } },
@@ -682,7 +682,7 @@ test('standalone thread numbers continue after project agent threads and skip ar
   }))
   const context = vm.createContext({
     document: { querySelectorAll: selector => {
-      assert.equal(selector, '.ws-project-agent, .ws-thread-row')
+      assert.equal(selector, '.ws-project-row:not([data-kind=project])')
       return rows
     } },
     node: () => ({ setAttribute() {} }),
@@ -769,54 +769,6 @@ test('thread list keeps all open threads and only the newest ten archived thread
   rows.at(-1).onclick()
   assert.deepEqual(calls, [['project.switch', '6']])
   assert.equal(threads.length, 25, 'older archives remain stored')
-})
-
-test('clicking a project thread only hides a tool that covers the selected agent', () => {
-  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const handler = source.slice(source.indexOf('  function toolOverlapsFrame('), source.indexOf('  function renderThreadShortcuts()'))
-  for (const visible of [false, true]) for (const overlaps of [false, true]) {
-    const agent = {
-      dataset: { appId: 'agent', appName: 'Agent', dock: 'center', taskTitle: 'Task' },
-      getBoundingClientRect: () => ({ left:0, right:visible ? 640 : 0, width:visible ? 640 : 0 }),
-    }
-    const tool = {
-      dataset: { appId: 'browser', dock: 'right' },
-      getBoundingClientRect: () => overlaps ? ({ left:500, right:1140, width:640 }) : ({ left:900, right:1540, width:640 }),
-    }
-    const label = { textContent: 'Task' }
-    const tab = {
-      dataset: { agentId: 'agent' }, title: '',
-      querySelector: () => label,
-      setAttribute() {},
-    }
-    const tree = {
-      dataset: {}, children: [tab],
-      classList: { contains: name => name === 'ws-project-agents' },
-      setAttribute() {}, insertBefore() {},
-    }
-    const parent = { nextElementSibling: tree, after() {} }
-    const row = { dataset: { projectKey: 'project' }, parentElement: parent, querySelector: () => ({ textContent: 'Project' }) }
-    const grid = {
-      dataset: { workspaceProject: 'project' },
-      querySelector: selector => selector === ':scope > [data-tool-overlay=true][data-dock-visible=true]' ? tool : null,
-    }
-    const state = { hidden: new Set() }
-    let selected = ''
-    vm.runInNewContext(handler + ';renderProjectAgents();', {
-      window: { __libroActiveProject: visible ? 'project' : 'other', __libroSelectedApp: 'browser' },
-      document: { querySelectorAll: selector => selector === '[data-workspace-project]' ? [grid] : [row] },
-      frames: () => [agent, tool], dockState: () => state,
-      closeSettings() {}, innerWidth: 1000, prefs: {}, save() {},
-      select: id => { selected = id }, call(action, data) {
-        assert.equal(action, 'project.switch')
-        assert.equal(data.appId, 'agent')
-      },
-    })
-    tab.onclick()
-    tab.onclick() // A second press can arrive before the switch response.
-    assert.equal(selected, visible ? 'agent' : '')
-    assert.equal(state.hidden.has('browser'), visible && overlaps)
-  }
 })
 
 test('closing panels restores focus without revealing hidden terminals', () => {
@@ -929,4 +881,56 @@ test('workspace dividers resize, clamp, persist, and clean up cancelled drags', 
     assert.equal(prefs[kind === 'sidebar' ? 'sidebarWidth' : 'terminalHeight'], kind === 'sidebar' ? 232 : 216)
     assert.equal(saved, 2)
   }
+})
+
+test('project groups contain the original branch first and number every worktree', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const render = source.slice(source.indexOf('  function renderProjects()'), source.indexOf('  function toolOverlapsFrame('))
+  const shortcuts = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  let notificationAudio;'))
+  function node(tag, classes = '', text = '') {
+    const el = {
+      tag, classes, textContent: text, dataset: {}, attributes: {}, children: [],
+      classList: { add() {} },
+      setAttribute(key, value) { this.attributes[key] = value },
+      removeAttribute(key) { delete this.attributes[key] },
+      append(...children) { children.forEach(child => { child.parentElement = this; this.children.push(child) }); this.lastElementChild = this.children.at(-1) },
+      replaceChildren() { this.children = [] },
+      querySelector(selector) { return this.children.find(child => child.classes.split(' ').includes(selector.slice(1))) || null },
+    }
+    return el
+  }
+  const list = node('div')
+  const calls = []
+  const flatten = el => [el, ...el.children.flatMap(flatten)]
+  const context = {
+    window: { __libroProjects: [
+      { kind:'worktree', name:'mail', branch:'feature', path:'/mail-feature', isActive:true },
+      { kind:'project', name:'mail', displayName:'mail', path:'/mail', isGit:true, currentBranch:'main' },
+      { kind:'project', name:'notes', path:'/notes', isGit:false },
+    ] },
+    document: {
+      getElementById: () => list,
+      querySelectorAll: () => flatten(list).filter(el => el.classes.split(' ').includes('ws-project-row') && el.dataset.kind !== 'project'),
+    },
+    node, button: (label, icon, onclick) => Object.assign(node('button', '', label), { onclick }),
+    call: (action, data) => calls.push([action, data]), closeSettings() {}, innerWidth:1000,
+    newThread() {}, projectSettings() {},
+  }
+  vm.runInNewContext(render + shortcuts + ';renderProjects();renderThreadShortcuts();', context)
+  assert.equal(list.children.length, 2)
+  const group = list.children[0]
+  assert.equal(group.classes, 'ws-project-group')
+  const rows = flatten(group).filter(el => el.classes.split(' ').includes('ws-thread-row'))
+  assert.deepEqual(rows.map(row => row.children[1].textContent), ['main', 'feature'])
+  assert.deepEqual(rows.map(row => row.dataset.projectShortcut), ['1', '2'])
+  rows[0].onclick()
+  rows[1].onclick()
+  assert.equal(calls[0][0], 'project.switch')
+  assert.equal(calls[0][1].name, 'mail')
+  assert.equal(calls[1][0], 'worktree.switch')
+  assert.equal(calls[1][1].branch, 'feature')
+  const nonGit = flatten(list.children[1])
+  assert.equal(nonGit.find(el => el.textContent === 'New project thread').disabled, true)
+  assert.equal(nonGit.find(el => el.dataset.kind === 'base').dataset.projectShortcut, '3')
+  assert.equal(flatten(list).some(el => el.classes === 'ws-project-agent'), false)
 })

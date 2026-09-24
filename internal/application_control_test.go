@@ -3,11 +3,15 @@ package libro
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"libro/internal/components"
 )
@@ -115,6 +119,9 @@ func TestProjectThreadsShareApplicationProcessButNotBrowsers(t *testing.T) {
 	createTables()
 	path := t.TempDir()
 	if err := setProjectCommand(path, "echo test"); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveApplicationSettings(path, applicationSettings{Mode: "shared"}); err != nil {
 		t.Fatal(err)
 	}
 	state := &AppState{
@@ -244,7 +251,7 @@ func TestApplicationBackgroundHydrationPreservesWorkspace(t *testing.T) {
 		Apps:     []Application{{ID: "agent"}, {ID: "browser"}},
 	}
 	sm.states["test"] = state
-	panel, _ := sm.insertProjectCommand("test", "background", "sleep 60")
+	panel, _ := sm.insertProjectCommand("test", "background", "sleep 60", 0, false, path)
 	js, handled := hydrateProjectCommand("test", panel.ID)
 	if !handled || js == "" || !tm.IsRunning(panel.ID) || !state.snapshots["background"].Apps[0].TerminalReady {
 		t.Fatal("background application was marked ready without starting its process")
@@ -260,5 +267,142 @@ func TestApplicationBackgroundHydrationPreservesWorkspace(t *testing.T) {
 	}
 	if sm.RemoveAppByID("test", panel.ID) == nil || len(state.snapshots["background"].Apps) != 0 || state.SelectedIndex != 1 {
 		t.Fatal("background removal changed visible selection")
+	}
+}
+
+func TestPerThreadApplicationIsolation(t *testing.T) {
+	oldDB, oldSM, oldTM := db, sm, tm
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "settings.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sm, tm = NewStateManager(), components.NewTerminalManager()
+	t.Cleanup(func() { tm.StopAll(); _ = db.Close(); db, sm, tm = oldDB, oldSM, oldTM })
+	createTables()
+	root, branch := t.TempDir(), t.TempDir()
+	state := &AppState{ActiveProject: "project", Projects: []Project{{Name: "project", Path: root}, {Name: "project/branch", Path: branch, Virtual: true, ParentProject: "project"}}, Apps: []Application{{ID: "agent", PluginID: "codex"}}}
+	sm.states["test"] = state
+	if err := setProjectCommand(root, `printf '%s' "$PORT" > assigned-port; sleep 60`); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveApplicationSettings(root, applicationSettings{Mode: "thread"}); err != nil {
+		t.Fatal(err)
+	}
+	_, first, err := controlApplication("test", root, "start")
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstID := state.Apps[1].ID
+	_, second, err := controlApplication("test", branch, "start")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first["port"] == 0 || second["port"] == 0 || first["port"] == second["port"] {
+		t.Fatalf("ports must be distinct: %v %v", first, second)
+	}
+	secondPanel := state.snapshots["project/branch"].Apps[0]
+	if secondPanel.Command != projectCommand(root) || secondPanel.ApplicationPath != branch || !secondPanel.ApplicationPerThread {
+		t.Fatal("thread must inherit command and use its own worktree")
+	}
+	if state.ActiveProject != "project" {
+		t.Fatal("background launch changed selection")
+	}
+	js, again, err := controlApplication("test", branch, "start")
+	if err != nil || js != "" || again["port"] != second["port"] {
+		t.Fatal("start must be idempotent")
+	}
+	switchToProjectName("test", "project/branch")
+	if len(state.Apps) != 1 || state.Apps[0].ID != secondPanel.ID {
+		t.Fatal("switching moved another thread's application")
+	}
+	if runtime.GOOS != "windows" {
+		if _, handled := hydrateProjectCommand("test", secondPanel.ID); !handled {
+			t.Fatal("application not hydrated")
+		}
+		deadline := time.Now().Add(3 * time.Second)
+		for {
+			data, readErr := os.ReadFile(filepath.Join(branch, "assigned-port"))
+			if readErr == nil && string(data) == strconv.Itoa(secondPanel.ApplicationPort) {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("application did not receive PORT in its own worktree")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	_, restarted, err := controlApplication("test", branch, "restart")
+	if err != nil || restarted["port"] != second["port"] || state.Apps[0].ID == secondPanel.ID {
+		t.Fatalf("restart should retain its port: %v %v", restarted, err)
+	}
+	if state.snapshots["project"].Apps[1].ID != firstID {
+		t.Fatal("restart affected another thread")
+	}
+	if _, _, err := controlApplication("test", branch, "stop"); err != nil {
+		t.Fatal(err)
+	}
+	_, stillRunning, err := controlApplication("test", root, "status")
+	if err != nil || stillRunning["status"] != "starting" || state.snapshots["project"].Apps[1].ID != firstID {
+		t.Fatal("stop affected another thread")
+	}
+	if err := saveApplicationSettings(branch, applicationSettings{Mode: "thread", Port: first["port"].(int)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := controlApplication("test", branch, "start"); err == nil {
+		t.Fatal("accepted another application's reserved port")
+	}
+	if len(state.Apps) != 0 {
+		t.Fatal("port conflict created a panel")
+	}
+	if _, _, err := controlApplication("test", root, "stop"); err != nil {
+		t.Fatal(err)
+	}
+	_, overridden, err := controlApplication("test", branch, "start")
+	if err != nil || overridden["port"] != first["port"] {
+		t.Fatalf("port override was not used: %v %v", overridden, err)
+	}
+
+	if _, _, err := controlApplication("test", branch, "stop"); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveApplicationSettings(root, applicationSettings{Mode: "shared"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := controlApplication("test", branch, "start"); err != nil {
+		t.Fatal(err)
+	}
+	shared := state.Apps[0]
+	if shared.ApplicationPath != root || shared.ApplicationPerThread {
+		t.Fatal("shared app must run from project root")
+	}
+	switchToProjectName("test", "project")
+	if len(state.Apps) != 2 || state.Apps[1].ID != shared.ID {
+		t.Fatal("shared application did not follow the selected worktree")
+	}
+	if js, _, err := controlApplication("test", branch, "start"); err != nil || js != "" {
+		t.Fatal("shared start duplicated application across worktrees")
+	}
+	if _, _, err := controlApplication("test", branch, "stop"); err != nil || len(state.Apps) != 1 {
+		t.Fatal("shared stop did not remove the assigned application")
+	}
+}
+
+func TestApplicationAgentScope(t *testing.T) {
+	scope := t.TempDir()
+	t.Setenv("LIBRO_APPLICATION_PATH", scope)
+	for _, action := range []string{"status", "start", "stop", "restart"} {
+		payload := json.RawMessage(fmt.Sprintf(`{"action":%q,"project":"/another-worktree"}`, action))
+		if _, err := scopedApplicationCommand(payload, scope); err == nil || !strings.Contains(err.Error(), "unknown field") {
+			t.Fatalf("MCP accepted a target override: %v", err)
+		}
+		if _, err := ApplicationCommand(payload); err == nil || !strings.Contains(err.Error(), "restricted") {
+			t.Fatalf("agent CLI accepted another workspace: %v", err)
+		}
+	}
+	for _, extra := range []string{`"pid":123`, `"command":"echo test"`, `"port":1234`} {
+		if _, err := scopedApplicationCommand(json.RawMessage(`{"action":"stop",`+extra+`}`), scope); err == nil {
+			t.Fatal("MCP accepted process selection")
+		}
 	}
 }

@@ -36,7 +36,7 @@ func TestMCPDiscovery(t *testing.T) {
 		t.Fatal("expected only application and issues tools")
 	}
 	application := discovery.Result.Tools[0]
-	if application.Name != "application" || application.InputSchema.Properties["project"] == nil || !strings.Contains(application.Description, "project settings") {
+	if application.Name != "application" || application.InputSchema.Properties["project"] != nil || len(application.InputSchema.Properties) != 1 || !strings.Contains(application.Description, "project settings") {
 		t.Fatal("application tool must explain the configured project command")
 	}
 	if !strings.Contains(application.Description, "Do not launch a separate application server") || !strings.Contains(lines[1], "Do not launch a separate application server") {

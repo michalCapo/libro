@@ -2,6 +2,7 @@ package libro
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	r "github.com/michalCapo/g-sui/ui"
@@ -35,70 +36,109 @@ func setProjectCommand(path, command string) error {
 func registerProjectCommandActions(app *r.App) {
 	registerApplicationControl(app)
 	registerAction(app, "project.command.save", func(ctx *r.Context) string {
+		applicationControlMu.Lock()
+		defer applicationControlMu.Unlock()
 		sid := extractSID(ctx)
-		name, _ := ctx.WsData()["name"].(string)
-		command, _ := ctx.WsData()["command"].(string)
-		restoreWorktreeProject(sm, sid, name)
-		for _, project := range sm.Get(sid).Projects {
-			if project.Name != name {
-				continue
+		data := ctx.WsData()
+		name, _ := data["name"].(string)
+		command, _ := data["command"].(string)
+		mode, _ := data["mode"].(string)
+		portText, _ := data["port"].(string)
+		port := 0
+		if portText != "" {
+			var err error
+			port, err = strconv.Atoi(portText)
+			if err != nil || port < 1 || port > 65535 {
+				return r.Notify("error", "Enter a port between 1 and 65535, or leave it blank")
 			}
-			if err := setProjectCommand(project.Path, command); err != nil {
-				return r.Notify("error", "Could not save command: "+err.Error())
-			}
-			return projectsJS(sm.Get(sid)) + `document.getElementById('project-command-dialog')?.close();`
 		}
-		return r.Notify("error", "Project not found")
+		restoreWorktreeProject(sm, sid, name)
+		state := sm.Get(sid)
+		_, path := threadProjectContext(state, name)
+		if path == "" {
+			return r.Notify("error", "Project not found")
+		}
+		root := applicationRoot(state, name)
+		settings := loadApplicationSettings(root)
+		if mode == "" {
+			mode = settings.Mode
+		}
+		if mode != "shared" && mode != "thread" {
+			return r.Notify("error", "Choose shared or per-thread application mode")
+		}
+		if strings.ContainsRune(command, 0) {
+			return r.Notify("error", "Command cannot contain a null character")
+		}
+		if settings.Mode != mode {
+			for _, running := range sm.GetAllRunningApps(sid) {
+				if applicationRoot(state, running.Name) != root {
+					continue
+				}
+				for _, panel := range running.Apps {
+					if panel.PluginID == "project-command" {
+						return r.Notify("error", "Stop the project's applications before changing application mode")
+					}
+				}
+			}
+		}
+		settings.Mode = mode
+		if mode == "shared" {
+			path = root
+			port = 0
+		}
+		if path == root {
+			settings.Port = port
+		}
+		if err := saveApplicationSettings(root, settings); err != nil {
+			return r.Notify("error", err.Error())
+		}
+		if path != root {
+			if err := saveApplicationSettings(path, applicationSettings{Mode: mode, Port: port}); err != nil {
+				return r.Notify("error", err.Error())
+			}
+		}
+		if err := setProjectCommand(path, command); err != nil {
+			return r.Notify("error", "Could not save command: "+err.Error())
+		}
+		return projectsJS(state) + `document.getElementById('project-command-dialog')?.close();`
 	})
 	registerAction(app, "project.command.run", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		state := sm.Get(sid)
-		path := sm.GetActiveProjectPath(sid)
-		command := projectCommand(path)
 		if state.ActiveProject == "" {
 			return r.Notify("error", "Open a project first")
 		}
+		_, command, _ := applicationConfiguration(state, state.ActiveProject)
 		if command == "" {
-			project := state.projectScope(state.ActiveProject)
-			if project == "" {
-				return r.Notify("error", "Open a project first")
-			}
-			return fmt.Sprintf(`libroWorkspace.projectSettings(%s);`, components.JSString(project))
+			return fmt.Sprintf(`libroWorkspace.projectSettings(%s);`, components.JSString(state.ActiveProject))
 		}
-		return runProjectCommand(sid, command)
+		hadCommand := false
+		for _, panel := range state.Apps {
+			if panel.PluginID == "project-command" {
+				hadCommand = true
+			}
+		}
+		js, _, err := controlApplication(sid, sm.GetActiveProjectPath(sid), "restart")
+		if err != nil {
+			return js + r.Notify("error", err.Error())
+		}
+		for _, panel := range sm.Get(sid).Apps {
+			if panel.PluginID == "project-command" {
+				js += navigateJS(sm.Get(sid), sid) + fmt.Sprintf(`libroWorkspace.select(%s);`, components.JSString(panel.ID))
+				break
+			}
+		}
+		if hadCommand {
+			js = "libroWorkspace.restartProject(function(){" + js + "});"
+		}
+		return js
 	})
 	registerAction(app, "project.command.stop", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
-		js := stopProjectCommand(sid)
-		message := "Application stopped"
-		if js == "" {
-			message = "Application is not running"
+		js, _, err := controlApplication(sid, sm.GetActiveProjectPath(sid), "stop")
+		if err != nil {
+			return js + r.Notify("error", err.Error())
 		}
-		return js + navigateJS(sm.Get(sid), sid) + projectsJS(sm.Get(sid)) + fmt.Sprintf(`if(window.__libroShowToast)window.__libroShowToast(%s, '', 1200);`, components.JSString(message))
+		return js + r.Notify("info", "Application stopped")
 	})
-}
-
-func runProjectCommand(sid, command string) string {
-	js := stopProjectCommand(sid)
-	id := sm.NextAppID()
-	sm.InsertTerminalPlaceholder(sid, id, WidthFull, command, true, "Project command", "", -1)
-	sm.SetAppPlugin(sid, id, "project-command", "bottom")
-	state := sm.Get(sid)
-	frame := renderAppFramePlaceholder(state.Apps[state.SelectedIndex], state.SelectedIndex, true, sid)
-	result := js + insertAppJS(frame, false, state.ActiveProject) + navigateJS(state, sid) + projectsJS(state) + hydrateAppAfterScrollJS(id, sidData(sid, "id", id)) + fmt.Sprintf(`libroWorkspace.select(%s);`, components.JSString(id))
-	if js != "" {
-		return "libroWorkspace.restartProject(function(){" + result + "});" + `if(window.__libroShowToast)window.__libroShowToast('Restarting application', '', 1200);`
-	}
-	return result + `if(window.__libroShowToast)window.__libroShowToast('Starting application', '', 1200);`
-}
-
-func stopProjectCommand(sid string) string {
-	for _, app := range sm.Get(sid).Apps {
-		if app.PluginID == "project-command" {
-			tm.Stop(app.ID)
-			sm.RemoveAppByID(sid, app.ID)
-			return removeAppJS(app.ID)
-		}
-	}
-	return ""
 }

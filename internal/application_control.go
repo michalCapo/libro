@@ -1,24 +1,30 @@
 package libro
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 
 	r "github.com/michalCapo/g-sui/ui"
 	"libro/internal/components"
 )
 
 const applicationHelp = components.ApplicationInstructions + "\n\n" + `Control the application's saved project command in Libro. Actions: status, start, restart, stop.
-Use the application MCP tool or: libro application status|start|restart|stop [project-path].
-The project defaults to the agent's working directory. Libro resolves registered projects, including subdirectories and symlinked paths.
+Use the application MCP tool or: libro application status|start|restart|stop.
+The MCP tool is bound to the workspace where its server was launched; it accepts only an action, never a target project, process ID, or command.
+Agent CLI calls are bound to LIBRO_APPLICATION_PATH, set by Libro when launching the agent. A different project path is rejected.
+Outside an agent session, the CLI accepts an optional project path and otherwise uses the current directory.
 All actions preserve the visible project, thread, and panel selection.
-All threads in the same project share one application process. Browsers remain independent per thread.
-Start is idempotent. Restart replaces the shared project command terminal. Stop stops that shared terminal for all project threads.
+Project settings choose a shared application or one application per thread. Browsers remain independent per thread.
+Start is idempotent. Restart and stop affect the selected application scope. Status includes mode, port and URL when assigned.
+Per-thread commands run in their worktree and receive PORT. The start command must use that port.
 Set the start command in project settings first. Commands cannot be supplied or changed through this tool.
 A starting response means launch was requested; use status to check the process. Running does not guarantee server readiness.
 `
@@ -34,6 +40,12 @@ func ApplicationCommand(command json.RawMessage) (json.RawMessage, error) {
 	}
 	if args.Action != "status" && args.Action != "start" && args.Action != "restart" && args.Action != "stop" {
 		return nil, errors.New("unknown application action")
+	}
+	if scope := os.Getenv("LIBRO_APPLICATION_PATH"); scope != "" {
+		if args.Project != "" && applicationPath(args.Project) != applicationPath(scope) {
+			return nil, errors.New("application control is restricted to this agent's workspace")
+		}
+		args.Project = scope
 	}
 	if args.Project == "" {
 		cwd, err := os.Getwd()
@@ -51,6 +63,26 @@ func ApplicationCommand(command json.RawMessage) (json.RawMessage, error) {
 		return nil, err
 	}
 	return desktopCommand(payload)
+}
+
+// scopedApplicationCommand deliberately excludes target selection from the MCP API.
+func scopedApplicationCommand(command json.RawMessage, scope string) (json.RawMessage, error) {
+	var args struct {
+		Action string `json:"action"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(command))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&args); err != nil {
+		return nil, err
+	}
+	if scope == "" {
+		return nil, errors.New("application workspace is unavailable; restart the agent from its Libro thread")
+	}
+	payload, err := json.Marshal(map[string]string{"action": args.Action, "project": scope})
+	if err != nil {
+		return nil, err
+	}
+	return ApplicationCommand(payload)
 }
 
 // RunApplicationCLI controls the configured application without MCP support.
@@ -138,28 +170,34 @@ func applicationProject(state *AppState, requested string) (string, string, erro
 	return name, path, nil
 }
 
+var applicationControlMu sync.Mutex
+
 func controlApplication(sid, project, operation string) (string, map[string]any, error) {
+	applicationControlMu.Lock()
+	defer applicationControlMu.Unlock()
 	if operation != "status" && operation != "start" && operation != "restart" && operation != "stop" {
 		return "", nil, errors.New("unknown application action")
 	}
-	workspace, path, err := applicationProject(sm.Get(sid), project)
+	workspace, _, err := applicationProject(sm.Get(sid), project)
 	if err != nil {
 		return "", nil, err
 	}
-	command := projectCommand(path)
+	path, command, settings := applicationConfiguration(sm.Get(sid), workspace)
+	port := settings.Port
+	perThread := settings.Mode == "thread"
 	if (operation == "start" || operation == "restart") && command == "" {
 		return "", nil, errors.New("set a start command in project settings first")
 	}
 	status := "stopped"
 	var previous []string
 	for _, running := range sm.GetAllRunningApps(sid) {
-		_, root := threadProjectContext(sm.Get(sid), running.Name)
-		if root == "" || applicationPath(root) != applicationPath(path) {
+		root := applicationRoot(sm.Get(sid), running.Name)
+		if perThread && running.Name != workspace || !perThread && (root == "" || applicationPath(root) != applicationPath(path)) {
 			continue
 		}
 		for _, app := range running.Apps {
-			if app.PluginID == "project-command" {
-				workspace = running.Name
+			if app.PluginID == "project-command" && app.ApplicationPerThread == perThread {
+				port = app.ApplicationPort
 				previous = append(previous, app.ID)
 				if !app.TerminalReady {
 					status = "starting"
@@ -170,7 +208,13 @@ func controlApplication(sid, project, operation string) (string, map[string]any,
 		}
 	}
 	if operation == "status" || operation == "start" && status != "stopped" {
-		return "", map[string]any{"project": path, "configured": command != "", "status": status}, nil
+		return "", map[string]any{"project": path, "configured": command != "", "status": status, "mode": settings.Mode, "port": port, "url": applicationURL(port)}, nil
+	}
+	// Reject a conflicting new override before stopping a healthy application.
+	if operation != "stop" && perThread && settings.Port != 0 && (len(previous) == 0 || settings.Port != port) {
+		if _, err := allocateApplicationPort(settings.Port); err != nil {
+			return "", nil, err
+		}
 	}
 	var js strings.Builder
 	for _, id := range previous {
@@ -180,18 +224,33 @@ func controlApplication(sid, project, operation string) (string, map[string]any,
 	}
 	status = "stopped"
 	if operation != "stop" {
-		panel, index := sm.insertProjectCommand(sid, workspace, command)
+		if perThread {
+			requested := settings.Port
+			if requested == 0 {
+				requested = port
+			}
+			port, err = allocateApplicationPort(requested)
+			if err != nil && settings.Port == 0 {
+				port, err = allocateApplicationPort(0)
+			}
+			if err != nil {
+				return js.String() + projectsJS(sm.Get(sid)), nil, err
+			}
+		}
+		panel, index := sm.insertProjectCommand(sid, workspace, command, port, perThread, path)
 		js.WriteString(insertAppJS(renderAppFramePlaceholder(panel, index, false, sid).Attr("data-dock-seen", "true"), false, workspace))
 		// Hydration also works when this workspace has never been shown.
 		js.WriteString(hydrateAppAfterScrollJS(panel.ID, sidData(sid, "id", panel.ID)))
 		status = "starting"
 	}
 	js.WriteString(projectsJS(sm.Get(sid)))
-	return js.String(), map[string]any{"project": path, "configured": command != "", "status": status}, nil
+	return js.String(), map[string]any{"project": path, "configured": command != "", "status": status, "mode": settings.Mode, "port": port, "url": applicationURL(port)}, nil
 }
 
-// hydrateProjectCommand starts shared applications without selecting their workspace.
+// hydrateProjectCommand starts applications without selecting their workspace.
 func hydrateProjectCommand(sid, id string) (string, bool) {
+	applicationControlMu.Lock()
+	defer applicationControlMu.Unlock()
 	for _, workspace := range sm.GetAllRunningApps(sid) {
 		for _, panel := range workspace.Apps {
 			if panel.ID != id || panel.PluginID != "project-command" {
@@ -200,8 +259,15 @@ func hydrateProjectCommand(sid, id string) (string, bool) {
 			if panel.TerminalReady {
 				return "", true
 			}
-			_, path := threadProjectContext(sm.Get(sid), workspace.Name)
-			_, err := tm.StartWithEnvironment(id, panel.Command, path, panel.Writable, nil)
+			path := panel.ApplicationPath
+			if path == "" {
+				_, path = threadProjectContext(sm.Get(sid), workspace.Name)
+			}
+			var environment []string
+			if panel.ApplicationPort != 0 {
+				environment = []string{"PORT=" + strconv.Itoa(panel.ApplicationPort)}
+			}
+			_, err := tm.StartWithEnvironment(id, panel.Command, path, panel.Writable, environment)
 			if err != nil {
 				sm.RemoveAppByID(sid, id)
 				return removeAppJS(id) + r.Notify("error", "Failed to start application: "+err.Error()), true

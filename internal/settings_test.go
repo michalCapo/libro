@@ -329,16 +329,16 @@ func TestAgentAutolaunch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := projectAutolaunchJS(state, "test"); !strings.Contains(got, `"plugin":"codex"`) || !strings.Contains(got, "'app.start'") {
-		t.Fatalf("missing persisted agent: %s", got)
+	if got := projectAutolaunchJS(state, "test"); got != "" {
+		t.Fatalf("base workspace must start empty: %s", got)
 	}
 	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "pi", Dock: "center"}}
 	if projectAutolaunchJS(state, "test") != "" {
 		t.Fatal("launched with an existing agent")
 	}
 	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "terminal", Dock: "bottom"}}
-	if projectAutolaunchJS(state, "test") == "" {
-		t.Fatal("bottom shell blocked agent")
+	if projectAutolaunchJS(state, "test") != "" {
+		t.Fatal("base workspace must not autolaunch an agent")
 	}
 	if err := save("pi", nil); err != nil {
 		t.Fatal(err)
@@ -453,8 +453,8 @@ func TestDefaultThreadAgent(t *testing.T) {
 		t.Fatalf("thread preference not persisted: %s", got)
 	}
 	state.ActiveProject = "project"
-	if got := projectAutolaunchJS(state, "test"); !strings.Contains(got, `"plugin":"pi"`) || !strings.Contains(got, "'app.start'") {
-		t.Fatalf("project preference changed: %s", got)
+	if got := projectAutolaunchJS(state, "test"); got != "" {
+		t.Fatalf("base workspace must start empty: %s", got)
 	}
 	state.ActiveProject = "thread:test"
 	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "pi", Dock: "center"}}
@@ -506,7 +506,7 @@ func TestReplaceAgentShortcutMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	keys := toolKeybindings()
-	if keys["new-agent"] != "Ctrl+N" || keys["replace-agent"] != "Ctrl+Shift+N" || keys["new-thread"] != "" || keys["terminal"] != "Ctrl+Alt+T" {
+	if keys["new-agent"] != "" || keys["replace-agent"] != "Ctrl+Shift+A" || keys["new-thread"] != "Ctrl+N" || keys["terminal"] != "Ctrl+Alt+T" {
 		t.Fatalf("incorrect shortcut migration: %v", keys)
 	}
 	if err := validateToolKeybindings(keys); err != nil {

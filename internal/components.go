@@ -1515,6 +1515,8 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroOpenWorktreeCreate)window.__libroOpenWorktreeCreate();
 			}},
+            {id:'thread-actions',label:'Thread actions',scope:'project',icon:'more_horiz',keywords:'thread finish settings discard',run:function(){closePalette();libroWorkspace.threadActionPalette();}},
+            {id:'finish-thread',label:'Finish current thread…',scope:'project',icon:'merge',keywords:'merge squash pull request pr finish cleanup worktree thread',run:function(){closePalette();libroWorkspace.finishThread();}},
 			{id:'close-project',label:'Close project',scope:'project',icon:'close',keywords:'close stop all panels terminals processes current project',run:function(){
 				closePalette();
 				__ws.call('project.close',{sid:window.__libroWorkspaceSID});
@@ -2784,18 +2786,21 @@ func projectsJS(state *AppState) string {
 		return filepath.Base(path)
 	}
 	type jsProject struct {
-		Kind          string   `json:"kind"`
-		Name          string   `json:"name"`
-		DisplayName   string   `json:"displayName,omitempty"`
-		Path          string   `json:"path"`
-		Branch        string   `json:"branch,omitempty"`
-		IsGit         bool     `json:"isGit"`
-		IsActive      bool     `json:"isActive"`
-		Branches      []string `json:"branches,omitempty"`
-		CurrentBranch string   `json:"currentBranch,omitempty"`
-		WorktreeRefs  []string `json:"worktreeRefs,omitempty"`
-		Transient     bool     `json:"transient,omitempty"`
-		Command       string   `json:"command,omitempty"`
+		Kind            string   `json:"kind"`
+		Name            string   `json:"name"`
+		DisplayName     string   `json:"displayName,omitempty"`
+		Path            string   `json:"path"`
+		Branch          string   `json:"branch,omitempty"`
+		IsGit           bool     `json:"isGit"`
+		IsActive        bool     `json:"isActive"`
+		Branches        []string `json:"branches,omitempty"`
+		CurrentBranch   string   `json:"currentBranch,omitempty"`
+		WorktreeRefs    []string `json:"worktreeRefs,omitempty"`
+		Transient       bool     `json:"transient,omitempty"`
+		Command         string   `json:"command,omitempty"`
+		ApplicationMode string   `json:"applicationMode"`
+		ApplicationPort int      `json:"applicationPort,omitempty"`
+		ApplicationURL  string   `json:"applicationURL,omitempty"`
 	}
 	var all []jsProject
 	for _, p := range state.Projects {
@@ -2821,6 +2826,10 @@ func projectsJS(state *AppState) string {
 			entry.CurrentBranch = GitCurrentBranch(p.Path)
 		}
 
+		settings := loadApplicationSettings(p.Path)
+		entry.ApplicationMode = settings.Mode
+		entry.ApplicationPort = settings.Port
+		entry.ApplicationURL = applicationLiveURL(state, p.Path)
 		all = append(all, entry)
 
 		if !p.IsGitRepo || !GitAvailable() {
@@ -2853,15 +2862,26 @@ func projectsJS(state *AppState) string {
 			}
 			vtName := p.Name + "/" + wt.Branch
 			wtActive := state.projectScope(state.ActiveProject) == vtName
+			command := projectCommand(wt.Path)
+			applicationPath := wt.Path
+			port := loadApplicationSettings(wt.Path).Port
+			if settings.Mode == "shared" {
+				command = entry.Command
+				applicationPath = p.Path
+				port = settings.Port
+			}
 			all = append(all, jsProject{
-				DisplayName: displayProjectName(wt.Branch, wt.Path),
-				Kind:        "worktree",
-				Command:     projectCommand(wt.Path),
-				Name:        p.Name,
-				Path:        wt.Path,
-				Branch:      wt.Branch,
-				IsGit:       true,
-				IsActive:    wtActive,
+				ApplicationMode: settings.Mode,
+				ApplicationPort: port,
+				ApplicationURL:  applicationLiveURL(state, applicationPath),
+				DisplayName:     displayProjectName(wt.Branch, wt.Path),
+				Kind:            "worktree",
+				Command:         command,
+				Name:            p.Name,
+				Path:            wt.Path,
+				Branch:          wt.Branch,
+				IsGit:           true,
+				IsActive:        wtActive,
 			})
 		}
 	}
