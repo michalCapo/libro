@@ -13,7 +13,7 @@ function harness(discard = false, method = 'merge') {
   const flatten = el => [el, ...el.children.flatMap(flatten)]
   function node(tag, cls = '', text = '') {
     const el = { tag, className:cls, textContent:text, value:'', children:[], events:{}, disabled:false,
-      setAttribute() {}, focus() {}, remove() {}, showModal() {},
+      setAttribute() {}, focus() {}, remove() {}, showModal() {}, click() { this.onclick?.() },
       addEventListener(name, fn) { this.events[name] = fn },
       close() { this.events.close?.() },
       append(...children) { this.children.push(...children) },
@@ -162,5 +162,27 @@ test('merge, squash and PR open dedicated dialogs without a method dropdown', ()
     assert.equal(h.field('finish-thread-method'), undefined)
     h.form.onsubmit({preventDefault(){}})
     assert.equal(h.calls.at(-1).data.method, method)
+  }
+})
+
+
+test('failed merge asks before sending to the exact thread agent; Escape sends nothing', () => {
+  for (const confirm of [false, true]) {
+    const h = harness()
+    const sent = []
+    h.context.window.__libroSendPageToolPrompt = (...args) => { sent.push(args); return true }
+    h.preview()
+    h.form.onsubmit({preventDefault(){}})
+    vm.runInContext(`finishThreadResult('repo/feature', {error:'Merge conflict', agentMerge:{appID:'thread-agent',workspace:'repo/feature',prompt:'Resolve this merge'}})`, h.context)
+    assert.deepEqual(sent, [])
+    const dialog = h.context.root.children.at(-1)
+    if (confirm) {
+      dialog.children.find(el => el.tag === 'form').onsubmit({preventDefault(){}})
+      assert.deepEqual(sent, [['Resolve this merge', true, 'thread-agent']])
+      assert.equal(h.calls.at(-1).data.name, 'repo/feature')
+    } else {
+      dialog.events.keydown({key:'Escape',target:{tagName:'BUTTON'},preventDefault(){},stopImmediatePropagation(){}})
+      assert.deepEqual(sent, [])
+    }
   }
 })

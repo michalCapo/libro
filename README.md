@@ -188,7 +188,10 @@ source default to the Base project’s current branch. You can change the destin
 Local merges require committed thread changes and a clean destination checked
 out in another worktree. If either branch changes after review, the dialog
 reloads the preview after reporting the error. Conflicts and failed commits keep the thread open; resolve or abort the
-Git operation in the destination worktree before retrying. Failed cleanup keeps
+Git operation in the destination worktree before retrying. A failed merge also
+offers **Ask the agent to merge**: Enter confirms and Escape cancels. Confirmation
+sends the task only to that thread’s running agent. The agent keeps the worktree
+open; use Merge again after resolution to finish cleanup. Failed cleanup keeps
 the worktree and reports the error. Shared applications are preserved.
 
 Successful local merges and squashes remove the thread, branch, and worktree

@@ -352,7 +352,9 @@
     state.busy = false;
     if (reply.error) {
       state.form.querySelectorAll('input,select,textarea,button').forEach(control => { control.disabled = false; });
-      state.error = reply.error; state.preview(); return;
+      state.error = reply.error; state.preview();
+      if (reply.agentMerge) confirmAgentMerge(state, reply.agentMerge);
+      return;
     }
     if (reply.url) {
       state.status.replaceChildren(node('span', '', 'Draft PR created. Thread kept open. '));
@@ -362,6 +364,27 @@
     }
     state.dialog.close();
     window.__libroShowToast?.(reply.warning || 'Thread removed', '', reply.warning ? 6000 : 2000);
+  }
+  function confirmAgentMerge(state, request) {
+    const dialog = node('dialog', 'ws-plugin-dialog ws-finish-dialog'); dialog.setAttribute('aria-labelledby', 'agent-merge-title');
+    const heading = node('h2', '', 'Ask the agent to merge?'); heading.id = 'agent-merge-title';
+    const description = node('p', '', 'The merge failed. Ask this thread’s agent to resolve the problem and complete the merge? Your thread and worktree will stay open.');
+    const status = node('p', 'ws-finish-status'); status.setAttribute('role', 'status');
+    const form = node('form', ''); const actions = node('div', 'ws-agent-actions');
+    const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
+    const submit = node('button', 'ws-launch', 'Ask agent to merge'); submit.type = 'submit';
+    actions.append(cancel, submit); form.append(status, actions); dialog.append(heading, description, form); root.append(dialog);
+    form.onsubmit = event => {
+      event.preventDefault(); if (submit.disabled) return;
+      if (!request.appID || !window.__libroSendPageToolPrompt?.(request.prompt, true, request.appID)) {
+        status.textContent = 'Start an agent in this thread, then retry the merge to send the request.'; return;
+      }
+      submit.disabled = true; dialog.close(); state.dialog.close();
+      call('project.switch', {name:request.workspace});
+      window.__libroShowToast?.('Merge request sent to the thread’s agent', '', 2500);
+    };
+    dialog.addEventListener('close', () => dialog.remove());
+    dialogKeys(dialog, form, submit, cancel); dialog.showModal(); submit.focus();
   }
   function threadActions(project) {
     const name = project.name + '/' + project.branch;

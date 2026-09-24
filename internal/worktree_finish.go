@@ -326,8 +326,9 @@ func registerFinishThreadActions(app *r.App) {
 		targetHead, _ := data["targetHead"].(string)
 		message, _ := data["message"].(string)
 		body, _ := data["body"].(string)
+		var agentMerge map[string]string
 		finish := func(err error, warning, url string) string {
-			reply := map[string]any{"warning": warning, "url": url}
+			reply := map[string]any{"warning": warning, "url": url, "agentMerge": agentMerge}
 			if err != nil {
 				reply["error"] = err.Error()
 			}
@@ -347,6 +348,7 @@ func registerFinishThreadActions(app *r.App) {
 		}
 		if method != "discard" {
 			if err := integrateFinishThread(info, method, message); err != nil {
+				agentMerge = mergeAgentRequest(sid, info, method)
 				return finish(err, "", "")
 			}
 		}
@@ -379,4 +381,22 @@ func cleanupFinishedThread(sid string, info worktreeFinishPreview, discard bool)
 	sm.RemoveProject(sid, name)
 	js += fmt.Sprintf("document.getElementById(%s)?.remove();", components.JSString(projectMainID(name)))
 	return js + projectsJS(sm.Get(sid)), warning, nil
+}
+
+// Only the failed thread's agent may receive this request.
+func mergeAgentRequest(sid string, info worktreeFinishPreview, method string) map[string]string {
+	id := ""
+	for _, workspace := range sm.GetAllRunningApps(sid) {
+		if workspace.Name != info.Name {
+			continue
+		}
+		for _, panel := range workspace.Apps {
+			if isAgentApp(panel) && panel.TerminalReady && tm.IsRunning(panel.ID) {
+				id = panel.ID
+				break
+			}
+		}
+	}
+	prompt := fmt.Sprintf("The user confirmed that you should resolve a failed %s and complete the local integration. Source branch: %q in %q. Destination branch: %q in %q. Inspect the current Git state first; a merge or squash may already be in progress. Resolve conflicts and complete the %s into the destination branch. Preserve unrelated uncommitted work; do not discard changes or force push. Do not delete either branch or worktree, and do not stop shared applications. Report the result so the user can finish cleanup in Libro.", method, info.Branch, info.Path, info.Base, info.TargetPath, method)
+	return map[string]string{"appID": id, "workspace": info.Name, "prompt": prompt}
 }

@@ -3451,10 +3451,10 @@ func terminalFrameSetupJS() string {
 				if (controller && controller.restart) controller.restart();
 			};
 
-			window.__libroSendPageToolPrompt = function(prompt, execute) {
-				var appID = window.__libroActiveAgentID || '';
+			window.__libroSendPageToolPrompt = function(prompt, execute, targetAppID) {
+				var appID = targetAppID || window.__libroActiveAgentID || '';
 				var el = appID ? document.querySelector('[data-terminal-app="' + String(appID).replace(/"/g, '\\"') + '"]') : null;
-				if (!el) {
+				if (!el && !targetAppID) {
 					var fallback = document.querySelector('[data-workspace-project]:not([aria-hidden="true"]) [data-dock="center"] [data-terminal-app]');
 					el = fallback || null;
 				}
