@@ -106,7 +106,25 @@ async function element(target, command, signal) {
   if (command.ref) {
     if (!state.refs.has(command.ref) || !command.ref.startsWith(state.epoch + ':')) throw new Error('Stale element reference; take a new snapshot')
     const backendNodeId = Number(command.ref.slice(state.epoch.length + 1))
-    ;({object} = await cdp(target,'DOM.resolveNode',{backendNodeId,executionContextId},signal))
+    try {
+      ;({object} = await cdp(target,'DOM.resolveNode',{backendNodeId,executionContextId},signal))
+    } catch (error) {
+      if (/Could not find node|No node with given id/.test(error.message)) throw new Error('Stale element reference; take a new snapshot')
+      throw error
+    }
+    // AX StaticText refs resolve to Text nodes. Use their containing element
+    // for input, visibility checks, and screenshots, just like selector lookup.
+    if (object?.objectId) {
+      const nodeId = object.objectId
+      try {
+        const response = await cdp(target,'Runtime.callFunctionOn',{
+          objectId:nodeId,
+          functionDeclaration:'function() { return this.nodeType === 3 ? this.parentElement : this }',
+        },signal)
+        if (response.exceptionDetails) throw new Error('Could not resolve element reference; take a new snapshot')
+        object = response.result
+      } finally { await release(target,nodeId) }
+    }
   } else {
     if (typeof command.selector !== 'string' || !command.selector || command.selector.length > 2000) throw new Error('Provide ref from snapshot or a CSS selector')
     const expression = `(() => {
@@ -120,7 +138,7 @@ async function element(target, command, signal) {
     if (response.exceptionDetails) throw new Error(response.exceptionDetails.exception?.description || 'Invalid selector')
     object = response.result
   }
-  if (!object?.objectId || object.subtype === 'null') throw new Error('Element not found')
+  if (!object?.objectId || object.subtype === 'null') throw new Error(command.ref ? 'Stale element reference; take a new snapshot' : 'Element not found')
   return object.objectId
 }
 async function onElement(target, objectId, fn, args, signal) {
@@ -159,7 +177,7 @@ async function snapshot(target, command, signal) {
     const tree = await cdp(target,'Accessibility.getFullAXTree',{},signal)
     for (const node of tree.nodes) {
       if (node.ignored || nodes.length >= 1000) continue
-      nodes.push({ref:node.backendDOMNodeId ? reference(state,node.backendDOMNodeId) : undefined, role:node.role?.value, name:String(node.name?.value || '').slice(0,500), states:(node.properties || []).filter(p=>['checked','disabled','expanded','selected','required','level'].includes(p.name)).map(p=>({name:p.name,value:p.value.value}))})
+      nodes.push({ref:node.backendDOMNodeId && node.role?.value !== 'RootWebArea' ? reference(state,node.backendDOMNodeId) : undefined, role:node.role?.value, name:String(node.name?.value || '').slice(0,500), states:(node.properties || []).filter(p=>['checked','disabled','expanded','selected','required','level'].includes(p.name)).map(p=>({name:p.name,value:p.value.value}))})
     }
   }
   if (state.epoch !== epoch) throw new Error('Page changed during snapshot; try again')
@@ -168,7 +186,8 @@ async function snapshot(target, command, signal) {
 
 async function elementAction(target, command, signal) {
   return withElement(target,command,signal,objectId=>onElement(target,objectId,function(command) {
-    if(this.nodeType!==1 || !this.isConnected) throw new Error('Element is detached or is not an element')
+    if(!this.isConnected) throw new Error('Stale element reference: element is detached; take a new snapshot')
+    if(this.nodeType!==1) throw new Error('Reference is not an element; choose an element ref or CSS selector')
     if (command.action==='select_option') {
       if(this.tagName!=='SELECT' || this.disabled) throw new Error('Target must be an enabled select')
       const values=command.values

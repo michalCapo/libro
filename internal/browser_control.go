@@ -91,7 +91,8 @@ Actions: list, open, status, select_panel, snapshot, wait, diagnostics, screensh
 All actions except list/open/status/pause/stop require panel. Use an ID from list; never guess a panel.
 Only browser panels belonging to your Libro thread are available. Other threads and their browser data are isolated.
 Background panels remain controllable even when visible:false or another thread is shown. No user thread switch is required. Select_panel only reveals a panel when its thread is already shown.
-Snapshot returns accessibility roles/names and element refs; format:"dom" returns DOM structure. Refs expire on navigation. Selector/ref lookup is main-document scoped (including open shadow roots).
+Snapshot returns accessibility roles/names and refs; format:"dom" returns DOM structure. Text refs target their containing element. Refs expire on navigation or when the page replaces the node. Selector/ref lookup is main-document scoped (including open shadow roots).
+If a ref is stale or detached, take a fresh snapshot and retry with the new ref or a unique CSS selector. If needed, use screenshot and viewport x/y. A failed ref does not mean browser automation is unavailable.
 Click/move/down/up/scroll accept a ref or CSS selector, or viewport x/y. Scroll also uses deltaY and optional deltaX; positive deltas scroll up/left.
 Wait accepts selector/ref with state visible/hidden/attached/detached, or exact url with state interactive/complete; timeoutMs is 0..20000 (default 10000).
 Diagnostics returns bounded console warnings/errors and network failures since connection. Use clear:true to clear after reading; reload after first call to capture startup.

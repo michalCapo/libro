@@ -96,6 +96,26 @@ app.whenReady().then(async()=>{
     const again=await control({action:'snapshot',panel:'panel'})
     assert.equal(again.nodes.find(n=>n.role==='textbox' && n.name==='Name').ref,name.ref,'refs must survive repeat snapshots')
     await control({action:'click',panel:'panel',ref:name.ref})
+    // AX StaticText exposes a Text backend node, not the clickable card Element.
+    await target.executeJavaScript(`{
+      const card=document.createElement('div');
+      card.id='job-card';card.textContent='Regression job card';
+      card.style='position:absolute;top:320px;left:20px;width:180px;height:40px';
+      card.onclick=()=>{document.body.dataset.jobOpened='yes'};
+      document.body.appendChild(card);
+    }`)
+    const cardSnapshot=await control({action:'snapshot',panel:'panel'})
+    assert.equal(cardSnapshot.nodes.find(n=>n.role==='RootWebArea').ref,undefined)
+    const cardText=cardSnapshot.nodes.find(n=>n.role==='StaticText' && n.name==='Regression job card')
+    assert.ok(cardText?.ref,'card text must have a usable ref')
+    await control({action:'wait',panel:'panel',ref:cardText.ref,timeoutMs:0})
+    await control({action:'click',panel:'panel',ref:cardText.ref})
+    assert.equal(await target.executeJavaScript('document.body.dataset.jobOpened'),'yes')
+    const cardShot=await control({action:'screenshot',panel:'panel',ref:cardText.ref})
+    assert.equal(cardShot.width,180)
+    assert.equal(cardShot.height,40)
+    await target.executeJavaScript("document.getElementById('job-card').remove()")
+    await assert.rejects(control({action:'click',panel:'panel',ref:cardText.ref}),/Stale element reference.*take a new snapshot/)
     const dom=await control({action:'snapshot',panel:'panel',format:'dom'})
     assert.ok(dom.nodes.some(n=>n.attributes.id==='choice'))
     await control({action:'click',panel:'panel',selector:'#shadow-button'})

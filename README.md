@@ -192,7 +192,11 @@ Available actions:
   managed downloads. Only the user can resume via the toolbar.
 - `select_panel`: select an existing panel in the current project.
 - `snapshot`: accessibility roles, names, states, and stable element references.
-  Use `format: "dom"` for DOM structure. References expire on navigation.
+  Text references target their containing element. Use `format: "dom"` for DOM
+  structure. References expire on navigation or when the page replaces a node.
+  For stale or detached refs, take a fresh snapshot and retry with the new ref
+  or a unique CSS selector. Screenshot coordinates are also available; a failed
+  ref does not mean browser automation is unavailable.
 - `wait`: wait for `selector`/`ref` with `state` set to `visible`, `hidden`,
   `attached`, or `detached`; or an exact `url` with `interactive`/`complete`.
   `timeoutMs` defaults to 10000 and is limited to 20000.
