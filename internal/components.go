@@ -2893,7 +2893,12 @@ func projectsJS(state *AppState) string {
 	if b == nil {
 		b = []byte("[]")
 	}
-	return threadsJS(state) + fmt.Sprintf("window.__libroActiveProject=%s;window.__libroProjects=%s;if(window.libroWorkspace)libroWorkspace.refresh();", components.JSString(state.ActiveProject), string(b))
+	path, _, settings := applicationConfiguration(state, state.ActiveProject)
+	url := applicationLiveURL(state, path)
+	if url == "" {
+		url = applicationURL(settings.Port)
+	}
+	return threadsJS(state) + fmt.Sprintf("window.__libroActiveProject=%s;window.__libroApplicationURL=%s;window.__libroProjects=%s;if(window.libroWorkspace)libroWorkspace.refresh();", components.JSString(state.ActiveProject), components.JSString(url), string(b))
 }
 
 // renderProjectDialog renders the create project modal

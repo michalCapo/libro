@@ -30,6 +30,21 @@ let script='';process.stdin.on('data',d=>script+=d);process.stdin.on('end',async
  app.input.keydown({key:'Enter',preventDefault(){},stopImmediatePropagation(){}});assert.equal(navigated,'http://localhost:1411/');
  storage.set('libro.browser.history',JSON.stringify([{url:'http://old/',time:Date.now()-31*86400000}]));app.input.value='';app.input.input();assert.equal(app.results.children.length,0);
  storage.set('libro.browser.history','broken');app.input.input();assert.equal(app.results.children.length,0);
+ // The current application comes first, even without history, and duplicates are hidden.
+ app.window.__libroApplicationURL='http://localhost:43327';
+ app.window.__libroRememberURL('http://localhost:43327/');
+ app.window.__libroRememberURL('https://example.com/');
+ app.window.__libroOpenURLPopupFor('a');
+ assert.equal(app.results.children.length,2);
+ assert.equal(app.results.children[0].children[1].textContent,'http://localhost:43327');
+ app.input.keydown({key:'ArrowDown',preventDefault(){},stopImmediatePropagation(){}});
+ app.input.keydown({key:'Enter',preventDefault(){},stopImmediatePropagation(){}});
+ assert.equal(navigated,'http://localhost:43327');
+ app.input.value='example';app.input.input();assert.equal(app.results.children.length,1);
+ // Switching workspace uses its latest assigned or configured URL.
+ app.window.__libroApplicationURL='http://localhost:5000';
+ app.window.__libroOpenURLPopupFor('a');
+ assert.equal(app.results.children[0].children[1].textContent,'http://localhost:5000');
  let nativeFocus='guest',completeFocus;
  app=boot({focusWorkspace(){return new Promise(resolve=>{completeFocus=()=>{nativeFocus='host';resolve();};});}});
  app.input.focus=()=>{focused=nativeFocus==='host';};

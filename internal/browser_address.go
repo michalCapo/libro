@@ -32,7 +32,7 @@ func urlPopupJS(_ string) string {
       row.className='ws-command-row';row.id='url-history-'+index;
       row.setAttribute('role','option');row.setAttribute('aria-selected',String(index===selected));
       row.dataset.selected=String(index===selected);
-      var icon=document.createElement('i');icon.className='material-icons-round';icon.textContent='history';icon.setAttribute('aria-hidden','true');
+      var icon=document.createElement('i');icon.className='material-icons-round';icon.textContent=entry.application?'language':'history';icon.setAttribute('aria-hidden','true');
       var label=document.createElement('span');label.className='ws-command-label';label.textContent=entry.url;
       row.append(icon,label);
       row.addEventListener('mousedown',function(e){e.preventDefault();});
@@ -44,7 +44,13 @@ func urlPopupJS(_ string) string {
   }
   function filter(){
     var query=input.value.trim().toLowerCase();
-    matches=history().filter(function(e){return e.url.toLowerCase().includes(query);}).slice(0,8);
+    var url=window.__libroApplicationURL||'';
+    var entries=history();
+    if(url){
+      entries=entries.filter(function(e){return e.url.replace(/\/$/,'')!==url.replace(/\/$/,'');});
+      entries.unshift({url:url,application:true});
+    }
+    matches=entries.filter(function(e){return e.url.toLowerCase().includes(query);}).slice(0,8);
     selected=query&&matches.length?0:-1;
     render();
   }
