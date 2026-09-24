@@ -186,3 +186,31 @@ test('failed merge asks before sending to the exact thread agent; Escape sends n
     }
   }
 })
+
+
+test('thread palette closes base and worktree workspaces without a Git deletion action', () => {
+  const code = source.slice(source.indexOf('  function threadActions('), source.indexOf('  function threadMenu('))
+  for (const kind of ['project', 'worktree']) {
+    const calls = []
+    const all = []
+    const node = (tag, cls = '', text = '') => {
+      const el = {tag, textContent:text, dataset:{}, children:[],
+        setAttribute() {}, addEventListener() {}, showModal() {}, focus() {}, close() {},
+        append(...children) { this.children.push(...children) },
+      }
+      all.push(el)
+      return el
+    }
+    vm.runInNewContext(code + ';threadActionPalette();', {
+      node, root:node('div'), document:{getElementById() {}},
+      button:label => node('button', '', label),
+      window:{__libroActiveProject:kind === 'worktree' ? 'repo/feature' : 'repo',
+        __libroProjects:[{kind,name:'repo',branch:'feature'}]},
+      call:action => calls.push(action),
+    })
+    const entry = all.find(el => el.dataset.label === 'close thread')
+    assert.ok(entry)
+    entry.onclick()
+    assert.deepEqual(calls, ['project.close'])
+  }
+})

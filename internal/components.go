@@ -2794,6 +2794,7 @@ func projectsJS(state *AppState) string {
 		IsGit           bool     `json:"isGit"`
 		IsActive        bool     `json:"isActive"`
 		BaseOpened      bool     `json:"baseOpened,omitempty"`
+		Closed          bool     `json:"closed,omitempty"`
 		Branches        []string `json:"branches,omitempty"`
 		CurrentBranch   string   `json:"currentBranch,omitempty"`
 		WorktreeRefs    []string `json:"worktreeRefs,omitempty"`
@@ -2816,7 +2817,7 @@ func projectsJS(state *AppState) string {
 			Path:        p.Path,
 			IsGit:       p.IsGitRepo,
 			IsActive:    isActive,
-			BaseOpened:  state.ActiveProject == p.Name || state.snapshots[p.Name] != nil,
+			BaseOpened:  !state.closedWorkspaces[p.Name] && (state.ActiveProject == p.Name || state.snapshots[p.Name] != nil),
 			Transient:   p.Transient,
 			Command:     projectCommand(p.Path),
 		}
@@ -2884,6 +2885,7 @@ func projectsJS(state *AppState) string {
 				Branch:          wt.Branch,
 				IsGit:           true,
 				IsActive:        wtActive,
+				Closed:          state.closedWorkspaces[vtName],
 			})
 		}
 	}

@@ -88,4 +88,17 @@ func TestProjectBaseOpensOnNavigation(t *testing.T) {
 			t.Fatalf("opened bases = %d, want %d", got, want)
 		}
 	}
+	if _, err := manager.CloseProject(sid); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(projectsJS(state), `"baseOpened":true`); got != 1 {
+		t.Fatalf("closed base still numbered: %d open bases", got)
+	}
+	if !manager.SwitchProject(sid, "second") {
+		t.Fatal("cannot reopen active base")
+	}
+	if got := strings.Count(projectsJS(state), `"baseOpened":true`); got != 2 {
+		t.Fatalf("reopened base missing: %d open bases", got)
+	}
+
 }

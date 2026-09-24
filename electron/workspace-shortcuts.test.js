@@ -377,6 +377,15 @@ test('base and worktree rows are numbered without requiring agents', () => {
   assert.equal(rows[0].badge.textContent, '1')
   assert.equal(rows[0].attributes['aria-keyshortcuts'], 'Control+1')
   assert.equal(rows[9].badge, null)
+  rows[0].dataset.closed = 'true'
+  vm.runInContext('renderThreadShortcuts();', context)
+  assert.equal(rows[0].dataset.projectShortcut, '')
+  assert.equal(rows[0].badge, null)
+  assert.equal(rows[0].attributes['aria-keyshortcuts'], undefined)
+  assert.equal(rows[1].dataset.projectShortcut, '1')
+  rows[0].dataset.closed = 'false'
+  vm.runInContext('renderThreadShortcuts();', context)
+  assert.equal(rows[0].dataset.projectShortcut, '1')
 })
 
 test('Ctrl+1–9 selects the numbered thread once', () => {

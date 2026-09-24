@@ -70,6 +70,7 @@ type AppState struct {
 	ActiveProject     string
 	ProjectDialogOpen bool
 	snapshots         map[string]*projectSnapshot
+	closedWorkspaces  map[string]bool
 
 	renderedProjects map[string]bool // tracks which projects have DOM divs
 
@@ -778,6 +779,10 @@ func (sm *StateManager) CloseProject(sessionID string) ([]Application, error) {
 		}
 		thread.Archived = true
 	}
+	if s.closedWorkspaces == nil {
+		s.closedWorkspaces = make(map[string]bool)
+	}
+	s.closedWorkspaces[s.ActiveProject] = true
 	apps := s.Apps
 	s.Apps = nil
 	s.SelectedIndex = 0
@@ -805,6 +810,7 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 		return false
 	}
 
+	delete(s.closedWorkspaces, projectName)
 	if s.ActiveProject == projectName {
 		return true
 	}

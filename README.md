@@ -184,6 +184,9 @@ Restart existing agent sessions to load the updated tools and instructions.
 ### Finish a project thread
 
 Press **Ctrl+;** for a searchable dialog with the current thread’s actions.
+**Close thread** closes its panels and removes its shortcut number, including on
+the Base branch. Files, branches, and worktrees stay on disk. Select the project
+or worktree again to reopen it.
 You can also right-click a worktree thread or open its **⋯** menu, then choose
 **Merge thread…**, **Squash thread…**, or **Create draft PR…**. Each opens its
 own confirmation dialog. In Ctrl+;, search for “merge” and press Enter to open

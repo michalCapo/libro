@@ -397,8 +397,10 @@
     ];
   }
   function threadActionPalette() {
-    const project = (window.__libroProjects || []).find(p => p.kind === 'worktree' && p.name + '/' + p.branch === window.__libroActiveProject);
-    if (!project) { window.__libroShowToast?.('Select a worktree thread first', '', 2000); return; }
+    const project = (window.__libroProjects || []).find(p => (p.kind === 'worktree' ? p.name + '/' + p.branch : p.name) === window.__libroActiveProject);
+    if (!project) { window.__libroShowToast?.('Select a project thread first', '', 2000); return; }
+    const actions = project.kind === 'worktree' ? threadActions(project) : [];
+    actions.push({label:'Close thread', icon:'close', description:'Remove shortcut number; keep files, branch and worktree', run:() => call('project.close')});
     document.getElementById('thread-action-dialog')?.remove();
     const dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'thread-action-dialog'; dialog.setAttribute('aria-label', 'Thread actions');
     const searchBar = node('div', 'ws-command-search');
@@ -407,10 +409,10 @@
     const icon = node('i', 'material-icons-round', 'search'); icon.setAttribute('aria-hidden', 'true');
     searchBar.append(icon, search, dismiss); dialog.append(searchBar);
     const entries = node('div', 'ws-plugin-list');
-    threadActions(project).forEach(action => {
+    actions.forEach(action => {
       const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; entry.dataset.label = action.label.toLowerCase();
       const glyph = node('i', 'material-icons-round', action.icon); glyph.setAttribute('aria-hidden', 'true');
-      const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', action.label), node('small', '', project.branch)); entry.append(glyph, copy);
+      const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', action.label), node('small', '', action.description || project.branch || project.currentBranch || project.name)); entry.append(glyph, copy);
       entry.onclick = () => { dialog.close(); action.run(); }; entries.append(entry);
     });
     const empty = node('p', 'ws-palette-empty', 'No matching actions'); empty.hidden = true;
@@ -562,7 +564,7 @@
       if (!branches) return;
       const item = node('div', 'ws-project-item');
       const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button';
-      row.dataset.kind = 'worktree'; row.dataset.projectKey = project.name + '/' + project.branch;
+      row.dataset.kind = 'worktree'; row.dataset.closed = String(!!project.closed); row.dataset.projectKey = project.name + '/' + project.branch;
       row.setAttribute('aria-current', String(!!project.isActive));
       row.title = project.branch + ' — ' + project.path;
       const icon = node('i', 'material-icons-round', 'account_tree'); icon.setAttribute('aria-hidden', 'true');
@@ -589,7 +591,7 @@
     let index = 0;
     document.querySelectorAll('.ws-project-row:not([data-kind=project])').forEach(row => {
       const thread = row.dataset.kind === 'thread';
-      const available = !thread || row.parentElement.dataset.archived !== 'true';
+      const available = row.dataset.closed !== 'true' && (!thread || row.parentElement.dataset.archived !== 'true');
       const number = available && index < 9 ? String(++index) : '';
       row.dataset.projectShortcut = number;
       let badge = row.querySelector('.ws-project-shortcut');

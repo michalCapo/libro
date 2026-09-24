@@ -72,11 +72,17 @@ func TestCloseProjectOnlyClearsActiveProject(t *testing.T) {
 	if s.ActiveProject != "work" || len(s.Projects) != 2 {
 		t.Fatal("close changed the project list or active project")
 	}
+	if !s.closedWorkspaces["work"] {
+		t.Fatal("closed workspace still available for shortcuts")
+	}
 	if !sm.SwitchProject("test", "home") || len(s.Apps) != 1 || s.Apps[0].ID != "other" {
 		t.Fatal("close affected another project")
 	}
 	if !sm.SwitchProject("test", "work") || len(s.Apps) != 0 {
 		t.Fatal("closed panels restored on switching back")
+	}
+	if s.closedWorkspaces["work"] {
+		t.Fatal("reopened workspace still closed")
 	}
 	if apps, err := sm.CloseProject("missing"); err != nil || len(apps) != 0 {
 		t.Fatal("missing session returned panels")
