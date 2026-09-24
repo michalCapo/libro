@@ -262,6 +262,14 @@ install: ## Build and install Libro locally
 	# Create launcher symlink in bin dir
 	ln -sf "$$LIBRO_DIR/$$BIN_NAME" "$$INSTALL_DIR/$$BIN_NAME"
 	ok "Installed to $$LIBRO_DIR (symlink at $$INSTALL_DIR/$$BIN_NAME)"
+
+	# Preload offline dictation. A failed download is retried automatically on launch.
+	info "Preparing offline voice typing..."
+	if "$$LIBRO_DIR/$$BIN_NAME" voice install; then
+	    ok "Voice typing ready"
+	else
+	    info "Voice setup will retry when Libro opens."
+	fi
 	
 	# ---------------------------------------------------------------------------
 	# Desktop integration (Linux)

@@ -31,3 +31,7 @@ Project settings choose Application per thread (default) or Shared application. 
 ## Finish threads
 
 Worktree threads have a right-click / overflow menu with Merge thread, Squash thread, Create draft PR, Thread settings, and a separate Discard thread action. Finish thread is also in the command palette and supports an optional configurable shortcut. Merge, squash, and draft GitHub PR each have a dedicated review dialog showing the destination and changes. Successful local integration automatically removes the worktree, thread, and branch. PR creation keeps the thread. New worktrees record their source branch. Dirty checkouts, stale previews, and conflicts block cleanup. Discard removes the thread, branch, and worktree together, without a typed confirmation.
+
+## Voice typing
+
+Hold Tab or the microphone beside the agent tab to dictate. Release to insert the transcript into the selected terminal (or the agent when a browser is selected) without submitting it. Escape, window blur, or switching threads cancels dictation. Libro automatically installs the local sherpa-onnx engine and multilingual Whisper tiny model during `make install` or first launch. After the download, transcription runs locally and works offline.

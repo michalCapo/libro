@@ -496,6 +496,8 @@ func Run(assets embed.FS, desktop bool) error {
 	registerSettingsActions(app)
 	registerFilesActions(app)
 	registerNotesActions(app)
+	registerVoiceRoutes(app)
+	voice.prepare()
 
 	// Open add dialog
 	registerAction(app, "app.dialog.open", func(_ *r.Context) string {

@@ -855,6 +855,7 @@
   }
   syncWorkspaceShortcuts();
   function shortcut(event) {
+    if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) return 'Tab';
     const key = event.key === '+' ? '=' : event.key;
     if (!/^[a-z0-9=,.;\[\]\-]$/i.test(key) || !(event.ctrlKey || event.altKey || event.metaKey)) return '';
     return (event.ctrlKey ? 'Ctrl+' : '') + (event.altKey ? 'Alt+' : '') + (event.shiftKey && event.key !== '+' ? 'Shift+' : '') + (event.metaKey ? 'Meta+' : '') + key.toUpperCase();
@@ -872,6 +873,7 @@
   }
   function updateToolHints() {
     syncWorkspaceShortcuts();
+    window.libroVoice?.refresh();
     document.querySelectorAll('.ws-tool-rail button, .ws-sidebar button.ws-button').forEach(button => {
       const name = button.getAttribute('aria-label');
       const plugin = window.__libroPlugins.find(plugin => plugin.id === button.dataset.toolId);
@@ -905,7 +907,7 @@
   window.addEventListener('keydown', event => {
     const input = event.target.closest?.('[data-tool-key]');
     if (input) {
-      if (event.key === 'Tab') return;
+      if (event.key === 'Tab' && (input.dataset.toolKey !== 'voice' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey)) return;
       event.preventDefault(); event.stopImmediatePropagation();
       if (event.key === 'Backspace' || event.key === 'Delete') input.value = '';
       else if (shortcut(event)) input.value = shortcut(event);
@@ -924,6 +926,13 @@
       return;
     }
     if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open], #libro-confirm-popover')) return;
+    if (binding && binding === toolKeys.voice) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      const grid = activeGrid();
+      const agent = grid && frames(grid).find(frame => frame.dataset.dock === 'center');
+      if (!event.repeat && agent) void window.libroVoice?.begin(agent.dataset.appId, {code:event.code});
+      return;
+    }
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
       if (event.repeat) return;
       const now = performance.now();
@@ -1253,9 +1262,11 @@
           picker.append(option);
         });
         sizes.append(trigger, picker); group.append(tab); if (dock !== 'bottom') group.append(sizes); tabs.append(group);
+        if (dock === 'center') window.libroVoice?.mount(group, id);
       });
     }
     tabs.hidden = signature.length === 0;
+    window.libroVoice?.refresh();
   }
   function toggle(zone) {
     if (zone !== 'projects') return;

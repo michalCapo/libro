@@ -449,7 +449,7 @@ function isWorkspaceShortcut(input) {
       (input.code === 'Backquote' || input.key === '`')) return true
   const key = input.key === '+' ? '=' : input.key || ''
   const binding = (input.control ? 'Ctrl+' : '') + (input.alt ? 'Alt+' : '') +
-    (input.shift && input.key !== '+' ? 'Shift+' : '') + (input.meta ? 'Meta+' : '') + key.toUpperCase()
+    (input.shift && input.key !== '+' ? 'Shift+' : '') + (input.meta ? 'Meta+' : '') + (key === 'Tab' ? 'Tab' : key.toUpperCase())
   return workspaceShortcuts.has(binding) || binding === 'Ctrl+A' ||
     (/^Ctrl\+[1-9]$/.test(binding) ||
       (!!input.control && !input.meta && !input.alt && !input.shift && /^Digit[1-9]$/.test(input.code || '')))
@@ -664,6 +664,9 @@ function createWindow() {
   mainWindow.webContents.on('will-attach-webview', (_event, preferences, params) => {
     configureLibroSession(session.fromPartition(params.partition || preferences.partition))
   })
+
+  // Dictation records in the trusted workspace, not in an embedded web page.
+  configureLibroSession(mainWindow.webContents.session)
 
   if (!instance) mainWindow.maximize()
   mainWindow.show()
@@ -893,12 +896,26 @@ app.on('web-contents-created', (event, contents) => {
   }
 
   contents.on('before-input-event', (e, input) => {
+    if (input.type === 'keyUp' && contents !== mainWindow?.webContents) {
+      mainWindow?.webContents.executeJavaScript(`
+        window.dispatchEvent(new KeyboardEvent('keyup', {
+          key: ${JSON.stringify(input.key)}, code: ${JSON.stringify(input.code || '')},
+          bubbles: true, cancelable: true
+        }));
+      `).catch(() => {})
+      return
+    }
     if (input.type !== 'keyDown' && input.type !== 'rawKeyDown') return
 
     const key = (input.key || '').toLowerCase()
     const code = (input.code || '').toLowerCase()
     const isWebview = contents.getType() === 'webview'
     const isMainWindowContents = !!(mainWindow && !mainWindow.isDestroyed() && contents.id === mainWindow.webContents.id)
+
+    // A browser tool can keep focus while dictation runs in the workspace.
+    if (!isMainWindowContents && key === 'escape') {
+      mainWindow?.webContents.executeJavaScript('window.libroVoice?.cancel()').catch(() => {})
+    }
 
     // Native terminals live in the host BrowserWindow. Non-Super input should
     // go straight to the renderer/xterm instead of synchronously traversing the

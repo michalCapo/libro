@@ -2,10 +2,12 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	libro "libro/internal"
 	"libro/internal/version"
@@ -48,6 +50,14 @@ func main() {
 	var err error
 	if len(args) > 0 {
 		switch args[0] {
+		case "voice":
+			if len(args) != 2 || args[1] != "install" {
+				err = fmt.Errorf("usage: libro voice install")
+			} else {
+				ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+				defer cancel()
+				err = libro.InstallVoice(ctx)
+			}
 		case "issues":
 			err = libro.RunIssuesCLI(args[1:], os.Stdout)
 		case "application":

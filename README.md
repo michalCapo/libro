@@ -30,6 +30,25 @@ Works on Linux, macOS, and Windows.
 
 Note: Libro starts the assistants for you, but the assistants themselves (Codex, Claude, Pi, OpenCode) must be installed on your computer first.
 
+### Voice typing
+
+Hold **Tab**, or the microphone beside the agent tab, and speak. Release
+to insert the transcript into the selected terminal (or the agent when a browser is selected). Review it and press Enter to send.
+Escape, switching threads, or leaving the window cancels dictation. Recordings
+are limited to 60 seconds. Change the shortcut in Settings → Shortcuts.
+
+Libro automatically downloads its local speech engine and multilingual Whisper
+tiny model on first launch (about 135 MB on Linux x64). `make install` prepares
+them during installation. Setup runs in the background and the microphone shows
+its status; click it to retry a failed download. Allow microphone access when
+your system asks. Once setup finishes, dictation works offline. Audio stays on
+your computer and temporary recordings are deleted after transcription.
+
+Voice files are stored in Libro's data directory under `voice/`, shared by its
+instances. `libro voice install` can also prepare them ahead of time. The engine
+is [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), using Whisper tiny with
+automatic language detection. No Python, compiler, API key, or GPU is required.
+
 ## Development instances
 
 Run `make dev` (or `go run . --dev`) while your installed Libro stays open.
