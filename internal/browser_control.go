@@ -10,6 +10,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+
+	r "github.com/michalCapo/g-sui/ui"
+	"libro/internal/components"
 	"os"
 	"path/filepath"
 	"time"
@@ -78,15 +82,15 @@ func BrowserCommand(command json.RawMessage) (json.RawMessage, error) {
 	return reply.Result, nil
 }
 
-const browserHelp = `Control the user's existing Libro browser panel. Never launch another browser to check work.
-Use the libro_browser MCP browser tool with action:"list" first, then choose a returned panel ID.
+const browserHelp = `Control your thread's Libro browser panels. Never launch another browser outside Libro to check work.
+Use the libro_browser MCP browser tool with action:"list" first, then choose a returned panel ID. If none exists, use action:"open" with an optional url to create one in your thread.
 Libro panels are exposed by this tool, not by cua, the shared browser MCP, or the browser named iab. An unavailable iab or an empty shared-browser list does not mean Libro's browser is unavailable. Use this tool or the Libro CLI below instead.
 Run: libro browser list
 Run: libro browser '{"action":"click","panel":"PANEL_ID","x":120,"y":80}'
-Actions: list, status, select_panel, snapshot, wait, diagnostics, screenshot, move, click, down, up, scroll, text, key, navigate, back, forward, reload, select_option, check, upload, download, downloads, cancel_download, pause, stop.
-All actions except list/status/pause/stop require panel. Use an ID from list; never guess a panel.
+Actions: list, open, status, select_panel, snapshot, wait, diagnostics, screenshot, move, click, down, up, scroll, text, key, navigate, back, forward, reload, select_option, check, upload, download, downloads, cancel_download, pause, stop.
+All actions except list/open/status/pause/stop require panel. Use an ID from list; never guess a panel.
 Only browser panels belonging to your Libro thread are available. Other threads and their browser data are isolated.
-Select_panel shows an existing panel in your thread. The user must show that thread first.
+Background panels remain controllable even when visible:false or another thread is shown. No user thread switch is required. Select_panel only reveals a panel when its thread is already shown.
 Snapshot returns accessibility roles/names and element refs; format:"dom" returns DOM structure. Refs expire on navigation. Selector/ref lookup is main-document scoped (including open shadow roots).
 Click/move/down/up/scroll accept a ref or CSS selector, or viewport x/y. Scroll also uses deltaY and optional deltaX; positive deltas scroll up/left.
 Wait accepts selector/ref with state visible/hidden/attached/detached, or exact url with state interactive/complete; timeoutMs is 0..20000 (default 10000).
@@ -172,7 +176,7 @@ func RunBrowserMCP(in io.Reader, out io.Writer) error {
 			for _, name := range []string{"x", "y", "deltaX", "deltaY", "timeoutMs"} {
 				properties[name] = map[string]any{"type": "integer"}
 			}
-			properties["action"] = map[string]any{"type": "string", "enum": []string{"list", "status", "select_panel", "snapshot", "wait", "diagnostics", "screenshot", "move", "click", "down", "up", "scroll", "text", "key", "navigate", "back", "forward", "reload", "select_option", "check", "upload", "download", "downloads", "cancel_download", "pause", "stop"}}
+			properties["action"] = map[string]any{"type": "string", "enum": []string{"list", "open", "status", "select_panel", "snapshot", "wait", "diagnostics", "screenshot", "move", "click", "down", "up", "scroll", "text", "key", "navigate", "back", "forward", "reload", "select_option", "check", "upload", "download", "downloads", "cancel_download", "pause", "stop"}}
 			for _, name := range []string{"fullPage", "clear", "checked"} {
 				properties[name] = map[string]any{"type": "boolean"}
 			}
@@ -215,4 +219,49 @@ func RunBrowserMCP(in io.Reader, out io.Writer) error {
 		}
 	}
 	return scanner.Err()
+}
+
+// registerBrowserControl opens a panel in the caller's thread without selecting it.
+func registerBrowserControl(app *r.App) {
+	registerAction(app, "browser.agent.open", func(ctx *r.Context) string {
+		data := ctx.WsData()
+		request, _ := data["request"].(string)
+		scope, _ := data["scope"].(string)
+		address, _ := data["url"].(string)
+		js, panel, err := openAgentBrowser(extractSID(ctx), scope, address)
+		reply := map[string]any{"result": map[string]string{"id": panel}}
+		if err != nil {
+			reply["error"] = err.Error()
+		}
+		encoded, _ := json.Marshal(reply)
+		return js + fmt.Sprintf("window.libroWorkspace.applicationResult(%s,%s);", components.JSString(request), encoded)
+	})
+}
+
+func openAgentBrowser(sid, scope, address string) (string, string, error) {
+	if address == "" {
+		address = "about:blank"
+	}
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return "", "", errors.New("use an http, https, or about:blank URL")
+	}
+	if address != "about:blank" && (parsed.Host == "" || parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", "", errors.New("use an http, https, or about:blank URL")
+	}
+	workspace := ""
+	for _, project := range sm.GetAllRunningApps(sid) {
+		if fmt.Sprintf("%x", sha256.Sum256([]byte(project.Name))) == scope {
+			workspace = project.Name
+			break
+		}
+	}
+	if workspace == "" {
+		return "", "", errors.New("browser thread not found; restart the agent panel")
+	}
+	panel, index, err := sm.insertThreadBrowser(sid, workspace, address, DBDefaultToolPanelWidth())
+	if err != nil {
+		return "", "", err
+	}
+	return insertAppJS(renderAppFrame(panel, index, false, sid), false, workspace), panel.ID, nil
 }

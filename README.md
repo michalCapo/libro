@@ -158,8 +158,9 @@ feature on or off. It is **On by default** and persists across restarts. Turning
 it off immediately cancels browser work and managed downloads, stops diagnostics,
 and blocks CLI/MCP commands. Enable it in Settings to allow browser control again.
 
-Agents can inspect and operate a browser panel that is already open in Libro,
-using its current page and login session. Libro does not launch another browser.
+Agents can inspect and operate their own thread's browser panels, using their
+current pages and login sessions. The `open` action creates a panel in that thread
+when needed. Libro does not launch another browser.
 They can inspect accessibility snapshots, click and type, navigate, capture
 screenshots, upload files, and manage agent-started downloads.
 
@@ -175,16 +176,17 @@ If an agent reports "Browser is not available: iab" or "No browser is available"
 tell it to call the `libro_browser` tool with `{"action":"list"}`, or run
 `libro browser list`. Those errors refer to a different browser connection.
 
-The agent first uses `list`, chooses the requested panel ID, then sends actions
-with that ID. The tool description tells it to use the existing panel to check
-work. Missing or closed panels return an error. Actions show a hidden panel in
-the current project and wait up to five seconds for its layout and guest to become
-available. `visible` reports its current layout, not window focus. Use
-`select_panel` to show a panel explicitly, and `wait` to wait for a page load. Switch projects in
-Libro before selecting a panel in another project.
+The agent first uses `list`, chooses a panel ID, then sends actions with that ID.
+If no panel exists, it uses `open` with an optional URL. Each thread has separate
+panels, browser storage, and command queues. Agents can work at the same time.
+Hidden panels remain controllable: commands do not switch threads or take focus
+from your work. `visible` reports layout, not whether automation is available.
+Use `select_panel` to reveal a panel when its thread is already shown, and `wait`
+to wait for a page load. Missing or closed panels return an error.
 
 Available actions:
 
+- `open`: create a browser in the calling thread; optional `url` defaults to `about:blank`.
 - `list`: panel IDs, session IDs, titles, URLs, and visibility.
 - `status`, `pause`, `stop`: read control state, cancel queued work, or also cancel
   managed downloads. Only the user can resume via the toolbar.

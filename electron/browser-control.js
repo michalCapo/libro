@@ -40,10 +40,7 @@ async function performAction(target, command, signal) {
   page.check(signal)
   const { action } = command
   if (action === 'screenshot') {
-    const viewport = await target.executeJavaScriptInIsolatedWorld(998, [{code:'({width:innerWidth,height:innerHeight})'}])
-    const capture = await target.capturePage()
-    const image = capture.resize({width:viewport.width,height:viewport.height})
-    return { mimeType: 'image/png', data: image.toPNG({scaleFactor:1}).toString('base64'), ...image.getSize() }
+    return page.pageAction(target, command, signal)
   }
   if (action === 'navigate') {
     const url = new URL(command.url)
@@ -56,7 +53,7 @@ async function performAction(target, command, signal) {
     if (action === 'forward' && history.canGoForward()) history.goForward()
   } else if (action === 'text') {
     if (typeof command.text !== 'string' || command.text.length > 100000) throw new Error('text must be a string up to 100000 characters')
-    await target.insertText(command.text)
+    await target.debugger.sendCommand('Input.insertText', {text:command.text})
   } else if (action === 'key') {
     if (typeof command.key !== 'string' || !command.key || command.key.length > 40) throw new Error('key is required')
     const modifiers = command.modifiers || []
@@ -66,8 +63,16 @@ async function performAction(target, command, signal) {
     try {
       await target.executeJavaScript('window.__libroKeyboardPassthrough = true')
       page.check(signal)
-      target.sendInputEvent({ type: 'keyDown', keyCode: command.key, modifiers })
-      target.sendInputEvent({ type: 'keyUp', keyCode: command.key, modifiers })
+      const aliases = {Return:'Enter',Esc:'Escape',Left:'ArrowLeft',Right:'ArrowRight',Up:'ArrowUp',Down:'ArrowDown',Space:' ',Spacebar:' '}
+      const key = aliases[command.key] || command.key
+      const codes = {Enter:13,Tab:9,Escape:27,Backspace:8,Delete:46,ArrowLeft:37,ArrowUp:38,ArrowRight:39,ArrowDown:40,Home:36,End:35,PageUp:33,PageDown:34,Insert:45,' ':32}
+      const virtualCode = codes[key] || (/^F([1-9]|1[0-9]|2[0-4])$/.test(key) ? 111 + Number(key.slice(1)) : key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0)
+      const flags = modifiers.reduce((value, modifier) => value | {alt:1,control:2,meta:4,shift:8}[modifier], 0)
+      const text = flags & 7 ? undefined : key === 'Enter' ? '\r' : key.length === 1 ? key : undefined
+      const event = {key,windowsVirtualKeyCode:virtualCode,modifiers:flags}
+      await target.debugger.sendCommand('Input.dispatchKeyEvent', {type:'keyDown',...event,...(text ? {text} : {})})
+      page.check(signal)
+      await target.debugger.sendCommand('Input.dispatchKeyEvent', {type:'keyUp',...event})
       // Let native input reach the page before restoring Libro shortcuts.
       await settleInput(target)
     } finally {
@@ -171,17 +176,23 @@ function createController(getWindow, fromId, options = {}) {
           page.check(signal)
           return options.scope ? allPanels.filter(panel => panel.scope === options.scope) : allPanels
         }
+        if (command.action === 'open') {
+          if (!options.scope) throw new Error('Browser control requires a Libro thread')
+          const opened = await win.webContents.executeJavaScript(`window.libroWorkspace.browserOpen(${JSON.stringify({scope:options.scope,url:command.url})})`)
+          page.check(signal)
+          command = {...command, panel:opened.id}
+        }
         const panels = await readPanels()
         if (command.action === 'list') return panels.map(({contentsId, ...panel}) => ({...panel,paused}))
         let panel = panels.find(panel => panel.id === command.panel)
-        if (!panel) throw new Error('Browser panel not found; use list first')
-        if (command.action === 'select_panel' || !panel.visible) {
+        if (!panel && command.action !== 'open') throw new Error('Browser panel not found; use list first')
+        if (command.action === 'select_panel') {
           const selected = await win.webContents.executeJavaScript(`(() => {
             const id=${JSON.stringify(command.panel)};
             const frame=document.getElementById('frame-'+id);
             if(!frame || !window.libroWorkspace) return false;
             const project=frame.closest('[data-workspace-project]');
-            if(project && project.dataset.workspaceProject!==window.__libroActiveProject) throw new Error('Switch to the panel project first');
+            if(project && project.dataset.workspaceProject!==window.__libroActiveProject) return true;
             window.libroWorkspace.select(id);return true;
           })()`)
           page.check(signal)
@@ -194,10 +205,10 @@ function createController(getWindow, fromId, options = {}) {
         let target
         for (;;) {
           page.check(signal)
-          if (!panel) throw new Error('Browser panel not found; use list first')
-          target = panel.contentsId ? fromId(panel.contentsId) : null
+          if (!panel && command.action !== 'open') throw new Error('Browser panel not found; use list first')
+          target = panel?.contentsId ? fromId(panel.contentsId) : null
           if (target && !target.isDestroyed() && (target.getType() !== 'webview' || target.hostWebContents !== win.webContents)) throw new Error('Browser panel is no longer available')
-          if (panel.visible && target && !target.isDestroyed()) break
+          if (target && !target.isDestroyed()) break
           if (Date.now() >= deadline) throw new Error('Browser panel did not become available within 5 seconds')
           await delay(100, undefined, {signal})
           panel = (await readPanels()).find(panel => panel.id === command.panel)
@@ -206,15 +217,26 @@ function createController(getWindow, fromId, options = {}) {
           targets.add(target)
           target.once('destroyed', () => targets.delete(target))
         }
+        if (command.action === 'open') return {id:panel.id, scope:panel.scope, visible:panel.visible}
         if (command.action === 'select_panel') return {ok:true}
         if (target.isLoadingMainFrame() && !['wait','diagnostics','downloads','cancel_download'].includes(command.action)) throw new Error('Page is loading; use wait to await readiness')
         await page.connect(target,signal)
         page.check(signal)
+        // Hidden docks may have a zero-sized native viewport. Give background
+        // automation a stable viewport without selecting a thread or stealing focus.
+        if (!panel.visible) {
+          if (!target.__libroBackgroundViewport) {
+            const size = await target.executeJavaScriptInIsolatedWorld(998, [{code:'({width:innerWidth,height:innerHeight})'}])
+            await target.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {width:size.width || 1280,height:size.height || 800,deviceScaleFactor:1,mobile:false})
+            target.__libroBackgroundViewport = true
+          }
+        } else if (target.__libroBackgroundViewport) {
+          await target.debugger.sendCommand('Emulation.clearDeviceMetricsOverride')
+          delete target.__libroBackgroundViewport
+        }
         if (['snapshot','wait','diagnostics','select_option','check','upload','download','downloads','cancel_download'].includes(command.action) || (command.action==='screenshot' && (command.fullPage || command.ref || command.selector))) {
           return page.pageAction(target,command,signal,options.downloadDir)
         }
-        win.focus()
-        target.focus()
         if (command.action === 'navigate') navigating = target
         try { return await performAction(target, command, signal) } finally { if (navigating === target) navigating = null }
       }

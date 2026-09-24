@@ -1028,3 +1028,26 @@ func (sm *StateManager) GetProjectPath(sessionID, projectName string) string {
 	}
 	return ""
 }
+
+// insertThreadBrowser preserves the active thread and both threads' selections.
+func (sm *StateManager) insertThreadBrowser(sid, workspace, address string, width Width) (Application, int, error) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	state := sm.states[sid]
+	if state == nil {
+		return Application{}, 0, fmt.Errorf("browser thread not found")
+	}
+	apps := &state.Apps
+	if workspace != state.ActiveProject {
+		snapshot := state.snapshots[workspace]
+		if snapshot == nil {
+			return Application{}, 0, fmt.Errorf("browser thread not found")
+		}
+		apps = &snapshot.Apps
+	}
+	sm.nextID++
+	panel := Application{ID: fmt.Sprintf("app-%d", sm.nextID), Type: AppTypeURL, PluginID: "browser", Dock: "right", URL: address, Width: width, Name: "Browser"}
+	index := len(*apps)
+	*apps = append(*apps, panel)
+	return panel, index, nil
+}

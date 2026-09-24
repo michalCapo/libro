@@ -22,7 +22,7 @@ test('mouse validates bounds and sends acknowledged CSS coordinates', async () =
   await assert.rejects(performAction(target,{action:'navigate',url:'file:///tmp/test'}),/http/)
 })
 
-test('controller requires an existing visible owned webview', async () => {
+test('controller requires an existing owned webview', async () => {
   const host = {executeJavaScript:async () => [{id:'panel',contentsId:4,visible:true}]}
   let focused = false
   const win = {isDestroyed:()=>false,webContents:host,focus:()=>{focused=true}}
@@ -211,7 +211,8 @@ function panelFixture() {
   }}
   const target = Object.assign(new EventEmitter(), {
     isDestroyed:()=>false, getType:()=> 'webview', hostWebContents:host,
-    isLoadingMainFrame:()=>false, focus:()=>{}, session:new EventEmitter(),
+    isLoadingMainFrame:()=>false, focus:()=>{assert.fail('must not steal focus')}, session:new EventEmitter(),
+    executeJavaScriptInIsolatedWorld:async()=>({width:800,height:600}),
     debugger:Object.assign(new EventEmitter(), {isAttached:()=>true, sendCommand:async()=>({})}),
   })
   const win = {isDestroyed:()=>false, webContents:host, focus:()=>{}}
@@ -219,18 +220,19 @@ function panelFixture() {
     get selections() {return selections}, set panels(value) {panels=value}}
 }
 
-test('hidden panel selection waits for layout and a replacement guest', async () => {
+test('hidden panel waits for a replacement guest without selecting its thread', async () => {
   const fixture = panelFixture()
   let delivered = false
-  fixture.target.insertText = async () => {delivered=true}
+  fixture.target.debugger.sendCommand = async method => {if(method==='Input.insertText') delivered=true;return {}}
   fixture.panels = [{id:'panel',scope:'a'.repeat(64),visible:false}]
   const action = fixture.control({action:'text',panel:'panel',text:'hello'})
   await new Promise(resolve=>setImmediate(resolve))
-  assert.equal(fixture.selections,1)
+  assert.equal(fixture.selections,0)
   assert.equal(delivered,false)
-  fixture.panels = [{id:'panel',scope:'a'.repeat(64),contentsId:4,visible:true}]
+  fixture.panels = [{id:'panel',scope:'a'.repeat(64),contentsId:4,visible:false}]
   assert.deepEqual(await action,{ok:true})
   assert.equal(delivered,true)
+  assert.equal(fixture.selections,0)
 })
 
 test('select_panel works while hidden and waits until usable', async () => {
@@ -244,7 +246,8 @@ test('select_panel works while hidden and waits until usable', async () => {
 
 test('pause cancels panel readiness without delivering input', async () => {
   const fixture = panelFixture()
-  fixture.target.insertText = async () => {assert.fail('input after pause')}
+  fixture.panels = [{id:'panel',scope:'a'.repeat(64),visible:false}]
+  fixture.target.debugger.sendCommand = async () => {assert.fail('input after pause')}
   const action = fixture.control({action:'text',panel:'panel',text:'hello'})
   const rejected = assert.rejects(action,/cancelled|stopped|aborted/)
   await new Promise(resolve=>setImmediate(resolve))
@@ -267,6 +270,73 @@ test('mouse delivery failures do not return ok or send the remaining events', as
 
 test('panel readiness has a bounded timeout', async () => {
   const fixture = panelFixture()
+  fixture.panels = [{id:'panel',scope:'a'.repeat(64),visible:false}]
   await assert.rejects(fixture.control({action:'select_panel',panel:'panel'}),/did not become available within 5 seconds/)
   assert.equal(fixture.selections,1)
+})
+
+test('open uses only the authenticated scope and returns a hidden panel', async () => {
+ const {createScopedController} = require('./browser-control')
+ const scope = 'a'.repeat(64)
+ const scripts = []
+ const host = {executeJavaScript:async script => {
+  scripts.push(script)
+  if(script.includes('browserOpen')) return {id:'new'}
+  return [{id:'new',scope,contentsId:1,visible:false}]
+ }}
+ const target = {isDestroyed:()=>false,getType:()=> 'webview',hostWebContents:host,once:()=>{}}
+ const control = createScopedController(()=>({isDestroyed:()=>false,webContents:host}),()=>target)
+ const panel = await control({action:'open',scope:'b'.repeat(64),url:'http://localhost:3000'},scope)
+ assert.deepEqual(panel,{id:'new',scope,visible:false})
+ assert.match(scripts[0],new RegExp(scope))
+ assert.ok(!scripts[0].includes('b'.repeat(64)))
+ assert.ok(scripts.every(script=>!script.includes('libroWorkspace.select')))
+})
+
+test('background keyboard input uses guest CDP without host focus', async () => {
+ const events=[]
+ const target={
+  isDestroyed:()=>false,
+  executeJavaScript:async()=>false,
+  executeJavaScriptInIsolatedWorld:async()=>null,
+  debugger:{sendCommand:async(method,event)=>events.push({method,...event})},
+  sendInputEvent:()=>assert.fail('native keyboard needs host focus'),
+ }
+ await performAction(target,{action:'key',key:'Enter'})
+ assert.equal(events[0].method,'Input.dispatchKeyEvent')
+ assert.equal(events[0].windowsVirtualKeyCode,13)
+ assert.equal(events[0].text,'\r')
+ await performAction(target,{action:'key',key:'a',modifiers:['control']})
+ assert.equal(events[2].modifiers,2)
+ assert.equal(events[2].text,undefined)
+ await performAction(target,{action:'text',text:'hello'})
+ assert.deepEqual(events.at(-1),{method:'Input.insertText',text:'hello'})
+})
+
+test('two background threads deliver input independently without selecting or focusing', async () => {
+ const {createScopedController} = require('./browser-control')
+ const scopes = ['a'.repeat(64),'b'.repeat(64)]
+ const input = [[],[]]
+ let release
+ const blocked = new Promise(resolve=>{release=resolve})
+ const host = {executeJavaScript:async script=>{
+  assert.ok(!script.includes('libroWorkspace.select'))
+  return scopes.map((scope,i)=>({id:String(i),scope,contentsId:i+1,visible:false}))
+ }}
+ const targets = scopes.map((_,i)=>Object.assign(new EventEmitter(),{
+  isDestroyed:()=>false,getType:()=> 'webview',hostWebContents:host,isLoadingMainFrame:()=>false,
+  session:new EventEmitter(),executeJavaScriptInIsolatedWorld:async()=>({width:800,height:600}),
+  focus:()=>assert.fail('guest focus'),
+  debugger:Object.assign(new EventEmitter(),{isAttached:()=>true,sendCommand:async(method,event)=>{
+   if(method==='Input.insertText') {if(i===0) await blocked;input[i].push(event.text)}
+   return {}
+  }}),
+ }))
+ const control=createScopedController(()=>({isDestroyed:()=>false,webContents:host,focus:()=>assert.fail('window focus')}),id=>targets[id-1])
+ const first=control({action:'text',panel:'0',text:'first'},scopes[0])
+ await control({action:'text',panel:'1',text:'second'},scopes[1])
+ assert.deepEqual(input,[[],['second']])
+ release()
+ await first
+ assert.deepEqual(input,[['first'],['second']])
 })

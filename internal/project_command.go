@@ -34,6 +34,7 @@ func setProjectCommand(path, command string) error {
 
 func registerProjectCommandActions(app *r.App) {
 	registerApplicationControl(app)
+	registerBrowserControl(app)
 	registerAction(app, "project.command.save", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		name, _ := ctx.WsData()["name"].(string)

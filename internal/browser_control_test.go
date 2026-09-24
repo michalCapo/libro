@@ -47,7 +47,7 @@ func TestBrowserMCPDiscovery(t *testing.T) {
 		t.Fatal("issues tool missing status or id")
 	}
 	tool := discovery.Result.Tools[0]
-	if tool.Name != "browser" || !strings.Contains(tool.Description, "existing Libro browser panel") || tool.InputSchema.Properties["panel"] == nil {
+	if tool.Name != "browser" || !strings.Contains(tool.Description, "thread's Libro browser panels") || tool.InputSchema.Properties["panel"] == nil {
 		t.Fatal("tool must explain and target existing panels")
 	}
 	for _, field := range []string{"ref", "selector", "timeoutMs", "fullPage", "checked", "files", "values", "downloadId"} {
@@ -99,5 +99,37 @@ func TestBrowserScopeFollowsThreadOwner(t *testing.T) {
 	}
 	if first == browserScope("test", "missing") {
 		t.Fatal("unknown panel inherited active scope")
+	}
+}
+
+func TestOpenAgentBrowserInBackgroundThread(t *testing.T) {
+	original := sm
+	sm = NewStateManager()
+	t.Cleanup(func() { sm = original })
+	sm.states["test"] = &AppState{
+		ActiveProject: "visible", Threads: []Thread{{ID: "visible"}, {ID: "background"}},
+		Apps:      []Application{{ID: "visible-agent"}},
+		snapshots: map[string]*projectSnapshot{"background": {Apps: []Application{{ID: "background-agent"}}}},
+	}
+	scope := browserScope("test", "background-agent")
+	js, id, err := openAgentBrowser("test", scope, "http://localhost:3000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := sm.Get("test")
+	if state.ActiveProject != "visible" || len(state.Apps) != 1 || state.SelectedIndex != 0 {
+		t.Fatal("changed visible thread")
+	}
+	if browserScope("test", id) != scope {
+		t.Fatal("browser created in wrong thread")
+	}
+	if !strings.Contains(js, "webview-"+id) {
+		t.Fatal("browser was not rendered")
+	}
+	if _, _, err := openAgentBrowser("test", "unknown", "about:blank"); err == nil {
+		t.Fatal("unknown scope accepted")
+	}
+	if _, _, err := openAgentBrowser("test", scope, "file:///private"); err == nil {
+		t.Fatal("invalid URL accepted")
 	}
 }
