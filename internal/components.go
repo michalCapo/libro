@@ -983,11 +983,6 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			OnClick(r.JS(consoleScript)).
 			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("code"))
 
-		agentControl := r.Button(btnCls).Attr("type", "button").Attr("data-browser-control", "").
-			Attr("title", "Pause agent browser control").Attr("aria-label", "Pause agent browser control").Attr("aria-pressed", "false").
-			OnClick(r.JS(`if(window.__libroBrowserControlPause)window.__libroBrowserControlPause('toggle')`)).
-			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("pause"))
-
 		menuID := "browser-actions-" + app.ID
 		menu := r.Div("ws-browser-menu").ID(menuID).Attr("popover", "auto").
 			Attr("role", "group").Attr("aria-label", "Browser actions")
@@ -996,7 +991,6 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		for _, action := range []struct {
 			label, shortcut, script, mode, group string
 		}{
-			{"Stop agent browser work", "", `if(window.__libroBrowserControlPause)window.__libroBrowserControlPause('stop')`, "", "Agent control"},
 			{"Reload", "R", fmt.Sprintf(`window.__libroWvReload(%s)`, components.JSString(app.ID)), "", "Browser"},
 			{"Copy URL", "", copyURLScript, "", "Browser"},
 			{"Open browser console", "", consoleScript, "", "Browser"},
@@ -1042,7 +1036,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();if(window.__libroNavigateAddress(%s,event.target.value))event.target.blur();}`, components.JSString(app.ID))))
 
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
-			Render(backBtn, forwardBtn, urlInput, copyBtn, consoleBtn, agentControl, moreBtn, menu)
+			Render(backBtn, forwardBtn, urlInput, copyBtn, consoleBtn, moreBtn, menu)
 	} else if app.Type == AppTypeTerminal {
 		labelText := workspaceAppName(app)
 
@@ -1179,7 +1173,6 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			Attr("data-sid", sid).
 			Attr("src", webviewSrc).
 			Attr("partition", "persist:libro-"+browserScope(sid, app.ID)).
-			Attr("data-browser-scope", browserScope(sid, app.ID)).
 			Attr("allow", "microphone; camera; display-capture; speaker-selection; autoplay; clipboard-read; clipboard-write; fullscreen").
 			Attr("allowpopups", "").
 			Attr("style", "display:none;width:100%;height:100%")

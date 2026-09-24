@@ -49,7 +49,7 @@ func IssuesCommand(command json.RawMessage) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return BrowserCommand(payload)
+	return desktopCommand(payload)
 }
 
 // RunIssuesCLI provides issue management for agents without MCP support.

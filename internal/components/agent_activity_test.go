@@ -47,8 +47,8 @@ func TestAgentLaunchIntegration(t *testing.T) {
 			if !strings.Contains(command, " --help") || activity.kind != kind {
 				t.Fatalf("launch lost arguments or identity: %s", command)
 			}
-			if kind != "opencode" && !strings.Contains(command, map[string]string{"codex": "mcp_servers.libro_browser", "claude": "--mcp-config", "pi": "--append-system-prompt"}[kind]) {
-				t.Fatal("browser discovery missing")
+			if kind != "opencode" && !strings.Contains(command, map[string]string{"codex": "mcp_servers.libro", "claude": "--mcp-config", "pi": "--append-system-prompt"}[kind]) {
+				t.Fatal("Libro discovery missing")
 			}
 			if kind == "codex" && !strings.Contains(command, `tui.terminal_title=["run-state","session-id","thread-name"]`) {
 				t.Fatal("Codex titles must include the session ID for resume")
@@ -61,15 +61,15 @@ func TestAgentLaunchIntegration(t *testing.T) {
 				if err := json.Unmarshal([]byte(strings.TrimPrefix(activity.env[0], "OPENCODE_CONFIG_CONTENT=")), &config); err != nil {
 					t.Fatal(err)
 				}
-				if config["mcp"].(map[string]any)["libro_browser"] == nil {
-					t.Fatal("browser MCP missing")
+				if config["mcp"].(map[string]any)["libro"] == nil {
+					t.Fatal("Libro MCP missing")
 				}
 				instructions := config["instructions"].([]any)
 				if len(instructions) != 2 || instructions[0] != "existing.md" {
 					t.Fatal("existing instructions lost")
 				}
 				data, err := os.ReadFile(instructions[1].(string))
-				if err != nil || string(data) != ApplicationInstructions {
+				if err != nil || string(data) != AgentInstructions {
 					t.Fatal("application startup instructions missing")
 				}
 				if config["theme"] != "existing" || len(config["plugin"].([]any)) != 2 {
@@ -101,8 +101,8 @@ func TestClaudeActivityHooks(t *testing.T) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(config.Permissions.Allow, []string{"mcp__libro_browser__browser", "mcp__libro_browser__application", "mcp__libro_browser__issues"}) {
-		t.Fatalf("browser permission = %v", config.Permissions.Allow)
+	if !reflect.DeepEqual(config.Permissions.Allow, []string{"mcp__libro__application", "mcp__libro__issues"}) {
+		t.Fatalf("Libro permissions = %v", config.Permissions.Allow)
 	}
 	for _, step := range []struct{ event, want string }{{"UserPromptSubmit", "working"}, {"Stop", "done"}, {"StopFailure", "error"}, {"SessionEnd", "idle"}, {"SessionStart", "idle"}} {
 		if output, err := exec.Command("sh", "-c", config.Hooks[step.event][0].Hooks[0].Command).CombinedOutput(); err != nil {
@@ -129,8 +129,8 @@ func TestOllamaClaudeActivity(t *testing.T) {
 			}
 			defer activity.cleanup()
 			executable, _ := os.Executable()
-			mcp, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"libro_browser": map[string]any{"command": executable, "args": []string{"browser-mcp"}}}})
-			want := agentExitCommand(test.prefix + " --settings " + shellQuote(filepath.Join(activity.dir, "claude.json")) + " --mcp-config " + shellQuote(string(mcp)) + " --append-system-prompt " + shellQuote(ApplicationInstructions) + test.suffix)
+			mcp, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"libro": map[string]any{"command": executable, "args": []string{"mcp"}}}})
+			want := agentExitCommand(test.prefix + " --settings " + shellQuote(filepath.Join(activity.dir, "claude.json")) + " --mcp-config " + shellQuote(string(mcp)) + " --append-system-prompt " + shellQuote(AgentInstructions) + test.suffix)
 			if command != want || activity.kind != "claude" {
 				t.Fatalf("launch = %q, want %q", command, want)
 			}

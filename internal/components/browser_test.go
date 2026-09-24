@@ -326,41 +326,6 @@ process.stdin.on('end', async () => {
 	}
 }
 
-func TestBrowserAgentPauseState(t *testing.T) {
-	node, err := exec.LookPath("node")
-	if err != nil {
-		t.Skip("node is not installed")
-	}
-	const harness = `
-const assert=require('node:assert/strict'),vm=require('node:vm');
-let source='';process.stdin.on('data',d=>source+=d);process.stdin.on('end',async()=>{
- const icon={textContent:'pause'},attrs={};
- const button={setAttribute:(k,v)=>attrs[k]=v,querySelector:()=>icon};
- let paused=false,listener;const setting={value:'on'};let applied;
- const window={libroElectron:{setBrowserControlEnabled:async enabled=>{applied=enabled;return {enabled,paused:!enabled}},onBrowserControlState:fn=>listener=fn,browserControlState:async action=>{if(action==='toggle')paused=!paused;if(action==='stop')paused=true;return {paused}}}};
- const start=source.indexOf('var agentControlPaused =');
- const end=source.indexOf('// --- Browser shortcuts',start);
- vm.runInNewContext(source.slice(start,end),{window,document:{querySelectorAll:()=>[button],getElementById:()=>setting}});
- await Promise.resolve();
- assert.equal(attrs['aria-label'],'Pause agent browser control');
- window.__libroBrowserControlPause('toggle');await Promise.resolve();
- assert.equal(attrs['aria-label'],'Resume agent browser control');assert.equal(attrs['aria-pressed'],'true');assert.equal(icon.textContent,'play_arrow');
- window.__libroBrowserControlPause('toggle');await Promise.resolve();
- assert.equal(icon.textContent,'pause');
- listener({paused:true});assert.equal(icon.textContent,'play_arrow');
- window.__libroBrowserControlPause('stop');await Promise.resolve();assert.equal(paused,true);
- window.__libroApplyBrowserControlSetting(false);await Promise.resolve();
- assert.equal(applied,false);assert.equal(button.disabled,true);assert.equal(setting.value,'off');assert.equal(attrs['aria-label'],'Agent browser control is off in Settings');
- window.__libroApplyBrowserControlSetting(true);await Promise.resolve();
- assert.equal(button.disabled,false);assert.equal(setting.value,'on');
-});`
-	cmd := exec.Command(node, "-e", harness)
-	cmd.Stdin = strings.NewReader(BrowserJS())
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("browser pause controls: %v\n%s", err, output)
-	}
-}
-
 func TestBrowserViewportFits(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {

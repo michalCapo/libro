@@ -5,7 +5,7 @@ const path = require('node:path')
 const vm = require('node:vm')
 
 const source = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8')
-const setup = source.slice(source.indexOf('const instance ='), source.indexOf('let browserController'))
+const setup = source.slice(source.indexOf('const instance ='), source.indexOf('let stopAgentControl'))
 function profile(env) {
   const result = {}
   vm.runInNewContext(setup, {

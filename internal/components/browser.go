@@ -14,46 +14,6 @@ window.__libroWebviews = window.__libroWebviews || {};
 var ready = {};       // appID -> true when dom-ready has fired
 var queued = {};      // appID -> [fn, fn, ...] calls waiting for dom-ready
 var initialized = {};
-var agentControlPaused = false;
-var agentControlEnabled = true;
-function renderAgentControlState(state) {
-    if (state) { agentControlPaused = !!state.paused; agentControlEnabled = state.enabled !== false; }
-    document.querySelectorAll('[data-browser-control]').forEach(function(button) {
-        button.disabled = !window.libroElectron || !agentControlEnabled;
-        var label = !agentControlEnabled ? 'Agent browser control is off in Settings' : agentControlPaused ? 'Resume agent browser control' : 'Pause agent browser control';
-        button.setAttribute('title', label);
-        button.setAttribute('aria-label', label);
-        button.setAttribute('aria-pressed', String(agentControlPaused));
-        var icon = button.querySelector('i');
-        var value = agentControlPaused ? 'play_arrow' : 'pause';
-        if (icon && icon.textContent !== value) icon.textContent = value;
-    });
-}
-window.__libroApplyBrowserControlSetting = function(enabled) {
-    agentControlEnabled = !!enabled;
-    var select = document.getElementById('browser-control-enabled');
-    if (select) select.value = enabled ? 'on' : 'off';
-    renderAgentControlState();
-    if (!window.libroElectron || !window.libroElectron.setBrowserControlEnabled) return;
-    window.libroElectron.setBrowserControlEnabled(!!enabled).then(renderAgentControlState).catch(function(error) {
-        if (window.__libroShowToast) window.__libroShowToast('Browser control setting not applied', error.message, 2600);
-    });
-};
-window.__libroBrowserControlPause = function(action) {
-    if (!window.libroElectron || !window.libroElectron.browserControlState) return;
-    window.libroElectron.browserControlState(action).then(function(state) {
-        renderAgentControlState(state);
-        if (window.__libroShowToast) window.__libroShowToast(state.paused ? 'Agent browser control paused' : 'Agent browser control resumed', state.paused ? 'Use the play button to resume. Your browser still works normally.' : '', 2600);
-    }).catch(function(error) {
-        if (window.__libroShowToast) window.__libroShowToast('Browser control unavailable', error.message, 2600);
-    });
-};
-if (window.libroElectron && window.libroElectron.onBrowserControlState) {
-    window.libroElectron.onBrowserControlState(renderAgentControlState);
-    window.libroElectron.browserControlState('status').then(renderAgentControlState).catch(function() {});
-}
-
-
 // --- Browser shortcuts script injected into webview guest pages ---
 var browserShortcutsScript = '(' + function(){
 	if(window.__libroBrowserShortcuts) return;
@@ -1149,7 +1109,6 @@ function bindWebviewEvents(wv) {
 }
 
 function initAll() {
-	renderAgentControlState();
 	// Plain browsers expose <webview> as an inert element. Registering it would
 	// route navigation into a guest that never becomes ready instead of the iframe.
 	if (!window.libroElectron) return;

@@ -52,10 +52,8 @@ func main() {
 			err = libro.RunIssuesCLI(args[1:], os.Stdout)
 		case "application":
 			err = libro.RunApplicationCLI(args[1:], os.Stdout)
-		case "browser":
-			err = libro.RunBrowserCLI(args[1:], os.Stdout)
-		case "browser-mcp":
-			err = libro.RunBrowserMCP(os.Stdin, os.Stdout)
+		case "mcp":
+			err = libro.RunMCP(os.Stdin, os.Stdout)
 		default:
 			err = fmt.Errorf("unknown command: %s", args[0])
 		}

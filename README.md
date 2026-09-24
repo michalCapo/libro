@@ -48,7 +48,7 @@ Named instance data lives under `libro/instances/<name>` in the usual data and
 Electron profile directories. Project folders remain shared if you add the same
 folder to both instances; edits and commands still affect those files.
 
-Flags must come before browser commands: `libro --dev browser list`.
+Flags must come before commands: `libro --dev application status`.
 `LIBRO_INSTANCE` and `LIBRO_PORT` also select an instance and are inherited by
 agents and terminals launched inside Libro. An occupied port fails before the
 app opens a window or database.
@@ -151,125 +151,20 @@ bundle matches its source. Run the editor integration tests with
 
 Every shortcut can be changed in **Settings → Keyboard shortcuts**.
 
-### Browser automation for agents
+### Agent tools
 
-**Settings → Browser control → Allow agents to control the browser** turns this
-feature on or off. It is **On by default** and persists across restarts. Turning
-it off immediately cancels browser work and managed downloads, stops diagnostics,
-and blocks CLI/MCP commands. Enable it in Settings to allow browser control again.
-
-Agents can inspect and operate their own thread's browser panels, using their
-current pages and login sessions. The `open` action creates a panel in that thread
-when needed. Libro does not launch another browser.
-They can inspect accessibility snapshots, click and type, navigate, capture
-screenshots, upload files, and manage agent-started downloads.
-
-New Codex, Claude (including Ollama-launched Claude), and OpenCode sessions get
-an automatically registered `libro_browser` MCP server with a `browser` tool.
-Pi gets startup instructions for the same controls through the Libro CLI.
-Restart an existing agent session to load this integration. Custom agents can
-register `libro browser-mcp` as a stdio MCP server or use the CLI below.
-Agent tool approval and sandbox settings still apply.
-
-Libro panels use `libro_browser`, not Codex's `iab` or shared browser connection.
-If an agent reports "Browser is not available: iab" or "No browser is available",
-tell it to call the `libro_browser` tool with `{"action":"list"}`, or run
-`libro browser list`. Those errors refer to a different browser connection.
-
-The agent first uses `list`, chooses a panel ID, then sends actions with that ID.
-If no panel exists, it uses `open` with an optional URL. Each thread has separate
-panels, browser storage, and command queues. Agents can work at the same time.
-Hidden panels remain controllable: commands do not switch threads or take focus
-from your work. `visible` reports layout, not whether automation is available.
-Use `select_panel` to reveal a panel when its thread is already shown, and `wait`
-to wait for a page load. Missing or closed panels return an error.
-
-Available actions:
-
-- `open`: create a browser in the calling thread; optional `url` defaults to `about:blank`.
-- `list`: panel IDs, session IDs, titles, URLs, and visibility.
-- `status`, `pause`, `stop`: read control state, cancel queued work, or also cancel
-  managed downloads. Only the user can resume via the toolbar.
-- `select_panel`: select an existing panel in the current project.
-- `snapshot`: accessibility roles, names, states, and stable element references.
-  Text references target their containing element. Use `format: "dom"` for DOM
-  structure. References expire on navigation or when the page replaces a node.
-  For stale or detached refs, take a fresh snapshot and retry with the new ref
-  or a unique CSS selector. Screenshot coordinates are also available; a failed
-  ref does not mean browser automation is unavailable.
-- `wait`: wait for `selector`/`ref` with `state` set to `visible`, `hidden`,
-  `attached`, or `detached`; or an exact `url` with `interactive`/`complete`.
-  `timeoutMs` defaults to 10000 and is limited to 20000.
-- `diagnostics`: recent console warnings/errors and failed network requests,
-  including HTTP errors. `clear: true` clears the returned history.
-- `screenshot`: viewport PNG, returned directly as an MCP image. Use
-  `fullPage: true` for the document or `ref`/`selector` for one element.
-- `move`, `click`, `down`, `up`: mouse actions with viewport `x`, `y`; optional
-  `button` (`left`, `middle`, `right`). Drag with down, move with the same button,
-  then up. Mouse actions also accept a snapshot `ref` or unique CSS `selector`.
-- `text`: insert `text` into the focused field, including Unicode.
-- `key`: press `key`, such as `Tab`, `Enter`, or `Backspace`, with optional
-  `modifiers` (`control`, `shift`, `alt`, `meta`).
-- `scroll`: wheel at `x`, `y` with `deltaY` and optional `deltaX` (positive is up/left).
-- `navigate`, `back`, `forward`, `reload`: navigate that same panel; navigate takes `url`.
-- `select_option`: choose `values` (an array of option values) in a select located
-  by `ref` or `selector`.
-- `check`: set `checked` to true/false on a checkbox or true on a radio button.
-- `upload`: set `files` (absolute paths) on a file input identified by `ref` or
-  `selector`. An empty array clears the selection.
-- `download`: fetch `url` with the panel's session into a unique folder under
-  `Downloads/Libro`. An optional `filename` controls its name. Returns its ID
-  and path without opening a save dialog.
-- `downloads`, `cancel_download`: inspect download progress or cancel by `downloadId`.
-
-Coordinates and screenshots use viewport CSS pixels, including when the page
-is zoomed. Mouse actions display a blue **Agent** pointer for five seconds.
-It does not move the user's pointer or block page interaction. Commands are
-serialized, and keyboard input focuses the target panel.
-
-CLI examples (replace `PANEL_ID` with an ID returned by `list`):
-
-```sh
-libro browser list
-libro browser '{"action":"click","panel":"PANEL_ID","x":120,"y":80}'
-libro browser '{"action":"text","panel":"PANEL_ID","text":"Hello"}'
-libro browser '{"action":"key","panel":"PANEL_ID","key":"Enter"}'
-libro browser '{"action":"screenshot","panel":"PANEL_ID"}' /tmp/page.png
-```
-
-The desktop bridge listens on loopback with a per-launch authentication token
-stored in the user's Libro config directory. No browser control is exposed to
-web pages. Browser-only (`--no-desktop`) mode cannot provide these controls.
-No global agent config or project instruction files are changed.
-
-Use the pause button beside the browser console button to pause all agent browser
-control. It changes to a play button for resuming. The browser actions menu also
-has **Stop agent browser work**, which cancels managed downloads. Pausing cancels
-pending waits and queued commands while leaving normal user input available.
-Agents cannot resume a user-paused browser.
-
-Element lookup covers the main document and open shadow roots. Cross-origin
-iframe controls are not yet exposed. Snapshots are capped at 1000 nodes and omit
-input values. Diagnostics keep the last 200 entries per category, without request
-headers or bodies; network capture begins when browser control first connects.
-Call diagnostics, then reload, to capture startup failures. Advanced controls
-use Electron's debugger connection and may need reconnecting after DevTools opens.
-Full-page and element screenshots are limited to 24 megapixels and 16000 pixels
-per side. Very large captures should be narrowed to an element.
-
-Examples of the additional controls:
-
-```sh
-libro browser '{"action":"snapshot","panel":"PANEL_ID"}'
-libro browser '{"action":"wait","panel":"PANEL_ID","selector":"#save","state":"visible"}'
-libro browser '{"action":"check","panel":"PANEL_ID","selector":"#agree","checked":true}'
-libro browser '{"action":"screenshot","panel":"PANEL_ID","fullPage":true}' /tmp/full-page.png
-libro browser '{"action":"download","panel":"PANEL_ID","url":"https://example.com/report.csv"}'
-```
+New Codex, Claude (including Ollama-launched Claude), and OpenCode sessions
+register the `libro` MCP server automatically. It provides `application` and
+`issues` tools. Pi receives instructions for the equivalent CLI commands.
+Custom agents can register `libro mcp` as a stdio MCP server.
+Agents also receive instructions to use the separately installed `agent-browser`
+CLI for browser testing, with a unique session per agent/thread. Libro does not
+install agent-browser or share its browser panel logins with it.
+Restart existing agent sessions to load the updated tools and instructions.
 
 ### Agent application control
 
-Agents can use the `application` tool on the existing `libro_browser` MCP
+Agents can use the `application` tool on the `libro` MCP
 server to start, restart, stop, or check the project application. Set the
 **Start command** in project settings first. The tool uses the same bottom
 terminal as Libro's application shortcuts and leaves agent terminals running.
@@ -290,12 +185,11 @@ Status checks work without changing the visible project. Lifecycle actions selec
 the matching project when needed. `start` preserves a running or starting application;
 `restart` replaces it. A `starting` response confirms a launch request, while
 `status` reports whether the process is running; it does not test server readiness.
-Only the saved command can be run. This uses the desktop browser bridge and
-respects its enable and pause controls.
+Only the saved command can be run. Commands use the local desktop bridge.
 
 ### Agent issue management
 
-The `issues` tool on the existing `libro_browser` MCP server supports:
+The `issues` tool on the `libro` MCP server supports:
 
 - `list`: issue summaries, with optional `status`, `limit` (default 100, max 200), and `offset`.
 - `read`: the full issue, including Markdown body and saved images, by `id`.

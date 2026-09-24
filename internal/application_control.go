@@ -50,7 +50,7 @@ func ApplicationCommand(command json.RawMessage) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return BrowserCommand(payload)
+	return desktopCommand(payload)
 }
 
 // RunApplicationCLI controls the configured application without MCP support.
@@ -201,7 +201,7 @@ func hydrateProjectCommand(sid, id string) (string, bool) {
 				return "", true
 			}
 			_, path := threadProjectContext(sm.Get(sid), workspace.Name)
-			_, err := tm.StartWithEnvironment(id, panel.Command, path, panel.Writable, []string{"LIBRO_BROWSER_SCOPE=" + browserScope(sid, id)})
+			_, err := tm.StartWithEnvironment(id, panel.Command, path, panel.Writable, nil)
 			if err != nil {
 				sm.RemoveAppByID(sid, id)
 				return removeAppJS(id) + r.Notify("error", "Failed to start application: "+err.Error()), true

@@ -791,7 +791,6 @@ func Run(assets embed.FS, desktop bool) error {
 			if isAgentApp(term) {
 				environment = agentEnvironmentList()
 			}
-			environment = append(environment, "LIBRO_BROWSER_SCOPE="+browserScope(sid, term.ID))
 			command := term.Command
 			var reportSession func(string)
 			if thread := state.thread(state.ActiveProject); thread != nil && isAgentApp(term) {
@@ -902,7 +901,6 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 		if isAgentApp(*term) {
 			environment = agentEnvironmentList()
 		}
-		environment = append(environment, "LIBRO_BROWSER_SCOPE="+browserScope(sid, term.ID))
 		if err := tm.RestartWithEnvironment(term.ID, term.Command, term.Writable, pwd, environment); err != nil {
 			return r.Notify("error", "Failed to restart terminal: "+err.Error())
 		}

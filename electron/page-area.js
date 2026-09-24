@@ -4,8 +4,19 @@ const path = require('node:path')
 async function capturePageArea(target, area, tempDir) {
   let png
   if (area?.fullPage === true) {
-    const image = await require('./browser-page').pageAction(target, { action: 'screenshot', fullPage: true })
-    png = Buffer.from(image.data, 'base64')
+    const ownsDebugger = !target.debugger.isAttached()
+    if (ownsDebugger) target.debugger.attach('1.3')
+    try {
+      const {cssContentSize: clip} = await target.debugger.sendCommand('Page.getLayoutMetrics')
+      if (clip.width <= 0 || clip.height <= 0 || clip.width * clip.height > 24000000 || clip.width > 16000 || clip.height > 16000) {
+        throw new Error('Page exceeds 24 megapixels or 16000 pixels per side; select a smaller area')
+      }
+      const result = await target.debugger.sendCommand('Page.captureScreenshot', {format:'png', captureBeyondViewport:true, clip:{...clip, scale:1}})
+      const image = require('electron').nativeImage.createFromBuffer(Buffer.from(result.data, 'base64'))
+      png = image.resize({width:Math.ceil(clip.width), height:Math.ceil(clip.height)}).toPNG({scaleFactor:1})
+    } finally {
+      if (ownsDebugger && !target.isDestroyed() && target.debugger.isAttached()) target.debugger.detach()
+    }
   } else {
     if (!area || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(area[key])) || area.width <= 0 || area.height <= 0) {
       throw new Error('Invalid selected area')

@@ -42,8 +42,7 @@ if (process.platform === 'windows') {
 const port = process.env.LIBRO_PORT || (instance ? '8101' : '8100')
 const serverURL = `http://localhost:${port}`
 
-let browserController = null
-let stopBrowserControl = null
+let stopAgentControl = null
 let goProcess = null
 let mainWindow = null
 let isQuitting = false
@@ -763,21 +762,6 @@ function createWindow() {
     ensureDevtoolsOverlay(targetId, bounds)
   })
 
-  ipcMain.handle('libro-browser-control-enabled', (event, enabled) => {
-    if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error('Invalid sender')
-    if (!browserController) throw new Error('Browser control is not ready')
-    return browserController.setEnabled(enabled)
-  })
-
-  ipcMain.handle('libro-browser-control-state', (event, action) => {
-    if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error('Invalid sender')
-    if (!browserController) throw new Error('Browser control is not ready')
-    if (action === 'toggle') return browserController.setPaused(!browserController.getState().paused)
-    if (action === 'stop') return browserController.setPaused(true, true)
-    if (action && action !== 'status') throw new Error('Invalid browser control action')
-    return browserController.getState()
-  })
-
   ipcMain.handle('libro-capture-page-area', async (event, targetId, area) => {
     if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error('Invalid sender')
     const target = withWebContents(targetId)
@@ -826,7 +810,6 @@ function createWindow() {
 app.on('web-contents-created', (event, contents) => {
   // Intercept new window requests from webviews — open as a new browser app
   if (contents.getType() === 'webview') {
-    require('./browser-page').observe(contents)
     const supportedUA = getSupportedBrowserUserAgent()
     if (supportedUA) {
       contents.setUserAgent(supportedUA)
@@ -910,7 +893,6 @@ app.on('web-contents-created', (event, contents) => {
   }
 
   contents.on('before-input-event', (e, input) => {
-    if (contents.__libroAgentInput) return
     if (input.type !== 'keyDown' && input.type !== 'rawKeyDown') return
 
     const key = (input.key || '').toLowerCase()
@@ -1281,15 +1263,9 @@ app.on('ready', async () => {
   }
   createWindow()
   try {
-    const { startControlServer, createScopedController } = require('./browser-control')
-    browserController = createScopedController(() => mainWindow, id => webContents.fromId(id), {
-      // The workspace applies its persisted setting when the trusted host loads.
-      enabled: false,
-      downloadDir: path.join(app.getPath('downloads'), 'Libro'),
-      onState: state => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('libro-browser-control-state', state) }
-    })
-    stopBrowserControl = await startControlServer(app.getPath('userData'), port, browserController)
-  } catch (error) { console.error('Browser control unavailable:', error.message) }
+    const { startControlServer, createController } = require('./agent-control')
+    stopAgentControl = await startControlServer(app.getPath('userData'), port, createController(() => mainWindow))
+  } catch (error) { console.error('Libro control unavailable:', error.message) }
   powerMonitor.on('resume', refreshTerminalFramesAfterResume)
 })
 
@@ -1302,6 +1278,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
-  if (stopBrowserControl) stopBrowserControl()
+  if (stopAgentControl) stopAgentControl()
   stopGoServer()
 })
