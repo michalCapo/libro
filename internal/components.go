@@ -2793,6 +2793,7 @@ func projectsJS(state *AppState) string {
 		Branch          string   `json:"branch,omitempty"`
 		IsGit           bool     `json:"isGit"`
 		IsActive        bool     `json:"isActive"`
+		BaseOpened      bool     `json:"baseOpened,omitempty"`
 		Branches        []string `json:"branches,omitempty"`
 		CurrentBranch   string   `json:"currentBranch,omitempty"`
 		WorktreeRefs    []string `json:"worktreeRefs,omitempty"`
@@ -2815,6 +2816,7 @@ func projectsJS(state *AppState) string {
 			Path:        p.Path,
 			IsGit:       p.IsGitRepo,
 			IsActive:    isActive,
+			BaseOpened:  state.ActiveProject == p.Name || state.snapshots[p.Name] != nil,
 			Transient:   p.Transient,
 			Command:     projectCommand(p.Path),
 		}

@@ -3,6 +3,7 @@ package libro
 import (
 	"database/sql"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -58,5 +59,33 @@ func TestRemoveActiveProject(t *testing.T) {
 	}
 	if !sm.AddProject("test", "home", t.TempDir()) || !sm.SwitchProject("test", "home") {
 		t.Fatal("cannot add home after removing last project")
+	}
+}
+
+func TestProjectBaseOpensOnNavigation(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "projects.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	DBSaveProject("first", t.TempDir())
+	DBSaveProject("second", t.TempDir())
+	manager := NewStateManager()
+	sid := manager.NewSession()
+	state := manager.Get(sid)
+	if state.ActiveProject != "" || strings.Contains(projectsJS(state), `"baseOpened":true`) {
+		t.Fatal("projects opened before navigation")
+	}
+	for i, name := range []string{"second", "first", "second"} {
+		if !manager.SwitchProject(sid, name) {
+			t.Fatal("cannot open project")
+		}
+		want := min(i+1, 2)
+		if got := strings.Count(projectsJS(state), `"baseOpened":true`); got != want {
+			t.Fatalf("opened bases = %d, want %d", got, want)
+		}
 	}
 }

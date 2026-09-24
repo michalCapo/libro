@@ -905,7 +905,7 @@ test('project groups contain the original branch first and number every worktree
   const context = {
     window: { __libroProjects: [
       { kind:'worktree', name:'mail', branch:'feature', path:'/mail-feature', isActive:true },
-      { kind:'project', name:'mail', displayName:'mail', path:'/mail', isGit:true, currentBranch:'main' },
+      { kind:'project', name:'mail', displayName:'mail', path:'/mail', isGit:true, currentBranch:'main', baseOpened:true },
       { kind:'project', name:'notes', path:'/notes', isGit:false },
     ] },
     document: {
@@ -931,6 +931,14 @@ test('project groups contain the original branch first and number every worktree
   assert.equal(calls[1][1].branch, 'feature')
   const nonGit = flatten(list.children[1])
   assert.equal(nonGit.find(el => el.textContent === 'New project thread').disabled, true)
-  assert.equal(nonGit.find(el => el.dataset.kind === 'base').dataset.projectShortcut, '3')
+  assert.equal(nonGit.find(el => el.dataset.kind === 'base'), undefined)
+  const projectRow = nonGit.find(el => el.dataset.kind === 'project' && el.tag === 'button')
+  assert.equal(projectRow.dataset.projectShortcut, undefined)
+  projectRow.onclick()
+  assert.equal(calls.at(-1)[0], 'project.switch')
+  assert.equal(calls.at(-1)[1].name, 'notes')
+  context.window.__libroProjects[2].baseOpened = true
+  vm.runInNewContext(render + shortcuts + ';renderProjects();renderThreadShortcuts();', context)
+  assert.equal(flatten(list.children[1]).find(el => el.dataset.kind === 'base').dataset.projectShortcut, '3')
   assert.equal(flatten(list).some(el => el.classes === 'ws-project-agent'), false)
 })

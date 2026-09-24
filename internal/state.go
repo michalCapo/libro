@@ -118,9 +118,6 @@ func newAppStateFromDB() *AppState {
 	detectGitRepos(projects)
 	rendered := make(map[string]bool)
 	activeProject := ""
-	if len(projects) > 0 {
-		activeProject = projects[0].Name
-	}
 	rendered[activeProject] = true
 
 	return &AppState{

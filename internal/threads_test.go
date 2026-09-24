@@ -27,6 +27,7 @@ func TestStandaloneThreadPersistenceAndIsolation(t *testing.T) {
 	manager := NewStateManager()
 	sid := manager.NewSession()
 	state := manager.Get(sid)
+	manager.SwitchProject(sid, "project")
 	manager.AddApp(sid, "https://example.com", WidthMD, "Project browser")
 	if !manager.SwitchProject(sid, "thread:test") {
 		t.Fatal("cannot switch to thread")

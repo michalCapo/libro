@@ -539,7 +539,7 @@
       branches.setAttribute('aria-label', projectName + ' threads');
       group.append(item, branches); list.append(group);
       groups.set(project.name, branches);
-      if (project.kind !== 'worktree') {
+      if (project.baseOpened) {
         const baseList = node('div', 'ws-project-item');
         const base = node('button', 'ws-project-row ws-thread-row'); base.type = 'button';
         base.dataset.kind = 'base'; base.dataset.projectKey = project.name;
