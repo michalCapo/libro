@@ -45,7 +45,10 @@ func TestApplicationControlLifecycle(t *testing.T) {
 	if err != nil || js == "" || result["status"] != "starting" {
 		t.Fatalf("start: %v %v", result, err)
 	}
-	first := sm.Get("test").Apps[1].ID
+	if sm.Get("test").ActiveProject != "other" || strings.Contains(js, "libroWorkspace.select(") {
+		t.Fatal("start changed the visible workspace or selection")
+	}
+	first := sm.Get("test").snapshots["project"].Apps[1].ID
 	switchToProjectName("test", "other")
 	js, result, err = controlApplication("test", path, "start")
 	if err != nil || js != "" || result["status"] != "starting" || sm.Get("test").ActiveProject != "other" {
@@ -74,12 +77,12 @@ func TestApplicationControlLifecycle(t *testing.T) {
 	}
 	switchToProjectName("test", "other")
 	_, result, err = controlApplication("test", path, "restart")
-	if err != nil || result["status"] != "starting" || sm.Get("test").Apps[1].ID == first {
+	if err != nil || result["status"] != "starting" || sm.Get("test").ActiveProject != "other" || sm.Get("test").snapshots["project"].Apps[1].ID == first {
 		t.Fatal("restart did not replace terminal")
 	}
 	switchToProjectName("test", "other")
 	_, result, err = controlApplication("test", path, "stop")
-	if err != nil || result["status"] != "stopped" || len(sm.Get("test").Apps) != 1 || sm.Get("test").Apps[0].ID != "agent" {
+	if err != nil || result["status"] != "stopped" || sm.Get("test").ActiveProject != "other" || len(sm.Get("test").snapshots["project"].Apps) != 1 || sm.Get("test").snapshots["project"].Apps[0].ID != "agent" {
 		t.Fatal("stop must preserve agent")
 	}
 	_, result, err = controlApplication("test", path, "status")
@@ -224,5 +227,38 @@ func TestApplicationProjectResolution(t *testing.T) {
 	name, path, err := applicationProject(state, filepath.Join(alias, "nested", "src"))
 	if err != nil || name != "nested" || path != nested {
 		t.Fatalf("resolve symlink: %q %q %v", name, path, err)
+	}
+}
+
+func TestApplicationBackgroundHydrationPreservesWorkspace(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a POSIX test command")
+	}
+	oldSM, oldTM := sm, tm
+	sm, tm = NewStateManager(), components.NewTerminalManager()
+	t.Cleanup(func() { tm.StopAll(); sm, tm = oldSM, oldTM })
+	path := t.TempDir()
+	state := &AppState{
+		ActiveProject: "visible", SelectedIndex: 1,
+		Projects: []Project{{Name: "visible", Path: t.TempDir()}, {Name: "background", Path: path}},
+		Apps:     []Application{{ID: "agent"}, {ID: "browser"}},
+	}
+	sm.states["test"] = state
+	panel, _ := sm.insertProjectCommand("test", "background", "sleep 60")
+	js, handled := hydrateProjectCommand("test", panel.ID)
+	if !handled || js == "" || !tm.IsRunning(panel.ID) || !state.snapshots["background"].Apps[0].TerminalReady {
+		t.Fatal("background application was marked ready without starting its process")
+	}
+	if state.ActiveProject != "visible" || state.SelectedIndex != 1 || len(state.Apps) != 2 {
+		t.Fatal("background hydration changed the user's workspace")
+	}
+	if strings.Contains(js, "libroWorkspace.select(") || strings.Contains(js, "__libroSelectedApp=") {
+		t.Fatal("background hydration emits selection changes")
+	}
+	if js, handled := hydrateProjectCommand("test", panel.ID); !handled || js != "" {
+		t.Fatal("repeated hydration must preserve the running process")
+	}
+	if sm.RemoveAppByID("test", panel.ID) == nil || len(state.snapshots["background"].Apps) != 0 || state.SelectedIndex != 1 {
+		t.Fatal("background removal changed visible selection")
 	}
 }

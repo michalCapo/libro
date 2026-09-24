@@ -16,7 +16,7 @@ import (
 const applicationHelp = components.ApplicationInstructions + "\n\n" + `Control the application's saved project command in Libro. Actions: status, start, restart, stop.
 Use the application MCP tool or: libro application status|start|restart|stop [project-path].
 The project defaults to the agent's working directory. Libro resolves registered projects, including subdirectories and symlinked paths.
-Status works without changing the visible project. Start, restart, and stop select the matching project when needed.
+All actions preserve the visible project, thread, and panel selection.
 All threads in the same project share one application process. Browsers remain independent per thread.
 Start is idempotent. Restart replaces the shared project command terminal. Stop stops that shared terminal for all project threads.
 Set the start command in project settings first. Commands cannot be supplied or changed through this tool.
@@ -151,6 +151,7 @@ func controlApplication(sid, project, operation string) (string, map[string]any,
 		return "", nil, errors.New("set a start command in project settings first")
 	}
 	status := "stopped"
+	var previous []string
 	for _, running := range sm.GetAllRunningApps(sid) {
 		_, root := threadProjectContext(sm.Get(sid), running.Name)
 		if root == "" || applicationPath(root) != applicationPath(path) {
@@ -158,6 +159,8 @@ func controlApplication(sid, project, operation string) (string, map[string]any,
 		}
 		for _, app := range running.Apps {
 			if app.PluginID == "project-command" {
+				workspace = running.Name
+				previous = append(previous, app.ID)
 				if !app.TerminalReady {
 					status = "starting"
 				} else if tm.IsRunning(app.ID) {
@@ -166,19 +169,50 @@ func controlApplication(sid, project, operation string) (string, map[string]any,
 			}
 		}
 	}
-	js := ""
-	if operation != "status" && (operation != "start" || status == "stopped") && sm.Get(sid).ActiveProject != workspace {
-		js = switchToProjectName(sid, workspace)
+	if operation == "status" || operation == "start" && status != "stopped" {
+		return "", map[string]any{"project": path, "configured": command != "", "status": status}, nil
 	}
-	switch operation {
-	case "start", "restart":
-		if operation == "restart" || status == "stopped" {
-			js += runProjectCommand(sid, command)
-			status = "starting"
+	var js strings.Builder
+	for _, id := range previous {
+		tm.Stop(id)
+		sm.RemoveAppByID(sid, id)
+		js.WriteString(removeAppJS(id))
+	}
+	status = "stopped"
+	if operation != "stop" {
+		panel, index := sm.insertProjectCommand(sid, workspace, command)
+		js.WriteString(insertAppJS(renderAppFramePlaceholder(panel, index, false, sid).Attr("data-dock-seen", "true"), false, workspace))
+		// Hydration also works when this workspace has never been shown.
+		js.WriteString(hydrateAppAfterScrollJS(panel.ID, sidData(sid, "id", panel.ID)))
+		status = "starting"
+	}
+	js.WriteString(projectsJS(sm.Get(sid)))
+	return js.String(), map[string]any{"project": path, "configured": command != "", "status": status}, nil
+}
+
+// hydrateProjectCommand starts shared applications without selecting their workspace.
+func hydrateProjectCommand(sid, id string) (string, bool) {
+	for _, workspace := range sm.GetAllRunningApps(sid) {
+		for _, panel := range workspace.Apps {
+			if panel.ID != id || panel.PluginID != "project-command" {
+				continue
+			}
+			if panel.TerminalReady {
+				return "", true
+			}
+			_, path := threadProjectContext(sm.Get(sid), workspace.Name)
+			_, err := tm.StartWithEnvironment(id, panel.Command, path, panel.Writable, []string{"LIBRO_BROWSER_SCOPE=" + browserScope(sid, id)})
+			if err != nil {
+				sm.RemoveAppByID(sid, id)
+				return removeAppJS(id) + r.Notify("error", "Failed to start application: "+err.Error()), true
+			}
+			if !sm.HydrateTerminalAnywhere(sid, id) {
+				tm.Stop(id)
+				return "", true
+			}
+			panel.TerminalReady = true
+			return renderAppContent(panel, sid, false, nil).ToJSReplace(appContentID(id)), true
 		}
-	case "stop":
-		js += stopProjectCommand(sid) + navigateJS(sm.Get(sid), sid) + projectsJS(sm.Get(sid))
-		status = "stopped"
 	}
-	return js, map[string]any{"project": path, "configured": command != "", "status": status}, nil
+	return "", false
 }

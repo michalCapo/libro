@@ -222,23 +222,33 @@ function createController(getWindow, fromId, options = {}) {
         if (target.isLoadingMainFrame() && !['wait','diagnostics','downloads','cancel_download'].includes(command.action)) throw new Error('Page is loading; use wait to await readiness')
         await page.connect(target,signal)
         page.check(signal)
-        // Hidden docks may have a zero-sized native viewport. Give background
-        // automation a stable viewport without selecting a thread or stealing focus.
-        if (!panel.visible) {
-          if (!target.__libroBackgroundViewport) {
+        // Emulation belongs to this command, never to the panel's lifetime.
+        // Otherwise showing a background thread keeps its old native viewport.
+        let backgroundViewport = false, restoration
+        const restoreViewport = () => {
+          if (!backgroundViewport || target.isDestroyed() || !target.debugger.isAttached()) return
+          return restoration ||= target.debugger.sendCommand('Emulation.clearDeviceMetricsOverride')
+        }
+        const restoreOnAbort = () => { restoreViewport()?.catch(() => {}) }
+        try {
+          if (!panel.visible) {
             const size = await target.executeJavaScriptInIsolatedWorld(998, [{code:'({width:innerWidth,height:innerHeight})'}])
+            page.check(signal)
+            backgroundViewport = true
+            signal.addEventListener('abort', restoreOnAbort, {once:true})
             await target.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {width:size.width || 1280,height:size.height || 800,deviceScaleFactor:1,mobile:false})
-            target.__libroBackgroundViewport = true
           }
-        } else if (target.__libroBackgroundViewport) {
-          await target.debugger.sendCommand('Emulation.clearDeviceMetricsOverride')
-          delete target.__libroBackgroundViewport
+          page.check(signal)
+          if (['snapshot','wait','diagnostics','select_option','check','upload','download','downloads','cancel_download'].includes(command.action) || (command.action==='screenshot' && (command.fullPage || command.ref || command.selector))) {
+            return await page.pageAction(target,command,signal,options.downloadDir)
+          }
+          if (command.action === 'navigate') navigating = target
+          return await performAction(target, command, signal)
+        } finally {
+          if (navigating === target) navigating = null
+          signal.removeEventListener('abort', restoreOnAbort)
+          await restoreViewport()
         }
-        if (['snapshot','wait','diagnostics','select_option','check','upload','download','downloads','cancel_download'].includes(command.action) || (command.action==='screenshot' && (command.fullPage || command.ref || command.selector))) {
-          return page.pageAction(target,command,signal,options.downloadDir)
-        }
-        if (command.action === 'navigate') navigating = target
-        try { return await performAction(target, command, signal) } finally { if (navigating === target) navigating = null }
       }
       try {
         const cancelled = new Promise((_,reject) => {

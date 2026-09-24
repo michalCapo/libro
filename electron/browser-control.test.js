@@ -340,3 +340,52 @@ test('two background threads deliver input independently without selecting or fo
  await first
  assert.deepEqual(input,[['first'],['second']])
 })
+
+test('background viewport is restored after success, failure, and pause', async () => {
+  for (const outcome of ['success', 'failure', 'pause']) {
+    const fixture = panelFixture()
+    const calls = []
+    let release, entered
+    const input = new Promise(resolve => { entered = resolve })
+    fixture.target.debugger.sendCommand = async method => {
+      calls.push(method)
+      if (method === 'Input.insertText') {
+        if (outcome === 'failure') throw new Error('delivery failed')
+        if (outcome === 'pause') await new Promise(resolve => { release = resolve; entered() })
+      }
+      return {}
+    }
+    const action = fixture.control({action:'text',panel:'panel',text:'hello'})
+    if (outcome === 'success') await action
+    else if (outcome === 'failure') await assert.rejects(action,/delivery failed/)
+    else {
+      const rejected = assert.rejects(action,/cancelled/)
+      await input
+      fixture.control.setPaused(true)
+      await rejected
+      assert.ok(calls.includes('Emulation.clearDeviceMetricsOverride'), 'pause must restore before pending input finishes')
+      release()
+      await new Promise(resolve=>setImmediate(resolve))
+    }
+    assert.ok(calls.includes('Emulation.setDeviceMetricsOverride'))
+    assert.equal(calls.at(-1),'Emulation.clearDeviceMetricsOverride',outcome)
+    assert.equal(fixture.selections,0)
+  }
+})
+
+test('select_panel does not select a panel in another visible workspace', async () => {
+  const vm = require('node:vm')
+  const fixture = panelFixture()
+  let selections = 0
+  fixture.target.hostWebContents.executeJavaScript = async script => {
+    if (!script.includes('window.libroWorkspace.select')) {
+      return [{id:'panel',scope:'a'.repeat(64),contentsId:4,visible:false}]
+    }
+    return vm.runInNewContext(script, {
+      document:{getElementById:()=>({closest:()=>({dataset:{workspaceProject:'background-thread'}})})},
+      window:{__libroActiveProject:'user-thread',libroWorkspace:{select:()=>{selections++}}},
+    })
+  }
+  await fixture.control({action:'select_panel',panel:'panel'})
+  assert.equal(selections,0)
+})

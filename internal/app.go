@@ -752,6 +752,10 @@ func Run(assets embed.FS, desktop bool) error {
 			return "/* noop */"
 		}
 
+		if js, handled := hydrateProjectCommand(sid, appID); handled {
+			return js
+		}
+
 		state := sm.Get(sid)
 		idx := -1
 		for i := range state.Apps {

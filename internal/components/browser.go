@@ -824,7 +824,7 @@ function injectBrowserShortcuts(wv, appID) {
 function refocusWebview(appID, wv) {
 	if (!wv) return;
 	function attempt() {
-		if ((window.__libroSelectedApp || '') !== appID) return;
+		if ((window.__libroSelectedApp || '') !== appID || !browserIsVisible(wv)) return;
 		if (document.querySelector('#url-popup:not(.hidden)')) return;
 		try { window.focus(); } catch(err) {}
 		try { wv.focus(); } catch(err) {}
@@ -967,7 +967,7 @@ function stopDevtoolsBoundsSync(appID) {
 function focusIfSelected(appID, wv) {
 	if (!appID || !wv) return;
 	function attempt() {
-		if ((window.__libroSelectedApp || '') !== appID) return;
+		if ((window.__libroSelectedApp || '') !== appID || !browserIsVisible(wv)) return;
 		if (document.querySelector('#url-popup:not(.hidden)')) return;
 		try { window.focus(); } catch(err) {}
 		try { wv.focus(); } catch(err) {}
@@ -1036,10 +1036,16 @@ function updateBrowserNavigation(wv) {
 	} catch (_) {}
 }
 
+function browserIsVisible(wv) {
+	var project = wv.closest('[data-workspace-project]');
+	return wv.isConnected && (!project || project.dataset.workspaceProject === window.__libroActiveProject) && wv.checkVisibility({checkVisibilityCSS:true});
+}
+
 function bindWebviewEvents(wv) {
 	if (wv.__libroEventsBound) return;
 	wv.__libroEventsBound = true;
 	wv.addEventListener('focus', function() {
+		if (!browserIsVisible(wv)) return;
 		var appID = currentAppID(wv);
 		if (appID && window.__libroSelectedApp !== appID && window.libroWorkspace) libroWorkspace.select(appID);
 	});

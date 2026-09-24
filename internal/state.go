@@ -409,6 +409,19 @@ func (sm *StateManager) RemoveAppByID(sessionID, appID string) *Application {
 			return removeApp(s, i)
 		}
 	}
+	for _, snapshot := range s.snapshots {
+		if snapshot == nil {
+			continue
+		}
+		for i, app := range snapshot.Apps {
+			if app.ID == appID {
+				state := &AppState{Apps: snapshot.Apps, SelectedIndex: snapshot.SelectedIndex}
+				removed := removeApp(state, i)
+				snapshot.Apps, snapshot.SelectedIndex = state.Apps, state.SelectedIndex
+				return removed
+			}
+		}
+	}
 	return nil
 }
 
@@ -1050,4 +1063,27 @@ func (sm *StateManager) insertThreadBrowser(sid, workspace, address string, widt
 	index := len(*apps)
 	*apps = append(*apps, panel)
 	return panel, index, nil
+}
+
+// insertProjectCommand keeps the user's workspace and selection unchanged.
+func (sm *StateManager) insertProjectCommand(sid, workspace, command string) (Application, int) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	state := sm.states[sid]
+	apps := &state.Apps
+	if workspace != state.ActiveProject {
+		if state.snapshots == nil {
+			state.snapshots = make(map[string]*projectSnapshot)
+		}
+		if state.snapshots[workspace] == nil {
+			state.snapshots[workspace] = &projectSnapshot{}
+		}
+		apps = &state.snapshots[workspace].Apps
+	}
+	sm.nextID++
+	id := fmt.Sprintf("app-%d", sm.nextID)
+	panel := Application{ID: id, TerminalID: id, Type: AppTypeTerminal, PluginID: "project-command", Dock: "bottom", Width: WidthFull, Command: command, Writable: true, Name: "Project command"}
+	index := len(*apps)
+	*apps = append(*apps, panel)
+	return panel, index
 }

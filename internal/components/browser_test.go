@@ -112,6 +112,8 @@ process.stdin.on('end', () => {
       assert.equal(window.__libroWebviews.test, webview);
       assert.equal(webview.src, url);
       assert.equal(typeof listeners['dom-ready'], 'function');
+      window.libroWorkspace = {select() { assert.fail('hidden browser stole selection'); }};
+      listeners.focus();
       assert.equal(iframe.style.display, 'none');
       assert.equal(notice.style.display, 'none');
       // The init observer runs before cleanup when hydration replaces a guest.
@@ -165,11 +167,14 @@ process.stdin.on('end', () => {
     const end = script.indexOf('\n}', start) + 2;
     let popupOpen = false, focused = 'input';
     const timers = [];
-    const window = { __libroSelectedApp: 'browser', focus() {} };
+    const window = { __libroSelectedApp: 'browser', __libroActiveProject: 'thread', focus() {} };
     const document = { querySelector() { return popupOpen ? {} : null; } };
     const context = { window, document, setTimeout(fn) { timers.push(fn); } };
-    vm.runInNewContext(script.slice(start, end), context);
-    const webview = { focus() { focused = 'webview'; } };
+    const visibleStart = script.indexOf('function browserIsVisible(');
+    const visibleEnd = script.indexOf('\n}', visibleStart) + 2;
+    vm.runInNewContext(script.slice(visibleStart, visibleEnd) + script.slice(start, end), context);
+    let visible = true;
+    const webview = { isConnected:true, closest:()=>({dataset:{workspaceProject:'thread'}}), checkVisibility:()=>visible, focus() { focused = 'webview'; } };
     context[name]('browser', webview);
     assert.equal(focused, 'webview');
     popupOpen = true;
@@ -181,6 +186,15 @@ process.stdin.on('end', () => {
     popupOpen = false;
     context[name]('browser', webview);
     assert.equal(focused, 'webview', name + ' must restore focus after closing');
+    focused = 'input';
+    window.__libroActiveProject = 'other-thread';
+    timers.splice(0).forEach(fn => fn());
+    context[name]('browser', webview);
+    assert.equal(focused, 'input', name + ' must ignore an inactive thread');
+    window.__libroActiveProject = 'thread';
+    visible = false;
+    context[name]('browser', webview);
+    assert.equal(focused, 'input', name + ' must ignore a hidden dock');
   }
 });`
 	cmd := exec.Command(node, "-e", harness)
