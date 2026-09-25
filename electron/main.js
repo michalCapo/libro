@@ -449,7 +449,7 @@ function isWorkspaceShortcut(input) {
       (input.code === 'Backquote' || input.key === '`')) return true
   const key = input.key === '+' ? '=' : input.key || ''
   const binding = (input.control ? 'Ctrl+' : '') + (input.alt ? 'Alt+' : '') +
-    (input.shift && input.key !== '+' ? 'Shift+' : '') + (input.meta ? 'Meta+' : '') + (key === 'Tab' ? 'Tab' : key.toUpperCase())
+    (input.shift && input.key !== '+' ? 'Shift+' : '') + (input.meta ? 'Meta+' : '') + (key.toLowerCase() === 'capslock' ? 'CapsLock' : key.toUpperCase())
   return workspaceShortcuts.has(binding) || binding === 'Ctrl+A' ||
     (/^Ctrl\+[1-9]$/.test(binding) ||
       (!!input.control && !input.meta && !input.alt && !input.shift && /^Digit[1-9]$/.test(input.code || '')))
@@ -896,15 +896,6 @@ app.on('web-contents-created', (event, contents) => {
   }
 
   contents.on('before-input-event', (e, input) => {
-    if (input.type === 'keyUp' && contents !== mainWindow?.webContents) {
-      mainWindow?.webContents.executeJavaScript(`
-        window.dispatchEvent(new KeyboardEvent('keyup', {
-          key: ${JSON.stringify(input.key)}, code: ${JSON.stringify(input.code || '')},
-          bubbles: true, cancelable: true
-        }));
-      `).catch(() => {})
-      return
-    }
     if (input.type !== 'keyDown' && input.type !== 'rawKeyDown') return
 
     const key = (input.key || '').toLowerCase()

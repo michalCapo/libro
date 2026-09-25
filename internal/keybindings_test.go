@@ -4,7 +4,7 @@ import "testing"
 
 func TestToolShortcutValidation(t *testing.T) {
 	keys := defaultToolKeybindings()
-	if keys["voice"] != "Tab" {
+	if keys["voice"] != "CapsLock" {
 		t.Fatalf("voice shortcut = %q", keys["voice"])
 	}
 	if keys["settings"] != "Ctrl+Shift+S" {

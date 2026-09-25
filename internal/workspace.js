@@ -857,7 +857,7 @@
   }
   syncWorkspaceShortcuts();
   function shortcut(event) {
-    if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) return 'Tab';
+    if (event.key === 'CapsLock' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) return 'CapsLock';
     const key = event.key === '+' ? '=' : event.key;
     if (!/^[a-z0-9=,.;\[\]\-]$/i.test(key) || !(event.ctrlKey || event.altKey || event.metaKey)) return '';
     return (event.ctrlKey ? 'Ctrl+' : '') + (event.altKey ? 'Alt+' : '') + (event.shiftKey && event.key !== '+' ? 'Shift+' : '') + (event.metaKey ? 'Meta+' : '') + key.toUpperCase();
@@ -909,7 +909,7 @@
   window.addEventListener('keydown', event => {
     const input = event.target.closest?.('[data-tool-key]');
     if (input) {
-      if (event.key === 'Tab' && (input.dataset.toolKey !== 'voice' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey)) return;
+      if (event.key === 'Tab') return;
       event.preventDefault(); event.stopImmediatePropagation();
       if (event.key === 'Backspace' || event.key === 'Delete') input.value = '';
       else if (shortcut(event)) input.value = shortcut(event);
@@ -932,7 +932,7 @@
       event.preventDefault(); event.stopImmediatePropagation();
       const grid = activeGrid();
       const agent = grid && frames(grid).find(frame => frame.dataset.dock === 'center');
-      if (!event.repeat && agent) void window.libroVoice?.begin(agent.dataset.appId, {code:event.code});
+      if (!event.repeat && agent) void window.libroVoice?.toggle(agent.dataset.appId);
       return;
     }
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {

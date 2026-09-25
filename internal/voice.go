@@ -102,7 +102,7 @@ func (v *voiceService) prepare() {
 			v.report("error", "Voice setup failed. Click the microphone to retry. "+err.Error())
 			return
 		}
-		v.report("ready", "Hold to speak")
+		v.report("ready", "Press to start voice typing")
 	}()
 }
 

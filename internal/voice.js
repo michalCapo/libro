@@ -18,11 +18,11 @@
     document.querySelectorAll('[data-voice-button]').forEach(button => {
       const active = current?.indicatorID === button.dataset.voiceButton;
       const state = active ? current.state : setup.state;
-      const label = active ? (state === 'recording' ? 'Listening… Release to transcribe' : state === 'permission' ? 'Waiting for microphone…' : 'Transcribing…') :
+      const label = active ? (state === 'recording' ? 'Listening… Press again to transcribe' : state === 'permission' ? 'Waiting for microphone…' : 'Transcribing…') :
         message || (state === 'ready' ? '' : state === 'error' ? 'Voice setup failed · Retry' : setup.message);
       button.dataset.state = state;
       button.setAttribute('aria-pressed', String(active && state === 'recording'));
-      button.title = state === 'error' ? setup.message : 'Hold to speak' + (shortcut ? ' (' + shortcut + ')' : '') + '. Escape cancels.';
+      button.title = state === 'error' ? setup.message : 'Press to start or stop voice typing' + (shortcut ? ' (' + shortcut + ')' : '') + '. Escape cancels.';
       button.setAttribute('aria-label', button.title);
       button.querySelector('i').textContent = state === 'error' ? 'refresh' : 'mic';
       const status = button.nextElementSibling;
@@ -76,22 +76,23 @@
     render();
   }
 
-  async function begin(id, source) {
+  async function toggle(id) {
+    if (current) { end(); return; }
     const indicatorID = id;
     const selected = window.__libroSelectedApp;
     if (available(selected) && target(selected).querySelector('[data-terminal-app]') &&
         target(selected).closest('[data-workspace-project]') === target(id)?.closest('[data-workspace-project]')) id = selected;
-    if (current || !available(id)) return;
+    if (!available(id)) return;
     if (setup.state === 'error' || setup.state === 'idle') { await retry(); return; }
     if (setup.state !== 'ready') return;
     message = '';
-    const attempt = {id, indicatorID, source, state:'permission', abort:new AbortController(), chunks:[]};
+    const attempt = {id, indicatorID, state:'permission', abort:new AbortController(), chunks:[]};
     current = attempt; render();
     try {
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('Microphone recording requires the desktop app or localhost.');
       const stream = await navigator.mediaDevices.getUserMedia({audio:{channelCount:1, echoCancellation:true, noiseSuppression:true}, video:false});
       attempt.stream = stream;
-      // The key may have been released while the OS permission prompt was open.
+      // Recording may have been canceled while the OS permission prompt was open.
       if (current !== attempt || !available(id)) { releaseResources(attempt); if (current === attempt) cancel(); return; }
       const recorder = new MediaRecorder(stream);
       attempt.recorder = recorder;
@@ -141,7 +142,7 @@
       finally { await audio.close(); }
       if (current !== attempt) return;
       const samples = decoded.getChannelData(0).subarray(0, 16000*60);
-      if (samples.length < 1600) throw new Error('Hold the microphone a little longer, then speak.');
+      if (samples.length < 1600) throw new Error('Speak a little longer before stopping the recording.');
       const energy = samples.reduce((sum, value) => sum + value*value, 0) / samples.length;
       if (energy < 0.00001) throw new Error('No speech heard. Check your microphone and try again.');
       const response = await fetch('/voice/transcribe', {method:'POST', headers:{...headers(), 'Content-Type':'audio/wav'}, body:wav(samples), signal:attempt.abort.signal});
@@ -162,33 +163,19 @@
     button.type = 'button'; button.className = 'ws-button ws-voice-button'; button.dataset.voiceButton = id;
     const icon = document.createElement('i'); icon.className = 'material-icons-round'; icon.setAttribute('aria-hidden', 'true'); button.append(icon);
     const status = document.createElement('span'); status.className = 'ws-voice-status'; status.setAttribute('role', 'status');
-    button.onpointerdown = event => {
-      if (event.button !== 0) return;
-      event.preventDefault(); void begin(id, {pointer:event.pointerId});
-    };
+    button.onclick = () => { void toggle(id); };
     button.onkeydown = event => {
-      if (![' ', 'Enter'].includes(event.key)) return;
-      event.preventDefault(); event.stopPropagation();
-      if (!event.repeat) void begin(id, {code:event.code});
+      if (event.repeat && [' ', 'Enter'].includes(event.key)) event.preventDefault();
     };
-    // Assistive technology can activate the same control without holding a pointer.
-    button.onclick = event => { if (event.detail === 0) { if (current) end(); else void begin(id, {toggle:true}); } };
     group.prepend(button); group.append(status); render();
   }
 
-  window.addEventListener('keyup', event => {
-    if (current?.source.code && (event.code === current.source.code || ['Control','Alt','Shift','Meta'].includes(event.key))) {
-      event.preventDefault(); event.stopImmediatePropagation(); end();
-    }
-  }, true);
-  window.addEventListener('pointerup', event => { if (current?.source.pointer === event.pointerId) end(); }, true);
-  window.addEventListener('pointercancel', event => { if (current?.source.pointer === event.pointerId) cancel(); }, true);
   window.addEventListener('keydown', event => {
     if (event.key === 'Escape' && current) { event.preventDefault(); event.stopImmediatePropagation(); cancel(); }
   }, true);
   window.addEventListener('blur', cancel);
   document.addEventListener('visibilitychange', () => { if (document.hidden) cancel(); });
   new MutationObserver(() => { if (current && !available(current.id)) cancel(); }).observe(document.getElementById('libro-workspace'), {subtree:true, childList:true, attributes:true, attributeFilter:['aria-hidden']});
-  window.libroVoice = {begin, cancel, mount, refresh:render};
+  window.libroVoice = {toggle, cancel, mount, refresh:render};
   void poll();
 })();

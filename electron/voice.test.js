@@ -57,11 +57,14 @@ async function harness(options = {}) {
   }
 }
 
-test('release transcribes mono PCM and pastes into the captured agent without Enter', async () => {
+test('second press transcribes mono PCM and pastes into the captured agent without Enter', async () => {
   const h = await harness()
-  await h.voice.begin('agent', {code:'Tab'})
+  await h.voice.toggle('agent')
   assert.equal(h.calls.recordings, 1)
-  h.event('keyup', {code:'Tab', key:'Tab'})
+  h.event('keyup', {code:'CapsLock', key:'CapsLock'})
+  await tick()
+  assert.equal(h.calls.stops, 0, 'releasing Caps Lock keeps recording')
+  await h.voice.toggle('agent')
   await tick()
   assert.deepEqual(h.calls.pastes, [['Hello Libro', false, 'agent']])
   const request = h.calls.requests.find(r => r.url === '/voice/transcribe')
@@ -73,21 +76,21 @@ test('release transcribes mono PCM and pastes into the captured agent without En
   assert.ok(h.calls.stops > 0)
 })
 
-test('releasing before microphone permission resolves does not start recording', async () => {
+test('pressing again before microphone permission resolves does not start recording', async () => {
   let grant
   const h = await harness({getUserMedia:() => new Promise(resolve => { grant = resolve })})
-  const pending = h.voice.begin('agent', {code:'Tab'})
-  h.event('keyup', {code:'Tab', key:'Tab'})
+  const pending = h.voice.toggle('agent')
+  await h.voice.toggle('agent')
   grant(h.stream)
   await pending
   assert.equal(h.calls.recordings, 0)
   assert.equal(h.calls.stops, 1)
 })
 
-for (const reason of ['Escape', 'blur', 'switch-thread', 'close-agent', 'pointercancel']) {
+for (const reason of ['Escape', 'blur', 'switch-thread', 'close-agent']) {
   test(reason + ' cancels capture and stops the microphone', async () => {
     const h = await harness()
-    await h.voice.begin('agent', {pointer:7})
+    await h.voice.toggle('agent')
     if (reason === 'Escape') h.event('keydown', {key:'Escape'})
     else if (reason === 'switch-thread') { h.frames.agent.closest = () => ({}); h.mutate() }
     else if (reason === 'close-agent') { h.frames.agent.isConnected = false; h.mutate() }
@@ -106,8 +109,8 @@ test('switching threads aborts transcription and ignores a late result', async (
     signal = init.signal
     return new Promise(resolve => { finish = resolve })
   }})
-  await h.voice.begin('agent', {code:'Tab'})
-  h.event('keyup', {code:'Tab', key:'Tab'})
+  await h.voice.toggle('agent')
+  await h.voice.toggle('agent')
   await tick()
   h.frames.agent.closest = () => ({})
   h.mutate()
@@ -119,8 +122,8 @@ test('switching threads aborts transcription and ignores a late result', async (
 
 test('silence does not invoke transcription', async () => {
   const h = await harness({silent:true})
-  await h.voice.begin('agent', {code:'Tab'})
-  h.event('keyup', {key:'Tab', code:'Tab'})
+  await h.voice.toggle('agent')
+  await h.voice.toggle('agent')
   await tick()
   assert.equal(h.calls.requests.filter(r => r.url === '/voice/transcribe').length, 0)
 })
@@ -128,12 +131,12 @@ test('silence does not invoke transcription', async () => {
 test('microphone denial permits another attempt', async () => {
   let attempts = 0
   const h = await harness({getUserMedia:async () => { attempts++; throw Object.assign(new Error('denied'), {name:'NotAllowedError'}) }})
-  await h.voice.begin('agent', {code:'Tab'})
-  await h.voice.begin('agent', {code:'Tab'})
+  await h.voice.toggle('agent')
+  await h.voice.toggle('agent')
   assert.equal(attempts, 2)
 })
 
-test('guest key releases and Escape reach workspace dictation', async () => {
+test('guest key releases leave recording active and Escape cancels', async () => {
   const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8')
   const start = main.indexOf("  contents.on('before-input-event', (e, input) => {")
   const end = main.indexOf('    // Native terminals live', start)
@@ -151,22 +154,23 @@ test('guest key releases and Escape reach workspace dictation', async () => {
     contents:{id:2, getType:() => 'webview', on(_name, fn) { callback = fn }},
     mainWindow:{webContents:host, isDestroyed:() => false},
   })
-  await h.voice.begin('agent', {code:'Tab'})
-  callback({}, {type:'keyUp', key:'Tab', code:'Tab'})
+  await h.voice.toggle('agent')
+  callback({}, {type:'keyUp', key:'CapsLock', code:'CapsLock'})
   await tick()
-  assert.equal(h.calls.pastes.length, 1)
-  await h.voice.begin('agent', {code:'Tab'})
+  assert.equal(h.calls.pastes.length, 0)
+  assert.equal(h.calls.stops, 0)
   callback({}, {type:'keyDown', key:'Escape', code:'Escape'})
   await tick()
-  assert.equal(h.calls.pastes.length, 1, 'Escape must cancel without another paste')
+  assert.equal(h.calls.pastes.length, 0, 'Escape must cancel without a paste')
+  assert.ok(h.calls.stops > 0)
 })
 
 test('dictation inserts into the terminal selected at recording start', async () => {
   const h = await harness({selected:'git'})
   h.frames.git = {isConnected:true, closest:() => null, getClientRects:() => [1], querySelector:() => ({})}
-  await h.voice.begin('agent', {code:'Tab'})
+  await h.voice.toggle('agent')
   h.window.__libroSelectedApp = 'agent'
-  h.event('keyup', {code:'Tab', key:'Tab'})
+  await h.voice.toggle('agent')
   await tick()
   assert.deepEqual(h.calls.pastes, [['Hello Libro', false, 'git']])
 })
@@ -174,8 +178,8 @@ test('dictation inserts into the terminal selected at recording start', async ()
 test('a selected browser keeps dictation targeted at the agent', async () => {
   const h = await harness({selected:'browser'})
   h.frames.browser = {isConnected:true, closest:() => null, getClientRects:() => [1], querySelector:() => null}
-  await h.voice.begin('agent', {code:'Tab'})
-  h.event('keyup', {code:'Tab', key:'Tab'})
+  await h.voice.toggle('agent')
+  await h.voice.toggle('agent')
   await tick()
   assert.deepEqual(h.calls.pastes, [['Hello Libro', false, 'agent']])
 })

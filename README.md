@@ -32,8 +32,8 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 
 ### Voice typing
 
-Hold **Tab**, or the microphone beside the agent tab, and speak. Release
-to insert the transcript into the selected terminal (or the agent when a browser is selected). Review it and press Enter to send.
+Press **Caps Lock**, or click the microphone beside the agent tab, to start listening.
+Press or click again to stop and insert the transcript into the selected terminal (or the agent when a browser is selected). Review it and press Enter to send.
 Escape, switching threads, or leaving the window cancels dictation. Recordings
 are limited to 60 seconds. Change the shortcut in Settings → Shortcuts.
 

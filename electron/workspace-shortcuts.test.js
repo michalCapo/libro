@@ -951,3 +951,12 @@ test('project groups contain the original branch first and number every worktree
   assert.equal(flatten(list.children[1]).find(el => el.dataset.kind === 'base').dataset.projectShortcut, '3')
   assert.equal(flatten(list).some(el => el.classes === 'ws-project-agent'), false)
 })
+
+test('voice uses Caps Lock and leaves Tab available to the browser', () => {
+  const context = vm.createContext({})
+  vm.runInContext(matching + ";workspaceShortcuts = new Set(['CapsLock'])", context)
+  for (const key of ['CapsLock', 'capslock', 'Tab']) {
+    context.input = {key}
+    assert.equal(vm.runInContext('isWorkspaceShortcut(input)', context), key !== 'Tab')
+  }
+})
