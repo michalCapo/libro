@@ -45,7 +45,7 @@ func workspaceAppName(app Application) string {
 }
 
 func workspaceButton(label, icon, js string) *r.Node {
-	return r.Button("ws-button").Attr("title", label).Attr("aria-label", label).
+	return r.Button("ws-button").Attr("type", "button").Attr("title", label).Attr("aria-label", label).
 		OnClick(r.JS(js)).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text(icon))
 }
 

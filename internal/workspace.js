@@ -877,7 +877,7 @@
     const customRows = document.getElementById('tool-key-custom-rows');
     if (customRows) {
       customRows.replaceChildren();
-      window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files', 'notes'].includes(p.id) && !p.removed).forEach(plugin => {
+      window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files', 'notes', 'nvim', 'lazyrepo', 'lazydata'].includes(p.id) && !p.removed).forEach(plugin => {
         const row = node('div', 'ws-settings-row ws-agent-command-row');
         const label = node('label', '', plugin.name);
         const input = node('input', 'ws-agent-command');
@@ -1481,7 +1481,7 @@
     document.getElementById('settings-save').disabled = false;
     document.getElementById('settings-cancel').disabled = false;
     document.getElementById('settings-save-status').textContent = ok ? '' : message;
-    if (ok) closeSettings();
+    if (ok) window.__libroShowToast?.('Settings saved', '', 'success');
   }
   let removedAgents = {};
   let draggedAgentRow = null;

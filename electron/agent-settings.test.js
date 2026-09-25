@@ -74,7 +74,9 @@ function settingsHarness(valid = true) {
   get('workspace-settings').querySelectorAll = () => [{ reportValidity: () => valid }]
   get('workspace-settings').querySelector = () => content
   const calls = []
+  const toasts = []
   const context = vm.createContext({
+    window: { __libroShowToast: (...args) => toasts.push(args) },
     document: { getElementById: get, querySelector: () => content, querySelectorAll: () => [] },
     settingsFocus: null,
     saveAgentCommand: () => calls.push('agents'),
@@ -87,18 +89,20 @@ function settingsHarness(valid = true) {
     saveNotificationSound: () => { calls.push('sound'); return true },
   })
   vm.runInContext(saveAll + close, context)
-  return { get, content, calls, run: code => vm.runInContext(code, context) }
+  return { get, content, calls, toasts, run: code => vm.runInContext(code, context) }
 }
 
-test('one Save waits for every section before closing and prevents duplicate saves', () => {
+test('one Save waits for every section before showing a toast and keeps settings open', () => {
   const h = settingsHarness()
   h.run('saveAllSettings(); saveAllSettings(); closeSettings()')
   assert.deepEqual(h.calls, ['agents'])
   assert.equal(h.get('workspace-settings').hidden, false)
   assert.equal(h.content.inert, true)
+  assert.deepEqual(h.toasts, [])
   for (let i = 0; i < 7; i++) h.run('settingsSaveFinished(true)')
   assert.deepEqual(h.calls, ['agents', 'tools', 'environment', 'default-thread-agent', 'page-tools', 'width', 'tool-width', 'theme', 'sound'])
-  assert.equal(h.get('workspace-settings').hidden, true)
+  assert.equal(h.get('workspace-settings').hidden, false)
+  assert.deepEqual(h.toasts, [['Settings saved', '', 'success']])
   assert.equal(h.get('settings-save').disabled, false)
   assert.equal(h.content.inert, false)
 })
@@ -109,6 +113,7 @@ test('a failed save keeps settings open and allows retry', () => {
   assert.deepEqual(h.calls, ['agents'])
   assert.equal(h.get('workspace-settings').hidden, false)
   assert.equal(h.get('settings-save-status').textContent, 'Invalid command')
+  assert.deepEqual(h.toasts, [])
   assert.equal(h.get('settings-cancel').disabled, false)
   h.run('saveAllSettings()')
   assert.deepEqual(h.calls, ['agents', 'agents'])
