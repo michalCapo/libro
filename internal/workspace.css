@@ -427,7 +427,9 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[aria-current=true]{position:relative;background:transparent;color:var(--ws-fg);box-shadow:none}
 :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[aria-current=true]::after{content:"";position:absolute;inset:0;z-index:0;border-radius:0;background:color-mix(in srgb,var(--ws-accent) 8%,var(--ws-raised));pointer-events:none}
 :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[aria-current=true]>*{position:relative;z-index:1}
-#libro-workspace[data-projects=false] :is(.ws-project-agents,.ws-project-threads:not(:empty)){display:none}
+#libro-workspace[data-projects=false] .ws-project-agents{display:none}
+#libro-workspace[data-projects=false] .ws-project-group .ws-project-item{margin-bottom:0}
+#libro-workspace[data-projects=false] .ws-project-group .ws-project-row{width:100%;min-width:0}
 
 #url-popup-results{padding:6px;max-height:min(320px,45dvh);overflow-y:auto;overflow-x:hidden}
 #url-popup-results .ws-command-row{min-height:40px}
