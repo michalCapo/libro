@@ -235,7 +235,7 @@ func renderToolKeybindings() *r.Node {
 				rows = append(rows, r.Div("ws-settings-row ws-agent-command-row").Render(
 					r.El("label", "").Attr("for", id).Text(tool.Name),
 					r.Input("ws-agent-command").ID(id).Attr("data-tool-key", tool.ID).Attr("readonly", "").Attr("placeholder", "Press shortcut"),
-					workspaceButton("Clear "+tool.Name+" shortcut", "close", "document.getElementById('"+id+"').value=''"),
+					workspaceButton("Clear "+tool.Name+" shortcut", "close", "libroWorkspace.setShortcutValue(document.getElementById('"+id+"'),'')"),
 				))
 			}
 		}
@@ -243,7 +243,6 @@ func renderToolKeybindings() *r.Node {
 			rows = append(rows, r.Div("").ID("tool-key-custom-rows"))
 		}
 		rows = append(rows,
-			r.Div("ws-settings-row ws-settings-actions").Render(r.Button("ws-launch").Attr("type", "submit").Text("Save shortcuts")),
 			r.P("ws-settings-status").Attr("data-tool-key-status", "").Attr("role", "status"),
 		)
 		content = append(content, r.El("h3", "ws-shortcut-heading").Text(group.Name), r.Div("ws-settings-group").Render(rows...))
@@ -252,5 +251,5 @@ func renderToolKeybindings() *r.Node {
 		r.Div("ws-settings-row ws-settings-actions").Render(r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.resetToolKeys()")).Text("Restore defaults")),
 		r.P("ws-settings-status").ID("tool-key-status").Attr("role", "status"),
 	)
-	return r.El("form", "").ID("tool-key-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveToolKeys()")).Render(content...)
+	return r.El("form", "").ID("tool-key-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveAllSettings()")).Render(content...)
 }

@@ -40,7 +40,6 @@ test('saving a new agent excludes removed tools and preserves removed agents', (
 })
 
 test('saving agent environment preserves masked values', () => {
-  const submit = { disabled: false }
   const status = { textContent: '' }
   const row = {
     dataset: { originalName: 'OPENROUTER_API_KEY' },
@@ -51,7 +50,7 @@ test('saving agent environment preserves masked values', () => {
   }
   const form = {
     querySelectorAll: () => [row],
-    querySelector: selector => selector === '[type=submit]' ? submit : status,
+    querySelector: () => status,
   }
   let payload
   vm.runInNewContext(saveEnvironment + ';saveAgentEnvironment(form)', {
@@ -59,6 +58,67 @@ test('saving agent environment preserves masked values', () => {
     call(action, data) { assert.equal(action, 'settings.agent-environment'); payload = JSON.parse(JSON.stringify(data)) },
   })
   assert.deepEqual(payload.entries, [{name: 'OPENROUTER_API_KEY', value: '', originalName: 'OPENROUTER_API_KEY'}])
-  assert.equal(submit.disabled, true)
   assert.equal(status.textContent, 'Saving…')
+})
+
+const saveAll = workspace.slice(workspace.indexOf('  let settingsSaveSteps ='), workspace.indexOf('  let removedAgents ='))
+const close = workspace.slice(workspace.indexOf('  function closeSettings('), workspace.indexOf('  function saveSettings('))
+
+function settingsHarness(valid = true) {
+  const elements = new Map()
+  const content = { inert: false }
+  const get = id => {
+    if (!elements.has(id)) elements.set(id, { value: id, disabled: false, textContent: '', hidden: false })
+    return elements.get(id)
+  }
+  get('workspace-settings').querySelectorAll = () => [{ reportValidity: () => valid }]
+  get('workspace-settings').querySelector = () => content
+  const calls = []
+  const context = vm.createContext({
+    document: { getElementById: get, querySelector: () => content, querySelectorAll: () => [] },
+    settingsFocus: null,
+    saveAgentCommand: () => calls.push('agents'),
+    saveTools: () => calls.push('tools'),
+    saveAgentEnvironment: () => calls.push('environment'),
+    saveThreadAgent: value => calls.push(value),
+    savePageTools: () => calls.push('page-tools'),
+    saveSettings: (value, tool) => calls.push(tool ? 'tool-width' : 'width'),
+    saveTheme: () => { calls.push('theme'); return true },
+    saveNotificationSound: () => { calls.push('sound'); return true },
+  })
+  vm.runInContext(saveAll + close, context)
+  return { get, content, calls, run: code => vm.runInContext(code, context) }
+}
+
+test('one Save waits for every section before closing and prevents duplicate saves', () => {
+  const h = settingsHarness()
+  h.run('saveAllSettings(); saveAllSettings(); closeSettings()')
+  assert.deepEqual(h.calls, ['agents'])
+  assert.equal(h.get('workspace-settings').hidden, false)
+  assert.equal(h.content.inert, true)
+  for (let i = 0; i < 7; i++) h.run('settingsSaveFinished(true)')
+  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', 'default-thread-agent', 'page-tools', 'width', 'tool-width', 'theme', 'sound'])
+  assert.equal(h.get('workspace-settings').hidden, true)
+  assert.equal(h.get('settings-save').disabled, false)
+  assert.equal(h.content.inert, false)
+})
+
+test('a failed save keeps settings open and allows retry', () => {
+  const h = settingsHarness()
+  h.run('saveAllSettings(); settingsSaveFinished(false, "Invalid command")')
+  assert.deepEqual(h.calls, ['agents'])
+  assert.equal(h.get('workspace-settings').hidden, false)
+  assert.equal(h.get('settings-save-status').textContent, 'Invalid command')
+  assert.equal(h.get('settings-cancel').disabled, false)
+  h.run('saveAllSettings()')
+  assert.deepEqual(h.calls, ['agents', 'agents'])
+})
+
+test('Cancel closes without saving and invalid fields prevent any save', () => {
+  const h = settingsHarness(false)
+  h.run('saveAllSettings()')
+  assert.deepEqual(h.calls, [])
+  h.run('closeSettings()')
+  assert.equal(h.get('workspace-settings').hidden, true)
+  assert.deepEqual(h.calls, [])
 })

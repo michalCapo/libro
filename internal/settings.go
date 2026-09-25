@@ -366,11 +366,10 @@ func setDefaultThreadAgent(id string) error {
 }
 
 func renderAgentCommands() *r.Node {
-	return r.El("form", "").ID("agent-commands-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveAgentCommand(this)")).Render(
+	return r.El("form", "").ID("agent-commands-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveAllSettings()")).Render(
 		r.Div("ws-settings-group").Render(
 			r.Div("").ID("agent-command-rows"),
 			r.Div("ws-settings-row").Render(
-				r.Button("ws-launch").Attr("type", "submit").Text("Save agents"),
 				r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomAgent()")).Text("Add custom agent"),
 			),
 		),
@@ -448,7 +447,7 @@ func registerSettingsActions(app *r.App) {
 			message = "Could not save: " + err.Error()
 		}
 		list, _ := json.Marshal(plugins())
-		return fmt.Sprintf("libroWorkspace.agentCommandSaved(%s,%s);", components.JSString(message), list)
+		return fmt.Sprintf("libroWorkspace.agentCommandSaved(%s,%s,%t);", components.JSString(message), list, err == nil)
 	})
 	registerAction(app, "settings.open", func(_ *r.Context) string {
 		commands := map[string]string{}
@@ -492,9 +491,9 @@ func renderWorkspaceSettings() *r.Node {
 				r.Div("ws-settings-row").Render(
 					r.Div("ws-settings-copy").Render(
 						r.El("label", "").Attr("for", "workspace-theme").Text("Theme"),
-						r.P("").ID("workspace-theme-help").Text("Auto follows your operating system. Changes apply immediately."),
+						r.P("").ID("workspace-theme-help").Text("Auto follows your operating system."),
 					),
-					r.El("select", "ws-settings-select").ID("workspace-theme").Attr("aria-describedby", "workspace-theme-help").On("change", r.JS("libroWorkspace.saveTheme(event.target.value)")).Render(
+					r.El("select", "ws-settings-select").ID("workspace-theme").Attr("aria-describedby", "workspace-theme-help").Render(
 						r.El("option", "").Attr("value", "system").Text("Auto"),
 						r.El("option", "").Attr("value", "light").Text("Light"),
 						r.El("option", "").Attr("value", "dark").Text("Dark"),
@@ -509,7 +508,7 @@ func renderWorkspaceSettings() *r.Node {
 						r.El("label", "").Attr("for", "notification-sound").Text("Agent done sound"),
 						r.P("").ID("notification-sound-help").Text("Play a short sound whenever an agent finishes a task, in any project."),
 					),
-					r.El("select", "ws-settings-select").ID("notification-sound").Attr("aria-describedby", "notification-sound-help").On("change", r.JS("libroWorkspace.saveNotificationSound(event.target.value)")).Render(
+					r.El("select", "ws-settings-select").ID("notification-sound").Attr("aria-describedby", "notification-sound-help").Render(
 						r.El("option", "").Attr("value", "on").Text("On"),
 						r.El("option", "").Attr("value", "off").Text("Off"),
 					),
@@ -523,7 +522,7 @@ func renderWorkspaceSettings() *r.Node {
 						r.El("label", "").Attr("for", "page-tools-autoexecute").Text("Autoexecute page tool prompts"),
 						r.P("").ID("page-tools-autoexecute-help").Text("Use A to annotate an element, D to annotate an area, or P to annotate the whole page, then send the prompt to the active agent. When on, it is submitted immediately."),
 					),
-					r.El("select", "ws-settings-select").ID("page-tools-autoexecute").Attr("aria-describedby", "page-tools-autoexecute-help").On("change", r.JS("libroWorkspace.savePageTools(event.target.value === 'on')")).Render(
+					r.El("select", "ws-settings-select").ID("page-tools-autoexecute").Attr("aria-describedby", "page-tools-autoexecute-help").Render(
 						r.El("option", "").Attr("value", "off").Text("Off — paste only"),
 						r.El("option", "").Attr("value", "on").Text("On — send and run"),
 					),
@@ -532,11 +531,10 @@ func renderWorkspaceSettings() *r.Node {
 			r.P("ws-settings-status").ID("page-tools-autoexecute-status").Attr("role", "status"),
 			r.El("h2", "ws-shortcut-heading").Text("Agent environment"),
 			r.P("ws-settings-status").Text("Environment variables passed to new agent sessions. Saved values stay hidden in Settings."),
-			r.El("form", "").ID("agent-environment-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveAgentEnvironment(this)")).Render(
+			r.El("form", "").ID("agent-environment-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveAllSettings()")).Render(
 				r.Div("ws-settings-group").Render(
 					r.Div("").ID("agent-environment-rows"),
 					r.Div("ws-settings-row").Render(
-						r.Button("ws-launch").Attr("type", "submit").Text("Save environment"),
 						r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addAgentEnvironment()")).Text("Add variable"),
 					),
 				),
@@ -549,14 +547,14 @@ func renderWorkspaceSettings() *r.Node {
 						r.El("label", "").Attr("for", "default-panel-width").Text("Agent panel width"),
 						r.P("").ID("default-panel-width-help").Text("Default width for the agent panel in new threads. Choose MAX to start at full width."),
 					),
-					r.El("select", "ws-settings-select").ID("default-panel-width").Attr("aria-describedby", "default-panel-width-help").On("change", r.JS("libroWorkspace.saveSettings(event.target.value)")).Render(options...),
+					r.El("select", "ws-settings-select").ID("default-panel-width").Attr("aria-describedby", "default-panel-width-help").Render(options...),
 				),
 				r.Div("ws-settings-row").Render(
 					r.Div("ws-settings-copy").Render(
 						r.El("label", "").Attr("for", "default-tool-panel-width").Text("Tool panel width"),
 						r.P("").ID("default-tool-panel-width-help").Text("Default width for new tool panels, such as Files and Browser."),
 					),
-					r.El("select", "ws-settings-select").ID("default-tool-panel-width").Attr("aria-describedby", "default-tool-panel-width-help").On("change", r.JS("libroWorkspace.saveSettings(event.target.value,true)")).Render(options...),
+					r.El("select", "ws-settings-select").ID("default-tool-panel-width").Attr("aria-describedby", "default-tool-panel-width-help").Render(options...),
 				),
 			),
 			r.P("ws-settings-status").Text("Existing panels keep their current width."),
@@ -568,7 +566,7 @@ func renderWorkspaceSettings() *r.Node {
 						r.El("label", "").Attr("for", "default-thread-agent").Text("Default agent"),
 						r.P("").ID("default-thread-agent-help").Text("Start this agent in new threads."),
 					),
-					r.El("select", "ws-settings-select").ID("default-thread-agent").Attr("aria-describedby", "default-thread-agent-help").On("change", r.JS("libroWorkspace.saveThreadAgent(event.target.value)")),
+					r.El("select", "ws-settings-select").ID("default-thread-agent").Attr("aria-describedby", "default-thread-agent-help"),
 				),
 			),
 			r.P("ws-settings-status").ID("default-thread-agent-status").Attr("role", "status"),
@@ -577,7 +575,7 @@ func renderWorkspaceSettings() *r.Node {
 				r.Div("ws-settings-row").Render(
 					r.Div("ws-settings-copy").Render(
 						r.El("label", "").Attr("for", "autolaunch-agent").Text("Autolaunch agent"),
-						r.P("").ID("autolaunch-agent-help").Text("Start this agent when you open a project with no agent panels. Choose Off to start manually. Apply with Save agents below."),
+						r.P("").ID("autolaunch-agent-help").Text("Start this agent when you open a project with no agent panels. Choose Off to start manually."),
 					),
 					r.El("select", "ws-settings-select").ID("autolaunch-agent").Attr("form", "agent-commands-form").Attr("aria-describedby", "autolaunch-agent-help"),
 				),
@@ -587,6 +585,11 @@ func renderWorkspaceSettings() *r.Node {
 			renderAgentCommands(),
 			renderToolSettings(),
 			renderToolKeybindings(),
+		),
+		r.Div("ws-settings-footer").Render(
+			r.P("ws-settings-status").ID("settings-save-status").Attr("role", "status").Attr("aria-live", "polite"),
+			r.Button("ws-launch").ID("settings-cancel").Attr("type", "button").OnClick(r.JS("libroWorkspace.closeSettings()")).Text("Cancel"),
+			r.Button("ws-launch").ID("settings-save").Attr("type", "button").OnClick(r.JS("libroWorkspace.saveAllSettings()")).Text("Save"),
 		),
 	)
 }

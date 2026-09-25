@@ -103,11 +103,10 @@ func renderToolSettings() *r.Node {
 		r.El("h2", "ws-shortcut-heading").Text("Tools"),
 		r.P("ws-settings-status").Text("Configure Nvim, Git, Database, and custom CLI tools and websites. Changes apply across projects to new sessions."),
 		r.P("ws-settings-status").ID("tool-shortcut-help").Text("Select a shortcut field and press Ctrl, Alt, or Meta with a letter, number, comma, period, brackets, = or -. Clear it to disable the shortcut."),
-		r.El("form", "").ID("tool-commands-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveTools(this)")).Render(
+		r.El("form", "").ID("tool-commands-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveAllSettings()")).Render(
 			r.Div("ws-settings-group").Render(
 				r.Div("").ID("tool-command-rows"),
 				r.Div("ws-settings-row").Render(
-					r.Button("ws-launch").Attr("type", "submit").Text("Save tools"),
 					r.Div("ws-settings-actions").Render(
 						r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomTool()")).Text("Add custom tool"),
 						r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomTool('url')")).Text("Add website"),

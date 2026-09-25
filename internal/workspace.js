@@ -648,9 +648,11 @@
       prefs = updated;
       enableNotificationAudio();
       status.textContent = enabled ? 'Notification sound on.' : 'Notification sound off.';
+      return true;
     } catch (_) {
       document.getElementById('notification-sound').value = prefs.notificationSound === false ? 'off' : 'on';
       status.textContent = 'Could not save. Please try again.';
+      return false;
     }
   }
   const acknowledgedAgents = new Set();
@@ -880,7 +882,7 @@
         const input = node('input', 'ws-agent-command');
         input.id = 'tool-key-' + plugin.id; label.htmlFor = input.id;
         input.dataset.toolKey = plugin.id; input.readOnly = true; input.placeholder = 'Press shortcut';
-        row.append(label, input, button('Clear ' + plugin.name + ' shortcut', 'close', () => { input.value = ''; input.focus(); }));
+        row.append(label, input, button('Clear ' + plugin.name + ' shortcut', 'close', () => { setShortcutValue(input, ''); input.focus(); }));
         customRows.append(row);
       });
     }
@@ -903,7 +905,12 @@
     document.querySelectorAll('#tool-key-status, [data-tool-key-status]').forEach(status => status.textContent = 'Saving…');
     call('settings.tool-keys', {bindings});
   }
-  function resetToolKeys() { document.querySelectorAll('#tool-key-form [data-tool-key]').forEach(input => input.value = window.__libroDefaultToolKeys[input.dataset.toolKey] || ''); }
+  function setShortcutValue(input, value) {
+    document.querySelectorAll('[data-tool-key]').forEach(field => {
+      if (field.dataset.toolKey === input.dataset.toolKey) field.value = value;
+    });
+  }
+  function resetToolKeys() { document.querySelectorAll('#tool-key-form [data-tool-key]').forEach(input => setShortcutValue(input, window.__libroDefaultToolKeys[input.dataset.toolKey] || '')); }
   function toolKeysSaved(bindings, message) {
     document.querySelectorAll('#tool-key-form [type=submit]').forEach(button => button.disabled = false);
     document.querySelectorAll('#tool-key-status, [data-tool-key-status]').forEach(status => status.textContent = message);
@@ -923,8 +930,8 @@
     if (input) {
       if (event.key === 'Tab') return;
       event.preventDefault(); event.stopImmediatePropagation();
-      if (event.key === 'Backspace' || event.key === 'Delete') input.value = '';
-      else if (shortcut(event)) input.value = shortcut(event);
+      if (event.key === 'Backspace' || event.key === 'Delete') setShortcutValue(input, '');
+      else if (shortcut(event)) setShortcutValue(input, shortcut(event));
       return;
     }
     const binding = shortcut(event);
@@ -1319,9 +1326,11 @@
     try {
       window.setTheme(mode);
       status.textContent = '';
+      return true;
     } catch (_) {
       document.getElementById('workspace-theme').value = themePreference();
       status.textContent = 'Could not save theme. Please try again.';
+      return false;
     }
   }
   let savedThreadAgent = '';
@@ -1341,6 +1350,7 @@
     fillThreadAgents();
     document.getElementById('default-thread-agent').disabled = false;
     document.getElementById('default-thread-agent-status').textContent = ok ? 'Saved.' : 'Could not save. Choose an enabled agent and try again.';
+    settingsSaveFinished(ok);
   }
   function savePageTools(enabled) {
     const select = document.getElementById('page-tools-autoexecute');
@@ -1355,6 +1365,7 @@
     const status = document.getElementById('page-tools-autoexecute-status');
     if (select) { select.disabled = false; select.value = enabled ? 'on' : 'off'; }
     if (status) status.textContent = ok ? 'Saved.' : 'Could not save. Try again.';
+    settingsSaveFinished(ok);
   }
   function addAgentEnvironment(name = '', saved = false) {
     const row = node('div', 'ws-settings-row ws-agent-command-row ws-environment-row');
@@ -1381,15 +1392,14 @@
       value: row.querySelector('[data-environment-value]').value,
       originalName: row.dataset.originalName || '',
     }));
-    form.querySelector('[type=submit]').disabled = true;
     form.querySelector('[role=status]').textContent = 'Saving…';
     call('settings.agent-environment', {entries});
   }
   function agentEnvironmentSaved(ok, message, names) {
     const form = document.getElementById('agent-environment-form');
-    form.querySelector('[type=submit]').disabled = false;
     form.querySelector('[role=status]').textContent = message;
     if (ok) fillAgentEnvironment(names);
+    settingsSaveFinished(ok, message);
   }
   function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '', pageToolsAutoExecute = false, environment = []) {
     window.__libroPageToolsAutoExecute = !!pageToolsAutoExecute;
@@ -1419,11 +1429,13 @@
     document.getElementById('default-panel-width').value = width;
     document.getElementById('default-tool-panel-width').value = toolWidth;
     document.getElementById('workspace-settings-status').textContent = '';
+    document.getElementById('settings-save-status').textContent = '';
     document.getElementById('workspace-settings').hidden = false;
     document.querySelectorAll('.ws-project').forEach(project => project.inert = true);
     document.getElementById('workspace-settings-title').focus();
   }
   function closeSettings() {
+    if (settingsSaveSteps) return;
     document.getElementById('workspace-settings').hidden = true;
     document.querySelectorAll('.ws-project').forEach(project => project.inert = false);
     if (settingsFocus?.isConnected) settingsFocus.focus();
@@ -1432,6 +1444,43 @@
     document.getElementById(tool ? 'default-tool-panel-width' : 'default-panel-width').disabled = true;
     document.getElementById('workspace-settings-status').textContent = 'Saving…';
     call('settings.width', {width, tool});
+  }
+  let settingsSaveSteps = null;
+  function saveAllSettings() {
+    if (settingsSaveSteps) return;
+    const page = document.getElementById('workspace-settings');
+    for (const form of page.querySelectorAll('form')) if (!form.reportValidity()) return;
+    const value = id => document.getElementById(id).value;
+    const agent = value('default-thread-agent'), width = value('default-panel-width'), toolWidth = value('default-tool-panel-width');
+    const theme = value('workspace-theme'), sound = value('notification-sound'), pageTools = value('page-tools-autoexecute') === 'on';
+    settingsSaveSteps = [
+      () => saveAgentCommand(document.getElementById('agent-commands-form')),
+      () => saveTools(document.getElementById('tool-commands-form')),
+      () => saveAgentEnvironment(document.getElementById('agent-environment-form')),
+      () => saveThreadAgent(agent),
+      () => savePageTools(pageTools),
+      () => saveSettings(width),
+      () => saveSettings(toolWidth, true),
+      () => {
+        const ok = saveTheme(theme) && saveNotificationSound(sound);
+        settingsSaveFinished(ok, 'Could not save appearance or sound. Please try again.');
+      },
+    ];
+    page.querySelector('.ws-settings-content').inert = true;
+    document.getElementById('settings-save').disabled = true;
+    document.getElementById('settings-cancel').disabled = true;
+    document.getElementById('settings-save-status').textContent = 'Saving…';
+    settingsSaveFinished(true);
+  }
+  function settingsSaveFinished(ok, message = 'Could not save all settings. Please try again.') {
+    if (!settingsSaveSteps) return;
+    if (ok && settingsSaveSteps.length) { settingsSaveSteps.shift()(); return; }
+    settingsSaveSteps = null;
+    document.querySelector('#workspace-settings .ws-settings-content').inert = false;
+    document.getElementById('settings-save').disabled = false;
+    document.getElementById('settings-cancel').disabled = false;
+    document.getElementById('settings-save-status').textContent = ok ? '' : message;
+    if (ok) closeSettings();
   }
   let removedAgents = {};
   let draggedAgentRow = null;
@@ -1469,7 +1518,7 @@
       key.value = toolKeys[plugin.id] || '';
       key.setAttribute('aria-label', (plugin.name || 'Custom tool') + ' shortcut');
       key.setAttribute('aria-describedby', 'tool-shortcut-help');
-      field.append(key, button('Clear shortcut', 'close', () => { key.value = ''; key.focus(); }));
+      field.append(key, button('Clear shortcut', 'close', () => { setShortcutValue(key, ''); key.focus(); }));
       row.insertBefore(field, remove);
     }
     if (!toolRow) {
@@ -1556,16 +1605,19 @@
   function saveTools(form) {
     const tools = window.__libroPlugins.filter(p => p.dock === 'right' && p.removed);
     form.querySelectorAll('[data-agent-id]').forEach(row => tools.push({id:row.dataset.agentId, name:row.querySelector('[data-agent-name]').value.trim(), [row.dataset.toolType === 'url' ? 'url' : 'command']:row.querySelector('[data-agent-command]').value, type:row.dataset.toolType, dock:'right', custom:row.dataset.custom === 'true', disabled:!row.querySelector('[data-agent-enabled]').checked, removed:row.dataset.removed === 'true'}));
-    form.querySelector('[type=submit]').disabled = true;
     form.querySelector('[role=status]').textContent = 'Saving…';
     const bindings = {...toolKeys};
-    form.querySelectorAll('[data-tool-key]').forEach(input => bindings[input.dataset.toolKey] = input.closest('[data-agent-id]').dataset.removed === 'true' ? '' : input.value);
+    document.querySelectorAll('#workspace-settings [data-tool-key]').forEach(input => {
+      bindings[input.dataset.toolKey] = input.value;
+    });
+    form.querySelectorAll('[data-agent-id][data-removed=true] [data-tool-key]').forEach(input => bindings[input.dataset.toolKey] = '');
     call('settings.tools', {tools, bindings});
   }
   function toolsSaved(plugins, message, bindings) {
     const form = document.getElementById('tool-commands-form');
-    form.querySelector('[type=submit]').disabled = false; form.querySelector('[role=status]').textContent = message;
+    form.querySelector('[role=status]').textContent = message;
     if (plugins) { window.__libroPlugins = plugins; if (bindings) { toolKeys = bindings; fillToolKeys(bindings); updateToolHints(); } refresh(); }
+    settingsSaveFinished(!!plugins, message);
   }
   function addCustomAgent() {
     addAgentRow({id:'custom-' + crypto.randomUUID(), name:'', custom:true}, '').querySelector('input').focus();
@@ -1579,21 +1631,20 @@
       commands[id] = command; disabled[id] = !row.querySelector('[data-agent-enabled]').checked;
       if (row.dataset.custom === 'true') custom.push({id, name:row.querySelector('[data-agent-name]').value.trim(), command, type:'terminal', dock:'center', custom:true});
     });
-    form.querySelector('[type=submit]').disabled = true;
     form.querySelector('[role=status]').textContent = 'Saving…';
     Object.keys(removedAgents).forEach(id => disabled[id] = true);
     call('settings.agent-command', {commands, disabled, custom, names, order, removed:removedAgents, autolaunch:document.getElementById('autolaunch-agent').value});
   }
-  function agentCommandSaved(message, plugins) {
+  function agentCommandSaved(message, plugins, ok = true) {
     const form = document.getElementById('agent-commands-form');
-    form.querySelector('[type=submit]').disabled = false;
     form.querySelector('[role=status]').textContent = message;
-    if (plugins) {
+    if (ok && plugins) {
       window.__libroPlugins = plugins;
-      fillThreadAgents();
+      if (!settingsSaveSteps) fillThreadAgents();
       document.querySelectorAll('.ws-grid > .ws-empty').forEach(el => el.remove());
       refresh();
     }
+    settingsSaveFinished(ok, message);
   }
   function settingsSaved(ok, tool = false) {
     const select = document.getElementById(tool ? 'default-tool-panel-width' : 'default-panel-width');
@@ -1604,8 +1655,9 @@
     } else select.value = tool ? savedToolWidth : savedWidth;
     select.disabled = false;
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
+    settingsSaveFinished(ok);
   }
-  window.libroWorkspace = {threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;
