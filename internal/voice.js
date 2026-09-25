@@ -173,7 +173,7 @@
     };
     // Assistive technology can activate the same control without holding a pointer.
     button.onclick = event => { if (event.detail === 0) { if (current) end(); else void begin(id, {toggle:true}); } };
-    group.append(button, status); render();
+    group.prepend(button); group.append(status); render();
   }
 
   window.addEventListener('keyup', event => {
