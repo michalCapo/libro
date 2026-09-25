@@ -285,7 +285,7 @@
   let finishDialog = null;
   function finishThread(name = window.__libroActiveProject, discard = false, method = 'merge') {
     const project = (window.__libroProjects || []).find(p => p.kind === 'worktree' && p.name + '/' + p.branch === name);
-    if (!project) { window.__libroShowToast?.('Select a worktree thread first', '', 2000); return; }
+    if (!project) { window.__libroShowToast?.('Select a worktree thread first', '', 'error'); return; }
     if (finishDialog?.busy) return;
     finishDialog?.dialog.remove();
     const dialog = node('dialog', 'ws-plugin-dialog ws-finish-dialog'); dialog.setAttribute('aria-labelledby', 'finish-thread-title');
@@ -363,7 +363,7 @@
       state.cancel.disabled = false; state.cancel.textContent = 'Done'; return;
     }
     state.dialog.close();
-    window.__libroShowToast?.(reply.warning || 'Thread removed', '', reply.warning ? 6000 : 2000);
+    window.__libroShowToast?.(reply.warning || 'Thread removed', '', reply.warning ? 'error' : 'success');
   }
   function confirmAgentMerge(state, request) {
     const dialog = node('dialog', 'ws-plugin-dialog ws-finish-dialog'); dialog.setAttribute('aria-labelledby', 'agent-merge-title');
@@ -381,7 +381,7 @@
       }
       submit.disabled = true; dialog.close(); state.dialog.close();
       call('project.switch', {name:request.workspace});
-      window.__libroShowToast?.('Merge request sent to the thread’s agent', '', 2500);
+      window.__libroShowToast?.('Merge request sent to the thread’s agent', '', 'success');
     };
     dialog.addEventListener('close', () => dialog.remove());
     dialogKeys(dialog, form, submit, cancel); dialog.showModal(); submit.focus();
@@ -398,7 +398,7 @@
   }
   function threadActionPalette() {
     const project = (window.__libroProjects || []).find(p => (p.kind === 'worktree' ? p.name + '/' + p.branch : p.name) === window.__libroActiveProject);
-    if (!project) { window.__libroShowToast?.('Select a project thread first', '', 2000); return; }
+    if (!project) { window.__libroShowToast?.('Select a project thread first', '', 'error'); return; }
     const actions = project.kind === 'worktree' ? threadActions(project) : [{label:'Thread settings', icon:'settings', run:() => projectSettings(project.name)}];
     actions.push({label:'Close thread', icon:'close', description:'Remove shortcut number; keep files, branch and worktree', run:() => call('project.close')});
     document.getElementById('thread-action-dialog')?.remove();

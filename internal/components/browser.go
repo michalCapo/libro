@@ -563,10 +563,10 @@ window.__libroTogglePageTool = function(appID, mode) {
 		if (next === 'page' || pageToolState[appID] !== next) return;
 		var label = next === 'annotate' ? 'Annotate mode' : next === 'area' ? 'Area select mode' : 'Page tool off';
 		var hint = next === 'annotate' ? 'Hover and click an element' : next === 'area' ? 'Drag a rectangle over the page' : 'Ready';
-		if (window.__libroShowToast) window.__libroShowToast(label, hint, 1200);
+		if (window.__libroShowToast) window.__libroShowToast(label, hint, 'info');
 	}).catch(function(err) {
 		pageToolButtonState(appID, '');
-		if (window.__libroShowToast) window.__libroShowToast('Page tool unavailable', err.message || 'Reload the page and try again.', 2600);
+		if (window.__libroShowToast) window.__libroShowToast('Page tool unavailable', err.message || 'Reload the page and try again.', 'error');
 	});
 };
 
@@ -613,7 +613,7 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 			payload.screenshot = await window.libroElectron.capturePageArea(guest.getWebContentsId(), rect);
 			await guest.executeJavaScript('window.__libroPageToolPromptOpen(' + JSON.stringify(payload) + ', ' + JSON.stringify(payload.url) + ')');
 		} catch (err) {
-			if (window.__libroShowToast) window.__libroShowToast('Screenshot failed', err.message || 'Try the annotation again in Libro desktop.', 2400);
+			if (window.__libroShowToast) window.__libroShowToast('Screenshot failed', err.message || 'Try the annotation again in Libro desktop.', 'error');
 		}
 		return;
 	}
@@ -637,7 +637,7 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 		var wv = pageToolWebview(appID);
 		if (wv && wv.executeJavaScript) wv.executeJavaScript('window.__libroPageToolResult && window.__libroPageToolResult(' + !!sent + ')').catch(function() {});
 		if (window.__libroShowToast) {
-			window.__libroShowToast(sent ? (window.__libroPageToolsAutoExecute ? 'Prompt sent to agent' : 'Prompt pasted to agent') : 'No active agent panel', sent ? '' : 'Start or select an agent and try again.', 1600);
+			window.__libroShowToast(sent ? (window.__libroPageToolsAutoExecute ? 'Prompt sent to agent' : 'Prompt pasted to agent') : 'No active agent panel', sent ? '' : 'Start or select an agent and try again.', sent ? 'success' : 'error');
 		}
 	}
 }
@@ -747,12 +747,12 @@ window.__libroToggleSelectedBrowserMobile = function(appID) {
 			}, 80);
 		}
 		if (window.__libroShowToast) {
-			if (next === 'normal') window.__libroShowToast('Viewport off', 'Restored previous browser size', 1200);
+			if (next === 'normal') window.__libroShowToast('Viewport off', 'Restored previous browser size', 'info');
 			else {
 				var size = mobileSizes[next];
 				var width = orientation === 'landscape' ? size.height : size.width;
 				var height = orientation === 'landscape' ? size.width : size.height;
-				window.__libroShowToast('Viewport ' + size.label, width + ' × ' + height, 1200);
+				window.__libroShowToast('Viewport ' + size.label, width + ' × ' + height, 'info');
 			}
 		}
 		var wv = window.__libroWebviews[appID];
@@ -771,7 +771,7 @@ window.__libroRotateSelectedBrowserViewport = function(appID) {
 		var size = mobileSizes[state.mode];
 		var width = nextOrientation === 'landscape' ? size.height : size.width;
 		var height = nextOrientation === 'landscape' ? size.width : size.height;
-		window.__libroShowToast('Viewport ' + nextOrientation, width + ' × ' + height, 1200);
+		window.__libroShowToast('Viewport ' + nextOrientation, width + ' × ' + height, 'info');
 	}
 	var wv = window.__libroWebviews[appID];
 	if (wv) refocusWebview(appID, wv);
@@ -1287,7 +1287,7 @@ window.__libroNavigateAddress = function(appID, value) {
 		url = (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|\/|$)/i.test(url) ? 'http://' : 'https://') + url;
 	}
 	try { var parsed = new URL(url); if (!['http:', 'https:', 'file:'].includes(parsed.protocol)) return false; url = parsed.href; }
-	catch (_) { if (window.__libroShowToast) window.__libroShowToast('Invalid address', 'Enter a valid website or file URL.', 2200); return false; }
+	catch (_) { if (window.__libroShowToast) window.__libroShowToast('Invalid address', 'Enter a valid website or file URL.', 'error'); return false; }
 	var host = document.querySelector('[data-webview-app="'+appID+'"], [data-browser-iframe-app="'+appID+'"]');
 	if (!host) return false;
 	var input = document.getElementById('urlinput-'+appID); if (input) input.value = url;

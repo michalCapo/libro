@@ -268,7 +268,7 @@ func finalizeProjectCreate(sid, path, name string, transient bool) string {
 		Add(projectAutolaunchJS(state, sid)).
 		Add(focusSelectedAppJS(state))
 	if transient {
-		resp.Add(showToastJS("Opened folder", path, 1600))
+		resp.Add(showToastJS("Opened folder", path, "success"))
 	}
 	return resp.Build()
 }
@@ -499,6 +499,14 @@ func Run(assets embed.FS, desktop bool) error {
 	registerVoiceRoutes(app)
 	voice.prepare()
 
+	registerAction(app, "app.notify", func(ctx *r.Context) string {
+		data := ctx.WsData()
+		title, _ := data["title"].(string)
+		subtitle, _ := data["subtitle"].(string)
+		variant, _ := data["variant"].(string)
+		return showToastJS(title, subtitle, variant)
+	})
+
 	// Open add dialog
 	registerAction(app, "app.dialog.open", func(_ *r.Context) string {
 		return `if(window.libroWorkspace)libroWorkspace.launcher();`
@@ -519,7 +527,7 @@ func Run(assets embed.FS, desktop bool) error {
 			name = "vim"
 		}
 		if cmd == "" {
-			return showToastJS("Editor not installed", "Install nvim or vim to use ⌘/Win+E", 2600)
+			return showToastJS("Editor not installed", "Install nvim or vim to use ⌘/Win+E", "error")
 		}
 		return fmt.Sprintf(`__ws.call('app.start',{sid:%s,type:'terminal',url:'',command:%s,writable:true,name:%s,iconUrl:'',side:'right'});`, components.JSString(sid), components.JSString(cmd), components.JSString(name))
 	})
@@ -528,7 +536,7 @@ func Run(assets embed.FS, desktop bool) error {
 	registerAction(app, "app.pi.open", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		if _, err := exec.LookPath("pi"); err != nil {
-			return showToastJS("Pi agent not installed", "Install pi to use ⌘/Win+Y", 2600)
+			return showToastJS("Pi agent not installed", "Install pi to use ⌘/Win+Y", "error")
 		}
 		return fmt.Sprintf(`__ws.call('app.start',{sid:%s,type:'terminal',url:'',command:'pi',writable:true,name:'pi',iconUrl:'',side:'right'});`, components.JSString(sid))
 	})
@@ -544,7 +552,7 @@ func Run(assets embed.FS, desktop bool) error {
 			p.Command = agentCommand(p)
 			if p.Command != "" {
 				if _, err := exec.LookPath(extractBaseCmd(p.Command)); err != nil {
-					return showToastJS(p.Name+" is not installed", "Install "+extractBaseCmd(p.Command)+" and try again.", 3200)
+					return showToastJS(p.Name+" is not installed", "Install "+extractBaseCmd(p.Command)+" and try again.", "error")
 				}
 			}
 			if !validDock(dock) {
@@ -619,7 +627,7 @@ func Run(assets embed.FS, desktop bool) error {
 			}
 			if plugin.Command != "" {
 				if _, err := exec.LookPath(extractBaseCmd(plugin.Command)); err != nil {
-					return showToastJS(plugin.Name+" is not installed", "Install "+extractBaseCmd(plugin.Command)+" and try again.", 3200)
+					return showToastJS(plugin.Name+" is not installed", "Install "+extractBaseCmd(plugin.Command)+" and try again.", "error")
 				}
 			}
 		}

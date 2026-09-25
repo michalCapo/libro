@@ -690,7 +690,7 @@ func flashCSS() string {
 	if(!document.getElementById('libro-flash-css')){
 		var s=document.createElement('style');
 		s.id='libro-flash-css';
-		s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-toast-in{0%{opacity:0;transform:translate(-50%,-50%) scale(.98)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}} @keyframes libro-toast-out{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.98)}} @keyframes libro-toast-slide-up{0%{transform:translateY(100%);opacity:0}100%{transform:translateY(0);opacity:1}} @keyframes libro-toast-slide-down{0%{transform:translateY(0);opacity:1}100%{transform:translateY(100%);opacity:0}} @keyframes libro-app-select{0%{outline:2px solid rgba(59,130,246,.5)}100%{outline:2px solid transparent}} @keyframes libro-project-switch{0%{opacity:0}100%{opacity:1}} button:focus-visible,input:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid rgba(59,130,246,.65)!important;outline-offset:2px!important} .scrollbar-none,[id^="app-strip-"]{scrollbar-width:none;-ms-overflow-style:none} .scrollbar-none::-webkit-scrollbar,[id^="app-strip-"]::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}';
+		s.textContent='@keyframes libro-flash{0%{transform:scale(1);opacity:1}15%{transform:scale(2.5);opacity:.6}100%{transform:scale(1);opacity:1}} @keyframes libro-app-select{0%{outline:2px solid rgba(59,130,246,.5)}100%{outline:2px solid transparent}} @keyframes libro-project-switch{0%{opacity:0}100%{opacity:1}} button:focus-visible,input:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid rgba(59,130,246,.65)!important;outline-offset:2px!important} .scrollbar-none,[id^="app-strip-"]{scrollbar-width:none;-ms-overflow-style:none} .scrollbar-none::-webkit-scrollbar,[id^="app-strip-"]::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}';
 		document.head.appendChild(s);
 	}
 
@@ -739,52 +739,24 @@ func flashCSS() string {
 })();`
 }
 
-// toastSetupJS returns JS that registers the global toast function.
+// toastSetupJS routes browser notifications through g-sui's Notify API.
 func toastSetupJS() string {
-	return `
-(function(){
-	if(window.__libroShowToast)return;
-	var timer=null;
-	// Configurable toast with custom message and duration
-	window.__libroShowToast=function(title,subtitle,durationMs){
-		var dur=durationMs||3000;
-		var el=document.getElementById('libro-project-toast');
-		if(!el){
-			el=document.createElement('div');
-			el.id='libro-project-toast';
-			el.style.cssText='position:fixed;top:38%;left:50%;transform:translate(-50%,-50%) scale(.92);z-index:9999;pointer-events:none;opacity:0;';
-			document.body.appendChild(el);
-		}
-		if(timer){clearTimeout(timer);timer=null;}
-		var dk=document.documentElement.classList.contains('dark');
-		var bg=dk?'rgba(24,24,37,.88)':'rgba(255,255,255,.92)';
-		var border=dk?'rgba(63,63,90,.5)':'rgba(200,200,220,.6)';
-		var fg=dk?'#e2e2e8':'#1a1a2e';
-		var dim=dk?'#7a7a8e':'#8a8a9e';
-		var html='<div style="background:'+bg+';border:1px solid '+border+';backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-radius:12px;padding:20px 36px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.18)">';
-		html+='<div style="font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,monospace;font-size:22px;font-weight:600;color:'+fg+';letter-spacing:-.02em;line-height:1.3">'+title.replace(/</g,'&lt;')+'</div>';
-		if(subtitle){html+='<div style="font-family:ui-monospace,SFMono-Regular,SF Mono,Menlo,monospace;font-size:14px;color:'+dim+';margin-top:6px;letter-spacing:.02em;max-width:400px;line-height:1.4">'+subtitle.replace(/</g,'&lt;')+'</div>';}
-		html+='</div>';
-		el.innerHTML=html;
-		el.style.animation='libro-toast-in .04s ease-out forwards';
-		timer=setTimeout(function(){
-			el.style.animation='libro-toast-out .05s ease-in forwards';
-			timer=setTimeout(function(){el.style.opacity='0';timer=null;},60);
-		},dur);
-	};
-})();
-`
+	return `window.__libroShowToast=function(title,subtitle,variant){
+		__ws.call('app.notify',{title,subtitle,variant:variant||'info'});
+	};`
 }
 
-// showToastJS returns JS that displays a configurable toast message.
-// title: main message (required)
-// subtitle: secondary message (optional, can be empty)
-// durationMs: visibility duration in milliseconds (default 3000)
-func showToastJS(title, subtitle string, durationMs int) string {
-	if durationMs <= 0 {
-		durationMs = 3000
+// showToastJS preserves the message detail while using g-sui's standard toast.
+func showToastJS(title, subtitle, variant string) string {
+	if subtitle != "" {
+		title += ": " + subtitle
 	}
-	return fmt.Sprintf("if(window.__libroShowToast)window.__libroShowToast(%s,%s,%d);", components.JSString(title), components.JSString(subtitle), durationMs)
+	switch variant {
+	case "success", "error":
+	default:
+		variant = "info"
+	}
+	return r.Notify(variant, title)
 }
 
 func appWidthPolicyJS(sid string) string {
@@ -820,7 +792,7 @@ func appWidthPolicyJS(sid string) string {
 	}
 
 	function notifyBlocked(){
-		if(window.__libroShowToast)window.__libroShowToast('3XL unavailable','Screen is Full HD or smaller',1800);
+		if(window.__libroShowToast)window.__libroShowToast('3XL unavailable','Screen is Full HD or smaller', 'error');
 	}
 
 	window.__libroAppWidthMaxPixel=maxFixedPixels;
@@ -1526,8 +1498,8 @@ func commandPopupJS(sid string) string {
 				var list=window.__libroProjects||[];
 				var active=null;
 				for(var i=0;i<list.length;i++){if(list[i].isActive){active=list[i];break;}}
-				if(!active){if(window.__libroShowToast)window.__libroShowToast('No active project','',2000);return;}
-				if(active.kind==='worktree'){if(window.__libroShowToast)window.__libroShowToast('Cannot remove a worktree from here','Use git worktree remove instead',2500);return;}
+				if(!active){if(window.__libroShowToast)window.__libroShowToast('No active project','', 'error');return;}
+				if(active.kind==='worktree'){if(window.__libroShowToast)window.__libroShowToast('Cannot remove a worktree from here','Use git worktree remove instead', 'error');return;}
 				var run=function(){__ws.call('project.remove',{sid:'%s',name:active.name});};
 				if(window.__libroConfirmAction){window.__libroConfirmAction('Remove project?', 'Remove project "'+active.name+'" from Libro?\n\nThis only removes it from the project list. Files on disk are kept.', run);}else{run();}
 			}},
@@ -1789,7 +1761,7 @@ func worktreeCreatePopupJS(sid string) string {
 		if(!dlg||!inp)return;
 		var active=activeProject();
 		if(!active||!active.isGit){
-			if(window.__libroShowToast)window.__libroShowToast('Not a git repository','Switch to a git project first',2200);
+			if(window.__libroShowToast)window.__libroShowToast('Not a git repository','Switch to a git project first', 'error');
 			return;
 		}
 		var parent=findParentProject(active);
@@ -1955,7 +1927,7 @@ func resizePopupJS(sid string) string {
 		if(!btn||!dlg||!dlg.contains(btn))return;
 		e.stopPropagation();
 		if(!btnAllowed(btn)){
-			if(window.__libroShowToast)window.__libroShowToast('3XL unavailable','Screen is Full HD or smaller',1800);
+			if(window.__libroShowToast)window.__libroShowToast('3XL unavailable','Screen is Full HD or smaller', 'error');
 			return;
 		}
 		var btns=getBtns();
@@ -2736,7 +2708,7 @@ func moveProjectPopupJS(sid string) string {
 		if(!dlg||!inp)return;
 		var appId=window.__libroSelectedApp||'';
 		if(!appId){
-			if(window.__libroShowToast)window.__libroShowToast('No selected app','Select or open an app first',1800);
+			if(window.__libroShowToast)window.__libroShowToast('No selected app','Select or open an app first', 'error');
 			return;
 		}
 		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
@@ -3114,7 +3086,7 @@ func terminalFrameSetupJS() string {
 				}
 				writeClipboardText(text);
 				if (event && event.preventDefault) event.preventDefault();
-				if (window.__libroShowToast) window.__libroShowToast('Copied terminal text', '', 1200);
+				if (window.__libroShowToast) window.__libroShowToast('Copied terminal text', '', 'success');
 				return true;
 			}
 
