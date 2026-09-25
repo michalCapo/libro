@@ -25,7 +25,7 @@ let script='';process.stdin.on('data',d=>script+=d);process.stdin.on('end',async
  }
  let app=boot();app.window.__libroRememberURL('http://localhost:1411/');app.window.__libroRememberURL('https://example.com/');app.window.__libroRememberURL('http://localhost:1411/');
  assert.equal(JSON.parse(storage.get('libro.browser.history')).length,2);
- app=boot();app.window.__libroOpenURLPopupFor('a');assert.ok(focused);assert.equal(app.input.value,'');
+ app=boot();app.window.__libroOpenURLPopupFor('a');assert.ok(focused);assert.equal(app.input.value,'http://localhost:1411/');
  app.input.value='1411';app.input.input();assert.equal(app.results.children.length,1);
  app.input.keydown({key:'Enter',preventDefault(){},stopImmediatePropagation(){}});assert.equal(navigated,'http://localhost:1411/');
  storage.set('libro.browser.history',JSON.stringify([{url:'http://old/',time:Date.now()-31*86400000}]));app.input.value='';app.input.input();assert.equal(app.results.children.length,0);
@@ -35,6 +35,7 @@ let script='';process.stdin.on('data',d=>script+=d);process.stdin.on('end',async
  app.window.__libroRememberURL('http://localhost:43327/');
  app.window.__libroRememberURL('https://example.com/');
  app.window.__libroOpenURLPopupFor('a');
+ assert.equal(app.input.value,'http://localhost:43327');
  assert.equal(app.results.children.length,2);
  assert.equal(app.results.children[0].children[1].textContent,'http://localhost:43327');
  app.input.keydown({key:'ArrowDown',preventDefault(){},stopImmediatePropagation(){}});

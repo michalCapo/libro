@@ -71,6 +71,7 @@ func urlPopupJS(_ string) string {
     input.value=typeof value==='string'?value:address.value;
     if(input.value==='about:blank')input.value='';
     filter();
+    if(!input.value&&matches.length)input.value=matches[0].url;
     dialog.classList.remove('hidden');
     input.focus();input.select();
     // DOM focus alone does not transfer native keyboard focus from an Electron guest.
