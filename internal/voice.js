@@ -25,7 +25,7 @@
       button.title = state === 'error' ? setup.message : 'Press to start or stop voice typing' + (shortcut ? ' (' + shortcut + ')' : '') + '. Escape cancels.';
       button.setAttribute('aria-label', button.title);
       button.querySelector('i').textContent = state === 'error' ? 'refresh' : 'mic';
-      const status = button.nextElementSibling;
+      const status = button.parentElement.querySelector('.ws-voice-status');
       if (status.textContent !== label) status.textContent = label;
       status.hidden = !label;
     });

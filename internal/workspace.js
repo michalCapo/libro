@@ -1237,12 +1237,12 @@
     else if (!placeholder) grid.append(empty('center', grid));
     let tabs = grid.parentElement.querySelector('.ws-tool-tabs');
     if (!tabs) { tabs = node('div', 'ws-tool-tabs'); tabs.setAttribute('aria-label', 'Agents and tools'); grid.before(tabs); }
-    const signature = [...center, ...all.filter(frame => frame.dataset.dock === 'right'), ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, frame.dataset.appName, frame.dataset.selected, frame.querySelector('[data-size-trigger]')?.textContent || 'MD', frame.dataset.dock]);
+    const signature = [...center, ...all.filter(frame => frame.dataset.dock === 'right'), ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, frame.dataset.dock === 'center' ? (grid.dataset.projectLabel || frame.dataset.appName) : frame.dataset.appName, frame.dataset.selected, frame.querySelector('[data-size-trigger]')?.textContent || 'MD', frame.dataset.dock]);
     if (tabs.dataset.signature !== JSON.stringify(signature)) {
       tabs.dataset.signature = JSON.stringify(signature); tabs.replaceChildren();
       signature.forEach(([id, name, shown, size, dock]) => {
         const group = node('div', 'ws-agent-tab ws-tool-tab-group'); group.dataset.selected = shown; group.dataset.tabDock = dock;
-        const tab = node('button', 'ws-tool-tab', name); tab.type = 'button'; tab.setAttribute('aria-pressed', shown);
+        const tab = node('button', 'ws-tool-tab', name); tab.type = 'button'; tab.title = name; tab.setAttribute('aria-pressed', shown);
         tab.onclick = () => {
           if (dock === 'center' && grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
             all.filter(frame => frame.dataset.dock === 'right').forEach(frame => state.hidden.add(frame.dataset.appId));
