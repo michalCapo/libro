@@ -2319,14 +2319,15 @@ func projectDialogJS(sid string) string {
 		if(!q){filtered=all;filtered.sort(sortProjects);}else if(isPathQuery(q)){filtered=[];}else{
 			filtered=[];
 			all.forEach(function(item){
-				var hay=item.name+' '+(item.displayName||'')+' '+(item.branch||'')+' '+(item.path||'');
-				var score=fuzzyMatch(hay,q);
+				// Match fields separately so letters cannot span unrelated names or paths.
+				var score=Math.max(fuzzyMatch(item.name,q),fuzzyMatch(item.displayName,q),fuzzyMatch(item.branch,q));
+				if((item.path||'').toLowerCase().indexOf(q.toLowerCase())!==-1)score=Math.max(score,1);
 				if(score>0){filtered.push(Object.assign({score:score},item));}
 			});
 			filtered.sort(sortProjects);
 		}
 		selectedIdx=0;
-		for(var i=0;i<filtered.length;i++){if(filtered[i].isActive){selectedIdx=i;break;}}
+		if(!q)for(var i=0;i<filtered.length;i++){if(filtered[i].isActive){selectedIdx=i;break;}}
 		scheduleLookup();
 		render();
 	}
