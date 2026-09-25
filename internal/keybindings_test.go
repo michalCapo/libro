@@ -4,6 +4,9 @@ import "testing"
 
 func TestToolShortcutValidation(t *testing.T) {
 	keys := defaultToolKeybindings()
+	if key, exists := keys["close-project"]; !exists || key != "" {
+		t.Fatalf("close-project shortcut = %q, exists = %v", key, exists)
+	}
 	if keys["voice"] != "CapsLock" {
 		t.Fatalf("voice shortcut = %q", keys["voice"])
 	}

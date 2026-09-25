@@ -22,7 +22,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"lazyrepo", "Git", "Ctrl+G"},
 	{"lazydata", "Database", "Ctrl+D"},
 	{"close-panel", "Close panel", "Ctrl+Q"},
-	{"close-project", "Close project", "Ctrl+Shift+Q"},
+	{"close-project", "Close project", ""},
 	{"run-project", "Start / restart project", "Ctrl+Shift+R"},
 	{"stop-project", "Stop project command", "Ctrl+Shift+T"},
 	{"panel-size-down", "Decrease panel size", "Ctrl+."},

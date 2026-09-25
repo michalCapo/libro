@@ -400,7 +400,7 @@
     const project = (window.__libroProjects || []).find(p => (p.kind === 'worktree' ? p.name + '/' + p.branch : p.name) === window.__libroActiveProject);
     if (!project) { window.__libroShowToast?.('Select a project thread first', '', 'error'); return; }
     const actions = project.kind === 'worktree' ? threadActions(project) : [{label:'Thread settings', icon:'settings', run:() => projectSettings(project.name)}];
-    actions.push({label:'Close thread', icon:'close', description:'Remove shortcut number; keep files, branch and worktree', run:() => call('project.close')});
+    actions.push({label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep files, branch and worktree', run:() => call('project.close')});
     document.getElementById('thread-action-dialog')?.remove();
     const dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'thread-action-dialog'; dialog.setAttribute('aria-label', 'Thread actions');
     const searchBar = node('div', 'ws-command-search');

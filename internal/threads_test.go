@@ -292,12 +292,13 @@ func TestCloseProjectArchivesThreadAndClosesTools(t *testing.T) {
 			{ID: "agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"},
 			{ID: "browser", Type: AppTypeURL, Dock: "right"},
 			{ID: "shell", Type: AppTypeTerminal, Dock: "bottom"},
+			{ID: "application", Type: AppTypeTerminal, PluginID: "project-command", Dock: "bottom"},
 		},
 		snapshots: map[string]*projectSnapshot{"other": {Apps: []Application{{ID: "other-agent"}}}},
 	}
 	manager.states["test"] = state
 	apps, err := manager.CloseProject("test")
-	if err != nil || len(apps) != 3 || len(state.Apps) != 0 || !state.Threads[0].Archived {
+	if err != nil || len(apps) != 4 || len(state.Apps) != 0 || !state.Threads[0].Archived {
 		t.Fatalf("thread not closed and archived: %v", err)
 	}
 	if len(state.snapshots["other"].Apps) != 1 {
