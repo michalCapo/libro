@@ -7,7 +7,7 @@ const { test } = require('node:test')
 const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8')
 const forwarding = main.slice(main.indexOf('    // Keep workspace navigation'), main.indexOf('    const isZoomInKey'))
 const matching = main.slice(main.indexOf('let workspaceShortcuts'), main.indexOf('// Find the Go binary'))
-const defaults = [...fs.readFileSync(path.join(__dirname, '../internal/keybindings.go'), 'utf8')
+const defaults = [...fs.readFileSync(path.join(__dirname, '../internal/keybindings.go'), 'utf8').split('var shortcutPattern')[0]
   .matchAll(/\{"[^"\n]+", "[^"\n]+", "([^"]+)"\}/g)].map(match => match[1])
 
 const toolIDs = [...fs.readFileSync(path.join(__dirname, '../internal/plugins.go'), 'utf8')
@@ -198,12 +198,12 @@ test('browser forwards the physical bottom terminal shortcut across keyboard lay
 test('workspace syncs initial bindings and saved settings to Electron', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const init = source.slice(source.indexOf('  let toolKeys'), source.indexOf('  function shortcut'))
-  const hints = source.slice(source.indexOf('  function updateToolHints'), source.indexOf('  function saveToolKeys'))
+  const hints = source.slice(source.indexOf('  function fillToolKeys'), source.indexOf('  function saveToolKeys'))
   const saved = source.slice(source.indexOf('  function toolKeysSaved'), source.indexOf("  window.addEventListener('keydown'"))
   const calls = []
   const context = vm.createContext({
     window: { __libroToolKeys: { files: 'Ctrl+F' }, libroElectron: { setWorkspaceShortcuts: bindings => calls.push(Array.from(bindings)) } },
-    document: { querySelectorAll: () => [], querySelector: () => ({}), getElementById: () => ({}) },
+    document: { querySelectorAll: () => [], querySelector: () => ({}), getElementById: id => id === 'tool-key-custom-rows' ? null : ({}) },
   })
   vm.runInContext(init + hints + saved, context)
   vm.runInContext("toolKeysSaved({files: 'Alt+F'}, 'Saved')", context)

@@ -264,7 +264,7 @@
       ? (window.__libroProjects || []).find(p => p.kind === 'project' && p.name === project.name)?.command || '' : '';
     const label = node('label', '', 'Start command'); label.htmlFor = 'project-command-input';
     const input = node('input', 'ws-agent-command'); input.id = 'project-command-input'; input.value = project.command || inheritedCommand; input.placeholder = project.kind === 'worktree' && project.applicationMode === 'thread' ? 'Inherit project start command' : 'air or bun src/dev.ts'; input.autocomplete = 'off'; input.spellcheck = false;
-    const help = node('p', 'ws-settings-status', 'Per-thread apps run in their worktree. Use $PORT in the command (for example: npm run dev -- --port "$PORT"). Blank thread commands inherit the project command. ' + (toolKeys['run-project'] || 'Start / restart project') + ' starts or restarts it; ' + (toolKeys['stop-project'] || 'Stop project command') + ' stops it. You can also use Ctrl+C in the terminal.'); help.id = 'project-command-help'; input.setAttribute('aria-describedby', help.id);
+    const help = node('p', 'ws-settings-status', 'Per-thread apps run in their worktree. Use $PORT in the command (for example: npm run dev -- --port "$PORT"). Blank thread commands inherit the project command. ' + (toolKeys['run-project'] || 'Start / restart application') + ' starts or restarts it; ' + (toolKeys['stop-project'] || 'Stop application') + ' stops it. You can also use Ctrl+C in the terminal.'); help.id = 'project-command-help'; input.setAttribute('aria-describedby', help.id);
     const modeLabel = node('label', '', 'Application mode (all project threads)'); modeLabel.htmlFor = 'project-application-mode';
     const mode = node('select', 'ws-agent-command'); mode.id = 'project-application-mode';
     [['shared', 'Shared application'], ['thread', 'Application per thread']].forEach(([value, text]) => { const option = node('option', '', text); option.value = value; mode.append(option); });
@@ -871,6 +871,19 @@
     window.dispatchEvent(new Event('resize'));
   }
   function fillToolKeys(bindings) {
+    const customRows = document.getElementById('tool-key-custom-rows');
+    if (customRows) {
+      customRows.replaceChildren();
+      window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files', 'notes'].includes(p.id) && !p.removed).forEach(plugin => {
+        const row = node('div', 'ws-settings-row ws-agent-command-row');
+        const label = node('label', '', plugin.name);
+        const input = node('input', 'ws-agent-command');
+        input.id = 'tool-key-' + plugin.id; label.htmlFor = input.id;
+        input.dataset.toolKey = plugin.id; input.readOnly = true; input.placeholder = 'Press shortcut';
+        row.append(label, input, button('Clear ' + plugin.name + ' shortcut', 'close', () => { input.value = ''; input.focus(); }));
+        customRows.append(row);
+      });
+    }
     document.querySelectorAll('[data-tool-key]').forEach(input => input.value = bindings[input.dataset.toolKey] || '');
   }
   function updateToolHints() {
@@ -886,15 +899,15 @@
   function saveToolKeys() {
     const bindings = {...toolKeys};
     document.querySelectorAll('#tool-key-form [data-tool-key]').forEach(input => bindings[input.dataset.toolKey] = input.value);
-    document.querySelector('#tool-key-form [type=submit]').disabled = true;
-    document.getElementById('tool-key-status').textContent = 'Saving…';
+    document.querySelectorAll('#tool-key-form [type=submit]').forEach(button => button.disabled = true);
+    document.querySelectorAll('#tool-key-status, [data-tool-key-status]').forEach(status => status.textContent = 'Saving…');
     call('settings.tool-keys', {bindings});
   }
   function resetToolKeys() { document.querySelectorAll('#tool-key-form [data-tool-key]').forEach(input => input.value = window.__libroDefaultToolKeys[input.dataset.toolKey] || ''); }
   function toolKeysSaved(bindings, message) {
-    document.querySelector('#tool-key-form [type=submit]').disabled = false;
-    document.getElementById('tool-key-status').textContent = message;
-    if (bindings) { toolKeys = bindings; updateToolHints(); }
+    document.querySelectorAll('#tool-key-form [type=submit]').forEach(button => button.disabled = false);
+    document.querySelectorAll('#tool-key-status, [data-tool-key-status]').forEach(status => status.textContent = message);
+    if (bindings) { toolKeys = bindings; fillToolKeys(bindings); updateToolHints(); }
   }
   let lastCtrlA = 0;
   function hideTools() {
@@ -1392,7 +1405,7 @@
     fillAgentEnvironment(environment);
     document.querySelector('#agent-environment-form [role=status]').textContent = '';
     toolKeys = bindings; fillToolKeys(bindings); updateToolHints();
-    document.getElementById('tool-key-status').textContent = '';
+    document.querySelectorAll('#tool-key-status, [data-tool-key-status]').forEach(status => status.textContent = '');
     document.getElementById('agent-command-rows').replaceChildren();
     document.getElementById('tool-command-rows').replaceChildren();
     window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files', 'notes'].includes(p.id) && !p.removed).forEach(p => addAgentRow(p, p.type === 'url' ? p.url : p.command, true));
@@ -1552,7 +1565,7 @@
   function toolsSaved(plugins, message, bindings) {
     const form = document.getElementById('tool-commands-form');
     form.querySelector('[type=submit]').disabled = false; form.querySelector('[role=status]').textContent = message;
-    if (plugins) { window.__libroPlugins = plugins; if (bindings) { toolKeys = bindings; updateToolHints(); } refresh(); }
+    if (plugins) { window.__libroPlugins = plugins; if (bindings) { toolKeys = bindings; fillToolKeys(bindings); updateToolHints(); } refresh(); }
   }
   function addCustomAgent() {
     addAgentRow({id:'custom-' + crypto.randomUUID(), name:'', custom:true}, '').querySelector('input').focus();

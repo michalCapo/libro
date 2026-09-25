@@ -23,8 +23,8 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"lazydata", "Database", "Ctrl+D"},
 	{"close-panel", "Close panel", "Ctrl+Q"},
 	{"close-project", "Close project", ""},
-	{"run-project", "Start / restart project", "Ctrl+Shift+R"},
-	{"stop-project", "Stop project command", "Ctrl+Shift+T"},
+	{"run-project", "Start / restart application", "Ctrl+Shift+R"},
+	{"stop-project", "Stop application", "Ctrl+Shift+T"},
 	{"panel-size-down", "Decrease panel size", "Ctrl+."},
 	{"panel-size-up", "Increase panel size", "Ctrl+,"},
 	{"panel-size-max", "Toggle panel size to MAX", "Ctrl+M"},
@@ -212,23 +212,45 @@ func registerKeybindingActions(app *r.App) {
 }
 
 func renderToolKeybindings() *r.Node {
-	rows := []*r.Node{}
-	for _, tool := range toolKeys {
-		if tool.ID == "nvim" || tool.ID == "lazyrepo" || tool.ID == "lazydata" {
-			continue
-		}
-		id := "tool-key-" + tool.ID
-		rows = append(rows, r.Div("ws-settings-row ws-agent-command-row").Render(
-			r.El("label", "").Attr("for", id).Text(tool.Name),
-			r.Input("ws-agent-command").ID(id).Attr("data-tool-key", tool.ID).Attr("readonly", "").Attr("placeholder", "Press shortcut").Attr("aria-describedby", "tool-key-help"),
-			workspaceButton("Clear "+tool.Name+" shortcut", "close", "document.getElementById('"+id+"').value=''"),
-		))
+	groups := []struct {
+		Name string
+		IDs  []string
+	}{
+		{"General", []string{"command-palette", "settings", "voice"}},
+		{"Projects & threads", []string{"project-picker", "close-project", "new-thread", "finish-thread", "thread-actions", "run-project", "stop-project"}},
+		{"Agents", []string{"new-agent", "replace-agent"}},
+		{"Tools", []string{"terminal", "browser", "new-browser", "previous-browser", "next-browser", "files", "notes"}},
+		{"Panels", []string{"previous-agent", "next-agent", "close-panel", "panel-size-down", "panel-size-up", "panel-size-max"}},
+		{"Zoom", []string{"zoom-in", "zoom-out", "zoom-reset"}},
 	}
-	rows = append(rows, r.Div("ws-settings-row").Render(r.Button("ws-launch").Attr("type", "submit").Text("Save shortcuts"), r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.resetToolKeys()")).Text("Restore defaults")))
-	return r.El("form", "").ID("tool-key-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveToolKeys()")).Render(
-		r.El("h2", "ws-shortcut-heading").Text("Keyboard shortcuts"),
-		r.P("ws-settings-status").ID("tool-key-help").Text("Select a field and press Ctrl, Alt, or Meta with a letter, number, comma, period, semicolon, brackets, = or -. Voice typing also accepts CapsLock. Press once to listen and again to transcribe. Clear a field to disable its shortcut. Ctrl+1–9 switches project agent threads and unarchived standalone threads in sidebar order."),
-		r.Div("ws-settings-group").Render(rows...),
+	content := []*r.Node{}
+	for _, group := range groups {
+		rows := []*r.Node{}
+		for _, key := range group.IDs {
+			for _, tool := range toolKeys {
+				if tool.ID != key {
+					continue
+				}
+				id := "tool-key-" + tool.ID
+				rows = append(rows, r.Div("ws-settings-row ws-agent-command-row").Render(
+					r.El("label", "").Attr("for", id).Text(tool.Name),
+					r.Input("ws-agent-command").ID(id).Attr("data-tool-key", tool.ID).Attr("readonly", "").Attr("placeholder", "Press shortcut"),
+					workspaceButton("Clear "+tool.Name+" shortcut", "close", "document.getElementById('"+id+"').value=''"),
+				))
+			}
+		}
+		if group.Name == "Tools" {
+			rows = append(rows, r.Div("").ID("tool-key-custom-rows"))
+		}
+		rows = append(rows,
+			r.Div("ws-settings-row ws-settings-actions").Render(r.Button("ws-launch").Attr("type", "submit").Text("Save shortcuts")),
+			r.P("ws-settings-status").Attr("data-tool-key-status", "").Attr("role", "status"),
+		)
+		content = append(content, r.El("h3", "ws-shortcut-heading").Text(group.Name), r.Div("ws-settings-group").Render(rows...))
+	}
+	content = append(content,
+		r.Div("ws-settings-row ws-settings-actions").Render(r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.resetToolKeys()")).Text("Restore defaults")),
 		r.P("ws-settings-status").ID("tool-key-status").Attr("role", "status"),
 	)
+	return r.El("form", "").ID("tool-key-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveToolKeys()")).Render(content...)
 }

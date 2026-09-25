@@ -260,7 +260,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 @media(max-width:520px){.ws-agent-command-fields{grid-template-columns:minmax(0,1fr)}}
 
 /* Match the section gap provided by the panel settings status row. */
-#agent-commands-form>[role=status]:empty{display:none}
+#agent-commands-form>[role=status]:empty,#tool-commands-form>[role=status]:empty{display:none}
 #tool-key-form{margin-top:44px}
 #tool-key-form .ws-agent-command{min-width:0;width:100%;box-sizing:border-box}
 @media(min-width:521px){#tool-key-form .ws-agent-command-row{grid-template-columns:180px minmax(0,1fr) auto}}
@@ -617,3 +617,9 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 .ws-voice-button { touch-action: none; flex-shrink: 0; }
 .ws-voice-button[data-state="recording"] { color: var(--ws-accent); background: var(--ws-hover); }
 .ws-voice-status { align-self: center; text-align: center; font-size: 12px; line-height: 1.35; max-width: 240px; white-space: normal; padding: 0 8px; color: var(--ws-muted); }
+
+#tool-key-form .ws-agent-command-row{padding:10px 16px;gap:16px}
+#tool-key-form h3{margin-top:44px;margin-bottom:12px}
+#tool-key-form h3:first-child{margin-top:0}
+
+[data-tool-key-status]:empty{display:none}
