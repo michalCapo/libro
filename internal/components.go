@@ -1487,6 +1487,7 @@ func commandPopupJS(sid string) string {
 				closePalette();
 				if(window.__libroOpenWorktreeCreate)window.__libroOpenWorktreeCreate();
 			}},
+            {id:'new-thread',label:'New thread',scope:'app',icon:'add',keywords:'create new thread worktree',run:function(){closePalette();libroWorkspace.newThread();}},
             {id:'thread-actions',label:'Thread actions',scope:'project',icon:'more_horiz',keywords:'thread finish settings discard',run:function(){closePalette();libroWorkspace.threadActionPalette();}},
             {id:'finish-thread',label:'Finish current thread…',scope:'project',icon:'merge',keywords:'merge squash pull request pr finish cleanup worktree thread',run:function(){closePalette();libroWorkspace.finishThread();}},
 			{id:'close-project',label:'Close project',scope:'project',icon:'close',keywords:'close stop all panels terminals processes current project',run:function(){
@@ -3701,12 +3702,6 @@ func keyboardShortcutsJS(sid string) string {
 					e.preventDefault();
 					e.stopImmediatePropagation();
 					if (window.__libroOpenMoveProject) window.__libroOpenMoveProject();
-					return;
-				}
-				if ((e.metaKey !== e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === ';' || e.code === 'Semicolon')) {
-					e.preventDefault();
-					e.stopImmediatePropagation();
-					if (window.__libroOpenCommandPalette) window.__libroOpenCommandPalette();
 					return;
 				}
 				if (e.metaKey && (e.key === 'q' || e.key === 'Q') && !e.ctrlKey) {

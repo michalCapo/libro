@@ -881,7 +881,6 @@
       const plugin = window.__libroPlugins.find(plugin => plugin.id === button.dataset.toolId);
       if (plugin) button.title = name + (toolKeys[plugin.id] ? ' (' + toolKeys[plugin.id] + ')' : '');
       else if (name === 'New thread') button.title = name + (toolKeys['new-thread'] ? ' (' + toolKeys['new-thread'] + ')' : '');
-      else if (name === 'Toggle projects') button.title = name + (toolKeys['toggle-projects'] ? ' (' + toolKeys['toggle-projects'] + ')' : '');
     });
   }
   function saveToolKeys() {
@@ -962,9 +961,9 @@
       if (!event.repeat && window.__libroSelectedApp) call('app.resize.max.toggle', {maxPixel: window.__libroAppWidthMaxPixel()});
       return;
     }
-    if (binding && binding === toolKeys['toggle-projects']) {
+    if (binding && binding === toolKeys['command-palette']) {
       event.preventDefault(); event.stopImmediatePropagation();
-      if (!event.repeat) { prefs.projects = !prefs.projects; save(); refresh(); }
+      if (!event.repeat) window.__libroOpenCommandPalette?.();
       return;
     }
     if (binding && (binding === toolKeys['previous-agent'] || binding === toolKeys['next-agent'])) {

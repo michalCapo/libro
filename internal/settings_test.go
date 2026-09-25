@@ -506,7 +506,7 @@ func TestReplaceAgentShortcutMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	keys := toolKeybindings()
-	if keys["new-agent"] != "" || keys["replace-agent"] != "Ctrl+Shift+A" || keys["new-thread"] != "Ctrl+N" || keys["terminal"] != "Ctrl+Alt+T" {
+	if keys["new-agent"] != "" || keys["replace-agent"] != "Ctrl+Shift+A" || keys["new-thread"] != "" || keys["terminal"] != "Ctrl+Alt+T" {
 		t.Fatalf("incorrect shortcut migration: %v", keys)
 	}
 	if err := validateToolKeybindings(keys); err != nil {
@@ -518,5 +518,46 @@ func TestReplaceAgentShortcutMigration(t *testing.T) {
 	}
 	if toolKeybindings()["replace-agent"] != "Ctrl+Alt+N" {
 		t.Fatal("migration overwrote a customized replacement shortcut")
+	}
+}
+
+func TestProjectShortcutMigration(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "settings.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	for _, test := range []struct {
+		name, saved, thread, picker string
+	}{
+		{"old defaults", `{"new-thread":"Ctrl+N","project-picker":"Ctrl+P","toggle-projects":"Ctrl+Shift+P"}`, "", "Ctrl+Shift+P"},
+		{"custom shortcuts", `{"new-thread":"Alt+N","project-picker":"Alt+P","toggle-projects":"Ctrl+Shift+P"}`, "Alt+N", "Alt+P"},
+		{"collision", `{"new-thread":"Ctrl+N","project-picker":"Ctrl+P","terminal":"Ctrl+Shift+P"}`, "", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := db.Exec(`INSERT OR REPLACE INTO settings (key,value) VALUES ('tool_keybindings',?)`, test.saved); err != nil {
+				t.Fatal(err)
+			}
+			keys := toolKeybindings()
+			if keys["new-thread"] != test.thread || keys["project-picker"] != test.picker || keys["command-palette"] != "Meta+;" {
+				t.Fatalf("incorrect migration: %v", keys)
+			}
+			if _, exists := keys["toggle-projects"]; exists {
+				t.Fatal("sidebar shortcut still present")
+			}
+			keys["new-thread"] = "Ctrl+N"
+			keys["project-picker"] = "Ctrl+P"
+			keys["command-palette"] = "Alt+K"
+			if err := setToolKeybindings(keys); err != nil {
+				t.Fatal(err)
+			}
+			keys = toolKeybindings()
+			if keys["new-thread"] != "Ctrl+N" || keys["project-picker"] != "Ctrl+P" || keys["command-palette"] != "Alt+K" {
+				t.Fatal("user reassignment was overwritten")
+			}
+		})
 	}
 }

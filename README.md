@@ -306,5 +306,8 @@ libro issues '{"action":"set_status","id":"ISSUE_ID","status":"archived"}'
 libro issues '{"action":"delete","id":"ISSUE_ID"}'
 ```
 
-Ctrl+N creates a new thread directly. Ctrl+Shift+A opens Replace agent for the
-current thread. Both shortcuts can be changed in Settings.
+New thread is available in the command palette and has no default shortcut.
+Ctrl+Shift+P opens the project list. Meta+; opens the command palette.
+Ctrl+Shift+A opens Replace agent for the current thread. These shortcuts can be
+changed in Settings. Ctrl+N and Ctrl+P are unbound by default.
+Use the sidebar button to toggle projects.

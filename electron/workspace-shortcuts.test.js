@@ -262,7 +262,7 @@ test('a hidden bottom shell exiting keeps the visible project command open', () 
 
 test('panel size shortcuts use saved bindings and ignore key repeat', () => {
   const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const handler = workspace.slice(workspace.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"), workspace.indexOf("    if (binding && binding === toolKeys['toggle-projects'])"))
+  const handler = workspace.slice(workspace.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"), workspace.indexOf("    if (binding && binding === toolKeys['command-palette'])"))
   for (const [binding, delta] of [['Ctrl+,', 1], ['Ctrl+.', -1], ['Alt+S', -1]]) {
     for (const repeat of [false, true]) {
       const calls = []
@@ -958,5 +958,29 @@ test('voice uses Caps Lock and leaves Tab available to the browser', () => {
   for (const key of ['CapsLock', 'capslock', 'Tab']) {
     context.input = {key}
     assert.equal(vm.runInContext('isWorkspaceShortcut(input)', context), key !== 'Tab')
+  }
+})
+
+test('Ctrl+N and Ctrl+P pass through to guest applications by default', () => {
+  for (const key of ['n', 'p']) {
+    const result = vm.runInNewContext(matching + '\nworkspaceShortcuts = new Set(bindings); isWorkspaceShortcut(input)', {
+      bindings: defaults, input: {key, control: true},
+    })
+    assert.equal(result, false)
+  }
+})
+
+test('command palette uses its configured shortcut and ignores repeated presses', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const start = source.indexOf("    if (binding && binding === toolKeys['command-palette'])")
+  const handler = source.slice(start, source.indexOf("    if (binding && (binding === toolKeys['previous-agent']", start))
+  for (const configured of ['Meta+;', 'Alt+K', '']) for (const repeat of [false, true]) {
+    let opened = 0
+    vm.runInNewContext('(function(){' + handler + '})()', {
+      binding: configured || 'Meta+;', toolKeys: {'command-palette': configured},
+      event: {repeat, preventDefault(){}, stopImmediatePropagation(){}},
+      window: {__libroOpenCommandPalette(){opened++}},
+    })
+    assert.equal(opened, configured && !repeat ? 1 : 0)
   }
 })

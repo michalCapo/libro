@@ -1069,17 +1069,6 @@ app.on('web-contents-created', (event, contents) => {
         }
         return
       }
-      // Super+;: command palette
-      if (input.meta && !input.control && code === 'semicolon') {
-        if (shouldSkipDuplicateShortcut()) return
-        e.preventDefault()
-        if (mainWindow) {
-          mainWindow.webContents.executeJavaScript(`
-            if (window.__libroOpenCommandPalette) window.__libroOpenCommandPalette();
-          `)
-        }
-        return
-      }
       // Super+F: toggle maximize width on selected app
       if (input.meta && !input.control && code === 'keyf') {
         if (shouldSkipDuplicateShortcut()) return
@@ -1100,20 +1089,6 @@ app.on('web-contents-created', (event, contents) => {
     // PDF/document viewers opened from a webview) should forward app shortcuts to
     // the main host page. These child contents are not always reported as "webview",
     // so do not special-case them as host content.
-
-    // Forward Ctrl+; from embedded browser and terminal views to the workspace.
-    if (input.control && !input.meta && !input.alt && !input.shift && (key === ';' || code === 'semicolon')) {
-      if (shouldSkipDuplicateShortcut()) return
-      e.preventDefault()
-      if (mainWindow) {
-        mainWindow.webContents.executeJavaScript(`
-          document.dispatchEvent(new KeyboardEvent('keydown', {
-            key: ';', code: 'Semicolon', ctrlKey: true, bubbles: true, cancelable: true
-          }));
-        `).catch(() => {})
-      }
-      return
-    }
 
     // Meta+Ctrl shortcuts: u, i, y (move app / open move-project popup)
     if (input.meta && input.control && ['keyu', 'keyi', 'keyy'].includes(code)) {
@@ -1157,7 +1132,7 @@ app.on('web-contents-created', (event, contents) => {
       triggerTerminalAppShortcut()
       return
     }
-    if (input.meta && !input.control && (['h', 'l', 'q', 'b', 'e', 'o', 'f', 'g', 'r', 'y', ';', ',', '.'].includes(key) || ['keyo', 'keyb', 'keye', 'keyy', 'semicolon', 'comma', 'period'].includes(code))) {
+    if (input.meta && !input.control && (['h', 'l', 'q', 'b', 'e', 'o', 'f', 'g', 'r', 'y', ',', '.'].includes(key) || ['keyo', 'keyb', 'keye', 'keyy', 'comma', 'period'].includes(code))) {
       if (shouldSkipDuplicateShortcut()) return
       e.preventDefault()
       if (mainWindow) {

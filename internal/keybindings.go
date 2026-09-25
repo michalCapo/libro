@@ -30,15 +30,15 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"panel-size-max", "Toggle panel size to MAX", "Ctrl+M"},
 	{"settings", "Settings", "Ctrl+Shift+S"},
 	{"voice", "Voice typing (toggle)", "CapsLock"},
-	{"project-picker", "Switch project", "Ctrl+P"},
+	{"project-picker", "Switch project", "Ctrl+Shift+P"},
 	{"new-agent", "New agent", ""},
-	{"new-thread", "New thread", "Ctrl+N"},
+	{"new-thread", "New thread", ""},
 	{"finish-thread", "Finish current thread…", ""},
 	{"thread-actions", "Thread actions", "Ctrl+;"},
 	{"replace-agent", "Replace agent", "Ctrl+Shift+A"},
 	{"previous-agent", "Previous panel", "Ctrl+H"},
 	{"next-agent", "Next panel", "Ctrl+L"},
-	{"toggle-projects", "Toggle project sidebar", "Ctrl+Shift+P"},
+	{"command-palette", "Command palette", "Meta+;"},
 	{"zoom-in", "Zoom in", "Ctrl+="},
 	{"zoom-out", "Zoom out", "Ctrl+-"},
 	{"zoom-reset", "Reset zoom", "Ctrl+0"},
@@ -134,10 +134,17 @@ func toolKeybindings() map[string]string {
 			}
 			if saved["new-agent"] == "Ctrl+N" {
 				saved["new-agent"] = ""
-				if saved["new-thread"] == "" {
-					saved["new-thread"] = "Ctrl+N"
+			}
+			// The command-palette field marks settings saved with the new defaults.
+			if _, current := saved["command-palette"]; !current {
+				if saved["new-thread"] == "Ctrl+N" {
+					saved["new-thread"] = ""
+				}
+				if saved["project-picker"] == "Ctrl+P" {
+					delete(saved, "project-picker")
 				}
 			}
+			delete(saved, "toggle-projects")
 			if saved["replace-agent"] == "Ctrl+Shift+N" {
 				saved["replace-agent"] = ""
 				available := true
