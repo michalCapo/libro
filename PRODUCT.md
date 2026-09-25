@@ -8,7 +8,9 @@ desktop (Go + Electron), with a browser fallback
 
 ## Product Purpose
 
-Libro is a Go and Electron desktop workspace for CLI coding agents. The main area runs Codex, Pi, Claude, OpenCode, or another CLI in a native terminal. Projects retain their running apps when the user switches context.
+Libro is an agent workspace with strong keyboard support, built around terminal and web applications. One project holds multiple agents and fixed-width tool panels. Comparable to T3 Code or the OpenAI and Anthropic desktop apps, but built with a different approach.
+
+The Go and Electron desktop app runs Codex, Pi, Claude, OpenCode, or another CLI in a native terminal, with one agent per thread. Tools run terminal commands or open web addresses beside the agent. Projects retain their running apps when the user switches context.
 
 ## Capabilities and Constraints
 
@@ -18,11 +20,11 @@ Collapsible project and thread navigation with one center agent panel per thread
 
 ## Brand Commitments
 
-The user requested the look and feel of Codex desktop or T3 Code. Use a quiet desktop coding interface with the agent as the main content.
+Use a quiet desktop interface with strong keyboard support and the agent as the main content. T3 Code and the OpenAI and Anthropic desktop apps are comparable products. Libro's approach centers on terminal and web applications, multiple agents within a project, and fixed-width tool panels.
 
 ## Layout
 
-Projects and agent threads stay on the left. Each thread has one center agent, right-dock tools switch through a shared tab row, and project terminals open below the main row. Build directly from the supplied T3 Code screenshots: near-white content, softly tinted sidebar, subtle dividers, rounded selected rows, muted icons, and compact bordered controls. Keep the existing Go-rendered UI and Electron runtime.
+Projects and agent threads stay on the left. Each thread has one center agent, fixed-width right-dock tools switch through a shared tab row, and project terminals open below the main row. Use near-white content, a softly tinted sidebar, subtle dividers, rounded selected rows, muted icons, and compact bordered controls. Keep the existing Go-rendered UI and Electron runtime.
 
 ## Application instances
 

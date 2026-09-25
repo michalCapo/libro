@@ -1,6 +1,6 @@
 ---
 name: Libro
-description: Quiet desktop chrome for a horizontal coding workspace.
+description: Agent workspace with strong keyboard support, terminal and web applications, and fixed-width tool panels.
 colors:
   bg: "#fcfcfd"
   chrome: "#f7f7f8"
@@ -118,13 +118,16 @@ components:
 
 ## Overview
 
-**Creative North Star: "T3 Code desktop workspace"**
+**Creative North Star: "Agent workspace built around terminal and web applications"**
 
-Libro follows the supplied T3 Code reference: near-white content, softly gray sidebar, subtle dividers, rounded white selected rows, muted icons, compact bordered controls, and restrained blue accents. The dark equivalent keeps the same hierarchy and geometry. The agent workspace is the main content.
+Libro brings multiple agents into one project with strong keyboard support and fixed-width tool panels. It is comparable to T3 Code or the OpenAI and Anthropic desktop apps, but built with a different approach centered on terminal and web applications.
+
+The desktop shell uses near-white content, a softly gray sidebar, subtle dividers, rounded white selected rows, muted icons, compact bordered controls, and restrained blue accents. The dark equivalent keeps the same hierarchy and geometry. The agent workspace is the main content.
 
 **Key Characteristics:**
 - Quiet system typography and compact desktop controls.
-- Flat app panels separated by fine rules.
+- Strong keyboard support for navigating projects, agents, and tools.
+- Fixed-width app panels separated by fine rules.
 - Rounded selection surfaces and softly lifted popups.
 
 Scope: the built workspace shell and its dialogs. Source of truth is `internal/workspace.css`, supported by `workspace.go`, `workspace.js`, `components.go`, and the popup components. Embedded terminals and browser pages retain their own content styling. `PRODUCT.md` fixes the brand and docked workspace structure. This is a record of the implementation, not a new visual direction.

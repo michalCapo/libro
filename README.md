@@ -1,15 +1,16 @@
 # Libro
 
-Libro is a desktop app for working with AI coding assistants. Run Codex, Claude, Pi, OpenCode, or any other agent in separate threads, with a browser, your files, and terminals right next to each one.
+Libro is an agent workspace with strong keyboard support, built around terminal and web applications. One project holds multiple agents and fixed-width tool panels. Comparable to T3 Code or the OpenAI and Anthropic desktop apps, but built with a different approach.
 
-Think of it as one desk for all your AI helpers. Each one gets its own thread and tool state.
+Run Codex, Claude, Pi, OpenCode, or any other CLI agent in its own thread. Open terminal commands and web applications as tools beside it. Each thread keeps its tool state, and panels use selectable fixed widths.
 
 ![Libro home screen with the agent launcher open](demo/libro-home.png)
 
 ## What It Does
 
-- Runs several AI coding assistants at the same time in separate threads.
-- Puts a browser, Issues, file manager, terminal, and more right next to them.
+- Runs multiple agents in one project, each in its own thread.
+- Puts terminal and web applications in fixed-width tool panels beside the agent.
+- Includes Browser, Issues, Files, Terminal, and other tools, with support for your own commands and web addresses.
 - Keeps all your projects in one place. Switch between them with one click.
 - Shows when an assistant is busy (its icon spins) or finished (green check).
 - Plays a sound when an assistant finishes its work.
@@ -86,7 +87,7 @@ bundle matches its source. Run the editor integration tests with
 - Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
-- Choose the width of each panel, from small to full width. Press `Ctrl + M` to make a panel full width and back.
+- Choose a fixed width for each panel, from small to large, or use the full workspace width. Press `Ctrl + M` to make a panel full width and back.
 - Hidden panels keep running. Switch away and come back without losing anything.
 
 ### Tools
