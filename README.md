@@ -249,8 +249,10 @@ npm run dev -- --port "$PORT"
 ```
 
 Leave **Port for this thread** blank for automatic allocation, or enter a port
-from 1 to 65535. Libro rejects occupied ports and ports assigned to another
-pending application. Automatic ports remain stable during restart when available.
+from 1 to 65535. On start or restart, Libro force-kills listeners occupying the
+selected port and waits for it to become free. Ports reserved by other Libro
+applications are rejected. Port cleanup requires `lsof` on Linux/macOS or
+PowerShell on Windows. Automatic ports remain stable during restart when available.
 An arbitrary start command must bind its port itself, so an unrelated process
 can still take the port between allocation and startup. The localhost URL appears
 in the thread's settings and in application status. Port assignment does not

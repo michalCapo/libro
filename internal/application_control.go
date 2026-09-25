@@ -211,7 +211,7 @@ func controlApplication(sid, project, operation string) (string, map[string]any,
 		return "", map[string]any{"project": path, "configured": command != "", "status": status, "mode": settings.Mode, "port": port, "url": applicationURL(port)}, nil
 	}
 	// Reject a conflicting new override before stopping a healthy application.
-	if operation != "stop" && perThread && settings.Port != 0 && (len(previous) == 0 || settings.Port != port) {
+	if operation != "stop" && settings.Port != 0 && (len(previous) == 0 || settings.Port != port) {
 		if _, err := allocateApplicationPort(settings.Port); err != nil {
 			return "", nil, err
 		}
@@ -224,7 +224,7 @@ func controlApplication(sid, project, operation string) (string, map[string]any,
 	}
 	status = "stopped"
 	if operation != "stop" {
-		if perThread {
+		if perThread || settings.Port != 0 {
 			requested := settings.Port
 			if requested == 0 {
 				requested = port

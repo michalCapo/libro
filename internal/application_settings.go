@@ -2,9 +2,12 @@ package libro
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
+	"syscall"
+	"time"
 )
 
 // Application mode belongs to the project; port overrides belong to a worktree.
@@ -110,7 +113,20 @@ func allocateApplicationPort(requested int) (int, error) {
 		return 0, fmt.Errorf("port %d is already assigned to another application", requested)
 	}
 	for range 100 {
-		listener, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(requested))
+		listener, err := net.Listen("tcp", ":"+strconv.Itoa(requested))
+		if requested != 0 && errors.Is(err, syscall.EADDRINUSE) {
+			if err := killApplicationPort(requested); err != nil {
+				return 0, fmt.Errorf("free application port %d: %w", requested, err)
+			}
+			// Killing a process is asynchronous; wait for its sockets to close.
+			deadline := time.Now().Add(2 * time.Second)
+			for errors.Is(err, syscall.EADDRINUSE) && time.Now().Before(deadline) {
+				listener, err = net.Listen("tcp", ":"+strconv.Itoa(requested))
+				if errors.Is(err, syscall.EADDRINUSE) {
+					time.Sleep(time.Millisecond)
+				}
+			}
+		}
 		if err != nil {
 			return 0, fmt.Errorf("application port unavailable: %w", err)
 		}
