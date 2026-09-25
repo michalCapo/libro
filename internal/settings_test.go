@@ -37,6 +37,12 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	if err := DBSetDefaultPanelWidth(WidthSM); err != nil {
 		t.Fatal(err)
 	}
+	if got := DBDefaultPanelWidth(); got != WidthSM {
+		t.Fatalf("fixed width = %s", got)
+	}
+	if err := DBSetDefaultPanelWidth(WidthFull); err != nil {
+		t.Fatal(err)
+	}
 	if err := DBSetDefaultPanelWidth(Width("invalid")); err == nil {
 		t.Fatal("accepted invalid width")
 	}
@@ -90,7 +96,7 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	if got := agentCommand(builtinPlugins[0]); got != "codex --model custom-model" {
 		t.Fatalf("saved command = %q", got)
 	}
-	if got := DBDefaultPanelWidth(); got != WidthSM {
+	if got := DBDefaultPanelWidth(); got != WidthFull {
 		t.Fatalf("saved width after reopening = %s", got)
 	}
 	if got := DBDefaultToolPanelWidth(); got != WidthXL {
@@ -106,7 +112,7 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	} {
 		want := WidthXL
 		if app.PluginID == "codex" || app.PluginID == "custom-test" {
-			want = WidthSM
+			want = WidthFull
 		}
 		if got := defaultAppWidth(app); got != want {
 			t.Errorf("%s width = %s, want %s", app.PluginID, got, want)

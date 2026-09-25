@@ -87,7 +87,7 @@ func setAgentEnvironment(inputs []environmentInput) error {
 }
 
 func defaultPanelWidths() []Width {
-	return []Width{WidthXS, WidthSM, WidthMD, WidthLG, WidthXL, Width2XL}
+	return []Width{WidthXS, WidthSM, WidthMD, WidthLG, WidthXL, Width2XL, WidthFull}
 }
 
 func validDefaultPanelWidth(width Width) bool {
@@ -547,7 +547,7 @@ func renderWorkspaceSettings() *r.Node {
 				r.Div("ws-settings-row").Render(
 					r.Div("ws-settings-copy").Render(
 						r.El("label", "").Attr("for", "default-panel-width").Text("Agent panel width"),
-						r.P("").ID("default-panel-width-help").Text("Default width for the agent panel in new threads."),
+						r.P("").ID("default-panel-width-help").Text("Default width for the agent panel in new threads. Choose MAX to start at full width."),
 					),
 					r.El("select", "ws-settings-select").ID("default-panel-width").Attr("aria-describedby", "default-panel-width-help").On("change", r.JS("libroWorkspace.saveSettings(event.target.value)")).Render(options...),
 				),
