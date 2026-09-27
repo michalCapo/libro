@@ -31,6 +31,19 @@ Works on Linux, macOS, and Windows.
 
 Note: Libro starts the assistants for you, but the assistants themselves (Codex, Claude, Pi, OpenCode) must be installed on your computer first.
 
+### Agent updates
+
+On desktop startup, Libro checks installed Codex, Claude, Pi, and OpenCode versions
+in the background and automatically updates supported installations. Toasts show
+which agent is updating and whether it succeeded. Existing sessions stay open;
+start a new session to use an updated CLI.
+
+Libro supports npm global installs and recognized native Claude, Codex, and
+OpenCode updaters. Other installation methods show a manual-update notice.
+Missing agents, offline checks, and prerelease versions are skipped.
+Pi's personal packages (including extensions) also update at startup, even when
+Pi itself is current. Project-local packages are not changed.
+
 ### Voice typing
 
 Press **Caps Lock**, or click the microphone beside the agent tab, to start listening.

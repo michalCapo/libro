@@ -671,6 +671,11 @@ function createWindow() {
   if (!instance) mainWindow.maximize()
   mainWindow.show()
 
+  mainWindow.webContents.once('did-finish-load', () => {
+    const { startAgentUpdates } = require('./agent-updates')
+    startAgentUpdates(mainWindow).catch(() => console.error('Agent update check unavailable'))
+  })
+
   mainWindow.loadURL(serverURL).catch((err) => {
     if (err && err.code === 'ERR_ABORTED') return
     console.error(`Failed to load Libro UI at ${serverURL}:`, err && err.message ? err.message : err)
