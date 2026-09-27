@@ -1,5 +1,31 @@
 (function () {
   const states = new Map();
+  const shortcutHelp = [
+    ['j / k', 'Move down / up'],
+    ['h / l', 'Fold / open folder'],
+    ['Backspace', 'Parent folder'],
+    ['gg / G', 'First / last item'],
+    ['/', 'Filter files'],
+    ['Enter', 'Preview file'],
+    ['o', 'Open externally'],
+    ['Space Space', 'Find project files in tree'],
+    ['h j k l / w b e', 'Source movement'],
+    ['00 / 44 / 5', 'Line start / end / matching bracket'],
+    ['Ctrl+d / Ctrl+u', 'Move 15 lines'],
+    ['/ / n / N', 'Find in file / next / previous'],
+    ['v / V / y / yy', 'Select / select lines / copy'],
+    ['Space yy', 'Copy file:line'],
+    ['gd / gr', 'Definition / references'],
+    ['gD / gi / gt', 'Declaration / implementation / type definition'],
+    ['go / [f / ]f', 'Symbols / previous / next function'],
+    ['Space ss / Space sw', 'Project search / word or selection'],
+    ['Ctrl+o / Tab', 'Jump back / forward'],
+    ['Space ,', 'Recent files'],
+    ['Space sk', 'Search shortcuts'],
+    ['Space lr', 'Restart language server'],
+    ['Space p', 'Toggle preview'],
+    ['Space w', 'Toggle wrapping'],
+  ].map(([keys,action])=>({keys,action,label:keys+' '+action}));
   function remember(s) {
     if (s.file && s.editor) s.positions.set(s.parents + ':' + s.file.path, s.editor.position());
   }
@@ -131,7 +157,7 @@
       }
       const source=kind==='navigation'?p.sourceItems:kind==='symbols'?(s.editor?.symbols() || []).map(item=>({...item,label:(item.kind||'')+' '+(item.name||item.label)})):
         kind==='recent'?Array.from(s.recent.values()).reverse().map(item=>({...item,label:item.path})):
-        Array.from(s.el.querySelectorAll('.ws-file-shortcuts kbd')).map(key=>({keys:key.textContent,action:key.previousElementSibling.textContent,label:key.textContent+' '+key.previousElementSibling.textContent}));
+        shortcutHelp;
       p.items=source.filter(item=>fuzzy(item.label || item.path,input.value)>=0);
       drawPicker(s);
     }
@@ -421,6 +447,7 @@
       s.wrap = el.querySelector('.ws-file-wrap input');
       s.wrap.onchange = () => {el.querySelector('.ws-file-text').classList.toggle('is-wrapped', s.wrap.checked);s.editor?.wrap(s.wrap.checked);};
       s.hidden.onchange = () => { s.index = 0; if(s.filter.value)indexFiles(s);else render(s); };
+      el.querySelector('.ws-file-help').onclick = () => picker(s,'help');
       s.filter.onfocus = () => {if(!s.filter.value)s.treeIndex=s.index;};
       s.filter.oninput = () => { s.index = 0;if(s.filter.value)indexFiles(s);else clearFilter(s);render(s); };
       el.querySelector('.ws-file-image-tools').onclick = event => {

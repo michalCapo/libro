@@ -253,36 +253,6 @@ func registerFilesActions(app *r.App) {
 }
 
 func renderFiles(app Application) *r.Node {
-	help := r.Div("ws-file-shortcuts")
-	for _, shortcut := range []struct{ keys, action string }{
-		{"j / k", "Move down / up"},
-		{"h / l", "Fold / open folder"},
-		{"Backspace", "Parent folder"},
-		{"gg / G", "First / last item"},
-		{"/", "Filter files"},
-		{"Enter", "Preview file"},
-		{"o", "Open externally"},
-		{"Space Space", "Find project files in tree"},
-		{"h j k l / w b e", "Source movement"},
-		{"00 / 44 / 5", "Line start / end / matching bracket"},
-		{"Ctrl+d / Ctrl+u", "Move 15 lines"},
-		{"/ / n / N", "Find in file / next / previous"},
-		{"v / V / y / yy", "Select / select lines / copy"},
-		{"Space yy", "Copy file:line"},
-		{"gd / gr", "Definition / references"},
-		{"gD / gi / gt", "Declaration / implementation / type definition"},
-		{"go / [f / ]f", "Symbols / previous / next function"},
-		{"Space ss / Space sw", "Project search / word or selection"},
-		{"Ctrl+o / Tab", "Jump back / forward"},
-		{"Space ,", "Recent files"},
-		{"Space sk", "Search shortcuts"},
-		{"Space lr", "Restart language server"},
-		{"Space p", "Toggle preview"},
-		{"Space w", "Toggle wrapping"},
-	} {
-		help.Render(r.Div("ws-file-shortcut").Render(
-			r.Span("").Text(shortcut.action), r.El("kbd", "").Text(shortcut.keys)))
-	}
 	return r.Div("ws-files").Attr("data-files", app.ID).Render(
 		r.Div("ws-file-preview").Render(
 			r.Div("ws-file-toolbar").Render(r.Div("ws-file-path").Text("Open file"),
@@ -291,16 +261,16 @@ func renderFiles(app Application) *r.Node {
 					r.Button("ws-file-image-zoom ws-file-image-reset").Attr("type", "button").Attr("data-image-zoom", "reset").Attr("aria-label", "Reset zoom").Text("100%"),
 					r.Button("ws-file-image-zoom").Attr("type", "button").Attr("data-image-zoom", "in").Attr("aria-label", "Zoom in").Text("+")),
 				r.El("label", "ws-file-render").Attr("title", "Preview HTML and Markdown").Render(r.Input("").Attr("type", "checkbox"), r.Span("").Text("Preview")),
-				r.El("label", "ws-file-wrap").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Word wrap"))),
+				r.El("label", "ws-file-wrap").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Word wrap")),
+				r.El("label", "ws-file-hidden").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Hidden files")),
+				r.Button("ws-button ws-file-help").Attr("type", "button").Attr("title", "Keyboard shortcuts").Attr("aria-label", "Keyboard shortcuts").Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("keyboard"))),
 			r.Div("ws-file-context").Attr("aria-label", "Source location"),
 			r.Div("ws-file-text is-wrapped").Attr("tabindex", "0").Text("Select a file from the project tree."),
 			r.Div("ws-file-media").Attr("hidden", "hidden"),
 		),
 		r.Div("ws-file-sidebar").Render(
 			r.Input("ws-file-filter").Attr("placeholder", "Find project files…").Attr("aria-label", "Filter files"),
-			r.El("label", "ws-file-hidden").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Show hidden files")),
 			r.Div("ws-file-tree").Attr("role", "tree").Attr("aria-label", "Project files").Attr("tabindex", "0"),
-			r.El("details", "ws-file-help").Attr("open", "open").Render(r.El("summary", "").Text("Keyboard shortcuts"), help),
 			r.Div("ws-file-status").Attr("role", "status"),
 		),
 	)

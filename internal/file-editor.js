@@ -126,14 +126,14 @@ const colors = HighlightStyle.define([
 export function create({element,path,source,wrap,onSymbols,onNavigate,onChange,copy}) {
   const wrapping = new Compartment(),fallback=new Compartment();
   const view = new EditorView({parent:element,state:EditorState.create({doc:source,extensions:[
-    vim({status:true}), EditorState.readOnly.of(true),
+    vim({status:false}), EditorState.readOnly.of(true),
     // Also reject programmatic Vim/IME/paste changes. Refresh replaces the state instead.
     EditorState.changeFilter.of(()=>false),
     lineNumbers(),highlightActiveLine(),highlightActiveLineGutter(),drawSelection(),bracketMatching(),search(),
     languageFor(path),fallback.of([]),syntaxHighlighting(colors),wrapping.of(wrap ? EditorView.lineWrapping : []),
     EditorView.contentAttributes.of({'aria-label':'Source preview','aria-readonly':'true'}),
     EditorView.updateListener.of(update=>{if(update.selectionSet) onChange?.();}),
-    EditorView.theme({'&':{height:'100%',backgroundColor:'var(--ws-bg)',color:'var(--ws-fg)'},'.cm-scroller':{overflow:'auto',fontFamily:'ui-monospace,monospace',fontSize:'12px',lineHeight:'1.6'},'.cm-gutters':{backgroundColor:'var(--ws-chrome)',color:'var(--ws-muted)',borderRight:'1px solid var(--ws-line)'},'.cm-activeLine, .cm-activeLineGutter':{backgroundColor:'var(--ws-hover)'},'.cm-cursor':{borderLeftColor:'var(--ws-fg)'},'&.cm-focused .cm-selectionBackground, .cm-selectionBackground':{backgroundColor:'color-mix(in srgb, var(--ws-accent) 25%, transparent)'},'.cm-panels':{backgroundColor:'var(--ws-chrome)',color:'var(--ws-fg)'},'&.cm-focused':{outline:'2px solid var(--ws-accent)',outlineOffset:'-2px'}})
+    EditorView.theme({'&':{height:'100%',backgroundColor:'var(--ws-bg)',color:'var(--ws-fg)'},'.cm-scroller':{overflow:'auto',fontFamily:'ui-monospace,monospace',fontSize:'12px',lineHeight:'1.6'},'.cm-gutters':{backgroundColor:'var(--ws-chrome)',color:'var(--ws-muted)',borderRight:'1px solid var(--ws-line)'},'.cm-activeLine, .cm-activeLineGutter':{backgroundColor:'var(--ws-hover)'},'.cm-cursor':{borderLeftColor:'var(--ws-fg)'},'&.cm-focused .cm-selectionBackground, .cm-selectionBackground':{backgroundColor:'color-mix(in srgb, var(--ws-accent) 25%, transparent)'},'.cm-panels':{backgroundColor:'var(--ws-chrome)',color:'var(--ws-fg)'}})
   ]})});
   const cm = getCM(view);
   // Vim treats digits as counts before consulting mappings. Handle these personal
