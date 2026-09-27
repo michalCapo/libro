@@ -215,6 +215,49 @@ func closeWorkspaceApp(sid, appID string) string {
 	return js + "if(window.libroWorkspace)libroWorkspace.restorePanelFocus();" + renderTopBar(state, sid).ToJSReplace(TopBarID) + projectsJS(state)
 }
 
+// closeOtherPanels closes every tool panel in the active workspace except the
+// selected one. Thread agents and shared project panels stay open: closing an
+// agent would archive its thread and shared panels belong to the whole project.
+func closeOtherPanels(sid, keepID string) string {
+	state := sm.Get(sid)
+	if len(state.Apps) == 0 {
+		return "/* noop */"
+	}
+	if keepID == "" {
+		index := state.SelectedIndex
+		if index < 0 || index >= len(state.Apps) {
+			index = 0
+		}
+		keepID = state.Apps[index].ID
+	}
+	ids := make([]string, 0, len(state.Apps))
+	for _, app := range state.Apps {
+		if app.ID == keepID || appDock(app) == "center" || isSharedProjectApp(app) {
+			continue
+		}
+		ids = append(ids, app.ID)
+	}
+	var closed []Application
+	for _, id := range ids {
+		if removed := sm.RemoveAppByID(sid, id); removed != nil {
+			closed = append(closed, *removed)
+		}
+	}
+	if len(closed) == 0 {
+		return "/* noop */"
+	}
+	var js strings.Builder
+	js.WriteString(closeDevtoolsForAppsJS(closed))
+	for _, app := range closed {
+		if app.Type == AppTypeTerminal {
+			tm.Stop(app.ID)
+		}
+		js.WriteString(removeAppJS(app.ID))
+	}
+	state = sm.Get(sid)
+	return js.String() + "if(window.libroWorkspace)libroWorkspace.restorePanelFocus();" + renderTopBar(state, sid).ToJSReplace(TopBarID) + projectsJS(state)
+}
+
 // Autolaunch starts an agent panel directly in the active workspace.
 func projectAutolaunchJS(state *AppState, sid string) string {
 	if state.ActiveProject == "" || state.thread(state.ActiveProject) == nil {
@@ -875,6 +918,14 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 		}
 
 		return closeWorkspaceApp(sid, appID)
+	})
+
+	// Close every panel except the selected one (thread agents and shared panels stay).
+	registerAction(app, "app.close.others", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		keepID, _ := data["id"].(string)
+		return closeOtherPanels(sid, keepID)
 	})
 
 	registerAction(app, "project.close.check", func(ctx *r.Context) string {

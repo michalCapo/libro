@@ -421,6 +421,53 @@ func TestCloseWorkspaceAppSelectsAdjacentThread(t *testing.T) {
 	}
 }
 
+func TestCloseOtherPanelsKeepsSelectedAgentAndShared(t *testing.T) {
+	oldSM := sm
+	t.Cleanup(func() { sm = oldSM })
+	for _, tc := range []struct {
+		name, keep string
+		want       []string
+	}{
+		{"keeps selected tool", "browser", []string{"agent", "browser", "issues"}},
+		{"keeps agent", "agent", []string{"agent", "issues"}},
+		{"empty uses selected index", "", []string{"agent", "issues"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sm = NewStateManager()
+			state := &AppState{
+				ActiveProject: "project",
+				SelectedIndex: 0,
+				Apps: []Application{
+					{ID: "agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"},
+					{ID: "browser", Type: AppTypeURL, Dock: "right"},
+					{ID: "terminal", Type: AppTypeTerminal, Dock: "right"},
+					{ID: "issues", PluginID: "notes", Dock: "right"},
+				},
+				snapshots: map[string]*projectSnapshot{},
+			}
+			sm.states["test"] = state
+			if tc.keep == "browser" {
+				state.SelectedIndex = 1
+			}
+			js := closeOtherPanels("test", tc.keep)
+			if len(state.Apps) != len(tc.want) {
+				t.Fatalf("apps = %+v, want ids %v", state.Apps, tc.want)
+			}
+			for i, id := range tc.want {
+				if state.Apps[i].ID != id {
+					t.Fatalf("apps = %+v, want ids %v", state.Apps, tc.want)
+				}
+			}
+			if tc.keep == "" && state.Apps[0].ID != "agent" {
+				t.Fatalf("selected agent was closed: %+v", state.Apps)
+			}
+			if !strings.Contains(js, "restorePanelFocus") {
+				t.Fatal("response did not restore panel focus")
+			}
+		})
+	}
+}
+
 func TestReplaceThreadAgentStartsFreshAndKeepsTools(t *testing.T) {
 	original := db
 	var err error

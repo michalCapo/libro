@@ -1508,6 +1508,7 @@ func commandPopupJS(sid string) string {
 		];
         if(selected){
             commands.push({id:'close-panel',label:'Close panel',scope:'selected panel',icon:'close',keywords:'close stop terminal agent tool',run:function(){closePalette();__ws.call('app.close',{sid:window.__libroWorkspaceSID,id:selected.id});}});
+            commands.push({id:'close-other-panels',label:'Close other panels',scope:'selected panel',icon:'close_fullscreen',keywords:'close others all panels keep selected tool tidy',run:function(){closePalette();libroWorkspace.closeOtherPanels();}});
             commands.push({
 				id:'resize',
 				label:'Resize panel',

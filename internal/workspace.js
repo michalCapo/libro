@@ -401,6 +401,7 @@
     if (!project) { window.__libroShowToast?.('Select a project thread first', '', 'error'); return; }
     const actions = project.kind === 'worktree' ? threadActions(project) : [{label:'Thread settings', icon:'settings', run:() => projectSettings(project.name)}];
     actions.unshift({label:'New thread', icon:'add', description:'Create a new thread in ' + project.name, run:() => newThread(project.name)});
+    actions.push({label:'Close other panels', icon:'close_fullscreen', description:'Close every panel except the selected one', run:() => closeOtherPanels()});
     actions.push({label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep files, branch and worktree', run:() => call('project.close')});
     document.getElementById('thread-action-dialog')?.remove();
     const dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'thread-action-dialog'; dialog.setAttribute('aria-label', 'Thread actions');
@@ -925,6 +926,9 @@
     frames(grid).forEach(frame => { if (frame.dataset.dock === 'right') state.hidden.add(frame.dataset.appId); });
     state.bottom = false;
     restoreAgentFocus(grid);
+  }
+  function closeOtherPanels() {
+    call('app.close.others', {id:window.__libroSelectedApp || ''});
   }
   window.addEventListener('keydown', event => {
     const input = event.target.closest?.('[data-tool-key]');
@@ -1680,7 +1684,7 @@
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
     settingsSaveFinished(ok);
   }
-  window.libroWorkspace = {saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited};
+  window.libroWorkspace = {saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;
