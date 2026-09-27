@@ -1,9 +1,10 @@
 const { test } = require('node:test')
+const vm = require('node:vm')
 const assert = require('node:assert/strict')
 const fs = require('node:fs/promises')
 const os = require('node:os')
 const path = require('node:path')
-const { checkUpdates, updateAgents, updateCommand, version, newer } = require('./agent-updates')
+const { checkUpdates, updateAgents, updateCommand, startAgentUpdates, version, newer } = require('./agent-updates')
 
 test('compares numeric releases without downgrading or replacing prereleases', () => {
   assert.equal(version('codex-cli 0.100.0'), '0.100.0')
@@ -62,8 +63,8 @@ test('automatically updates and verifies before showing success', async () => {
 test('reports failure and continues with other agents', async () => {
   const f = fixture([codex, { ...codex, name: 'Pi', install: null }], { runCommand: async () => { throw Error('permission denied') } })
   await f.run()
-  assert.equal(f.notices[1][2], 'error')
-  assert.match(f.notices[2][0], /Pi.*available/)
+  assert.ok(f.notices.some(([title, , variant]) => title.includes('Codex') && variant === 'error'))
+  assert.ok(f.notices.some(([title]) => /Pi.*available/.test(title)))
 })
 
 test('does not report success if updater leaves the old version installed', async () => {
@@ -104,4 +105,58 @@ test('does not begin updates after the window closes', async () => {
   await f.run()
   assert.equal(f.calls.length, 0)
   assert.equal(f.notices.length, 0)
+})
+
+
+test('agents update concurrently; Pi extensions wait only for Pi', async () => {
+  const codexGate = Promise.withResolvers()
+  const piGate = Promise.withResolvers()
+  const started = []
+  const f = fixture([
+    { ...codex, command: 'codex', install: { file: 'codex-update', args: [] } },
+    { ...codex, command: 'pi', name: 'Pi', executable: '/bin/pi', install: { file: 'pi-update', args: [] } },
+  ], {
+    find: async () => '/bin/pi',
+    runCommand: async (file, args) => {
+      if (file.endsWith('-update')) {
+        started.push(file)
+        await (file === 'codex-update' ? codexGate.promise : piGate.promise)
+      }
+      if (args.includes('--help')) return '--extensions'
+      if (args.includes('--extensions')) started.push('extensions')
+      return '1.1.0'
+    },
+  })
+  const running = f.run()
+  try {
+    await new Promise(resolve => setImmediate(resolve))
+    assert.deepEqual(started, ['codex-update', 'pi-update'])
+    piGate.resolve()
+    await new Promise(resolve => setImmediate(resolve))
+    assert.deepEqual(started, ['codex-update', 'pi-update', 'extensions'])
+    assert.ok(f.notices.some(([title]) => title === 'Pi extensions are up to date'))
+    assert.ok(!f.notices.some(([title]) => title.startsWith('Codex updated')))
+  } finally {
+    piGate.resolve()
+    codexGate.resolve()
+    await running
+  }
+})
+
+
+test('startup skips all CLI and extension work when automatic updates are off', async () => {
+  for (const [stored, expected] of [[null, 1], ['{"agentAutoUpdate":false}', 0], ['{"agentAutoUpdate":true}', 1], ['invalid', 0]]) {
+    let checks = 0
+    let finds = 0
+    const window = {
+      isDestroyed: () => false,
+      webContents: { executeJavaScript: async source => vm.runInNewContext(source, { localStorage: { getItem: () => stored } }) },
+    }
+    await startAgentUpdates(window, {
+      check: async () => { checks++; return [] },
+      find: async () => { finds++; return null },
+    })
+    assert.equal(checks, expected)
+    assert.equal(finds, expected)
+  }
 })

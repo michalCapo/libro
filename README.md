@@ -34,7 +34,7 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 ### Agent updates
 
 On desktop startup, Libro checks installed Codex, Claude, Pi, and OpenCode versions
-in the background and automatically updates supported installations. Toasts show
+in the background and automatically updates supported installations in parallel. Toasts show
 which agent is updating and whether it succeeded. Existing sessions stay open;
 start a new session to use an updated CLI.
 
@@ -42,7 +42,10 @@ Libro supports npm global installs and recognized native Claude, Codex, and
 OpenCode updaters. Other installation methods show a manual-update notice.
 Missing agents, offline checks, and prerelease versions are skipped.
 Pi's personal packages (including extensions) also update at startup, even when
-Pi itself is current. Project-local packages are not changed.
+Pi itself is current. Extension updates wait for Pi’s own update to finish, but
+not for other agents. Project-local packages are not changed.
+Turn off **Settings → Agent updates → Automatic updates** and save to disable
+both CLI and extension updates on the next launch.
 
 ### Voice typing
 

@@ -1334,6 +1334,20 @@
       return false;
     }
   }
+  function saveAgentAutoUpdate(value) {
+    const status = document.getElementById('agent-auto-update-status');
+    try {
+      const updated = {...prefs, agentAutoUpdate:value === 'on'};
+      localStorage.setItem('libro.workspace', JSON.stringify(updated));
+      prefs = updated;
+      status.textContent = '';
+      return true;
+    } catch (_) {
+      document.getElementById('agent-auto-update').value = prefs.agentAutoUpdate === false ? 'off' : 'on';
+      status.textContent = 'Could not save. Please try again.';
+      return false;
+    }
+  }
   let savedThreadAgent = '';
   function fillThreadAgents() {
     const select = document.getElementById('default-thread-agent');
@@ -1409,6 +1423,8 @@
     document.getElementById('default-thread-agent-status').textContent = '';
     document.getElementById('notification-sound').value = prefs.notificationSound === false ? 'off' : 'on';
     document.getElementById('notification-sound-status').textContent = '';
+    document.getElementById('agent-auto-update').value = prefs.agentAutoUpdate === false ? 'off' : 'on';
+    document.getElementById('agent-auto-update-status').textContent = '';
     document.getElementById('page-tools-autoexecute').value = pageToolsAutoExecute ? 'on' : 'off';
     document.getElementById('page-tools-autoexecute-status').textContent = '';
     document.getElementById('workspace-theme').value = themePreference();
@@ -1458,6 +1474,7 @@
       () => saveAgentCommand(document.getElementById('agent-commands-form')),
       () => saveTools(document.getElementById('tool-commands-form')),
       () => saveAgentEnvironment(document.getElementById('agent-environment-form')),
+      () => settingsSaveFinished(saveAgentAutoUpdate(value('agent-auto-update')), 'Could not save automatic updates. Please try again.'),
       () => saveThreadAgent(agent),
       () => savePageTools(pageTools),
       () => saveSettings(width),

@@ -61,6 +61,7 @@ test('saving agent environment preserves masked values', () => {
   assert.equal(status.textContent, 'Saving…')
 })
 
+const saveAutoUpdate = workspace.slice(workspace.indexOf('  function saveAgentAutoUpdate('), workspace.indexOf('  let savedThreadAgent ='))
 const saveAll = workspace.slice(workspace.indexOf('  let settingsSaveSteps ='), workspace.indexOf('  let removedAgents ='))
 const close = workspace.slice(workspace.indexOf('  function closeSettings('), workspace.indexOf('  function saveSettings('))
 
@@ -75,7 +76,10 @@ function settingsHarness(valid = true) {
   get('workspace-settings').querySelector = () => content
   const calls = []
   const toasts = []
+  let stored
   const context = vm.createContext({
+    prefs: { notificationSound: false },
+    localStorage: { setItem(key, value) { stored = JSON.parse(value) } },
     window: { __libroShowToast: (...args) => toasts.push(args) },
     document: { getElementById: get, querySelector: () => content, querySelectorAll: () => [] },
     settingsFocus: null,
@@ -88,8 +92,8 @@ function settingsHarness(valid = true) {
     saveTheme: () => { calls.push('theme'); return true },
     saveNotificationSound: () => { calls.push('sound'); return true },
   })
-  vm.runInContext(saveAll + close, context)
-  return { get, content, calls, toasts, run: code => vm.runInContext(code, context) }
+  vm.runInContext(saveAutoUpdate + saveAll + close, context)
+  return { get, content, calls, toasts, context, stored: () => stored, run: code => vm.runInContext(code, context) }
 }
 
 test('one Save waits for every section before showing a toast and keeps settings open', () => {
@@ -126,4 +130,17 @@ test('Cancel closes without saving and invalid fields prevent any save', () => {
   h.run('closeSettings()')
   assert.equal(h.get('workspace-settings').hidden, true)
   assert.deepEqual(h.calls, [])
+})
+
+
+test('automatic update preference persists without replacing other settings', () => {
+  const h = settingsHarness()
+  assert.equal(h.run("saveAgentAutoUpdate('off')"), true)
+  assert.deepEqual(h.stored(), { notificationSound: false, agentAutoUpdate: false })
+  assert.equal(h.run("saveAgentAutoUpdate('on')"), true)
+  assert.equal(h.stored().agentAutoUpdate, true)
+  h.context.localStorage.setItem = () => { throw Error('storage unavailable') }
+  assert.equal(h.run("saveAgentAutoUpdate('off')"), false)
+  assert.equal(h.get('agent-auto-update').value, 'on')
+  assert.match(h.get('agent-auto-update-status').textContent, /Could not save/)
 })

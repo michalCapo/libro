@@ -515,6 +515,20 @@ func renderWorkspaceSettings() *r.Node {
 				),
 			),
 			r.P("ws-settings-status").ID("notification-sound-status").Attr("role", "status"),
+			r.El("h2", "ws-shortcut-heading").Text("Agent updates"),
+			r.Div("ws-settings-group").Render(
+				r.Div("ws-settings-row").Render(
+					r.Div("ws-settings-copy").Render(
+						r.El("label", "").Attr("for", "agent-auto-update").Text("Automatic updates"),
+						r.P("").ID("agent-auto-update-help").Text("Update agent CLIs and Pi extensions when Libro starts. Changes apply on the next launch."),
+					),
+					r.El("select", "ws-settings-select").ID("agent-auto-update").Attr("aria-describedby", "agent-auto-update-help").Render(
+						r.El("option", "").Attr("value", "on").Text("On"),
+						r.El("option", "").Attr("value", "off").Text("Off"),
+					),
+				),
+			),
+			r.P("ws-settings-status").ID("agent-auto-update-status").Attr("role", "status"),
 			r.El("h2", "ws-shortcut-heading").Text("Page tools"),
 			r.Div("ws-settings-group").Render(
 				r.Div("ws-settings-row").Render(

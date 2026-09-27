@@ -107,11 +107,11 @@ async function checkUpdates({ runCommand = run, find = findExecutable, latest = 
 
 async function updateAgents(notify, { check = checkUpdates, runCommand = run, find = findExecutable, active = () => true } = {}) {
   const updates = await check()
-  for (const update of updates) {
+  const tasks = updates.map(async update => {
     if (!active()) return
     if (!update.install) {
       await notify(`${update.name} ${update.latest} is available`, 'Update it with the package manager used to install it.', 'info')
-      continue
+      return
     }
     await notify(`Updating ${update.name}…`, `${update.current} → ${update.latest}`, 'info')
     try {
@@ -122,28 +122,35 @@ async function updateAgents(notify, { check = checkUpdates, runCommand = run, fi
     } catch (_) {
       await notify(`${update.name} could not be updated`, 'Try updating it in a terminal with its package manager.', 'error')
     }
+  })
+  const updateExtensions = async () => {
+    await tasks[updates.findIndex(update => update.command === 'pi')]
+    const pi = await find('pi')
+    if (!pi || !active()) return
+    await notify('Updating Pi extensions…', 'Checking installed Pi packages for updates.', 'info')
+    try {
+      const help = await runCommand(pi, ['update', '--help'])
+      // Older Pi releases used bare `update` for packages, before adding a self-updater.
+      const args = help.includes('--extensions') ? ['update', '--extensions', '--no-approve'] : ['update']
+      await runCommand(pi, args, 300000)
+      await notify('Pi extensions are up to date', 'Restart Pi or reload its resources to use updated extensions.', 'success')
+    } catch (_) {
+      await notify('Pi extensions could not be updated', 'Run Pi’s package update command in a terminal to retry.', 'error')
+    }
   }
-  const pi = await find('pi')
-  if (!pi || !active()) return
-  await notify('Updating Pi extensions…', 'Checking installed Pi packages for updates.', 'info')
-  try {
-    const help = await runCommand(pi, ['update', '--help'])
-    // Older Pi releases used bare `update` for packages, before adding a self-updater.
-    const args = help.includes('--extensions') ? ['update', '--extensions', '--no-approve'] : ['update']
-    await runCommand(pi, args, 300000)
-    await notify('Pi extensions are up to date', 'Restart Pi or reload its resources to use updated extensions.', 'success')
-  } catch (_) {
-    await notify('Pi extensions could not be updated', 'Run Pi’s package update command in a terminal to retry.', 'error')
-  }
+  await Promise.all([...tasks, updateExtensions()])
 }
 
-function startAgentUpdates(window) {
+async function startAgentUpdates(window, options = {}) {
+  if (window.isDestroyed()) return
+  const enabled = await window.webContents.executeJavaScript(`(JSON.parse(localStorage.getItem('libro.workspace') || '{}') || {}).agentAutoUpdate !== false`).catch(() => false)
+  if (!enabled) return
   const active = () => !window.isDestroyed()
   const notify = async (title, subtitle, variant) => {
     if (!active()) return
     await window.webContents.executeJavaScript(`window.__libroShowToast?.(${JSON.stringify(title)}, ${JSON.stringify(subtitle)}, ${JSON.stringify(variant)})`).catch(() => {})
   }
-  return updateAgents(notify, { active })
+  return updateAgents(notify, { ...options, active })
 }
 
 module.exports = { checkUpdates, updateAgents, startAgentUpdates, updateCommand, version, newer }
