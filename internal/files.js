@@ -86,14 +86,14 @@
   }
   function picker(s,kind,query='') {
     closePicker(s,false);
-    const element=document.createElement('section');element.className='ws-file-picker'+(kind==='navigation'?' ws-file-navigation':kind==='symbols'?' ws-file-symbol-dialog':'');
+    const element=document.createElement('section');element.className='ws-file-picker'+(kind==='navigation'?' ws-file-navigation':kind==='help'?' ws-file-help-dialog':kind==='symbols'?' ws-file-symbol-dialog':'');
     const header=document.createElement('div');header.className='ws-file-picker-header';
     const input=document.createElement('input');input.className='ws-file-filter';
-    const title={search:'Search project',symbols:'File symbols',recent:'Recent files',help:'Search shortcuts',navigation:navigationTitles[s.navigationKind]}[kind];
-    input.placeholder=title;input.setAttribute('aria-label',title);input.value=query;
+    const title={search:'Search project',symbols:'File symbols',recent:'Recent files',help:'Keyboard shortcuts',navigation:navigationTitles[s.navigationKind]}[kind];
+    input.placeholder=kind==='help'?'Search shortcuts':title;input.setAttribute('aria-label',input.placeholder);input.value=query;
     const close=document.createElement('button');close.type='button';close.className='ws-button';close.textContent='Close';close.onclick=()=>closePicker(s);
     if(kind!=='navigation')header.append(input);if(kind!=='symbols')header.append(close);element.append(header);
-    if(kind==='navigation'){
+    if(kind==='navigation'||kind==='help'){
       const heading=document.createElement('h2');heading.className='ws-file-navigation-title';heading.textContent=title;header.prepend(heading);
     }
     const list=document.createElement('div');list.className='ws-file-results';list.tabIndex=0;list.setAttribute('role','listbox');list.setAttribute('aria-label',title+' results');
@@ -112,8 +112,12 @@
       const hints=document.createElement('div');hints.className='ws-file-navigation-keys';
       hints.textContent='j/k · Ctrl+n/p · ]e/[e next/previous   e/Enter open   q/Esc return';element.append(hints);
     }
+    if(kind==='help'){
+      const hints=document.createElement('div');hints.className='ws-file-navigation-keys';
+      hints.textContent='↑/↓ move   / search   Esc close';element.append(hints);
+    }
     s.el.querySelector('.ws-file-preview').prepend(element);
-    if(kind==='navigation'){element.setAttribute('role','region');element.setAttribute('aria-label',title);p.covered=Array.from(element.parentElement.children).filter(el=>el!==element);p.covered.forEach(el=>{el.inert=true;});}
+    if(kind==='navigation'||kind==='help'){element.setAttribute('role','region');element.setAttribute('aria-label',title);p.covered=Array.from(element.parentElement.children).filter(el=>el!==element);p.covered.forEach(el=>{el.inert=true;});}
     function update(){
       p.index=0;
       if(kind==='search'){
@@ -127,7 +131,7 @@
       }
       const source=kind==='navigation'?p.sourceItems:kind==='symbols'?(s.editor?.symbols() || []).map(item=>({...item,label:(item.kind||'')+' '+(item.name||item.label)})):
         kind==='recent'?Array.from(s.recent.values()).reverse().map(item=>({...item,label:item.path})):
-        Array.from(s.el.querySelectorAll('.ws-file-shortcuts kbd')).map(key=>({label:key.textContent+' — '+key.previousElementSibling.textContent}));
+        Array.from(s.el.querySelectorAll('.ws-file-shortcuts kbd')).map(key=>({keys:key.textContent,action:key.previousElementSibling.textContent,label:key.textContent+' '+key.previousElementSibling.textContent}));
       p.items=source.filter(item=>fuzzy(item.label || item.path,input.value)>=0);
       drawPicker(s);
     }
@@ -195,6 +199,9 @@
         row.style.paddingLeft=(10+(item.depth||0)*16)+'px';
         const type=document.createElement('span');type.className='ws-file-symbol-kind';type.textContent=(item.kind||'')+' ';
         const name=document.createElement('span');name.className='ws-file-symbol-name';name.textContent=item.name||item.label;row.append(type,name);
+      }else if(p.kind==='help'){
+        const keys=document.createElement('kbd');keys.className='ws-file-shortcut-keys';keys.textContent=item.keys||'';
+        const action=document.createElement('span');action.className='ws-file-shortcut-action';action.textContent=item.action||'';row.append(keys,action);
       }else row.textContent=item.label || `${item.path}:${item.line}  ${item.text}`;
       row.onclick=()=>{p.index=index;choosePicker(s);};p.list.append(row);
     });

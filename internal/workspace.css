@@ -652,10 +652,13 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 
 /* Navigation is a dedicated buffer in the preview pane. */
 .ws-file-preview{position:relative}
-.ws-file-navigation{position:absolute;inset:0;z-index:3;max-height:none;background:var(--ws-bg);border:0}
-.ws-file-navigation .ws-file-picker-header{flex-wrap:wrap;padding:12px;gap:10px;border-bottom:1px solid var(--ws-line)}
+.ws-file-navigation,.ws-file-help-dialog{position:absolute;inset:0;z-index:3;max-height:none;background:var(--ws-bg);border:0}
+.ws-file-navigation .ws-file-picker-header,.ws-file-help-dialog .ws-file-picker-header{flex-wrap:wrap;padding:12px;gap:10px;border-bottom:1px solid var(--ws-line)}
 .ws-file-navigation-title{font-size:14px;font-weight:600;margin:0}
-.ws-file-navigation .ws-file-results{flex:1;padding:0 12px 12px 0}
+.ws-file-navigation .ws-file-results,.ws-file-help-dialog .ws-file-results{flex:1;padding:0 12px 12px 0}
+.ws-file-help-dialog .ws-file-result{display:grid;grid-template-columns:220px minmax(0,1fr);gap:16px;align-items:baseline;font:13px/1.7 ui-monospace,monospace}
+.ws-file-help-dialog kbd{font:inherit;color:var(--ws-fg)}
+.ws-file-help-dialog .ws-file-shortcut-action{color:var(--ws-muted);overflow-wrap:anywhere}
 .ws-file-reference-file{display:flex;align-items:center;gap:16px;margin-left:48px;padding:20px;background:color-mix(in srgb,var(--ws-accent) 11%,var(--ws-bg));font:13px/1.5 ui-monospace,monospace;min-width:0}
 .ws-file-reference-file strong{overflow-wrap:anywhere}
 .ws-file-reference-directory{color:#008000;overflow-wrap:anywhere;min-width:0}
@@ -673,8 +676,8 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 .ws-file-reference-code .tok-keyword{color:#a626a4}.ws-file-reference-code .tok-string{color:#398146}.ws-file-reference-code .tok-number{color:#986801}.ws-file-reference-code .tok-comment{color:var(--ws-muted)}.ws-file-reference-code .tok-typeName,.ws-file-reference-code .tok-className{color:#986801}.ws-file-reference-code .tok-function{color:#4078f2}
 .dark .ws-file-reference-code .tok-keyword{color:#c678dd}.dark .ws-file-reference-code .tok-string{color:#98c379}.dark .ws-file-reference-code .tok-number{color:#d19a66}.dark .ws-file-reference-code .tok-typeName,.dark .ws-file-reference-code .tok-className{color:#e5c07b}.dark .ws-file-reference-code .tok-function{color:#61afef}
 .ws-file-navigation-keys{padding:10px 12px;border-top:1px solid var(--ws-line);font-size:11px;color:var(--ws-muted)}
-.ws-file-navigation .ws-file-picker-header>.ws-button{width:auto;padding:4px 8px;margin-left:auto}
-@container(max-width:520px){.ws-files{grid-template-columns:minmax(0,1fr) minmax(140px,38%)}.ws-file-toolbar{gap:8px}.ws-file-path{flex-basis:100%}}
+.ws-file-navigation .ws-file-picker-header>.ws-button,.ws-file-help-dialog .ws-file-picker-header>.ws-button{width:auto;padding:4px 8px;margin-left:auto}
+@container(max-width:520px){.ws-files{grid-template-columns:minmax(0,1fr) minmax(140px,38%)}.ws-file-toolbar{gap:8px}.ws-file-path{flex-basis:100%}.ws-file-help-dialog .ws-file-result{grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:10px}}
 
 .ws-file-symbol-dialog{position:absolute;z-index:4;top:50%;left:50%;transform:translate(-50%,-50%);width:min(640px,calc(100% - 32px));max-height:calc(100% - 40px);border:1px solid var(--ws-control-line);border-radius:6px;background:var(--ws-chrome);box-shadow:0 12px 36px #0002;font:13px/1.7 ui-monospace,monospace}
 .ws-file-symbol-dialog .ws-file-picker-header{padding:8px}
