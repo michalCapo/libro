@@ -2,6 +2,7 @@
 package libro
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"slices"
+	"time"
 
 	"os"
 	"os/exec"
@@ -296,9 +298,9 @@ func expandUserPath(path string) string {
 	return path
 }
 
-func projectDirLookup(query string) []projectDirLookupMatch {
+func projectDirLookup(ctx context.Context, query string) []projectDirLookupMatch {
 	query = strings.TrimSpace(query)
-	if query == "" {
+	if query == "" || ctx.Err() != nil {
 		return nil
 	}
 
@@ -312,6 +314,9 @@ func projectDirLookup(query string) []projectDirLookupMatch {
 		var out []projectDirLookupMatch
 		prefix = strings.ToLower(prefix)
 		for _, e := range entries {
+			if ctx.Err() != nil {
+				break
+			}
 			name := e.Name()
 			if !e.IsDir() || strings.HasPrefix(name, ".") {
 				continue
@@ -338,7 +343,7 @@ func projectDirLookup(query string) []projectDirLookupMatch {
 		if strings.HasSuffix(query, string(os.PathSeparator)) {
 			return children(expanded, "")
 		}
-		if info, err := os.Stat(expanded); err == nil && info.IsDir() {
+		if expanded == home && (query == "~" || query == "./") {
 			return children(expanded, "")
 		}
 		return children(filepath.Dir(expanded), filepath.Base(expanded))
@@ -356,6 +361,9 @@ func projectDirLookup(query string) []projectDirLookupMatch {
 	seen := map[string]bool{}
 	var out []projectDirLookupMatch
 	for _, root := range roots {
+		if ctx.Err() != nil || len(out) >= 80 {
+			break
+		}
 		root = filepath.Clean(root)
 		if seenRoot[root] {
 			continue
@@ -367,7 +375,10 @@ func projectDirLookup(query string) []projectDirLookupMatch {
 		}
 		rootDepth := len(strings.Split(strings.Trim(filepath.Clean(root), string(os.PathSeparator)), string(os.PathSeparator)))
 		_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-			if err != nil || len(out) >= 80 {
+			if ctx.Err() != nil || len(out) >= 80 {
+				return filepath.SkipAll
+			}
+			if err != nil {
 				return nil
 			}
 			name := d.Name()
@@ -442,10 +453,11 @@ var (
 	signalHandlerOnce   sync.Once
 )
 
-// CleanupRuntime tears down terminal backends.
+// CleanupRuntime tears down terminal backends and language servers.
 func CleanupRuntime() {
 	shutdownCleanupOnce.Do(func() {
 		tm.StopAll()
+		closeNavigationServers()
 	})
 }
 
@@ -1188,17 +1200,19 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 
 	// Lookup directories for the unified project dialog. Bare terms search common
 	// code roots recursively; absolute paths list matching child directories.
-	registerAction(app, "project.lookup", func(ctx *r.Context) string {
-		data := ctx.WsData()
-		query, _ := data["query"].(string)
-		seq, _ := data["seq"].(float64)
-		matches := projectDirLookup(query)
-		payload, _ := json.Marshal(map[string]any{
-			"query":   strings.TrimSpace(query),
-			"seq":     int(seq),
-			"matches": matches,
-		})
-		return fmt.Sprintf(`if(window.__libroProjectDialogSetDirMatches)window.__libroProjectDialogSetDirMatches(%s);`, string(payload))
+	app.GET("/project/lookup", func(w http.ResponseWriter, req *http.Request) {
+		if !authorizeVoice(w, req) {
+			return
+		}
+		ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+		defer cancel()
+		matches := projectDirLookup(ctx, req.URL.Query().Get("query"))
+		if req.Context().Err() != nil {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(matches)
 	})
 
 	// Open the unified project dialog in folder-browse mode.

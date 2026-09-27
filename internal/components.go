@@ -2129,8 +2129,8 @@ func projectDialogJS(sid string) string {
 	var hoverEnabled=false;
 	var lookupSeq=0;
 	var lookupTimer=0;
-	var lookupQuery='';
 	var lookupLoading=false;
+	var lookupController=null;
 	var documentKeydownBound=false;
 	var documentInputBound=false;
 
@@ -2295,17 +2295,43 @@ func projectDialogJS(sid string) string {
 		if(selected)selected.scrollIntoView({block:'nearest'});
 	}
 
+	function cancelLookup(){
+		clearTimeout(lookupTimer);
+		++lookupSeq;
+		if(lookupController)lookupController.abort();
+		lookupController=null;
+		lookupLoading=false;
+	}
+	function lookup(q){
+		var seq=lookupSeq;
+		var controller=new AbortController();
+		lookupController=controller;
+		fetch('/project/lookup?query='+encodeURIComponent(q),{
+			signal:controller.signal,headers:{'X-Libro-Session':'%s'}
+		}).then(function(response){
+			if(!response.ok)throw new Error('Folder search failed');
+			return response.json();
+		}).then(function(matches){
+			if(seq!==lookupSeq)return;
+			lookupController=null;
+			window.__libroProjectDialogSetDirMatches({seq:seq,query:q,matches:matches});
+		}).catch(function(error){
+			if(seq!==lookupSeq||error.name==='AbortError')return;
+			lookupController=null;
+			lookupLoading=false;
+			var res=getResults();
+			if(res)res.textContent='Folder search failed. Try again.';
+		});
+	}
 	function scheduleLookup(){
 		var q=query();
-		clearTimeout(lookupTimer);
+		cancelLookup();
+		dirMatches=[];
 		hideCreateConfirm();
-		if(!q||(!isPathQuery(q)&&filtered.length>0)){dirMatches=[];lookupLoading=false;render();return;}
+		if(!q||(!isPathQuery(q)&&filtered.length>0)){render();return;}
 		lookupLoading=true;
 		render();
-		lookupTimer=setTimeout(function(){
-			lookupQuery=q;
-			__ws.call('project.lookup',{sid:'%s',query:q,seq:++lookupSeq});
-		},90);
+		lookupTimer=setTimeout(function(){lookup(q);},90);
 	}
 
 	function sortProjects(a,b){
@@ -2338,6 +2364,7 @@ func projectDialogJS(sid string) string {
 	}
 
 	function closePopup(){
+		cancelLookup();
 		var dlg=getDlg();
 		var inp=getInp();
 		if(dlg)dlg.classList.add('hidden');
@@ -2410,7 +2437,7 @@ func projectDialogJS(sid string) string {
 		dirMatches=[];
 		lookupLoading=true;
 		render();
-		__ws.call('project.lookup',{sid:'%s',query:inp.value,seq:++lookupSeq});
+		scheduleLookup();
 	}
 
 	function navigateSelection(delta){
@@ -2539,8 +2566,14 @@ func projectDialogJS(sid string) string {
 	}
 	bindInput();
 	window.__libroProjectDialogBind=bindInput;
+	window.__libroCloseProjectDialog=closePopup;
+	new MutationObserver(function(){
+		var dlg=getDlg();
+		if(!dlg||dlg.classList.contains('hidden'))cancelLookup();
+	}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
 	window.__libroProjectDialogSetDirMatches=function(payload){
 		payload=payload||{};
+		if(!getDlg()||getDlg().classList.contains('hidden'))return;
 		if(payload.seq&&payload.seq<lookupSeq)return;
 		if(payload.query&&payload.query!==query())return;
 		dirMatches=payload.matches||[];
@@ -2556,7 +2589,7 @@ func projectDialogJS(sid string) string {
 	window.__libroOpenProjectDialogSearch=openPopup;
 	window.__libroOpenProjectDialogBrowse=openBrowse;
 })();
-`, ProjectDialogID, sid, sid, sid, sid, sid, sid, sid, sid, sid)
+`, ProjectDialogID, sid, sid, sid, sid, sid, sid, sid, sid)
 }
 
 func moveProjectPopupJS(sid string) string {

@@ -68,3 +68,46 @@ assert.equal(selectedIdx,0);
 		t.Fatalf("project search failed: %v\n%s", err, output)
 	}
 }
+
+func TestProjectDialogCancelsLookup(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node is required")
+	}
+	script := projectDialogJS("test-session")
+	start := strings.Index(script, "function cancelLookup()")
+	end := strings.Index(script[start:], "function sortProjects") + start
+	closeStart := strings.Index(script, "function closePopup()")
+	closeEnd := strings.Index(script[closeStart:], "function launchProject()") + closeStart
+	js := `
+const assert=require('node:assert/strict');
+var lookupTimer=0,lookupSeq=0,lookupController=null,lookupLoading=false;
+var dirMatches=[],filtered=[],hoverEnabled=false,q='nisa';
+var dlg={classList:{add(){}}},inp={value:q};
+function getDlg(){return dlg;} function getInp(){return inp;}
+function query(){return q;} function isPathQuery(){return false;}
+function render(){} function hideCreateConfirm(){} function getResults(){return null;}
+var requests=[],results=[];
+var window={__libroProjectDialogSetDirMatches(p){results.push(p);}};
+function fetch(url,options){return new Promise(resolve=>requests.push({url,options,resolve}));}
+` + script[start:end] + script[closeStart:closeEnd] + `
+(async()=>{
+ scheduleLookup(); closePopup();
+ await new Promise(r=>setTimeout(r,110));
+ assert.equal(requests.length,0,'close cancels debounce');
+ lookup('nisa');
+ closePopup();
+ assert.equal(requests[0].options.signal.aborted,true,'close aborts active request');
+ requests[0].resolve({ok:true,json:async()=>[{name:'nisa'}]});
+ await new Promise(r=>setImmediate(r));
+ assert.equal(results.length,0,'late results ignored');
+ lookup('old');
+ q='new'; scheduleLookup();
+ assert.equal(requests[1].options.signal.aborted,true,'new query aborts previous search');
+ closePopup();
+})().catch(e=>{console.error(e);process.exitCode=1;});
+`
+	if output, err := exec.Command(node, "-e", js).CombinedOutput(); err != nil {
+		t.Fatalf("lookup cancellation: %v\n%s", err, output)
+	}
+}

@@ -24,6 +24,8 @@ type fileEntry struct {
 	Dir  bool   `json:"dir"`
 }
 type fileResult struct {
+	Version   string      `json:"version,omitempty"`
+	Unchanged bool        `json:"unchanged,omitempty"`
 	ID        string      `json:"id"`
 	Path      string      `json:"path"`
 	Request   string      `json:"request"`
@@ -34,9 +36,15 @@ type fileResult struct {
 	MIME      string      `json:"mime,omitempty"`
 	Data      string      `json:"data,omitempty"`
 	Error     string      `json:"error,omitempty"`
+	Matches   []fileMatch `json:"matches,omitempty"`
+	Truncated bool        `json:"truncated,omitempty"`
 }
 
 func readProjectFile(rootPath, path string) (fileResult, error) {
+	return readProjectFileVersion(rootPath, path, "")
+}
+
+func readProjectFileVersion(rootPath, path, version string) (fileResult, error) {
 	result := fileResult{Path: path}
 	if path == "" {
 		path = "."
@@ -85,6 +93,11 @@ func readProjectFile(rootPath, path string) (fileResult, error) {
 	}
 	if !info.Mode().IsRegular() {
 		return result, fmt.Errorf("only regular files can be previewed")
+	}
+	result.Version = fmt.Sprintf("%d:%d", info.ModTime().UnixNano(), info.Size())
+	if version != "" && version == result.Version {
+		result.Unchanged = true
+		return result, nil
 	}
 	header := make([]byte, 512)
 	n, err := f.Read(header)
@@ -177,7 +190,7 @@ func filesRoot(projectPath string, parents int) string {
 }
 
 func registerFilesActions(app *r.App) {
-	for _, action := range []string{"files.read", "files.open"} {
+	for _, action := range []string{"files.read", "files.open", "files.index", "files.search", "files.navigate"} {
 		registerAction(app, action, func(ctx *r.Context) string {
 			sid := extractSID(ctx)
 			data := ctx.WsData()
@@ -206,7 +219,24 @@ func registerFilesActions(app *r.App) {
 					result.Error = err.Error()
 				}
 			} else if allowed {
-				value, err := readProjectFile(root, path)
+				var value fileResult
+				var err error
+				switch action {
+				case "files.navigate":
+					kind, _ := data["kind"].(string)
+					version, _ := data["version"].(string)
+					line, _ := data["line"].(float64)
+					column, _ := data["column"].(float64)
+					value, err = navigateProjectFile(sm.GetActiveProjectPath(sid), path, kind, version, int(parents), int(line), int(column))
+				case "files.index", "files.search":
+					query, _ := data["query"].(string)
+					ignored, _ := data["ignored"].(bool)
+					// Search always targets the active workspace, even after browsing a parent.
+					value, err = searchProjectFiles(sm.GetActiveProjectPath(sid), query, ignored, action == "files.index")
+				default:
+					version, _ := data["version"].(string)
+					value, err = readProjectFileVersion(root, path, version)
+				}
 				result = value
 				result.ID = id
 				result.Request = request
@@ -232,8 +262,26 @@ func renderFiles(app Application) *r.Node {
 		{"/", "Filter files"},
 		{"Enter", "Preview file"},
 		{"o", "Open externally"},
+		{"Space Space", "Find project files in tree"},
+		{"h j k l / w b e", "Source movement"},
+		{"00 / 44 / 5", "Line start / end / matching bracket"},
+		{"Ctrl+d / Ctrl+u", "Move 15 lines"},
+		{"/ / n / N", "Find in file / next / previous"},
+		{"v / V / y / yy", "Select / select lines / copy"},
+		{"Space yy", "Copy file:line"},
+		{"gd / gr", "Definition / references"},
+		{"gD / gi / gt", "Declaration / implementation / type definition"},
+		{"go / [f / ]f", "Symbols / previous / next function"},
+		{"Space ss / Space sw", "Project search / word or selection"},
+		{"Ctrl+o / Tab", "Jump back / forward"},
+		{"Space ,", "Recent files"},
+		{"Space sk", "Search shortcuts"},
+		{"Space lr", "Restart language server"},
+		{"Space p", "Toggle preview"},
+		{"Space w", "Toggle wrapping"},
 	} {
-		help.Render(r.Span("").Text(shortcut.action), r.El("kbd", "").Text(shortcut.keys))
+		help.Render(r.Div("ws-file-shortcut").Render(
+			r.Span("").Text(shortcut.action), r.El("kbd", "").Text(shortcut.keys)))
 	}
 	return r.Div("ws-files").Attr("data-files", app.ID).Render(
 		r.Div("ws-file-preview").Render(
@@ -244,11 +292,12 @@ func renderFiles(app Application) *r.Node {
 					r.Button("ws-file-image-zoom").Attr("type", "button").Attr("data-image-zoom", "in").Attr("aria-label", "Zoom in").Text("+")),
 				r.El("label", "ws-file-render").Attr("title", "Preview HTML and Markdown").Render(r.Input("").Attr("type", "checkbox"), r.Span("").Text("Preview")),
 				r.El("label", "ws-file-wrap").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Word wrap"))),
-			r.El("pre", "ws-file-text is-wrapped").Attr("tabindex", "0").Text("Select a file from the project tree."),
+			r.Div("ws-file-context").Attr("aria-label", "Source location"),
+			r.Div("ws-file-text is-wrapped").Attr("tabindex", "0").Text("Select a file from the project tree."),
 			r.Div("ws-file-media").Attr("hidden", "hidden"),
 		),
 		r.Div("ws-file-sidebar").Render(
-			r.Input("ws-file-filter").Attr("placeholder", "Filter files…").Attr("aria-label", "Filter files"),
+			r.Input("ws-file-filter").Attr("placeholder", "Find project files…").Attr("aria-label", "Filter files"),
 			r.El("label", "ws-file-hidden").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Show hidden files")),
 			r.Div("ws-file-tree").Attr("role", "tree").Attr("aria-label", "Project files").Attr("tabindex", "0"),
 			r.El("details", "ws-file-help").Attr("open", "open").Render(r.El("summary", "").Text("Keyboard shortcuts"), help),

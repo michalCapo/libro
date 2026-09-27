@@ -390,7 +390,7 @@ test('base and worktree rows are numbered without requiring agents', () => {
 
 test('Ctrl+1–9 selects the numbered thread once', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const handler = source.slice(source.indexOf('    if (event.ctrlKey &&'), source.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"))
+  const handler = source.slice(source.indexOf('    const number = /^[1-9]$/'), source.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"))
   for (const key of ['1', '9']) for (const repeat of [false, true]) {
     let clicked = 0
     vm.runInNewContext('(function () {' + handler + '})()', {

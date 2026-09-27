@@ -73,7 +73,7 @@ test('does not report success if updater leaves the old version installed', asyn
   assert.equal(f.notices.at(-1)[2], 'error')
 })
 
-test('updates Pi extensions even when Pi itself is current', async () => {
+test('updates Pi extensions silently when Pi itself is current', async () => {
   const calls = []
   const f = fixture([], {
     find: async name => name === 'pi' ? '/bin/pi' : null,
@@ -81,8 +81,7 @@ test('updates Pi extensions even when Pi itself is current', async () => {
   })
   await f.run()
   assert.deepEqual(calls, [['update', '--help'], ['update', '--extensions', '--no-approve']])
-  assert.equal(f.notices[0][0], 'Updating Pi extensions…')
-  assert.equal(f.notices[1][2], 'success')
+  assert.deepEqual(f.notices, [])
 })
 
 test('supports legacy Pi package updates and reports errors', async () => {
@@ -134,7 +133,7 @@ test('agents update concurrently; Pi extensions wait only for Pi', async () => {
     piGate.resolve()
     await new Promise(resolve => setImmediate(resolve))
     assert.deepEqual(started, ['codex-update', 'pi-update', 'extensions'])
-    assert.ok(f.notices.some(([title]) => title === 'Pi extensions are up to date'))
+    assert.ok(!f.notices.some(([title]) => title.includes('extensions')))
     assert.ok(!f.notices.some(([title]) => title.startsWith('Codex updated')))
   } finally {
     piGate.resolve()

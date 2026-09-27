@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/creack/pty v1.1.24
 	github.com/michalCapo/g-sui v1.1.32
+	github.com/sourcegraph/jsonrpc2 v0.2.1
 	github.com/yuin/goldmark v1.8.6
 	golang.org/x/net v0.59.0
 	modernc.org/sqlite v1.58.0

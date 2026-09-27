@@ -41,6 +41,7 @@ start a new session to use an updated CLI.
 Libro supports npm global installs and recognized native Claude, Codex, and
 OpenCode updaters. Other installation methods show a manual-update notice.
 Missing agents, offline checks, and prerelease versions are skipped.
+Successful Pi extension checks run silently; failures still show a notification.
 Pi's personal packages (including extensions) also update at startup, even when
 Pi itself is current. Extension updates wait for Pi’s own update to finish, but
 not for other agents. Project-local packages are not changed.
@@ -131,6 +132,28 @@ bundle matches its source. Run the editor integration tests with
 - Ask the agent about part of a page: press `a` and click an element, or `d` and draw a box around it. Type a short note and it is pasted into the agent, together with that part of the page.
 
 ![Browser panel open next to other tools](demo/browser-panel.png)
+
+### Files
+
+Files has a read-only Vim source viewer. Shortcuts apply while the tree or preview has focus.
+
+- `Enter` opens the selected file.
+- `Space Space` focuses the existing tree filter. It fuzzy-matches project file paths, including unopened folders; `Esc` clears the filter.
+- Use Vim motions and counts (`h/j/k/l`, `w/b/e`, `10j`, `gg/G`, `{`/`}`). `00` jumps to the first nonblank character, `44` to line end, `gb` to file end, and `5` to the matching bracket. `Ctrl+d/u` moves 15 lines.
+- `/` searches the file; `n/N` repeats the search. `ff/fb` searches the cursor word forward/backward.
+- `v/V` selects characters/lines, `y` copies the selection, and `yy` copies a line to the clipboard. `Space yy` (also `Space yl`) copies `path:line`.
+- `gd` goes to a definition, `gr` lists references, `gD` goes to a declaration, `gi` finds implementations, and `gt` goes to a type definition. A single target opens directly; multiple targets open a dedicated navigation view grouped by file, with highlighted source context and marked symbols. Use `j/k`, `Ctrl+n/p`, `]e/[e`, or `*/#` to move, `e`/`Enter` to open, and `q`/`Esc` to return. Dependency sources outside the project can also open in the preview.
+- `go` lists file symbols; `[f` / `]f` jumps between functions. Structural symbols cover JavaScript/TypeScript, Go, C/C++, Python, Rust and Java. Other supported formats retain syntax highlighting.
+- `Space ss` searches project text; `Space sw` searches the word or selection. Search respects ignore files by default. Results show paths and line numbers; arrows or `j/k` in the results select a match, `Enter` opens it, and `Esc` returns to the preview.
+- `Ctrl+o` goes back through file/symbol/result jumps; `Tab` or `Ctrl+i` goes forward. `Space ,` opens recent previews. Cursor and scroll positions are remembered while the Files tool is open.
+- `Space p` toggles Preview; `Space w` toggles wrapping; `Space sk` searches shortcut help. Image previews also accept `h/j/k/l` to pan and `+/-/0` to zoom/reset.
+- Visible text previews refresh after external changes, preserving position. Source files cannot be edited through this viewer.
+
+Semantic navigation requires `gopls` for Go, `typescript-language-server` (with TypeScript) for JS/TS, or `clangd` for C/C++/Objective-C on PATH. Commands supported by each language server may differ; missing tools and unsupported actions show a message. Servers start on demand and reuse project analysis for later requests. They stop after 10 idle minutes or when Libro exits. Use `Space lr` to restart the current file’s server. Previously opened source buffers are refreshed from disk before navigation.
+
+Project search and fuzzy file discovery require `rg` (ripgrep) on PATH. Search is literal, uses smart case, skips files over 1 MB, and returns up to 500 matching lines. File discovery indexes up to 20,000 paths; the UI reports limits and errors. Clipboard access requires the desktop app or browser clipboard permission.
+
+Rebuild the bundled viewer after source changes with `npm run build:files`. Check it with `npm run check:files` and `node --test electron/files-navigation.test.cjs`.
 
 ### Issues
 

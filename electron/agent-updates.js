@@ -127,13 +127,12 @@ async function updateAgents(notify, { check = checkUpdates, runCommand = run, fi
     await tasks[updates.findIndex(update => update.command === 'pi')]
     const pi = await find('pi')
     if (!pi || !active()) return
-    await notify('Updating Pi extensions…', 'Checking installed Pi packages for updates.', 'info')
     try {
       const help = await runCommand(pi, ['update', '--help'])
       // Older Pi releases used bare `update` for packages, before adding a self-updater.
       const args = help.includes('--extensions') ? ['update', '--extensions', '--no-approve'] : ['update']
       await runCommand(pi, args, 300000)
-      await notify('Pi extensions are up to date', 'Restart Pi or reload its resources to use updated extensions.', 'success')
+      // Successful package maintenance is silent: Pi also succeeds when nothing changed.
     } catch (_) {
       await notify('Pi extensions could not be updated', 'Run Pi’s package update command in a terminal to retry.', 'error')
     }

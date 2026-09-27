@@ -21,7 +21,7 @@ func ProjectDialog(_ string) *r.Node {
 	return r.Div("ws-popup fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
 		ID(ProjectDialogID).
 		Attr("data-project-home", homeDir).
-		OnClick(r.JS(HideJS(ProjectDialogID))).
+		OnClick(r.JS("if(window.__libroCloseProjectDialog)window.__libroCloseProjectDialog();else{" + HideJS(ProjectDialogID) + "}")).
 		Render(
 			r.Div("bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden").
 				Attr("role", "dialog").Attr("aria-modal", "true").Attr("aria-label", "Projects").
@@ -35,7 +35,7 @@ func ProjectDialog(_ string) *r.Node {
 							Attr("placeholder", "Type project, branch, folder, or path...").
 							Attr("autocomplete", "off").
 							Attr("spellcheck", "false"),
-						r.Button("ws-command-dismiss").Attr("type", "button").Attr("aria-label", "Close projects").OnClick(r.JS(HideJS(ProjectDialogID))).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("close")),
+						r.Button("ws-command-dismiss").Attr("type", "button").Attr("aria-label", "Close projects").OnClick(r.JS("if(window.__libroCloseProjectDialog)window.__libroCloseProjectDialog();else{"+HideJS(ProjectDialogID)+"}")).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("close")),
 					),
 					r.Div("max-h-80 overflow-y-auto").ID("project-results"),
 					r.Div("hidden px-4 py-3 border-t border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20").

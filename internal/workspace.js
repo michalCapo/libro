@@ -935,6 +935,11 @@
       else if (shortcut(event)) setShortcutValue(input, shortcut(event));
       return;
     }
+    // Let the Files editor receive its Vim scroll keys before global tool shortcuts.
+    if (event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey &&
+        ['d', 'u'].includes(event.key.toLowerCase()) &&
+        event.target.closest?.('[data-files] .cm-content')) return;
+    if(event.ctrlKey && !event.altKey && !event.metaKey && ['n','p','e','d','u'].includes(event.key.toLowerCase()) && event.target.closest?.('[data-files] .ws-file-navigation .ws-file-results, [data-files] .ws-file-symbol-dialog')) return;
     const binding = shortcut(event);
     const zoomAction = binding && ['zoom-in', 'zoom-out', 'zoom-reset'].find(id => toolKeys[id] === binding);
     if (zoomAction) {
