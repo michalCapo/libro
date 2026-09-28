@@ -572,7 +572,7 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 /* Keep terminal activity in the row, before the trailing shortcut. */
 .ws-project-item .ws-thread-row:has(.ws-project-terminal) span{flex:0 1 auto}
 .ws-project-item:has(.ws-thread-row) .ws-thread-row .ws-project-terminal{position:static;order:1}
-.ws-project-item .ws-thread-row .ws-project-shortcut{order:2}
+.ws-project-item .ws-thread-row .ws-project-shortcut{order:2;margin-left:auto}
 
 /* Wide hit targets keep the existing one-pixel panel dividers quiet. */
 .ws-sidebar{position:relative}
