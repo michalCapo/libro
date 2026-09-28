@@ -738,7 +738,7 @@
       .map(grid => grid.dataset.projectScope || grid.dataset.workspaceProject));
     document.querySelectorAll('.ws-project-row').forEach(row => {
       const thread = (window.__libroThreads || []).find(thread => thread.id === row.dataset.projectKey);
-      const active = !thread?.project && running.has(row.dataset.projectKey);
+      const active = ['base', 'worktree', 'thread'].includes(row.dataset.kind) && !thread?.project && running.has(row.dataset.projectKey);
       let icon = row.querySelector('.ws-project-terminal');
       if (!active) { icon?.remove(); return; }
       if (icon) return;

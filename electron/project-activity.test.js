@@ -83,15 +83,19 @@ test('thread interaction clears completion until a new turn completes', () => {
   assert.equal(tabs[1].icon.textContent, 'chat_bubble_outline')
 })
 
-test('bottom terminal activity belongs to the project, or to a standalone thread', () => {
-  const rows = ['project', 'thread:one', 'thread:two', 'thread:solo'].map(projectKey => ({
-    dataset: { projectKey }, icon: null,
+test('bottom terminal activity belongs to its branch, worktree, or standalone thread, never the project header', () => {
+  const rows = [
+    ['project', 'project'], ['project', 'base'], ['project/branch', 'worktree'],
+    ['thread:one', 'thread'], ['thread:two', 'thread'], ['thread:solo', 'thread'],
+  ].map(([projectKey, kind]) => ({
+    dataset: { projectKey, kind }, icon: null,
     querySelector(selector) { return selector === '.ws-project-terminal' ? this.icon : null },
     insertBefore(icon) { this.icon = icon; icon.remove = () => { this.icon = null } },
   }))
   const grids = [
     { dataset: { workspaceProject: 'thread:one', projectScope: 'project' }, running: true },
     { dataset: { workspaceProject: 'thread:solo', projectScope: '' }, running: true },
+    { dataset: { workspaceProject: 'project/branch', projectScope: 'project/branch' }, running: true },
   ].map(grid => ({ ...grid, querySelector() { return this.running } }))
   const context = vm.createContext({
     window: { __libroThreads: [{ id: 'thread:one', project: 'project' }, { id: 'thread:two', project: 'project' }, { id: 'thread:solo' }] },
@@ -103,12 +107,20 @@ test('bottom terminal activity belongs to the project, or to a standalone thread
   const start = workspace.indexOf('  function renderProjectTerminals()')
   vm.runInContext(workspace.slice(start, workspace.indexOf("  window.addEventListener('libro-process-status'", start)), context)
   vm.runInContext('renderProjectTerminals()', context)
-  assert.ok(rows[0].icon)
-  assert.equal(rows[1].icon, null)
-  assert.equal(rows[2].icon, null)
-  assert.ok(rows[3].icon)
+  assert.equal(rows[0].icon, null)
+  assert.ok(rows[1].icon)
+  assert.ok(rows[2].icon)
+  assert.equal(rows[3].icon, null)
+  assert.equal(rows[4].icon, null)
+  assert.ok(rows[5].icon)
   grids[0].running = false
   vm.runInContext('renderProjectTerminals()', context)
   assert.equal(rows[0].icon, null)
-  assert.ok(rows[3].icon)
+  assert.equal(rows[1].icon, null)
+  assert.ok(rows[2].icon)
+  assert.ok(rows[5].icon)
+  grids[2].running = false
+  vm.runInContext('renderProjectTerminals()', context)
+  assert.equal(rows[2].icon, null)
+  assert.ok(rows[5].icon)
 })
