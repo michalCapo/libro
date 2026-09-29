@@ -596,6 +596,7 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 #libro-workspace[data-projects=false] .ws-project-new-thread{display:none}
 
 .ws-project-group .ws-project-threads .ws-project-item:has(.ws-project-settings) .ws-thread-row{padding-right:72px}
+.ws-project-group .ws-project-threads .ws-project-item:has(.ws-project-settings) .ws-project-settings{right:36px}
 .ws-project-group .ws-project-threads .ws-project-item:has(.ws-project-settings) .ws-thread-row .ws-project-shortcut{position:absolute;right:12px}
 
 /* Thread completion keeps destructive work behind a reviewed dialog. */
