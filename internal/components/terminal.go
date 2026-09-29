@@ -73,6 +73,7 @@ func shellQuote(s string) string {
 type TerminalManager struct {
 	mu       sync.Mutex
 	sessions map[string]*TerminalSession
+	logs     map[string]*terminalLog
 	launchMu sync.Mutex // serializes launches with StopAll
 }
 
@@ -92,6 +93,7 @@ type TerminalSession struct {
 	mu             sync.Mutex
 	clients        map[*terminalClient]bool
 	closed         bool
+	log            *terminalLog
 	pendingOutput  []byte // startup output retained until the first client connects
 	connected      bool
 	cols           uint16
@@ -137,7 +139,7 @@ const (
 
 // NewTerminalManager creates a PTY terminal manager.
 func NewTerminalManager() *TerminalManager {
-	return &TerminalManager{sessions: make(map[string]*TerminalSession)}
+	return &TerminalManager{sessions: make(map[string]*TerminalSession), logs: make(map[string]*terminalLog)}
 }
 
 // Start launches (or returns) a PTY session for the given app.
@@ -212,6 +214,8 @@ func (tm *TerminalManager) StartWithSessionReporter(appID, command, cwd string, 
 	}
 
 	tm.mu.Lock()
+	s.log = &terminalLog{}
+	tm.logs[appID] = s.log
 	tm.sessions[appID] = s
 	tm.mu.Unlock()
 
@@ -410,6 +414,7 @@ func (tm *TerminalManager) removeSession(id string, s *TerminalSession) {
 func (tm *TerminalManager) Stop(appID string) {
 	tm.mu.Lock()
 	s := tm.sessions[appID]
+	delete(tm.logs, appID)
 	if s != nil {
 		delete(tm.sessions, appID)
 	}
@@ -437,8 +442,8 @@ func (tm *TerminalManager) StopAll() {
 	tm.launchMu.Lock()
 	defer tm.launchMu.Unlock()
 	tm.mu.Lock()
-	ids := make([]string, 0, len(tm.sessions))
-	for id := range tm.sessions {
+	ids := make([]string, 0, len(tm.logs))
+	for id := range tm.logs {
 		ids = append(ids, id)
 	}
 	tm.mu.Unlock()
@@ -542,6 +547,9 @@ func (s *TerminalSession) broadcast(msg terminalWSMessage) {
 }
 
 func (s *TerminalSession) broadcastOutput(data []byte) {
+	if s.log != nil {
+		s.log.append(data)
+	}
 	if len(data) == 0 {
 		return
 	}

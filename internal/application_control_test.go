@@ -45,6 +45,10 @@ func TestApplicationControlLifecycle(t *testing.T) {
 	if err != nil || js != "" || result["status"] != "stopped" || sm.Get("test").ActiveProject != "other" {
 		t.Fatalf("background status: %v %v", result, err)
 	}
+	js, result, err = controlApplication("test", path, "logs")
+	if err != nil || js != "" || result["logs"] != "" || result["status"] != "stopped" || result["truncated"] != false || sm.Get("test").ActiveProject != "other" {
+		t.Fatalf("empty background logs: %v %v", result, err)
+	}
 	js, result, err = controlApplication("test", path, "start")
 	if err != nil || js == "" || result["status"] != "starting" {
 		t.Fatalf("start: %v %v", result, err)
@@ -283,7 +287,7 @@ func TestPerThreadApplicationIsolation(t *testing.T) {
 	root, branch := t.TempDir(), t.TempDir()
 	state := &AppState{ActiveProject: "project", Projects: []Project{{Name: "project", Path: root}, {Name: "project/branch", Path: branch, Virtual: true, ParentProject: "project"}}, Apps: []Application{{ID: "agent", PluginID: "codex"}}}
 	sm.states["test"] = state
-	if err := setProjectCommand(root, `printf '%s' "$PORT" > assigned-port; sleep 60`); err != nil {
+	if err := setProjectCommand(root, `printf '%s' "$PORT" > assigned-port; printf thread-output; sleep 60`); err != nil {
 		t.Fatal(err)
 	}
 	if err := saveApplicationSettings(root, applicationSettings{Mode: "thread"}); err != nil {
@@ -323,7 +327,15 @@ func TestPerThreadApplicationIsolation(t *testing.T) {
 		deadline := time.Now().Add(3 * time.Second)
 		for {
 			data, readErr := os.ReadFile(filepath.Join(branch, "assigned-port"))
-			if readErr == nil && string(data) == strconv.Itoa(secondPanel.ApplicationPort) {
+			js, logs, logErr := controlApplication("test", branch, "logs")
+			if readErr == nil && string(data) == strconv.Itoa(secondPanel.ApplicationPort) && logErr == nil && strings.Contains(logs["logs"].(string), "thread-output") {
+				if js != "" || state.ActiveProject != "project/branch" {
+					t.Fatal("logs changed the visible workspace")
+				}
+				_, other, err := controlApplication("test", root, "logs")
+				if err != nil || other["logs"] != "" {
+					t.Fatal("logs leaked across thread scopes")
+				}
 				break
 			}
 			if time.Now().After(deadline) {
@@ -391,7 +403,7 @@ func TestPerThreadApplicationIsolation(t *testing.T) {
 func TestApplicationAgentScope(t *testing.T) {
 	scope := t.TempDir()
 	t.Setenv("LIBRO_APPLICATION_PATH", scope)
-	for _, action := range []string{"status", "start", "stop", "restart"} {
+	for _, action := range []string{"status", "start", "stop", "restart", "logs"} {
 		payload := json.RawMessage(fmt.Sprintf(`{"action":%q,"project":"/another-worktree"}`, action))
 		if _, err := scopedApplicationCommand(payload, scope); err == nil || !strings.Contains(err.Error(), "unknown field") {
 			t.Fatalf("MCP accepted a target override: %v", err)

@@ -17,7 +17,7 @@ function createController(getWindow) {
           return win.webContents.executeJavaScript(`window.libroNotes.control(${JSON.stringify(args)})`)
         }
         if (command.action === 'application') {
-          if (!['status', 'start', 'restart', 'stop'].includes(command.operation) || typeof command.project !== 'string' || !command.project) throw new Error('Invalid application command')
+          if (!['status', 'start', 'restart', 'stop', 'logs'].includes(command.operation) || typeof command.project !== 'string' || !command.project) throw new Error('Invalid application command')
           return win.webContents.executeJavaScript(`window.libroWorkspace.applicationControl(${JSON.stringify({operation:command.operation, project:command.project})})`)
         }
         throw new Error('Unknown Libro action')

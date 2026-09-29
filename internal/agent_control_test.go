@@ -42,6 +42,9 @@ func TestMCPDiscovery(t *testing.T) {
 	if !strings.Contains(application.Description, "Do not launch a separate application server") || !strings.Contains(lines[1], "Do not launch a separate application server") {
 		t.Fatal("MCP initialization and application discovery must explain process ownership")
 	}
+	if !strings.Contains(lines[2], `"logs"`) {
+		t.Fatal("application tool must advertise logs")
+	}
 	issues := discovery.Result.Tools[1]
 	if issues.Name != "issues" || issues.InputSchema.Properties["status"] == nil || issues.InputSchema.Properties["id"] == nil {
 		t.Fatal("issues tool missing status or id")

@@ -31,6 +31,7 @@ test('dispatches application and issues commands, and rejects browser automation
   await assert.rejects(control({action:'snapshot', panel:'panel'}), /Unknown Libro action/)
   await assert.rejects(control({action:'application', operation:'invalid', project:'/project'}), /Invalid application/)
   await assert.rejects(control({action:'issues', command:{action:'list'}}), /Invalid issues/)
-  await control({action:'application', operation:'status', project:'/project'})
+  await control({action:'application', operation:'logs', project:'/project'})
+  assert.match(calls[2], /logs/)
   assert.equal(calls.length, 3)
 })

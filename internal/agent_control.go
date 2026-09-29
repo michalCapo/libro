@@ -96,7 +96,7 @@ func RunMCP(in io.Reader, out io.Writer) error {
 		case "ping":
 			reply["result"] = map[string]any{}
 		case "tools/list":
-			reply["result"] = map[string]any{"tools": []any{map[string]any{"name": "application", "description": applicationHelp, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "start", "restart", "stop"}}}, "required": []string{"action"}, "additionalProperties": false}}, issuesTool()}}
+			reply["result"] = map[string]any{"tools": []any{map[string]any{"name": "application", "description": applicationHelp, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "start", "restart", "stop", "logs"}}}, "required": []string{"action"}, "additionalProperties": false}}, issuesTool()}}
 		case "tools/call":
 			var result json.RawMessage
 			var err error

@@ -125,7 +125,7 @@ export default function (pi) {
   pi.on('agent_end', event => { if (!event.willRetry) status('done'); });
   pi.on('session_shutdown', () => status('idle'));
 }`
-		args = " --extension " + shellQuote(filepath.Join(dir, filename)) + " --append-system-prompt " + shellQuote(AgentInstructions+"\nControl the saved project start command with libro application status|start|restart|stop; see libro application --help. Application actions preserve the user’s active project and thread. Manage project issues with libro issues; see libro issues --help for create, list, read, set_status, and delete.")
+		args = " --extension " + shellQuote(filepath.Join(dir, filename)) + " --append-system-prompt " + shellQuote(AgentInstructions+"\nControl the saved project start command with libro application status|start|restart|stop|logs; see libro application --help. Application actions preserve the user’s active project and thread. Manage project issues with libro issues; see libro issues --help for create, list, read, set_status, and delete.")
 	case "opencode":
 		filename = "opencode.mjs"
 		content = `import { writeFileSync } from 'node:fs';
