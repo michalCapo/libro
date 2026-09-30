@@ -208,6 +208,10 @@ Save note keeps the editor open and shows Saved. Cancel discards draft changes a
 
 Settings is a workspace page reached from the sidebar. Grouped rows provide the global default panel widths for agent and tool panels (XS–2XL), initially MD (640px) and LG (960px). Changes save to SQLite and apply only to newly opened panels. The page also holds theme (Auto, Light, Dark), an agent-done notification sound, agent command management (edit, rename, disable, remove, custom agents, autolaunch), tool command management (edit, disable, remove, and add custom CLI tools), and remappable keyboard shortcuts.
 
+The Editor section follows Tools and uses the existing grouped-row layout: a File editor label and help text beside a select control. It lists enabled CLI tools by name, including custom tools, with Off to clear the selection. Websites and disabled or removed tools are excluded. Nvim is selected by default. Tool name and enabled-state changes update the choices before saving; disabling or removing the selected tool clears the selection. Save persists the editor choice with tool settings across projects.
+
+In Files, `e` opens the previewed file or selected tree file in that tool in the right dock. It replaces the source viewer’s Vim end-of-word motion, while navigation results retain `e` to open a result. Shortcut help lists Open in editor; text fields retain normal typing.
+
 Panel toolbars fit within the workspace viewport while terminal content retains its fixed width. The close button comes before the title and appears on panel hover or button keyboard focus; it remains visible for touch input. Worktree rows use their dedicated switch action with project, path, and branch.
 
 ### Thread activity

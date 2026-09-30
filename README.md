@@ -137,9 +137,10 @@ bundle matches its source. Run the editor integration tests with
 
 Files has a read-only Vim source viewer. Shortcuts apply while the tree or preview has focus.
 
-- `Enter` opens the selected file.
+- `Enter` previews the selected file.
+- `e` opens the previewed file, or the selected tree file, in the configured editor. `o` in the tree opens a file with its system default application.
 - `Space Space` focuses the existing tree filter. It fuzzy-matches project file paths, including unopened folders; `Esc` clears the filter.
-- Use Vim motions and counts (`h/j/k/l`, `w/b/e`, `10j`, `gg/G`, `{`/`}`). `00` jumps to the first nonblank character, `44` to line end, `gb` to file end, and `5` to the matching bracket. `Ctrl+d/u` moves 15 lines.
+- Use Vim motions and counts (`h/j/k/l`, `w/b`, `10j`, `gg/G`, `{`/`}`). `00` jumps to the first nonblank character, `44` to line end, `gb` to file end, and `5` to the matching bracket. `Ctrl+d/u` moves 15 lines.
 - `/` searches the file; `n/N` repeats the search. `ff/fb` searches the cursor word forward/backward.
 - `v/V` selects characters/lines, `y` copies the selection, and `yy` copies a line to the clipboard. `Space yy` (also `Space yl`) copies `path:line`.
 - `gd` goes to a definition, `gr` lists references, `gD` goes to a declaration, `gi` finds implementations, and `gt` goes to a type definition. A single target opens directly; multiple targets open a dedicated navigation view grouped by file, with highlighted source context and marked symbols. Use `j/k`, `Ctrl+n/p`, `]e/[e`, or `*/#` to move, `e`/`Enter` to open, and `q`/`Esc` to return. Dependency sources outside the project can also open in the preview.
@@ -148,6 +149,8 @@ Files has a read-only Vim source viewer. Shortcuts apply while the tree or previ
 - `Ctrl+o` goes back through file/symbol/result jumps; `Tab` or `Ctrl+i` goes forward. `Space ,` opens recent previews. Cursor and scroll positions are remembered while the Files tool is open.
 - `Space p` toggles Preview; `Space w` toggles wrapping; `Space sk` searches shortcut help. Image previews also accept `h/j/k/l` to pan and `+/-/0` to zoom/reset.
 - Visible text previews refresh after external changes, preserving position. Source files cannot be edited through this viewer.
+
+Choose the editor in **Settings → Editor → File editor** and save. Nvim is the default. The list includes enabled CLI tools from the Tools section; add a custom CLI tool there to use another editor. Websites are excluded. Choose Off to clear the editor selection. The setting applies across projects. Pressing `e` starts the selected tool in the right dock, with the full file path passed as one argument to its configured command. The command must accept a file path and be installed on PATH. In source previews, `e` replaces Vim’s end-of-word motion; in navigation results, `e` still opens the selected result.
 
 Semantic navigation requires `gopls` for Go, `typescript-language-server` (with TypeScript) for JS/TS, or `clangd` for C/C++/Objective-C on PATH. Commands supported by each language server may differ; missing tools and unsupported actions show a message. Servers start on demand and reuse project analysis for later requests. They stop after 10 idle minutes or when Libro exits. Use `Space lr` to restart the current file’s server. Previously opened source buffers are refreshed from disk before navigation.
 
@@ -171,7 +174,8 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 - Choose one agent to start on its own when you open a project that has no agents open.
 - Choose if browser prompts run right away, or are only pasted in.
 - Change how assistants and tools start, rename them, add your own.
-- Change any keyboard shortcut and restore the defaults anytime.
+- Select an enabled CLI tool as the file editor under Editor. Nvim is the default; Off clears the selection. Use `e` in Files to open a file in it.
+- Change workspace keyboard shortcuts and restore the defaults anytime.
 
 ![Settings page: theme and notification options](demo/settings.png)
 

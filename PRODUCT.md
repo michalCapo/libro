@@ -37,3 +37,7 @@ Worktree threads have a right-click / overflow menu with Merge thread, Squash th
 ## Voice typing
 
 Hold Tab or the microphone beside the agent tab to dictate. Release to insert the transcript into the selected terminal (or the agent when a browser is selected) without submitting it. Escape, window blur, or switching threads cancels dictation. Libro automatically installs the local sherpa-onnx engine and multilingual Whisper tiny model during `make install` or first launch. After the download, transcription runs locally and works offline.
+
+## Files and editor
+
+Files provides a read-only Vim source preview. Press `e` with the tree or preview focused to open the selected tree file or current preview in the configured editor. Settings → Editor selects an enabled CLI tool from Tools, including custom tools; websites are excluded. Nvim is the default, and Off clears the selection. The choice persists across projects. Libro opens the tool in the right dock and passes the full file path as one argument to its command. In source previews, `e` replaces Vim’s end-of-word motion; navigation results keep `e` for opening the selected result. The tree’s `o` shortcut continues to open files with their system default application.
