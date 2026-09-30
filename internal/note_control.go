@@ -154,7 +154,10 @@ func controlNotes(sid string, command noteCommand) (any, error) {
 		var result sql.Result
 		var err error
 		if command.Action == "delete" {
-			result, err = db.Exec(`DELETE FROM notes WHERE project = ? AND id = ?`, project, command.ID)
+			if err := deleteNote(project, command.ID); err != nil {
+				return nil, err
+			}
+			return map[string]any{"id": command.ID, "status": command.Status, "deleted": true}, nil
 		} else {
 			if command.Status == "" {
 				return nil, errors.New("note status is required")

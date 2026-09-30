@@ -247,3 +247,41 @@ func TestMoveNoteBetweenProjects(t *testing.T) {
 		t.Fatalf("destination list: %v", result)
 	}
 }
+
+func TestDeleteNoteFromPanel(t *testing.T) {
+	originalDB, originalSM := db, sm
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "notes.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sm = NewStateManager()
+	t.Cleanup(func() { _ = db.Close(); db, sm = originalDB, originalSM })
+	createTables()
+	sm.states["session"] = &AppState{ActiveProject: "one", Apps: []Application{{ID: "notes", PluginID: "notes"}}}
+	note, err := saveNote("one", projectNote{Title: "Delete me", State: "new"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := saveNote("two", projectNote{Title: "Keep me", State: "new"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := noteRequest{SID: "session", ID: "notes", Project: "one", Action: "delete", NoteID: other.ID}
+	if handleNoteRequest(req)["error"] == nil {
+		t.Fatal("deleted another project's note")
+	}
+	req.NoteID = note.ID
+	if result := handleNoteRequest(req); result["error"] != nil || result["noteID"] != note.ID {
+		t.Fatalf("delete failed: %v", result)
+	}
+	if handleNoteRequest(req)["error"] == nil {
+		t.Fatal("accepted a second deletion")
+	}
+	if notes, err := loadNotes("one"); err != nil || len(notes) != 0 {
+		t.Fatalf("note still exists: %v %v", notes, err)
+	}
+	if notes, err := loadNotes("two"); err != nil || len(notes) != 1 || notes[0].ID != other.ID {
+		t.Fatalf("other project changed: %v %v", notes, err)
+	}
+}

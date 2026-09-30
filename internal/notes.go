@@ -57,6 +57,21 @@ func loadNotes(project string) ([]projectNote, error) {
 	return notes, rows.Err()
 }
 
+func deleteNote(project, id string) error {
+	result, err := db.Exec(`DELETE FROM notes WHERE project = ? AND id = ?`, project, id)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return fmt.Errorf("note not found in this project")
+	}
+	return nil
+}
+
 func saveNote(project string, note projectNote) (projectNote, error) {
 	note.Title = strings.TrimSpace(note.Title)
 	if note.Title == "" || len(note.Title) > 200 || len(note.Body) > 1024*1024 {
@@ -203,6 +218,9 @@ func handleNoteRequest(data noteRequest) map[string]any {
 				err = moveNote(data.Project, data.Target, data.NoteID)
 				result["noteID"] = data.NoteID
 			}
+		case "delete":
+			err = deleteNote(data.Project, data.NoteID)
+			result["noteID"] = data.NoteID
 		case "save":
 			result["note"], err = saveNote(data.Project, data.Note)
 		case "list":

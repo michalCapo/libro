@@ -13,16 +13,19 @@ app.whenReady().then(async () => {
     await win.webContents.insertCSS(css);
     await win.webContents.executeJavaScript(`
       window.__libroActiveProject = 'test'; window.__libroWorkspaceSID = 'test';
-      window.savedNotes = []; window.sent = [];
+      window.savedNotes = []; window.sent = []; window.saveDelay = 0; window.failSave = false;
       window.__libroSendPageToolPrompt = (prompt, execute) => { sent.push({prompt,execute}); return true; };
       window.fetch = async (url, options) => {
         const data = JSON.parse(options.body), action = 'notes.' + data.action;
         const result = {id:data.id,request:data.request};
         if(action === 'notes.list') { result.notes = structuredClone(savedNotes.filter(note => note.project === data.project)); result.projects = ['test', 'other'].filter(project => project !== data.project); }
         if(action === 'notes.save') {
+          await new Promise(resolve => setTimeout(resolve, saveDelay));
+          if (failSave) return {ok:false};
           result.note = {...structuredClone(data.note), id:data.note.id || String(savedNotes.length+1), project:data.project};
           savedNotes = [result.note,...savedNotes.filter(note=>note.id !== result.note.id)];
         }
+        if(action === 'notes.delete') { savedNotes = savedNotes.filter(note => note.id !== data.noteID); result.noteID = data.noteID; }
         if(action === 'notes.move') { savedNotes.find(note => note.id === data.noteID && note.project === data.project).project = data.target; result.noteID = data.noteID; }
         if(action === 'notes.send') result.prompt = savedNotes.find(note=>note.id === data.noteID).body;
         return {ok:true, json:async () => result};
@@ -54,7 +57,7 @@ app.whenReady().then(async () => {
         document.querySelector('.ws-note-body').dispatchEvent(new ClipboardEvent('paste', {clipboardData:transfer,bubbles:true,cancelable:true}));
       };
       pasteImage();
-      if (!Array.from(document.querySelectorAll('button')).find(button=>button.textContent==='Save note').disabled) throw new Error('Save must wait for clipboard reads');
+      if (!Array.from(document.querySelectorAll('button')).find(button=>button.textContent==='Send to agent').disabled) throw new Error('Send must wait for clipboard reads');
     `);
     await new Promise(resolve => setTimeout(resolve, 200));
     assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-note-body img').naturalWidth > 0`), true, 'pasted image is visible inside editor');
@@ -72,45 +75,48 @@ app.whenReady().then(async () => {
       assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-notes').scrollWidth <= document.querySelector('.ws-notes').clientWidth`), true, 'no overflow at '+width);
       fs.writeFileSync(path.join(__dirname, '../.impeccable/review/notes-'+width+'.png'), (await win.webContents.capturePage()).toPNG());
     }
-    await win.webContents.executeJavaScript(`window.originalBody=editor().getMarkdown(); clickText('Save note');`);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await win.webContents.executeJavaScript(`window.originalBody=editor().getMarkdown();`);
+    await new Promise(resolve => setTimeout(resolve, 800));
     assert.equal(await win.webContents.executeJavaScript(`savedNotes[0].images.length`), 1, 'image persisted');
     assert.equal(await win.webContents.executeJavaScript(`savedNotes[0].body === originalBody && editor().getMarkdown() === originalBody`), true, 'Markdown and image position survive reopening');
-    await win.webContents.executeJavaScript(`editor().commands.setContent('Discard this',{contentType:'markdown'}); clickText('Cancel'); if (!document.activeElement.matches('.ws-note-row')) throw new Error('Cancel lost note focus'); document.querySelector('.ws-note-row').click();`);
-    assert.equal(await win.webContents.executeJavaScript(`editor().getMarkdown() === originalBody`), true, 'cancel discards changes');
+    await win.webContents.executeJavaScript(`window.liveEditor = editor(); saveDelay = 900; input('.ws-note-title', 'First edit');`);
+    await new Promise(resolve => setTimeout(resolve, 700));
+    await win.webContents.executeJavaScript(`input('.ws-note-title', 'Latest edit');`);
+    await new Promise(resolve => setTimeout(resolve, 2400));
+    assert.equal(await win.webContents.executeJavaScript(`savedNotes.length === 1 && savedNotes[0].title === 'Latest edit' && editor() === liveEditor`), true, 'typing during auto-save keeps the editor and saves the latest draft');
+    await win.webContents.executeJavaScript(`saveDelay = 0; failSave = true; input('.ws-note-title', 'Retry save');`);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-notes-status').textContent.includes('Could not save')`), true, 'save failure is visible');
+    await win.webContents.executeJavaScript(`failSave = false; clickText('Retry');`);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.equal(await win.webContents.executeJavaScript(`savedNotes[0].title === 'Retry save'`), true, 'failed draft can be retried');
+    await win.webContents.executeJavaScript(`document.querySelector('.ws-note-row').click(); document.querySelector('.ws-note-row').click();`);
+    assert.equal(await win.webContents.executeJavaScript(`editor().getMarkdown() === originalBody`), true, 'closing and reopening preserves saved content');
     await win.webContents.executeJavaScript(`clickText('Send to agent')`);
     await new Promise(resolve => setTimeout(resolve, 100));
     assert.equal(await win.webContents.executeJavaScript(`sent.length === 1 && sent[0].prompt === originalBody && sent[0].execute`), true, 'send saved Markdown to agent');
     await win.webContents.executeJavaScript(`
       let imagePos; editor().state.doc.descendants((node,pos)=>{if(node.type.name==='image')imagePos=pos});
       editor().chain().setNodeSelection(imagePos).deleteSelection().run();
-      clickText('Save note');
     `);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 800));
     assert.equal(await win.webContents.executeJavaScript(`savedNotes[0].images.length`), 0, 'deleting image also removes saved attachment');
-    await win.webContents.executeJavaScript(`document.querySelector('[aria-label="Archive note"]').click(); clickText('Save note')`);
-    await new Promise(resolve => setTimeout(resolve, 100));
-    await win.webContents.executeJavaScript(`clickText('Cancel')`);
-    assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-row').length`), 0, 'archived note hidden from Open');
-    await win.webContents.executeJavaScript(`clickText('Archived')`);
-    assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-row').length`), 1, 'archived note accessible');
     await win.webContents.executeJavaScript(`
+      savedNotes[0].state='archived';
       savedNotes[0].images=[{data:'data:image/png;base64,'+${JSON.stringify(png)}}];
-      document.querySelector('.ws-note-row').click(); clickText('Cancel');
+      document.querySelector('.ws-note-row').click();
       document.querySelector('[data-notes]').replaceChildren();
       document.querySelector('[data-notes]').dataset.notes='legacy'; libroNotes.init();
     `);
     await new Promise(resolve => setTimeout(resolve, 100));
-    await win.webContents.executeJavaScript(`clickText('Archived'); document.querySelector('.ws-note-row').click();`);
-    assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-body img').length`), 1, 'legacy attachments remain visible');
+    await win.webContents.executeJavaScript(`document.querySelector('.ws-note-row').click();`);
+    assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-body img').length`), 1, 'archived notes and legacy attachments remain visible without filters');
     await win.webContents.executeJavaScript(`
       editor().commands.setContent('![Remote](https://example.invalid/tracker.png)', {contentType:'markdown'});
       void 0;
     `);
     assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-body img').length`), 0, 'external images never load');
-    await win.webContents.executeJavaScript(`pasteImage(); clickText('Cancel'); clickText('New note'); input('.ws-note-title','New draft');`);
-    await new Promise(resolve => setTimeout(resolve, 100));
-    assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-body img').length`), 0, 'cancelled paste cannot leak into another draft');
+    await win.webContents.executeJavaScript(`editor().commands.setContent(''); void 0;`);
     win.show(); win.focus();
     await win.webContents.executeJavaScript(`editor().commands.focus(); void 0;`);
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -122,13 +128,13 @@ app.whenReady().then(async () => {
     for (const character of '**bold**') win.webContents.sendInputEvent({type:'char',keyCode:character});
     await new Promise(resolve => setTimeout(resolve, 50));
     assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-note-body strong')?.textContent`), 'bold', 'typed Markdown bold shortcut');
+    await new Promise(resolve => setTimeout(resolve, 800));
     await win.webContents.executeJavaScript(`
-      clickText('Cancel'); clickText('Archived'); document.querySelector('.ws-note-row').click();
       window.noteToMove = savedNotes[0].id;
       const picker = document.querySelector('[aria-label="Move note to project"]');
       picker.value = 'other'; picker.dispatchEvent(new Event('change'));
       input('.ws-note-title', 'Unsaved title');
-      if (!Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Move note').disabled) throw new Error('Move must require saved changes');
+      if (!Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Move note').disabled) throw new Error('Move must wait for automatic saving');
       input('.ws-note-title', savedNotes[0].title);
       clickText('Move note');
     `);
@@ -139,7 +145,6 @@ app.whenReady().then(async () => {
       grid.dataset.workspaceProject = 'other'; grid.dataset.noteProject = 'other'; window.__libroActiveProject = 'other'; libroNotes.init();
     `);
     await new Promise(resolve => setTimeout(resolve, 100));
-    await win.webContents.executeJavaScript(`clickText('Archived')`);
     assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-note-row').dataset.noteId === noteToMove`), true, 'same panel rebinds to destination project');
     await win.webContents.executeJavaScript(`document.querySelector('.ws-note-row').click()`);
     for (const width of [1209,640,320]) {
@@ -149,11 +154,16 @@ app.whenReady().then(async () => {
       fs.writeFileSync(path.join(__dirname, '../.impeccable/review/notes-move-'+width+'.png'), (await win.webContents.capturePage()).toPNG());
     }
     await win.webContents.executeJavaScript(`
-      clickText('Cancel'); document.querySelector('[data-workspace-project]').dataset.workspaceProject = 'test'; document.querySelector('[data-workspace-project]').dataset.noteProject = 'test'; window.__libroActiveProject = 'test'; libroNotes.init();
+      document.querySelector('.ws-note-row').click(); document.querySelector('[data-workspace-project]').dataset.workspaceProject = 'test'; document.querySelector('[data-workspace-project]').dataset.noteProject = 'test'; window.__libroActiveProject = 'test'; libroNotes.init();
       savedNotes = []; document.querySelector('[data-workspace-project]').dataset.workspaceProject = 'other'; document.querySelector('[data-workspace-project]').dataset.noteProject = 'other'; window.__libroActiveProject = 'other'; libroNotes.init();
     `);
     await new Promise(resolve => setTimeout(resolve, 100));
     assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-row').length`), 0, 'returning to project refreshes cached list');
+    await win.webContents.executeJavaScript(`clickText('New note'); input('.ws-note-title', 'Delete me');`);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    await win.webContents.executeJavaScript(`window.confirm = () => true; clickText('Delete note');`);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    assert.equal(await win.webContents.executeJavaScript(`savedNotes.length === 0 && !document.querySelector('.ws-note-row')`), true, 'deleted note is not recreated by auto-save');
     console.log('Notes editor integration passed');
   } finally { win.destroy(); app.quit(); }
 }).catch(error => { console.error(error); app.exit(1); });
