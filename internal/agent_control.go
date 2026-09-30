@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// desktopCommand sends application and issue commands through the local bridge.
+// desktopCommand sends application and note commands through the local bridge.
 func desktopCommand(command json.RawMessage) (json.RawMessage, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
@@ -62,7 +62,7 @@ func desktopCommand(command json.RawMessage) (json.RawMessage, error) {
 	return reply.Result, nil
 }
 
-// RunMCP exposes application and issue tools over stdio.
+// RunMCP exposes application and note tools over stdio.
 func RunMCP(in io.Reader, out io.Writer) error {
 	applicationScope := os.Getenv("LIBRO_APPLICATION_PATH")
 	if applicationScope == "" {
@@ -92,17 +92,17 @@ func RunMCP(in io.Reader, out io.Writer) error {
 		reply := map[string]any{"jsonrpc": "2.0", "id": request.ID}
 		switch request.Method {
 		case "initialize":
-			reply["result"] = map[string]any{"protocolVersion": "2024-11-05", "capabilities": map[string]any{"tools": map[string]any{}}, "serverInfo": map[string]any{"name": "libro", "version": "1.0.0"}, "instructions": applicationHelp + "\n" + issuesHelp}
+			reply["result"] = map[string]any{"protocolVersion": "2024-11-05", "capabilities": map[string]any{"tools": map[string]any{}}, "serverInfo": map[string]any{"name": "libro", "version": "1.0.0"}, "instructions": applicationHelp + "\n" + notesHelp}
 		case "ping":
 			reply["result"] = map[string]any{}
 		case "tools/list":
-			reply["result"] = map[string]any{"tools": []any{map[string]any{"name": "application", "description": applicationHelp, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "start", "restart", "stop", "logs"}}}, "required": []string{"action"}, "additionalProperties": false}}, issuesTool()}}
+			reply["result"] = map[string]any{"tools": []any{map[string]any{"name": "application", "description": applicationHelp, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "start", "restart", "stop", "logs"}}}, "required": []string{"action"}, "additionalProperties": false}}, notesTool()}}
 		case "tools/call":
 			var result json.RawMessage
 			var err error
 			switch request.Params.Name {
-			case "issues":
-				result, err = IssuesCommand(request.Params.Arguments)
+			case "notes":
+				result, err = NotesCommand(request.Params.Arguments)
 			case "application":
 				result, err = scopedApplicationCommand(request.Params.Arguments, applicationScope)
 			default:

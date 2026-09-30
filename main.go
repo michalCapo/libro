@@ -58,8 +58,8 @@ func main() {
 				defer cancel()
 				err = libro.InstallVoice(ctx)
 			}
-		case "issues":
-			err = libro.RunIssuesCLI(args[1:], os.Stdout)
+		case "notes":
+			err = libro.RunNotesCLI(args[1:], os.Stdout)
 		case "application":
 			err = libro.RunApplicationCLI(args[1:], os.Stdout)
 		case "mcp":

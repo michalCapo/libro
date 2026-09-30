@@ -11,9 +11,9 @@ function createController(getWindow) {
       const execute = async () => {
         const win = getWindow()
         if (!win || win.isDestroyed()) throw new Error('Desktop window is not available')
-        if (command.action === 'issues') {
+        if (command.action === 'notes') {
           const args = command.command
-          if (!args || !['list', 'read', 'create', 'set_status', 'delete'].includes(args.action) || typeof args.project !== 'string' || !args.project) throw new Error('Invalid issues command')
+          if (!args || !['list', 'read', 'create', 'set_status', 'delete'].includes(args.action) || typeof args.project !== 'string' || !args.project) throw new Error('Invalid notes command')
           return win.webContents.executeJavaScript(`window.libroNotes.control(${JSON.stringify(args)})`)
         }
         if (command.action === 'application') {

@@ -168,7 +168,7 @@ func TestCloseThreadAgentKeepsSharedProjectApps(t *testing.T) {
 		Apps: []Application{
 			{ID: "agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"},
 			{ID: "browser", PluginID: "browser", Dock: "right"},
-			{ID: "issues", PluginID: "notes", Dock: "right"},
+			{ID: "notes", PluginID: "notes", Dock: "right"},
 			{ID: "app", PluginID: "project-command", Dock: "bottom"},
 			{ID: "shell", PluginID: "terminal", Dock: "bottom"},
 		},
@@ -179,7 +179,7 @@ func TestCloseThreadAgentKeepsSharedProjectApps(t *testing.T) {
 	if err != nil || len(closed) != 2 || len(state.Apps) != 3 {
 		t.Fatalf("close result: closed=%+v remaining=%+v err=%v", closed, state.Apps, err)
 	}
-	if state.Apps[0].ID != "issues" || state.Apps[1].ID != "app" || state.Apps[2].ID != "shell" {
+	if state.Apps[0].ID != "notes" || state.Apps[1].ID != "app" || state.Apps[2].ID != "shell" {
 		t.Fatalf("shared apps were closed: %+v", state.Apps)
 	}
 }
@@ -391,7 +391,7 @@ func TestCloseWorkspaceAppSelectsAdjacentThread(t *testing.T) {
 				Apps: []Application{
 					{ID: "agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"},
 					{ID: "browser", Type: AppTypeURL, Dock: "right"},
-					{ID: "issues", PluginID: "notes", Dock: "right"},
+					{ID: "notes", PluginID: "notes", Dock: "right"},
 				},
 				snapshots: map[string]*projectSnapshot{},
 			}
@@ -404,11 +404,11 @@ func TestCloseWorkspaceAppSelectsAdjacentThread(t *testing.T) {
 				t.Fatalf("active thread = %q, want %q", state.ActiveProject, tc.want)
 			}
 			if tc.closeID == "agent" && tc.active == tc.want {
-				if !state.thread(tc.active).Archived || len(state.Apps) != 1 || state.Apps[0].ID != "issues" {
+				if !state.thread(tc.active).Archived || len(state.Apps) != 1 || state.Apps[0].ID != "notes" {
 					t.Fatalf("last thread close changed shared panels: %+v", state.Apps)
 				}
 			} else if tc.closeID == "agent" {
-				if !state.thread(tc.active).Archived || len(state.Apps) != 2 || state.Apps[0].ID != "sibling-agent" || state.Apps[1].ID != "issues" {
+				if !state.thread(tc.active).Archived || len(state.Apps) != 2 || state.Apps[0].ID != "sibling-agent" || state.Apps[1].ID != "notes" {
 					t.Fatalf("thread switch lost sibling or shared panels: %+v", state.Apps)
 				}
 				if !strings.Contains(js, projectMainID(tc.want)) {
@@ -428,9 +428,9 @@ func TestCloseOtherPanelsKeepsSelectedAgentAndShared(t *testing.T) {
 		name, keep string
 		want       []string
 	}{
-		{"keeps selected tool", "browser", []string{"agent", "browser", "issues"}},
-		{"keeps agent", "agent", []string{"agent", "issues"}},
-		{"empty uses selected index", "", []string{"agent", "issues"}},
+		{"keeps selected tool", "browser", []string{"agent", "browser", "notes"}},
+		{"keeps agent", "agent", []string{"agent", "notes"}},
+		{"empty uses selected index", "", []string{"agent", "notes"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sm = NewStateManager()
@@ -441,7 +441,7 @@ func TestCloseOtherPanelsKeepsSelectedAgentAndShared(t *testing.T) {
 					{ID: "agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"},
 					{ID: "browser", Type: AppTypeURL, Dock: "right"},
 					{ID: "terminal", Type: AppTypeTerminal, Dock: "right"},
-					{ID: "issues", PluginID: "notes", Dock: "right"},
+					{ID: "notes", PluginID: "notes", Dock: "right"},
 				},
 				snapshots: map[string]*projectSnapshot{},
 			}

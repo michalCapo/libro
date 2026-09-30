@@ -20,17 +20,17 @@ test('local bridge rejects unauthenticated and web-origin requests and cleans up
   } finally {stop();assert.equal(fs.existsSync(descriptor),false);fs.rmSync(dir,{recursive:true,force:true})}
 })
 
-test('dispatches application and issues commands, and rejects browser automation', async () => {
+test('dispatches application and notes commands, and rejects browser automation', async () => {
   const calls = []
   const win = {isDestroyed: () => false, webContents: {executeJavaScript: async script => { calls.push(script); return {ok:true} }}}
   const control = createController(() => win)
   await control({action:'application', operation:'status', project:'/project'})
-  await control({action:'issues', command:{action:'list', project:'/project'}})
+  await control({action:'notes', command:{action:'list', project:'/project'}})
   assert.match(calls[0], /window.libroWorkspace.applicationControl/)
   assert.match(calls[1], /window.libroNotes.control/)
   await assert.rejects(control({action:'snapshot', panel:'panel'}), /Unknown Libro action/)
   await assert.rejects(control({action:'application', operation:'invalid', project:'/project'}), /Invalid application/)
-  await assert.rejects(control({action:'issues', command:{action:'list'}}), /Invalid issues/)
+  await assert.rejects(control({action:'notes', command:{action:'list'}}), /Invalid notes/)
   await control({action:'application', operation:'logs', project:'/project'})
   assert.match(calls[2], /logs/)
   assert.equal(calls.length, 3)

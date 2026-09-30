@@ -17,7 +17,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"previous-browser", "Previous browser panel", "Ctrl+["},
 	{"next-browser", "Next browser panel", "Ctrl+]"},
 	{"files", "Files", "Ctrl+F"},
-	{"notes", "Issues", "Ctrl+I"},
+	{"notes", "Notes", "Ctrl+I"},
 	{"nvim", "Nvim", "Ctrl+E"},
 	{"lazyrepo", "Git", "Ctrl+G"},
 	{"lazydata", "Database", "Ctrl+D"},

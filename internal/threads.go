@@ -78,6 +78,17 @@ func (s *AppState) projectScope(id string) string {
 	return project
 }
 
+// noteScope keeps notes with the parent project across all its workspaces.
+func (s *AppState) noteScope(id string) string {
+	name := s.projectScope(id)
+	for _, project := range s.Projects {
+		if project.Name == name && project.Virtual {
+			return project.ParentProject
+		}
+	}
+	return name
+}
+
 func isSharedProjectApp(app Application) bool {
 	return !app.ApplicationPerThread && (app.PluginID == "notes" || app.PluginID == "project-command" || appDock(app) == "bottom")
 }

@@ -485,14 +485,14 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 .ws-notes-title{font-size:16px;font-weight:600}
 .ws-notes-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-bottom:12px}
 .ws-notes-tabs{display:inline-flex;border:1px solid var(--ws-control-line);border-radius:8px;overflow:hidden}
-.ws-notes-toolbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;margin-left:auto}
+.ws-notes-toolbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;max-width:100%;margin-left:auto}
 .ws-notes-tab{border:0;background:transparent;color:var(--ws-fg);padding:7px 14px;font:inherit;font-size:12px;min-height:32px;cursor:pointer}
 .ws-notes-tab-count{color:var(--ws-muted);font-variant-numeric:tabular-nums}
 .ws-notes-tab-active .ws-notes-tab-count{color:inherit}
 .ws-notes-tab+.ws-notes-tab{border-left:1px solid var(--ws-control-line)}
 .ws-notes-tab:hover{background:var(--ws-hover)}
 .ws-notes-tab-active{background:var(--ws-raised);font-weight:600}
-.ws-notes-search{border:1px solid var(--ws-control-line);border-radius:8px;background:var(--ws-raised);color:var(--ws-fg);padding:7px 10px;font:inherit;font-size:12px;min-height:32px;min-width:160px}
+.ws-notes-search{box-sizing:border-box;width:160px;border:1px solid var(--ws-control-line);border-radius:8px;background:var(--ws-raised);color:var(--ws-fg);padding:7px 10px;font:inherit;font-size:12px;min-height:32px;min-width:0}
 .ws-notes-button,.ws-notes select{border:1px solid var(--ws-control-line);border-radius:8px;background:var(--ws-raised);color:var(--ws-fg);padding:7px 12px;font:inherit;font-size:12px;min-height:32px;cursor:pointer}
 .ws-notes-button:hover:not(:disabled){background:var(--ws-hover)}
 .ws-notes-primary{background:var(--ws-accent);border-color:var(--ws-accent);color:#fff;font-weight:600}
@@ -500,8 +500,12 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 .ws-notes :is(button,input,textarea,select):focus-visible{outline:2px solid var(--ws-accent);outline-offset:2px}
 .ws-notes :is(button,input,textarea,select):disabled{opacity:.55;cursor:default}
 .ws-notes-list{display:flex;flex-direction:column;border:1px solid var(--ws-line);border-radius:10px;overflow:hidden}
-.ws-note-row{display:flex;align-items:center;gap:12px;text-align:left;width:100%;padding:10px 14px;border:0;border-bottom:1px solid var(--ws-line);background:transparent;color:var(--ws-fg);font:inherit;min-height:52px;cursor:pointer}
-.ws-note-row:last-child{border-bottom:0}
+.ws-note-row{display:flex;align-items:center;gap:12px;text-align:left;width:100%;padding:10px 14px;border:0;background:transparent;color:var(--ws-fg);font:inherit;min-height:52px;cursor:pointer}
+.ws-note-item+.ws-note-item{border-top:1px solid var(--ws-line)}
+.ws-note-row[aria-expanded=true]{background:var(--ws-chrome)}
+.ws-note-row[aria-expanded=true] .ws-note-chevron{transform:rotate(180deg)}
+.ws-note-detail{padding:16px 12px 24px;border-top:1px solid var(--ws-line)}
+.ws-note-detail[hidden]{display:none}
 .ws-note-row:hover{background:var(--ws-hover)}
 .ws-note-row-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
 .ws-note-row-title-line{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
@@ -518,13 +522,13 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 .ws-notes-empty-text{margin:0;color:var(--ws-muted);font-size:12px}
 .ws-note-hint,.ws-notes-status{color:var(--ws-muted);font-size:12px}
 .ws-notes-status{min-height:18px}
-.ws-note-editor{display:flex;flex-direction:column;gap:28px}
-.ws-note-editor-header,.ws-note-section{display:grid;grid-template-columns:24px minmax(0,1fr);column-gap:16px;align-items:start;padding:4px}
+.ws-note-editor{display:flex;flex-direction:column;gap:24px}
+.ws-note-editor-header,.ws-note-section{display:grid;grid-template-columns:24px minmax(0,1fr);column-gap:8px;align-items:start;padding:4px}
 .ws-note-state-toggle{position:relative;width:18px;height:18px;justify-self:center;margin-top:5px;border:2px solid var(--ws-muted);border-radius:50%;background:transparent;cursor:pointer}
 .ws-note-state-toggle:hover{border-color:var(--ws-accent)}
 .ws-note-state-toggle-archived{border-color:var(--ws-success);background:var(--ws-success)}
 .ws-note-state-toggle-archived::after{content:'check';position:absolute;inset:-2px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Material Icons Round';font-size:14px}
-.ws-note-title{flex:1;min-width:0;border:0;border-radius:0;background:transparent;color:var(--ws-fg);padding:0;font:inherit;font-size:28px;line-height:1.25;font-weight:650;letter-spacing:-.02em;caret-color:var(--ws-accent)}
+.ws-note-title{flex:1;min-width:0;border:0;border-radius:0;background:transparent;color:var(--ws-fg);padding:0;font:inherit;font-size:20px;line-height:1.25;font-weight:650;letter-spacing:-.02em;caret-color:var(--ws-accent)}
 #libro-workspace .ws-note-title:focus,#libro-workspace .ws-note-title:focus-visible{outline:none!important;outline-offset:0!important}
 .ws-note-section-icon{width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--ws-fg)}
 .ws-note-section-content{display:flex;flex-direction:column;gap:14px;min-width:0}
@@ -536,7 +540,7 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 .ws-note-formatting button .material-icons-round{font-size:18px}
 .ws-note-formatting button:hover:not(:disabled),.ws-note-formatting button[aria-pressed=true]{background:var(--ws-hover);color:var(--ws-fg)}
 .ws-note-formatting button:disabled{opacity:.55;cursor:default}
-.ws-note-body{width:100%;box-sizing:border-box;color:var(--ws-fg);padding:16px;font:inherit;caret-color:var(--ws-accent);min-height:280px;line-height:1.7;overflow-wrap:anywhere;outline:none}
+.ws-note-body{width:100%;box-sizing:border-box;color:var(--ws-fg);padding:16px;font:inherit;caret-color:var(--ws-accent);min-height:160px;line-height:1.7;overflow-wrap:anywhere;outline:none}
 .ws-note-body:focus-visible{outline:none}
 .ws-note-body p{margin:0 0 12px}
 .ws-note-body>:last-child{margin-bottom:0}

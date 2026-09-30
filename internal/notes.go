@@ -111,7 +111,7 @@ func moveNote(project, target, id string) error {
 	}
 	count, err := result.RowsAffected()
 	if err == nil && count != 1 {
-		err = fmt.Errorf("issue not found in this project")
+		err = fmt.Errorf("note not found in this project")
 	}
 	return err
 }
@@ -130,7 +130,7 @@ type noteRequest struct {
 
 // HTTP allows clipboard images larger than the UI websocket's 1 MB limit.
 func registerNotesActions(app *r.App) {
-	registerIssueControl(app)
+	registerNoteControl(app)
 	app.POST("/notes/action", func(w http.ResponseWriter, req *http.Request) {
 		if origin := req.Header.Get("Origin"); origin != "" {
 			parsed, err := url.Parse(origin)
@@ -156,9 +156,9 @@ func handleNoteRequest(data noteRequest) map[string]any {
 	projects := []string{}
 	targetAllowed := false
 	sm.mu.Lock()
-	if state := sm.states[data.SID]; state != nil && data.Project != "" && data.Project == state.projectScope(state.ActiveProject) {
+	if state := sm.states[data.SID]; state != nil && data.Project != "" && data.Project == state.noteScope(state.ActiveProject) {
 		for _, project := range state.Projects {
-			if project.Name != data.Project {
+			if !project.Virtual && project.Name != data.Project {
 				projects = append(projects, project.Name)
 				targetAllowed = targetAllowed || project.Name == data.Target
 			}

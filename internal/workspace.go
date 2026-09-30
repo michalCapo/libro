@@ -28,7 +28,7 @@ func workspaceJS(sid string) string {
 
 func workspaceAppName(app Application) string {
 	if app.PluginID == "notes" && (app.Name == "" || app.Name == "Notes") {
-		return "Issues"
+		return "Notes"
 	}
 	if app.Name != "" {
 		return app.Name
@@ -100,7 +100,7 @@ func renderWorkspaceStrip(state *AppState, sid, placeholderID string) *r.Node {
 		children = append(children, renderAppFrameBase(app, i, i == state.SelectedIndex, sid, app.ID == placeholderID))
 	}
 	return r.Div("ws-project").ID(projectMainID(state.ActiveProject)).Render(
-		r.Div("ws-grid").ID(stripID(state.ActiveProject)).Attr("data-workspace-project", state.ActiveProject).Attr("data-project-scope", projectScope).Attr("data-thread", fmt.Sprint(state.thread(state.ActiveProject) != nil)).Attr("data-project-label", projectLabel).Render(children...),
+		r.Div("ws-grid").ID(stripID(state.ActiveProject)).Attr("data-workspace-project", state.ActiveProject).Attr("data-project-scope", projectScope).Attr("data-note-project", state.noteScope(state.ActiveProject)).Attr("data-thread", fmt.Sprint(state.thread(state.ActiveProject) != nil)).Attr("data-project-label", projectLabel).Render(children...),
 	).JS(centerSelectedJS(state))
 }
 

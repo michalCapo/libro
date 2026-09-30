@@ -10,7 +10,7 @@ Run Codex, Claude, Pi, OpenCode, or any other CLI agent in its own thread. Open 
 
 - Runs multiple agents in one project, each in its own thread.
 - Puts terminal and web applications in fixed-width tool panels beside the agent.
-- Includes Browser, Issues, Files, Terminal, and other tools, with support for your own commands and web addresses.
+- Includes Browser, Notes, Files, Terminal, and other tools, with support for your own commands and web addresses.
 - Keeps all your projects in one place. Switch between them with one click.
 - Shows when an assistant is busy (its icon spins) or finished (green check).
 - Plays a sound when an assistant finishes its work.
@@ -100,7 +100,7 @@ bundle matches its source. Run the editor integration tests with
 
 ### AI assistants
 
-- Each project thread has one agent and its own browser and tool state. Starting another agent creates a new thread under the same project. Issues are shared across that project. Applications can be shared or run separately in each thread. Standalone threads are unchanged.
+- Each project thread has one agent and its own browser and tool state. Starting another agent creates a new thread under the same project. Notes are shared across that project. Applications can be shared or run separately in each thread. Standalone threads are unchanged.
 - Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
@@ -109,7 +109,7 @@ bundle matches its source. Run the editor integration tests with
 
 ### Tools
 
-- Open the tool you need next to your assistants: Terminal, Browser, Issues, Files, Nvim, Git, Database, or any tool of your own.
+- Open the tool you need next to your assistants: Terminal, Browser, Notes, Files, Nvim, Git, Database, or any tool of your own.
 - Use whatever tool you like. Name it, add its command or web address, and it shows up next to the built-in tools.
 
 ![Tools in Settings: named tools with their commands and shortcuts](demo/tools-settings.png)
@@ -121,7 +121,7 @@ bundle matches its source. Run the editor integration tests with
 - A project is a folder on your computer. Add as many as you like.
 - Switch projects with `Ctrl + P`, or with `Ctrl + 1` to `Ctrl + 9`.
 - Project-backed threads keep the project folder as their working directory.
-- Each thread remembers its own browser, files, terminal, and other thread-local tools. Threads in the same project share Issues. Project settings choose a shared application or one application per thread.
+- Each thread remembers its own browser, files, terminal, and other thread-local tools. Threads in the same project share Notes. Project settings choose a shared application or one application per thread.
 
 ![Project sidebar: projects with their running assistants listed underneath](demo/projects-sidebar.png)
 
@@ -155,10 +155,10 @@ Project search and fuzzy file discovery require `rg` (ripgrep) on PATH. Search i
 
 Rebuild the bundled viewer after source changes with `npm run build:files`. Check it with `npm run check:files` and `node --test electron/files-navigation.test.cjs`.
 
-### Issues
+### Notes
 
-- Open Issues with `Ctrl + I`. Issues are stored separately for each project.
-- Start with the Open list. Switch the filter to see Archived notes or all notes.
+- Open Notes with `Ctrl + I`. Notes are shared across all branches, threads, and worktrees of a project.
+- Expand a note to edit it inline. Search and filters stay visible. Switch the filter to see Open, Archived, or all notes.
 - Edit formatted text in one area using Markdown shortcuts or the formatting toolbar.
 - Paste a PNG, JPEG, or GIF screenshot at the cursor, or use Insert image. Images stay in place between paragraphs when saved. Select an image and press Backspace or Delete to remove it.
 - Save keeps the editor open. Cancel discards unsaved changes. Send a saved note to the selected agent to execute it, with local paths to any attached images.
@@ -195,7 +195,7 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 | `Ctrl + B` | Browser |
 | `Ctrl + Shift + B` | New browser panel |
 | `Ctrl + F` | Files |
-| `Ctrl + I` | Issues |
+| `Ctrl + I` | Notes |
 | `Ctrl + E` | Nvim |
 | `Ctrl + G` | Git |
 | `Ctrl + D` | Database |
@@ -214,7 +214,7 @@ Every shortcut can be changed in **Settings → Keyboard shortcuts**.
 
 New Codex, Claude (including Ollama-launched Claude), and OpenCode sessions
 register the `libro` MCP server automatically. It provides `application` and
-`issues` tools. Pi receives instructions for the equivalent CLI commands.
+`notes` tools. Pi receives instructions for the equivalent CLI commands.
 Custom agents can register `libro mcp` as a stdio MCP server.
 Agents also receive instructions to use the separately installed `agent-browser`
 CLI for browser testing, with a unique session per agent/thread. Libro does not
@@ -321,35 +321,35 @@ HTTP readiness. Agents must check status first and use the returned URL rather
 than starting an unmanaged server. Only the saved command can be run.
 Restart existing agent sessions to load the scoped MCP schema and instructions.
 
-### Agent issue management
+### Agent note management
 
-The `issues` tool on the `libro` MCP server supports:
+The `notes` tool on the `libro` MCP server supports:
 
-- `list`: issue summaries, with optional `status`, `limit` (default 100, max 200), and `offset`.
-- `read`: the full issue, including Markdown body and saved images, by `id`.
+- `list`: note summaries, with optional `status`, `limit` (default 100, max 200), and `offset`.
+- `read`: the full note, including Markdown body and saved images, by `id`.
 - `create`: requires `title`; accepts `body` and `status`.
 - `set_status`: requires `id` and `status`; preserves the description and images.
-- `delete`: permanently removes the issue by `id`.
+- `delete`: permanently removes the note by `id`.
 
 Statuses are `new` (Open) and `archived`. Create defaults to `new`.
-Use full issue IDs from `list` or `create`. Read/create results use `state`
-for the saved status, matching Libro's issue storage.
+Use full note IDs from `list` or `create`. Read/create results use `state`
+for the saved status, matching Libro's note storage.
 
 The project defaults to the agent's working directory, or accepts an explicit
-`project` path. That project must be active in Libro. No Issues or browser
+`project` path for any workspace of the active project in Libro. No Notes or browser
 panel needs to be open. This uses the same desktop bridge and enable/pause
 controls as application control. Restart existing agent sessions to discover
-the new tool. Open issue lists refresh after agent changes; unsaved editor
+the new tool. Open note lists refresh after agent changes; unsaved editor
 text is preserved.
 
 CLI fallback:
 
 ```sh
-libro issues '{"action":"list"}'
-libro issues '{"action":"create","title":"Fix login","body":"Steps to reproduce"}'
-libro issues '{"action":"read","id":"ISSUE_ID"}'
-libro issues '{"action":"set_status","id":"ISSUE_ID","status":"archived"}'
-libro issues '{"action":"delete","id":"ISSUE_ID"}'
+libro notes '{"action":"list"}'
+libro notes '{"action":"create","title":"Fix login","body":"Steps to reproduce"}'
+libro notes '{"action":"read","id":"NOTE_ID"}'
+libro notes '{"action":"set_status","id":"NOTE_ID","status":"archived"}'
+libro notes '{"action":"delete","id":"NOTE_ID"}'
 ```
 
 New thread is available in the command palette and has no default shortcut.

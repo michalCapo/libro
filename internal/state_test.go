@@ -136,7 +136,7 @@ func TestSharedProjectAppsMoveBetweenProjectThreads(t *testing.T) {
 		Apps: []Application{
 			{ID: "agent-one", PluginID: "codex", Dock: "center"},
 			{ID: "browser", PluginID: "browser", Dock: "right"},
-			{ID: "issues", PluginID: "notes", Dock: "right"},
+			{ID: "notes", PluginID: "notes", Dock: "right"},
 			{ID: "app", PluginID: "project-command", Dock: "bottom"},
 			{ID: "shell-one", PluginID: "terminal", Dock: "bottom"},
 			{ID: "shell-two", PluginID: "terminal", Dock: "bottom"},
@@ -155,7 +155,7 @@ func TestSharedProjectAppsMoveBetweenProjectThreads(t *testing.T) {
 	if !manager.SwitchProject("test", "thread:two") || len(state.Apps) != 5 {
 		t.Fatalf("shared panels missing from target: %+v", state.Apps)
 	}
-	if state.Apps[0].ID != "agent-two" || state.Apps[1].ID != "issues" || state.Apps[2].ID != "app" || state.Apps[3].ID != "shell-one" || state.Apps[4].ID != "shell-two" {
+	if state.Apps[0].ID != "agent-two" || state.Apps[1].ID != "notes" || state.Apps[2].ID != "app" || state.Apps[3].ID != "shell-one" || state.Apps[4].ID != "shell-two" {
 		t.Fatalf("unexpected target panels: %+v", state.Apps)
 	}
 	if moved := manager.MoveSharedProjectApps("test", "thread:other"); len(moved) != 0 {

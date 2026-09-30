@@ -113,7 +113,7 @@ func TestNotesRequestAuthorizationAndMarkdown(t *testing.T) {
 	}
 }
 
-func TestProjectThreadUsesSharedIssues(t *testing.T) {
+func TestProjectThreadUsesSharedNotes(t *testing.T) {
 	original := sm
 	sm = NewStateManager()
 	t.Cleanup(func() { sm = original })
@@ -125,11 +125,11 @@ func TestProjectThreadUsesSharedIssues(t *testing.T) {
 	}
 	req := noteRequest{SID: "session", ID: "notes", Project: "one", Action: "preview", Body: "Shared"}
 	if result := handleNoteRequest(req); result["error"] != nil {
-		t.Fatalf("project thread could not use project issues: %v", result)
+		t.Fatalf("project thread could not use project notes: %v", result)
 	}
 	req.Project = "thread:test"
 	if handleNoteRequest(req)["error"] == nil {
-		t.Fatal("thread id was accepted as an issue store")
+		t.Fatal("thread id was accepted as an note store")
 	}
 }
 
@@ -183,7 +183,7 @@ func TestNotesHTTPLargeImage(t *testing.T) {
 	}
 }
 
-func TestMoveIssueBetweenProjects(t *testing.T) {
+func TestMoveNoteBetweenProjects(t *testing.T) {
 	originalDB, originalSM := db, sm
 	var err error
 	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "notes.db"))
@@ -212,14 +212,14 @@ func TestMoveIssueBetweenProjects(t *testing.T) {
 	req.Target = "two"
 	req.NoteID = "missing"
 	if handleNoteRequest(req)["error"] == nil {
-		t.Fatal("moved nonexistent issue")
+		t.Fatal("moved nonexistent note")
 	}
 	req.NoteID = note.ID
 	if result := handleNoteRequest(req); result["error"] != nil {
 		t.Fatalf("move failed: %v", result)
 	}
 	if notes, err := loadNotes("one"); err != nil || len(notes) != 0 {
-		t.Fatalf("source still contains issue: %v %v", notes, err)
+		t.Fatalf("source still contains note: %v %v", notes, err)
 	}
 	notes, err := loadNotes("two")
 	if err != nil || len(notes) != 1 {
@@ -227,13 +227,13 @@ func TestMoveIssueBetweenProjects(t *testing.T) {
 	}
 	moved := notes[0]
 	if moved.ID != note.ID || moved.Title != note.Title || moved.Body != note.Body || moved.State != note.State || len(moved.Images) != 1 || moved.Images[0] != note.Images[0] {
-		t.Fatal("move changed issue content")
+		t.Fatal("move changed note content")
 	}
 	if _, err := saveNote("one", note); err == nil {
-		t.Fatal("stale source editor can update moved issue")
+		t.Fatal("stale source editor can update moved note")
 	}
 	if handleNoteRequest(req)["error"] == nil {
-		t.Fatal("moved issue from wrong source")
+		t.Fatal("moved note from wrong source")
 	}
 	req.Action = "list"
 	result := handleNoteRequest(req)

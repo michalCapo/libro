@@ -33,7 +33,7 @@ func TestMCPDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(discovery.Result.Tools) != 2 {
-		t.Fatal("expected only application and issues tools")
+		t.Fatal("expected only application and notes tools")
 	}
 	application := discovery.Result.Tools[0]
 	if application.Name != "application" || application.InputSchema.Properties["project"] != nil || len(application.InputSchema.Properties) != 1 || !strings.Contains(application.Description, "project settings") {
@@ -45,9 +45,9 @@ func TestMCPDiscovery(t *testing.T) {
 	if !strings.Contains(lines[2], `"logs"`) {
 		t.Fatal("application tool must advertise logs")
 	}
-	issues := discovery.Result.Tools[1]
-	if issues.Name != "issues" || issues.InputSchema.Properties["status"] == nil || issues.InputSchema.Properties["id"] == nil {
-		t.Fatal("issues tool missing status or id")
+	notes := discovery.Result.Tools[1]
+	if notes.Name != "notes" || notes.InputSchema.Properties["status"] == nil || notes.InputSchema.Properties["id"] == nil {
+		t.Fatal("notes tool missing status or id")
 	}
 	if !strings.Contains(lines[3], `"isError":true`) {
 		t.Fatal("unknown tool must fail")

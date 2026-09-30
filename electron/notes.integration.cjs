@@ -9,7 +9,7 @@ app.whenReady().then(async () => {
   win.webContents.on('console-message', event => console.log(event.message));
   try {
     const css = fs.readFileSync(path.join(__dirname, '../internal/workspace.css'), 'utf8');
-    await win.loadURL('data:text/html,' + encodeURIComponent('<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Round"><style>body{margin:0;font-family:system-ui}button{cursor:pointer}[data-workspace-project]{height:100vh}</style><div id="libro-workspace"><div data-workspace-project="test"><div data-notes="notes" class="ws-notes"></div></div></div>'));
+    await win.loadURL('data:text/html,' + encodeURIComponent('<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Round"><style>body{margin:0;font-family:system-ui}button{cursor:pointer}[data-workspace-project]{height:100vh}</style><div id="libro-workspace"><div data-workspace-project="test" data-note-project="test"><div data-notes="notes" class="ws-notes"></div></div></div>'));
     await win.webContents.insertCSS(css);
     await win.webContents.executeJavaScript(`
       window.__libroActiveProject = 'test'; window.__libroWorkspaceSID = 'test';
@@ -40,7 +40,7 @@ app.whenReady().then(async () => {
         const transfer = new DataTransfer(); transfer.setData('text/plain', text);
         document.querySelector('.ws-note-body').dispatchEvent(new ClipboardEvent('paste', {clipboardData:transfer,bubbles:true,cancelable:true}));
       };
-      clickText('New issue'); input('.ws-note-title','Improve document requests');
+      clickText('New note'); input('.ws-note-title','Improve document requests');
       editor().commands.focus();
       pasteText('## Office logo\\n\\nShow the **office logo** above the request.\\n\\nSender information follows below.');
       editor().commands.setTextSelection(14);
@@ -54,7 +54,7 @@ app.whenReady().then(async () => {
         document.querySelector('.ws-note-body').dispatchEvent(new ClipboardEvent('paste', {clipboardData:transfer,bubbles:true,cancelable:true}));
       };
       pasteImage();
-      if (!Array.from(document.querySelectorAll('button')).find(button=>button.textContent==='Save issue').disabled) throw new Error('Save must wait for clipboard reads');
+      if (!Array.from(document.querySelectorAll('button')).find(button=>button.textContent==='Save note').disabled) throw new Error('Save must wait for clipboard reads');
     `);
     await new Promise(resolve => setTimeout(resolve, 200));
     assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-note-body img').naturalWidth > 0`), true, 'pasted image is visible inside editor');
@@ -72,7 +72,7 @@ app.whenReady().then(async () => {
       assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-notes').scrollWidth <= document.querySelector('.ws-notes').clientWidth`), true, 'no overflow at '+width);
       fs.writeFileSync(path.join(__dirname, '../.impeccable/review/notes-'+width+'.png'), (await win.webContents.capturePage()).toPNG());
     }
-    await win.webContents.executeJavaScript(`window.originalBody=editor().getMarkdown(); clickText('Save issue');`);
+    await win.webContents.executeJavaScript(`window.originalBody=editor().getMarkdown(); clickText('Save note');`);
     await new Promise(resolve => setTimeout(resolve, 100));
     assert.equal(await win.webContents.executeJavaScript(`savedNotes[0].images.length`), 1, 'image persisted');
     assert.equal(await win.webContents.executeJavaScript(`savedNotes[0].body === originalBody && editor().getMarkdown() === originalBody`), true, 'Markdown and image position survive reopening');
@@ -84,11 +84,11 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript(`
       let imagePos; editor().state.doc.descendants((node,pos)=>{if(node.type.name==='image')imagePos=pos});
       editor().chain().setNodeSelection(imagePos).deleteSelection().run();
-      clickText('Save issue');
+      clickText('Save note');
     `);
     await new Promise(resolve => setTimeout(resolve, 100));
     assert.equal(await win.webContents.executeJavaScript(`savedNotes[0].images.length`), 0, 'deleting image also removes saved attachment');
-    await win.webContents.executeJavaScript(`document.querySelector('[aria-label="Archive issue"]').click(); clickText('Save issue')`);
+    await win.webContents.executeJavaScript(`document.querySelector('[aria-label="Archive note"]').click(); clickText('Save note')`);
     await new Promise(resolve => setTimeout(resolve, 100));
     await win.webContents.executeJavaScript(`clickText('Cancel')`);
     assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-row').length`), 0, 'archived note hidden from Open');
@@ -108,7 +108,7 @@ app.whenReady().then(async () => {
       void 0;
     `);
     assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-body img').length`), 0, 'external images never load');
-    await win.webContents.executeJavaScript(`pasteImage(); clickText('Cancel'); clickText('New issue'); input('.ws-note-title','New draft');`);
+    await win.webContents.executeJavaScript(`pasteImage(); clickText('Cancel'); clickText('New note'); input('.ws-note-title','New draft');`);
     await new Promise(resolve => setTimeout(resolve, 100));
     assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-body img').length`), 0, 'cancelled paste cannot leak into another draft');
     win.show(); win.focus();
@@ -124,33 +124,33 @@ app.whenReady().then(async () => {
     assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-note-body strong')?.textContent`), 'bold', 'typed Markdown bold shortcut');
     await win.webContents.executeJavaScript(`
       clickText('Cancel'); clickText('Archived'); document.querySelector('.ws-note-row').click();
-      window.issueToMove = savedNotes[0].id;
-      const picker = document.querySelector('[aria-label="Move issue to project"]');
+      window.noteToMove = savedNotes[0].id;
+      const picker = document.querySelector('[aria-label="Move note to project"]');
       picker.value = 'other'; picker.dispatchEvent(new Event('change'));
       input('.ws-note-title', 'Unsaved title');
-      if (!Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Move issue').disabled) throw new Error('Move must require saved changes');
+      if (!Array.from(document.querySelectorAll('button')).find(button => button.textContent === 'Move note').disabled) throw new Error('Move must require saved changes');
       input('.ws-note-title', savedNotes[0].title);
-      clickText('Move issue');
+      clickText('Move note');
     `);
     await new Promise(resolve => setTimeout(resolve, 100));
-    assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-row').length`), 0, 'moved issue disappears from source');
+    assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-row').length`), 0, 'moved note disappears from source');
     await win.webContents.executeJavaScript(`
       const grid = document.querySelector('[data-workspace-project]');
-      grid.dataset.workspaceProject = 'other'; window.__libroActiveProject = 'other'; libroNotes.init();
+      grid.dataset.workspaceProject = 'other'; grid.dataset.noteProject = 'other'; window.__libroActiveProject = 'other'; libroNotes.init();
     `);
     await new Promise(resolve => setTimeout(resolve, 100));
     await win.webContents.executeJavaScript(`clickText('Archived')`);
-    assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-note-row').dataset.noteId === issueToMove`), true, 'same panel rebinds to destination project');
+    assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-note-row').dataset.noteId === noteToMove`), true, 'same panel rebinds to destination project');
     await win.webContents.executeJavaScript(`document.querySelector('.ws-note-row').click()`);
     for (const width of [1209,640,320]) {
       win.setSize(width,900);
       await new Promise(resolve => setTimeout(resolve, 100));
       assert.equal(await win.webContents.executeJavaScript(`document.querySelector('.ws-notes').scrollWidth <= document.querySelector('.ws-notes').clientWidth`), true, 'move controls fit at '+width);
-      fs.writeFileSync(path.join(__dirname, '../.impeccable/review/issues-move-'+width+'.png'), (await win.webContents.capturePage()).toPNG());
+      fs.writeFileSync(path.join(__dirname, '../.impeccable/review/notes-move-'+width+'.png'), (await win.webContents.capturePage()).toPNG());
     }
     await win.webContents.executeJavaScript(`
-      clickText('Cancel'); window.__libroActiveProject = 'test'; libroNotes.init();
-      savedNotes = []; window.__libroActiveProject = 'other'; libroNotes.init();
+      clickText('Cancel'); document.querySelector('[data-workspace-project]').dataset.workspaceProject = 'test'; document.querySelector('[data-workspace-project]').dataset.noteProject = 'test'; window.__libroActiveProject = 'test'; libroNotes.init();
+      savedNotes = []; document.querySelector('[data-workspace-project]').dataset.workspaceProject = 'other'; document.querySelector('[data-workspace-project]').dataset.noteProject = 'other'; window.__libroActiveProject = 'other'; libroNotes.init();
     `);
     await new Promise(resolve => setTimeout(resolve, 100));
     assert.equal(await win.webContents.executeJavaScript(`document.querySelectorAll('.ws-note-row').length`), 0, 'returning to project refreshes cached list');

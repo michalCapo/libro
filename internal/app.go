@@ -185,7 +185,7 @@ func switchToProjectName(sid, name string) string {
 }
 
 // Closing a thread's agent archives the thread and closes thread-local tools.
-// Issues and the project command remain available to the other project threads.
+// Notes and the project command remain available to the other project threads.
 func closeWorkspaceApp(sid, appID string) string {
 	target := sm.Get(sid).adjacentProjectThread()
 	apps, err := sm.CloseThreadAgent(sid, appID)
