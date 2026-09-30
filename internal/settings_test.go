@@ -567,3 +567,51 @@ func TestProjectShortcutMigration(t *testing.T) {
 		})
 	}
 }
+
+func TestEditorToolPersistenceAndValidation(t *testing.T) {
+	original := db
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	var err error
+	path := filepath.Join(t.TempDir(), "settings.db")
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	createTables()
+	if editorToolID() != "nvim" {
+		t.Fatal("expected Nvim by default")
+	}
+	tools := []Plugin{
+		{ID: "custom-tool-editor", Name: "Editor", Command: "nvim -u NONE", Dock: "right", Type: AppTypeTerminal, Custom: true},
+		{ID: "custom-tool-site", Name: "Website", URL: "https://example.com", Dock: "right", Type: AppTypeURL, Custom: true},
+	}
+	if err := saveToolsWithEditor(tools, tools[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if editorToolID() != tools[0].ID {
+		t.Fatal("editor did not persist")
+	}
+	for _, id := range []string{"missing", tools[1].ID} {
+		if err := saveToolsWithEditor(tools, id, true); err == nil {
+			t.Fatalf("accepted %s as editor", id)
+		}
+	}
+	tools[0].Disabled = true
+	if err := saveToolsWithEditor(tools, tools[0].ID, true); err == nil {
+		t.Fatal("accepted disabled editor")
+	}
+	if editorToolID() != tools[0].ID {
+		t.Fatal("invalid save changed editor")
+	}
+	if err := saveToolsWithEditor(tools, "", true); err != nil {
+		t.Fatal(err)
+	}
+	if editorToolID() != "" {
+		t.Fatal("editor did not turn off")
+	}
+}

@@ -8,8 +8,9 @@
     ['/', 'Filter files'],
     ['Enter', 'Preview file'],
     ['o', 'Open externally'],
+    ['e', 'Open in editor'],
     ['Space Space', 'Find project files in tree'],
-    ['h j k l / w b e', 'Source movement'],
+    ['h j k l / w b', 'Source movement'],
     ['00 / 44 / 5', 'Line start / end / matching bracket'],
     ['Ctrl+d / Ctrl+u', 'Move 15 lines'],
     ['/ / n / N', 'Find in file / next / previous'],
@@ -256,6 +257,12 @@
     s.picker.loading=true;s.picker.message.textContent=navigationLoadingMessage(kind);
     __ws.call('files.navigate',{sid:window.__libroWorkspaceSID,id:s.id,request:token,path:s.file.path,parents:s.parents,kind,line:position.line,column:position.column,version:s.file.version});
   }
+  function openEditor(s) {
+    const tree = document.activeElement === s.tree;
+    const file = tree ? s.items[s.index] : s.file;
+    if (!file || file.dir) return;
+    __ws.call('app.start', {sid:window.__libroWorkspaceSID, editorFile:file.path, filesPanel:s.id, parents:tree && s.filter.value ? 0 : s.parents});
+  }
   function focusTree(s,filter=false) {
     if(filter){s.filter.focus();s.filter.select();}
     else s.tree.focus();
@@ -275,10 +282,11 @@
     if(!s || event.isComposing)return;
     const typing=event.target.matches('input,textarea,select') || event.target.closest('.cm-vim-panel');
     const source=event.target.closest('.cm-content');
-    const navigation=source || event.target===s.tree || event.target===s.el.querySelector('.ws-file-media');
+    const navigation=source || event.target===s.tree || event.target===s.el.querySelector('.ws-file-media') || event.target===s.el.querySelector('.ws-file-text');
     let action;
     if(navigation && !typing && !event.metaKey && !event.altKey){
-      if(event.ctrlKey && event.key.toLowerCase()==='o')action=()=>historyMove(s,-1);
+      if(!event.ctrlKey && !event.shiftKey && event.key==='e' && s.leader==null)action=()=>{if(!event.repeat)openEditor(s);};
+      else if(event.ctrlKey && event.key.toLowerCase()==='o')action=()=>historyMove(s,-1);
       else if((event.ctrlKey && event.key.toLowerCase()==='i') || source && event.key==='Tab'&&!event.shiftKey)action=()=>historyMove(s,1);
       else if(!event.ctrlKey && (event.key===' ' || s.leader!=null)){
         if(s.leader==null)s.leader='';else s.leader+=event.key;

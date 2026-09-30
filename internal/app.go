@@ -649,6 +649,34 @@ func Run(assets embed.FS, desktop bool) error {
 			}
 		}
 
+		editorPath := ""
+		if path, editing := data["editorFile"].(string); editing {
+			panel, _ := data["filesPanel"].(string)
+			if !slices.ContainsFunc(sm.Get(sid).Apps, func(a Application) bool { return a.ID == panel && a.PluginID == "files" }) {
+				return r.Notify("error", "Open Files in this workspace first")
+			}
+			var editor *Plugin
+			editorID := editorToolID()
+			for _, p := range plugins() {
+				if p.ID == editorID && editorTool(p) {
+					editor = &p
+					break
+				}
+			}
+			if editor == nil {
+				return r.Notify("error", "Select an enabled file editor in Settings")
+			}
+			parents, _ := data["parents"].(float64)
+			if parents < 0 || parents > 1024 {
+				parents = 0
+			}
+			var err error
+			editorPath, err = projectFileToOpen(filesRoot(sm.GetActiveProjectPath(sid), int(parents)), path)
+			if err != nil {
+				return r.Notify("error", err.Error())
+			}
+			data["type"], data["plugin"], data["dock"], data["name"] = "terminal", editor.ID, "right", editor.Name
+		}
 		appType, _ := data["type"].(string)
 		name, _ := data["name"].(string)
 		side, _ := data["side"].(string)
@@ -749,6 +777,9 @@ func Run(assets embed.FS, desktop bool) error {
 				command = components.UserShellBase()
 			}
 			command = strings.ReplaceAll(command, "__dir__", pwd)
+			if editorPath != "" {
+				command = components.CommandWithFile(command, editorPath)
+			}
 
 			writable := true
 			if val, ok := data["writable"].(bool); ok {

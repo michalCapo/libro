@@ -69,6 +69,11 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }
 
+// CommandWithFile appends a local path as one shell argument.
+func CommandWithFile(command, path string) string {
+	return command + " " + shellQuote(path)
+}
+
 // TerminalManager manages native PTY-backed terminal sessions.
 type TerminalManager struct {
 	mu       sync.Mutex

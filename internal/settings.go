@@ -460,7 +460,7 @@ func registerSettingsActions(app *r.App) {
 		keys, _ := json.Marshal(toolKeybindings())
 		list, _ := json.Marshal(plugins())
 		environment, _ := json.Marshal(agentEnvironmentNames())
-		return fmt.Sprintf("window.__libroPlugins=%s;libroWorkspace.showSettings(%s,%s,%s,%s,%s,%t,%s);", list, components.JSString(string(DBDefaultPanelWidth())), encoded, keys, components.JSString(string(DBDefaultToolPanelWidth())), components.JSString(defaultThreadAgent()), browserPageToolsAutoExecute(), environment)
+		return fmt.Sprintf("window.__libroPlugins=%s;libroWorkspace.showSettings(%s,%s,%s,%s,%s,%t,%s,%s);", list, components.JSString(string(DBDefaultPanelWidth())), encoded, keys, components.JSString(string(DBDefaultToolPanelWidth())), components.JSString(defaultThreadAgent()), browserPageToolsAutoExecute(), environment, components.JSString(editorToolID()))
 	})
 	registerAction(app, "settings.width", func(ctx *r.Context) string {
 		value, _ := ctx.WsData()["width"].(string)
@@ -598,6 +598,7 @@ func renderWorkspaceSettings() *r.Node {
 			r.P("ws-settings-status").Text("CLI commands used to start agents in new threads. Drag the handles or use the arrows to reorder agents, then save. The first three enabled agents appear on the welcome screen. Include any flags you need. Running sessions are unchanged."),
 			renderAgentCommands(),
 			renderToolSettings(),
+			renderEditorSettings(),
 			renderToolKeybindings(),
 		),
 		r.Div("ws-settings-footer").Render(

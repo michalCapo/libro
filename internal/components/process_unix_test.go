@@ -159,3 +159,14 @@ func TestProjectCommandRestartPreservesOtherTerminals(t *testing.T) {
 		t.Fatal("unrelated shell was stopped")
 	}
 }
+
+func TestCommandWithFileKeepsPathAsOneArgument(t *testing.T) {
+	path := "/tmp/a file's $(printf injected); `printf injected` __dir__.go"
+	output, err := exec.Command("bash", "-c", CommandWithFile("printf '%s'", path)).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(output) != path {
+		t.Fatalf("path changed: %q", output)
+	}
+}

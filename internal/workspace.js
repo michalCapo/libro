@@ -1425,7 +1425,7 @@
     if (ok) fillAgentEnvironment(names);
     settingsSaveFinished(ok, message);
   }
-  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '', pageToolsAutoExecute = false, environment = []) {
+  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '', pageToolsAutoExecute = false, environment = [], editor = 'nvim') {
     window.__libroPageToolsAutoExecute = !!pageToolsAutoExecute;
     savedThreadAgent = threadAgent;
     fillThreadAgents();
@@ -1445,6 +1445,7 @@
     document.getElementById('agent-command-rows').replaceChildren();
     document.getElementById('tool-command-rows').replaceChildren();
     window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files', 'notes'].includes(p.id) && !p.removed).forEach(p => addAgentRow(p, p.type === 'url' ? p.url : p.command, true));
+    fillEditorTools(editor);
     removedAgents = Object.fromEntries(window.__libroPlugins.filter(p => p.removed && p.dock === 'center' && p.type === 'terminal').map(p => [p.id, true]));
     window.__libroPlugins.filter(p => !p.removed && p.dock === 'center' && p.type === 'terminal').forEach(p => addAgentRow(p, commands[p.id] || p.command));
     fillAutolaunchAgents();
@@ -1526,7 +1527,7 @@
     toggle.append(checkbox);
     const remove = button(toolRow ? 'Remove tool' : 'Remove agent', 'delete_outline', () => {
       if (checkbox.checked) return;
-      if (toolRow) { if (!window.__libroPlugins.some(p => p.id === plugin.id)) { row.remove(); return; } row.dataset.removed = 'true'; row.hidden = true; row.querySelectorAll('input').forEach(input => input.required = false); return; }
+      if (toolRow) { if (!window.__libroPlugins.some(p => p.id === plugin.id)) { row.remove(); fillEditorTools(); return; } row.dataset.removed = 'true'; row.hidden = true; row.querySelectorAll('input').forEach(input => input.required = false); fillEditorTools(); return; }
       if (window.__libroPlugins.some(p => p.id === plugin.id)) removedAgents[plugin.id] = true;
       row.remove();
       updateAgentOrderButtons();
@@ -1534,9 +1535,9 @@
     remove.hidden = checkbox.checked;
     checkbox.onchange = () => {
       remove.hidden = checkbox.checked;
-      if (!toolRow) fillAutolaunchAgents();
+      if (!toolRow) fillAutolaunchAgents(); else fillEditorTools();
     };
-    if (!toolRow) name.oninput = fillAutolaunchAgents;
+    name.oninput = toolRow ? () => fillEditorTools() : fillAutolaunchAgents;
     row.prepend(toggle, name, input); row.append(remove); document.getElementById(toolRow ? 'tool-command-rows' : 'agent-command-rows').append(row);
     if (toolRow) {
       const field = node('div', 'ws-tool-shortcut');
@@ -1629,6 +1630,16 @@
   function addCustomTool(type = 'terminal') {
     addAgentRow({id:'custom-tool-' + crypto.randomUUID(), name:'', custom:true, type}, '', true).querySelector('[data-agent-name]').focus();
   }
+  function fillEditorTools(selected = document.getElementById('editor-tool').value) {
+    const select = document.getElementById('editor-tool');
+    select.replaceChildren(new Option('Off', ''));
+    document.querySelectorAll('#tool-command-rows [data-agent-id]').forEach(row => {
+      if (row.dataset.toolType === 'terminal' && row.dataset.removed !== 'true' && row.querySelector('[data-agent-enabled]').checked) {
+        select.add(new Option(row.querySelector('[data-agent-name]').value.trim() || 'Custom tool', row.dataset.agentId));
+      }
+    });
+    select.value = [...select.options].some(option => option.value === selected) ? selected : '';
+  }
   function saveTools(form) {
     const tools = window.__libroPlugins.filter(p => p.dock === 'right' && p.removed);
     form.querySelectorAll('[data-agent-id]').forEach(row => tools.push({id:row.dataset.agentId, name:row.querySelector('[data-agent-name]').value.trim(), [row.dataset.toolType === 'url' ? 'url' : 'command']:row.querySelector('[data-agent-command]').value, type:row.dataset.toolType, dock:'right', custom:row.dataset.custom === 'true', disabled:!row.querySelector('[data-agent-enabled]').checked, removed:row.dataset.removed === 'true'}));
@@ -1638,7 +1649,7 @@
       bindings[input.dataset.toolKey] = input.value;
     });
     form.querySelectorAll('[data-agent-id][data-removed=true] [data-tool-key]').forEach(input => bindings[input.dataset.toolKey] = '');
-    call('settings.tools', {tools, bindings});
+    call('settings.tools', {tools, bindings, editor:document.getElementById('editor-tool').value});
   }
   function toolsSaved(plugins, message, bindings) {
     const form = document.getElementById('tool-commands-form');

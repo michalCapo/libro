@@ -4,7 +4,7 @@ const {readFileSync}=require('node:fs');
 const {JSDOM}=require('jsdom');
 
 function fixture(t, scoped=false) {
-  const dom=new JSDOM(`<div data-workspace-project="test"><div data-files="files"><div class="ws-file-preview"><div class="ws-file-path"></div><div class="ws-file-image-tools"><button class="ws-file-image-reset"></button></div><label class="ws-file-render"><input type="checkbox"></label><label class="ws-file-wrap"><input type="checkbox" checked></label><div class="ws-file-text"></div><div class="ws-file-context"></div><div class="ws-file-media" hidden></div></div><div class="ws-file-sidebar"><input class="ws-file-filter"><label class="ws-file-hidden"><input type="checkbox"></label><div class="ws-file-tree" tabindex="0"></div><div class="ws-file-shortcuts"><span>Copy line</span><kbd>yy</kbd></div><div role="status"></div></div></div></div>`,{url:'http://localhost',runScripts:'outside-only',pretendToBeVisual:true});
+  const dom=new JSDOM(`<div data-workspace-project="test"><div data-files="files"><div class="ws-file-preview"><div class="ws-file-path"></div><button class="ws-file-help"></button><div class="ws-file-image-tools"><button class="ws-file-image-reset"></button></div><label class="ws-file-render"><input type="checkbox"></label><label class="ws-file-wrap"><input type="checkbox" checked></label><div class="ws-file-text"></div><div class="ws-file-context"></div><div class="ws-file-media" hidden></div></div><div class="ws-file-sidebar"><input class="ws-file-filter"><label class="ws-file-hidden"><input type="checkbox"></label><div class="ws-file-tree" tabindex="0"></div><div class="ws-file-shortcuts"><span>Copy line</span><kbd>yy</kbd></div><div role="status"></div></div></div></div>`,{url:'http://localhost',runScripts:'outside-only',pretendToBeVisual:true});
   const w=dom.window,calls=[],copied=[];t.after(()=>w.close());
   let refresh;const interval=w.setInterval.bind(w);w.setInterval=(fn,ms)=>{if(ms===3000)refresh=fn;return interval(fn,ms);};
   w.HTMLElement.prototype.scrollIntoView=()=>{};
@@ -224,4 +224,20 @@ test('go opens compact symbols with short names and two-stage Escape',t=>{
  assert.equal(dialog.querySelectorAll('.ws-file-result').length,1);
  f.key('Enter');assert.equal(f.editor.position().line,2);assert.equal(f.w.document.querySelector('.ws-file-symbol-dialog'),null);
  f.keys('go');f.key('Escape');f.key('Escape');assert.equal(f.w.document.querySelector('.ws-file-symbol-dialog'),null);
+});
+
+test('e opens the preview or selected tree file, excluding typing and modifiers',t=>{
+  const f=fixture(t);f.open('file with spaces.js');
+  f.key('e');
+  assert.equal(f.calls.at(-1).action,'app.start');
+  assert.equal(f.calls.at(-1).data.editorFile,'file with spaces.js');
+  assert.equal(f.calls.at(-1).data.filesPanel,'files');
+  const count=f.calls.length;
+  f.key('e',{repeat:true});f.key('e',{ctrlKey:true});
+  assert.equal(f.calls.length,count);
+  f.w.document.querySelector('.ws-file-filter').focus();f.key('e');
+  assert.equal(f.calls.length,count);
+  f.w.document.querySelector('.ws-file-tree').focus();f.key('e');
+  assert.equal(f.calls.length,count+1);
+  assert.equal(f.calls.at(-1).data.editorFile,'file with spaces.js');
 });
