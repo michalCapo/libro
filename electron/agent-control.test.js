@@ -35,3 +35,14 @@ test('dispatches application and notes commands, and rejects browser automation'
   assert.match(calls[2], /logs/)
   assert.equal(calls.length, 3)
 })
+
+test('dispatches scoped child orchestration through the workspace bridge', async () => {
+  const calls=[]
+  const win={isDestroyed:()=>false,webContents:{executeJavaScript:async script=>{calls.push(script);return {id:'thread:child'}}}}
+  const control=createController(()=>win)
+  const result=await control({action:'children',project:'/orchestrator',command:{action:'create',name:'QA',base:'main',prompt:'Check app'}})
+  assert.equal(result.id,'thread:child')
+  assert.match(calls[0],/window.libroWorkspace.childrenControl/)
+  assert.match(calls[0],/"project":"\/orchestrator"/)
+  await assert.rejects(control({action:'children',command:{action:'list'}}),/Invalid children command/)
+})

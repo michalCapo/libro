@@ -5,6 +5,7 @@ import "sync"
 const terminalLogLimit = 64 * 1024
 
 type terminalLog struct {
+	managed   *managedTerminal
 	mu        sync.Mutex
 	data      []byte
 	truncated bool

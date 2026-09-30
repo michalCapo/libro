@@ -62,6 +62,8 @@ func main() {
 			err = libro.RunNotesCLI(args[1:], os.Stdout)
 		case "application":
 			err = libro.RunApplicationCLI(args[1:], os.Stdout)
+		case "children":
+			err = libro.RunChildrenCLI(args[1:], os.Stdout)
 		case "mcp":
 			err = libro.RunMCP(os.Stdin, os.Stdout)
 		default:

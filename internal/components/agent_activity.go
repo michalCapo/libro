@@ -96,7 +96,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 		}
 		data, _ := json.Marshal(map[string]any{
 			"hooks":       hooks,
-			"permissions": map[string]any{"allow": []string{"mcp__libro__application", "mcp__libro__notes"}},
+			"permissions": map[string]any{"allow": []string{"mcp__libro__application", "mcp__libro__notes", "mcp__libro__children"}},
 		})
 		filename, content = "claude.json", string(data)
 		mcpJSON, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"libro": libroMCP}})
@@ -190,9 +190,9 @@ export default async function () {
 	return agentExitCommand(prepared), a, nil
 }
 
-func agentExitCommand(command string) string {
-	return command + `; printf '\033]777;libro;exited\007'`
-}
+const agentExitMarker = `; printf '\033]777;libro;exited\007'`
+
+func agentExitCommand(command string) string { return command + agentExitMarker }
 
 func (a *agentActivity) cleanup() {
 	if a != nil && a.dir != "" {
@@ -282,6 +282,9 @@ func (s *TerminalSession) setAgentStatus(status string) {
 	}
 	s.agentStatus = status
 	s.mu.Unlock()
+	if s.managed != nil {
+		s.managed.activity(status)
+	}
 	s.broadcast(terminalWSMessage{Type: "agent-status", Data: status})
 }
 

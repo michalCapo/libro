@@ -111,6 +111,7 @@ type TerminalSession struct {
 	agentEnded     bool
 	agentMu        sync.Mutex
 	processStatus  string
+	managed        *managedTerminal
 }
 
 type terminalClient struct {
@@ -160,6 +161,10 @@ func (tm *TerminalManager) StartWithEnvironment(appID, command, cwd string, writ
 
 // StartWithSessionReporter reports agent session IDs before the terminal closes.
 func (tm *TerminalManager) StartWithSessionReporter(appID, command, cwd string, writable bool, environment []string, reportSession func(string)) (*TerminalSession, error) {
+	return tm.startTerminal(appID, command, cwd, writable, environment, reportSession, nil)
+}
+
+func (tm *TerminalManager) startTerminal(appID, command, cwd string, writable bool, environment []string, reportSession func(string), managed *managedTerminal) (*TerminalSession, error) {
 	tm.launchMu.Lock()
 	defer tm.launchMu.Unlock()
 	if appID == "" {
@@ -188,6 +193,12 @@ func (tm *TerminalManager) StartWithSessionReporter(appID, command, cwd string, 
 		return nil, fmt.Errorf("prepare agent activity: %w", err)
 	}
 	cmd := terminalCommand(launchCommand, shell)
+	if managed != nil {
+		// Lifecycle integrations end with an OSC marker; retain the agent's exit code.
+		launchCommand = strings.TrimSuffix(launchCommand, agentExitMarker)
+		cmd = exec.Command("bash", "--noprofile", "--norc", "-c", launchCommand)
+		environment = append(environment, "BASH_ENV=", "ENV=")
+	}
 	cmd.Dir = cwd
 	cmd.Env = mergeEnvironment(os.Environ(), append(environment, "TERM=xterm-256color", "COLORTERM=truecolor"))
 	if activity != nil {
@@ -216,15 +227,18 @@ func (tm *TerminalManager) StartWithSessionReporter(appID, command, cwd string, 
 		activity:      activity,
 		agentStatus:   "idle",
 		reportSession: reportSession,
+		managed:       managed,
 	}
 
 	tm.mu.Lock()
-	s.log = &terminalLog{}
+	s.log = &terminalLog{managed: managed}
 	tm.logs[appID] = s.log
 	tm.sessions[appID] = s
 	tm.mu.Unlock()
 
-	log.Printf("terminal started for app %s (writable=%v): %s", appID, writable, command)
+	if managed == nil {
+		log.Printf("terminal started for app %s (writable=%v): %s", appID, writable, command)
+	}
 	go tm.readLoop(s)
 	go tm.waitLoop(s)
 	go s.watchAgentActivity()
@@ -309,9 +323,16 @@ func (tm *TerminalManager) readLoop(s *TerminalSession) {
 			s.activity.output(buf[:n], s.setAgentStatus)
 			chunk := make([]byte, n)
 			copy(chunk, buf[:n])
+			if s.managed != nil {
+				s.managed.touch()
+				chunk = s.managed.redactor.feed(chunk, false)
+			}
 			chunks <- chunk
 		}
 		if err != nil {
+			if s.managed != nil {
+				chunks <- s.managed.redactor.feed(nil, true)
+			}
 			if err != io.EOF && !s.isClosed() {
 				log.Printf("terminal read failed for app %s: %v", s.ID, err)
 			}
@@ -348,6 +369,9 @@ func (s *TerminalSession) outputLoop(chunks <-chan []byte) {
 	flush := func() {
 		if len(batch) == 0 {
 			return
+		}
+		if s.managed != nil {
+			s.managed.write(batch)
 		}
 		s.broadcastOutput(batch)
 		batch = batch[:0]
@@ -401,6 +425,9 @@ func (tm *TerminalManager) waitLoop(s *TerminalSession) {
 		code = s.cmd.ProcessState.ExitCode()
 	}
 	s.waitForOutputFlush(terminalOutputExitFlushTimeout)
+	if s.managed != nil {
+		s.managed.finish(code)
+	}
 	s.broadcast(terminalWSMessage{Type: "exit", Code: code})
 	tm.removeSession(s.ID, s)
 	s.close(false)

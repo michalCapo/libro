@@ -101,7 +101,7 @@ func TestClaudeActivityHooks(t *testing.T) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(config.Permissions.Allow, []string{"mcp__libro__application", "mcp__libro__notes"}) {
+	if !reflect.DeepEqual(config.Permissions.Allow, []string{"mcp__libro__application", "mcp__libro__notes", "mcp__libro__children"}) {
 		t.Fatalf("Libro permissions = %v", config.Permissions.Allow)
 	}
 	for _, step := range []struct{ event, want string }{{"UserPromptSubmit", "working"}, {"Stop", "done"}, {"StopFailure", "error"}, {"SessionEnd", "idle"}, {"SessionStart", "idle"}} {

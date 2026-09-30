@@ -35,6 +35,7 @@ func setProjectCommand(path, command string) error {
 
 func registerProjectCommandActions(app *r.App) {
 	registerApplicationControl(app)
+	registerChildControl(app)
 	registerAction(app, "project.command.save", func(ctx *r.Context) string {
 		applicationControlMu.Lock()
 		defer applicationControlMu.Unlock()

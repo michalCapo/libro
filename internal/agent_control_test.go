@@ -32,8 +32,8 @@ func TestMCPDiscovery(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[2]), &discovery); err != nil {
 		t.Fatal(err)
 	}
-	if len(discovery.Result.Tools) != 2 {
-		t.Fatal("expected only application and notes tools")
+	if len(discovery.Result.Tools) != 3 {
+		t.Fatal("expected application, notes and children tools")
 	}
 	application := discovery.Result.Tools[0]
 	if application.Name != "application" || application.InputSchema.Properties["project"] != nil || len(application.InputSchema.Properties) != 1 || !strings.Contains(application.Description, "project settings") {

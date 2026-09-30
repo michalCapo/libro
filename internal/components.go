@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -2868,7 +2869,9 @@ func projectsJS(state *AppState) string {
 				continue
 			}
 			isMain := applicationPath(wt.Path) == applicationPath(p.Path)
-			if isMain {
+			if isMain || slices.ContainsFunc(state.Threads, func(thread Thread) bool {
+				return thread.Managed && applicationPath(thread.Path) == applicationPath(wt.Path)
+			}) {
 				continue
 			}
 			vtName := p.Name + "/" + wt.Branch

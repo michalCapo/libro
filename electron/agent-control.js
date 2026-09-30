@@ -16,6 +16,10 @@ function createController(getWindow) {
           if (!args || !['list', 'read', 'create', 'set_status', 'delete'].includes(args.action) || typeof args.project !== 'string' || !args.project) throw new Error('Invalid notes command')
           return win.webContents.executeJavaScript(`window.libroNotes.control(${JSON.stringify(args)})`)
         }
+        if (command.action === 'children') {
+          if (!command.command || typeof command.project !== 'string' || !command.project) throw new Error('Invalid children command')
+          return win.webContents.executeJavaScript(`window.libroWorkspace.childrenControl(${JSON.stringify({project:command.project, command:command.command})})`)
+        }
         if (command.action === 'application') {
           if (!['status', 'start', 'restart', 'stop', 'logs'].includes(command.operation) || typeof command.project !== 'string' || !command.project) throw new Error('Invalid application command')
           return win.webContents.executeJavaScript(`window.libroWorkspace.applicationControl(${JSON.stringify({operation:command.operation, project:command.project})})`)

@@ -267,6 +267,9 @@ func projectAutolaunchJS(state *AppState, sid string) string {
 		return ""
 	}
 	thread := state.thread(state.ActiveProject)
+	if thread != nil && thread.Managed {
+		return ""
+	}
 	threadAgent := defaultThreadAgent()
 	if thread != nil && thread.AgentID != "" {
 		threadAgent = thread.AgentID

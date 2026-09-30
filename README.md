@@ -361,3 +361,51 @@ Ctrl+Shift+P opens the project list. Meta+; opens the command palette.
 Ctrl+Shift+A opens Replace agent for the current thread. These shortcuts can be
 changed in Settings. Ctrl+N and Ctrl+P are unbound by default.
 Use the sidebar button to toggle projects.
+
+### Isolated QA child agents
+
+The `children` MCP tool and `libro children` CLI let an orchestrator own QA
+threads. Choose **per-thread** application mode in project settings first.
+Each child gets a visible thread, a Git worktree from the selected local branch,
+an application binding, an agent attempt log, and a unique browser session.
+The selected thread stays unchanged.
+
+```bash
+libro children '{"action":"create","name":"QA login","base":"main","prompt":"Test the login flow. Save screenshots."}'
+libro children '{"action":"launch","id":"<child ID>","command":["pi","-p"],"provider":"openrouter","model":"deepseek/deepseek-v4.1-flash","thinking":"high"}'
+libro children '{"action":"list"}'
+libro children '{"action":"status","id":"<child ID>"}'
+libro children '{"action":"followup","id":"<child ID>","prompt":"Also test invalid passwords."}'
+libro children '{"action":"interrupt","id":"<child ID>"}'
+libro children '{"action":"restart","id":"<child ID>"}'
+libro children '{"action":"cleanup","id":"<child ID>"}'
+```
+
+Repeat create and launch for each QA task. Use full IDs returned by create or
+list. MCP accepts the same JSON fields. `command` is an executable and separate
+arguments, without shell operators. It defaults to `["pi", "-p"]`.
+
+Libro loads exported provider credentials from its environment, Bash login and
+interactive startup files, and agent environment settings. It does not return
+credentials. Known credential values are redacted before agent output reaches
+logs or terminals. Keep credentials out of prompts and command arguments.
+
+Children use the existing application status/start/restart tools, automatically
+bound to their worktree. They receive a browser session name in their prompt
+and `AGENT_BROWSER_SESSION`. Save screenshots and other results in the worktree.
+
+Status reports running, waiting, completed, failed, or stalled, with the last
+activity time, exit code, attempt number and recent output. A running agent with
+no output or lifecycle activity for five minutes is marked stalled. This is a
+silence threshold; a long tool call can also cross it. Interrupt or restart to
+recover. Restart uses the saved task and command with a fresh log. Followup
+adds instructions to the saved task and starts a fresh attempt, including for
+Pi print mode. It does not resume the provider conversation.
+
+Cleanup stops the owned agent, application and browser session. It saves all
+worktree files except the Git pointer in `worktree.tar.gz`, Git history in
+`commits.bundle`, and keeps attempt logs in the returned results directory.
+It then removes the worktree and temporary branch. Retry cleanup after an
+interruption; completed archives and cleaned child records are retained.
+Desktop restart restores visible children and treats missing agent processes
+as failed. It never kills a process using a saved PID.

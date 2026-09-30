@@ -19,7 +19,7 @@
     return __ws.call(action, {sid, ...data});
   };
   const applicationRequests = new Map();
-  function applicationControl(command) {
+  function applicationControl(command, action = 'project.command.agent') {
     return new Promise((resolve, reject) => {
       const request = crypto.randomUUID();
       const timer = setTimeout(() => { applicationRequests.delete(request); reject(new Error('Application control timed out')); }, 25000);
@@ -27,7 +27,7 @@
         clearTimeout(timer);
         if (reply.error) reject(new Error(reply.error)); else resolve(reply.result);
       });
-      try { call('project.command.agent', {request, ...command}); }
+      try { call(action, {request, ...command}); }
       catch (error) { applicationResult(request, {error:error.message}); }
     });
   }
@@ -1695,7 +1695,7 @@
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
     settingsSaveFinished(ok);
   }
-  window.libroWorkspace = {saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
+  window.libroWorkspace = {saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;

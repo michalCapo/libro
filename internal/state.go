@@ -124,7 +124,7 @@ func newAppStateFromDB() *AppState {
 
 	return &AppState{
 		Projects:      projects,
-		Threads:       loadThreads(),
+		Threads:       append(loadThreads(), loadChildThreads(projects)...),
 		ActiveProject: activeProject,
 		snapshots:     make(map[string]*projectSnapshot),
 

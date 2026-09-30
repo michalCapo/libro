@@ -15,6 +15,7 @@ import (
 // Thread is a single agent session with its own tool state. Project and Path
 // keep project-backed threads in the directory where they were created.
 type Thread struct {
+	Managed      bool   `json:"managed,omitempty"`
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	Archived     bool   `json:"archived"`
