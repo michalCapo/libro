@@ -1,10 +1,74 @@
 package libro
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestProjectDoesNotInheritParentRepository(t *testing.T) {
+	if !GitAvailable() {
+		t.Skip("git not installed")
+	}
+	home := t.TempDir()
+	if _, err := worktreeGit(home, "init", "-b", "main"); err != nil {
+		t.Fatal(err)
+	}
+	project := filepath.Join(home, "new-project")
+	if err := os.Mkdir(project, 0755); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewStateManager()
+	manager.states["test"] = &AppState{}
+	if !manager.AddProject("test", "new-project", project) {
+		t.Fatal("could not add project")
+	}
+	state := manager.Get("test")
+	if state.Projects[0].IsGitRepo || strings.Contains(projectsJS(state), `"kind":"worktree"`) {
+		t.Fatal("new project inherited the home repository")
+	}
+	if trees, err := GitListWorktrees(project); err != nil || len(trees) != 0 {
+		t.Fatalf("parent worktrees leaked: %+v, %v", trees, err)
+	}
+	restoreWorktreeProject(manager, "test", "new-project/main")
+	if len(state.Projects) != 1 {
+		t.Fatal("restored a worktree pointing to the home folder")
+	}
+	if _, err := manager.createProjectWorktree("test", "new-project", "feature"); err == nil {
+		t.Fatal("allowed a worktree in the parent repository")
+	}
+	if _, err := worktreeGit(project, "init", "-b", "main"); err != nil {
+		t.Fatal(err)
+	}
+	if !GitIsRepo(project) {
+		t.Fatal("nested repository root was not recognized")
+	}
+}
+
+func TestProjectRepositoryAliases(t *testing.T) {
+	if !GitAvailable() {
+		t.Skip("git not installed")
+	}
+	_, root, branch := finishFixture(t)
+	for _, path := range []string{root, branch} {
+		if !GitIsRepo(path) {
+			t.Fatalf("worktree root not recognized: %s", path)
+		}
+	}
+	alias := filepath.Join(t.TempDir(), "repo-link")
+	if err := os.Symlink(root, alias); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if !GitIsRepo(alias) {
+		t.Fatal("repository symlink not recognized")
+	}
+	state := &AppState{Projects: []Project{{Name: "repo", Path: alias, IsGitRepo: true}}}
+	if got := strings.Count(projectsJS(state), `"kind":"worktree"`); got != 1 {
+		t.Fatalf("worktree rows = %d, want only the linked worktree", got)
+	}
+}
 
 func TestRestoreWorktreeWithSlashesInProjectAndBranch(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {

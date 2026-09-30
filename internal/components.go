@@ -2867,7 +2867,7 @@ func projectsJS(state *AppState) string {
 			if wt.IsBare {
 				continue
 			}
-			isMain := wt.Path == p.Path
+			isMain := applicationPath(wt.Path) == applicationPath(p.Path)
 			if isMain {
 				continue
 			}

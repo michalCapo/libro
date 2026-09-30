@@ -30,24 +30,24 @@ type Worktree struct {
 	IsBare bool   // true for bare repos
 }
 
-// GitIsRepo returns true if the given path is inside a git repository.
+// GitIsRepo returns true if the given path is a Git worktree root.
 func GitIsRepo(path string) bool {
 	if !GitAvailable() {
 		return false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", path, "rev-parse", "--is-inside-work-tree")
+	cmd := exec.CommandContext(ctx, "git", "-C", path, "rev-parse", "--show-toplevel")
 	out, err := cmd.Output()
 	if err != nil {
 		return false
 	}
-	return strings.TrimSpace(string(out)) == "true"
+	return applicationPath(strings.TrimSpace(string(out))) == applicationPath(path)
 }
 
 // GitListWorktrees returns all worktrees for the repository at repoPath.
 func GitListWorktrees(repoPath string) ([]Worktree, error) {
-	if !GitAvailable() {
+	if !GitIsRepo(repoPath) {
 		return nil, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
