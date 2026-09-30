@@ -125,6 +125,14 @@
       form.querySelectorAll('input,textarea,select,button').forEach(el => { el.disabled = true; });
     });
     actions.append(s.target, s.move);
+    for (const [control, label, icon] of [[s.send, 'Send to agent', 'send'], [s.remove, 'Delete note', 'delete_outline'], [s.move, 'Move note', 'drive_file_move']]) {
+      control.classList.add('ws-note-icon-button');
+      control.title = label;
+      control.setAttribute('aria-label', label);
+      const glyph = element('span', 'material-icons-round', icon);
+      glyph.setAttribute('aria-hidden', 'true');
+      control.replaceChildren(glyph);
+    }
     actionsSection.append(actions, s.status);
     form.append(header, description, actionsSection);
     s.detail.append(form);

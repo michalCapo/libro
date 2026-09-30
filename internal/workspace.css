@@ -496,11 +496,13 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 .ws-notes-list{display:flex;flex-direction:column;gap:12px}
 .ws-note-row{display:flex;align-items:center;gap:12px;text-align:left;width:100%;padding:10px 14px;border:0;background:transparent;color:var(--ws-fg);font:inherit;min-height:52px;cursor:pointer}
 .ws-note-item{border:1px solid var(--ws-control-line);border-radius:10px;overflow:hidden}
-.ws-note-row[aria-expanded=true]{background:var(--ws-chrome)}
+.ws-note-row[aria-expanded=true]{background:color-mix(in srgb,var(--ws-accent) 10%,var(--ws-bg))}
 .ws-note-row[aria-expanded=true] .ws-note-chevron{transform:rotate(180deg)}
-.ws-note-detail{padding:12px;border-top:1px solid var(--ws-line)}
+.ws-note-detail{padding:12px;border-top:1px solid var(--ws-line);background:#f5f7ff}
+html.dark .ws-note-detail{background:color-mix(in srgb,var(--ws-accent) 6%,var(--ws-bg))}
 .ws-note-detail[hidden]{display:none}
 .ws-note-row:hover{background:var(--ws-hover)}
+.ws-note-row[aria-expanded=true]:hover{background:color-mix(in srgb,var(--ws-accent) 14%,var(--ws-bg))}
 .ws-note-row-main{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
 .ws-note-row-title-line{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 .ws-note-row-meta{color:var(--ws-muted);font-size:11px}
@@ -515,14 +517,14 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 .ws-note-section{display:flex;flex-direction:column;gap:8px;min-width:0}
 .ws-note-title{flex:1;min-width:0;border:0;border-radius:0;background:transparent;color:var(--ws-fg);padding:0;font:inherit;font-size:20px;line-height:1.25;font-weight:650;letter-spacing:-.02em;caret-color:var(--ws-accent)}
 #libro-workspace .ws-note-title:focus,#libro-workspace .ws-note-title:focus-visible{outline:none!important;outline-offset:0!important}
-.ws-note-rich-editor{border:1px solid var(--ws-control-line);border-radius:8px;background:var(--ws-raised);overflow:hidden}
-.ws-note-rich-editor:focus-within{border-color:var(--ws-accent);outline:1px solid var(--ws-accent)}
-.ws-note-formatting{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:6px 8px;border-bottom:1px solid var(--ws-line);background:var(--ws-chrome)}
-.ws-note-formatting button{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:0;border-radius:6px;background:transparent;color:var(--ws-muted);cursor:pointer}
+.ws-note-rich-editor{background:transparent}
+.ws-note-formatting{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:0 0 8px;background:transparent}
+.ws-note-formatting select{border:1px solid var(--ws-control-line);background:var(--ws-raised)}
+.ws-note-formatting button{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid var(--ws-control-line);border-radius:6px;background:var(--ws-raised);color:var(--ws-muted);cursor:pointer}
 .ws-note-formatting button .material-icons-round{font-size:18px}
 .ws-note-formatting button:hover:not(:disabled),.ws-note-formatting button[aria-pressed=true]{background:var(--ws-hover);color:var(--ws-fg)}
 .ws-note-formatting button:disabled{opacity:.55;cursor:default}
-.ws-note-body{width:100%;box-sizing:border-box;color:var(--ws-fg);padding:16px;font:inherit;caret-color:var(--ws-accent);min-height:120px;max-height:clamp(120px,30vh,300px);overflow:auto;line-height:1.7;overflow-wrap:anywhere;outline:none}
+.ws-note-body{width:100%;box-sizing:border-box;border:1px solid var(--ws-line);border-radius:8px;background:var(--ws-raised);color:var(--ws-fg);padding:8px 12px;font:inherit;caret-color:var(--ws-accent);min-height:120px;max-height:clamp(120px,30vh,300px);overflow:auto;line-height:1.7;overflow-wrap:anywhere;outline:none}
 .ws-note-body:focus-visible{outline:none}
 .ws-note-body p{margin:0 0 12px}
 .ws-note-body>:last-child{margin-bottom:0}
@@ -548,6 +550,8 @@ html.dark :is(.ws-project-agent,.ws-project-threads .ws-thread-row)[data-agent-s
 .ws-note-hint{margin:0;line-height:1.5}
 .ws-note-actions select{min-width:0;max-width:100%}
 .ws-note-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ws-note-icon-button{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0}
+.ws-note-icon-button .material-icons-round{font-size:18px}
 
 .ws-project-threads .ws-project-item{margin:0;border-radius:0;background:transparent}
 .ws-project-threads:empty{display:none}
