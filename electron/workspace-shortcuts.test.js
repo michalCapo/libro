@@ -443,11 +443,12 @@ for (const thread of [false, true]) test('new browser creates separate blank pan
   }
 })
 
-for (const thread of [false, true]) for (const occupied of [false, true]) test(`agent launch routing: thread=${thread}, occupied=${occupied}`, () => {
+for (const thread of [false, true]) for (const occupied of [false, true]) for (const replace of [false, true]) test(`agent launch routing: thread=${thread}, occupied=${occupied}, replace=${replace}`, () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const launch = source.slice(source.indexOf('  function openPlugin('), source.indexOf('  function select('))
   const calls = []
-  vm.runInNewContext(launch + ';openPlugin("codex", "center")', {
+  vm.runInNewContext(launch + ';openPlugin("codex", "center", undefined, replace)', {
+    replace,
     window: {
       __libroActiveProject: 'project',
       __libroPlugins: [{ id: 'codex', type: 'terminal', name: 'Codex', dock: 'center' }],
@@ -458,11 +459,16 @@ for (const thread of [false, true]) for (const occupied of [false, true]) test(`
     call: (action, data) => calls.push([action, JSON.parse(JSON.stringify(data))]),
   })
   assert.equal(calls.length, 1)
-  assert.equal(calls[0][0], thread && occupied ? 'thread.create' : 'app.start')
-  if (thread && occupied) assert.equal(calls[0][1].agent, 'codex')
+  const newThread = replace ? !occupied : thread && occupied
+  assert.equal(calls[0][0], newThread ? 'thread.create' : 'app.start')
+  if (newThread) {
+    assert.equal(calls[0][1].agent, 'codex')
+    assert.equal(calls[0][1].project, 'project')
+  }
   else {
     assert.equal(calls[0][1].plugin, 'codex')
     assert.equal(calls[0][1].dock, 'center')
+    assert.equal(calls[0][1].replaceAgent, replace)
   }
 })
 

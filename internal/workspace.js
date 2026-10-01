@@ -119,7 +119,9 @@
       trigger.setAttribute('aria-busy', 'true');
     }
     const targetDock = dock || plugin.dock;
-    if (targetDock === 'center' && isThread() && !replace && frames(activeGrid()).some(frame => frame.dataset.dock === 'center')) {
+    const grid = targetDock === 'center' && activeGrid();
+    const hasAgent = grid && frames(grid).some(frame => frame.dataset.dock === 'center');
+    if (targetDock === 'center' && (replace ? !hasAgent : isThread() && hasAgent)) {
       call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''});
     } else call('app.start', {
       replaceAgent: replace,
