@@ -70,6 +70,31 @@ func TestProjectRepositoryAliases(t *testing.T) {
 	}
 }
 
+func TestNewProjectThreadsStayLast(t *testing.T) {
+	if !GitAvailable() {
+		t.Skip("git not installed")
+	}
+	_, repo, _ := finishFixture(t)
+	manager := NewStateManager()
+	state := &AppState{Projects: []Project{{Name: "repo", Path: repo, IsGitRepo: true}}}
+	manager.states["test"] = state
+	// Record the existing thread before adding branches whose paths sort earlier.
+	projectsJS(state)
+	for _, branch := range []string{"aaa-first", "aaa-second"} {
+		if _, err := manager.createProjectWorktree("test", "repo", branch); err != nil {
+			t.Fatal(err)
+		}
+		js := projectsJS(state)
+		last := strings.LastIndex(js, `"kind":"worktree"`)
+		if last < 0 || !strings.Contains(js[last:], `"branch":"`+branch+`"`) {
+			t.Fatalf("new thread %s is not the last worktree", branch)
+		}
+		if got := projectsJS(state); got != js {
+			t.Fatal("refresh changed the thread order")
+		}
+	}
+}
+
 func TestRestoreWorktreeWithSlashesInProjectAndBranch(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")

@@ -2851,6 +2851,18 @@ func projectsJS(state *AppState) string {
 		if err != nil {
 			continue
 		}
+		if state.worktreeOrder == nil {
+			state.worktreeOrder = make(map[string]int)
+		}
+		for _, wt := range wts {
+			path := applicationPath(wt.Path)
+			if _, exists := state.worktreeOrder[path]; !exists {
+				state.worktreeOrder[path] = len(state.worktreeOrder)
+			}
+		}
+		slices.SortStableFunc(wts, func(a, b Worktree) int {
+			return state.worktreeOrder[applicationPath(a.Path)] - state.worktreeOrder[applicationPath(b.Path)]
+		})
 		var refs []string
 		for _, wt := range wts {
 			if wt.Branch != "" && wt.Branch != "(detached)" {

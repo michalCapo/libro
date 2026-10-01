@@ -72,6 +72,7 @@ type AppState struct {
 	ProjectDialogOpen bool
 	snapshots         map[string]*projectSnapshot
 	closedWorkspaces  map[string]bool
+	worktreeOrder     map[string]int // keeps new project threads at the end of the list
 
 	renderedProjects map[string]bool // tracks which projects have DOM divs
 
