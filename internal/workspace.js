@@ -56,7 +56,7 @@
     const menu = event.target.closest('.ws-browser-menu');
     if (!menu || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    const items = [...menu.querySelectorAll('button')];
+    const items = [...menu.querySelectorAll('button')].filter(item => !item.disabled);
     const current = items.indexOf(document.activeElement);
     const index = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
     items[index]?.focus();
@@ -441,12 +441,19 @@
   }
   function threadMenu(project, trigger, point) {
     document.getElementById('thread-actions-menu')?.remove();
-    const menu = node('div', 'ws-browser-menu ws-thread-menu'); menu.id = 'thread-actions-menu'; menu.setAttribute('popover', 'auto'); menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', 'Thread actions');
+    const worktree = project.kind === 'worktree';
+    const menu = node('div', 'ws-browser-menu ws-thread-menu'); menu.id = 'thread-actions-menu'; menu.setAttribute('popover', 'auto'); menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', worktree ? 'Thread actions' : 'Branch actions');
     const add = (label, run, danger = false) => {
       const item = node('button', 'ws-thread-menu-item' + (danger ? ' ws-thread-discard' : ''), label); item.type = 'button'; item.setAttribute('role', 'menuitem');
       item.onclick = () => { menu.hidePopover(); run(); }; menu.append(item);
     };
-    threadActions(project).forEach(action => add(action.label, action.run, action.danger));
+    const actions = worktree ? threadActions(project) : [
+      {label:'Close branch', run:() => call('project.close', {name:project.name})},
+      {label:'New thread', run:() => newThread(project.name)},
+      {label:'Branch settings', run:() => projectSettings(project.name)},
+    ];
+    actions.forEach(action => add(action.label, action.run, action.danger));
+    if (!worktree && (!project.isGit || !project.currentBranch)) menu.children[1].disabled = true;
     root.append(menu); menu.showPopover();
     const rect = trigger.getBoundingClientRect();
     menu.style.left = Math.max(8, Math.min(point?.x ?? rect.left, innerWidth - menu.offsetWidth - 8)) + 'px';
@@ -555,7 +562,11 @@
         const baseIcon = node('i', 'material-icons-round', 'chat_bubble_outline'); baseIcon.setAttribute('aria-hidden', 'true');
         base.append(baseIcon, node('span', '', baseLabel));
         base.onclick = row.onclick;
-        baseList.append(base); branches.append(baseList);
+        const actions = button('Branch actions for ' + baseLabel, 'more_horiz', event => { event.stopPropagation(); threadMenu(project, actions); });
+        actions.setAttribute('aria-haspopup', 'menu');
+        actions.classList.add('ws-project-settings');
+        base.oncontextmenu = event => { event.preventDefault(); threadMenu(project, base, {x:event.clientX, y:event.clientY}); };
+        baseList.append(base, actions); branches.append(baseList);
       }
       const threadList = node('div', 'ws-project-threads');
       threadList.dataset.projectThreads = row.dataset.projectKey;

@@ -930,6 +930,7 @@ test('project groups contain the original branch first and number every worktree
     node, button: (label, icon, onclick) => Object.assign(node('button', '', label), { onclick }),
     call: (action, data) => calls.push([action, data]), closeSettings() {}, innerWidth:1000,
     newThread() {}, projectSettings() {},
+    threadMenu: (project, trigger) => calls.push(['menu', project.name, trigger.textContent]),
   }
   vm.runInNewContext(render + shortcuts + ';renderProjects();renderThreadShortcuts();', context)
   assert.equal(list.children.length, 2)
@@ -944,6 +945,12 @@ test('project groups contain the original branch first and number every worktree
   assert.equal(calls[0][1].name, 'mail')
   assert.equal(calls[1][0], 'worktree.switch')
   assert.equal(calls[1][1].branch, 'feature')
+  const branchActions = flatten(group).find(el => el.textContent === 'Branch actions for main')
+  assert.equal(branchActions.attributes['aria-haspopup'], 'menu')
+  branchActions.onclick({stopPropagation() {}})
+  assert.deepEqual(calls.at(-1), ['menu', 'mail', 'Branch actions for main'])
+  rows[0].oncontextmenu({preventDefault() {}, clientX:10, clientY:20})
+  assert.deepEqual(calls.at(-1), ['menu', 'mail', ''])
   const nonGit = flatten(list.children[1])
   assert.equal(nonGit.find(el => el.textContent === 'New project thread').disabled, true)
   assert.equal(nonGit.find(el => el.dataset.kind === 'base'), undefined)

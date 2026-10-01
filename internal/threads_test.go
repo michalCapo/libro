@@ -297,7 +297,7 @@ func TestCloseProjectArchivesThreadAndClosesTools(t *testing.T) {
 		snapshots: map[string]*projectSnapshot{"other": {Apps: []Application{{ID: "other-agent"}}}},
 	}
 	manager.states["test"] = state
-	apps, err := manager.CloseProject("test")
+	apps, err := manager.CloseProject("test", "")
 	if err != nil || len(apps) != 4 || len(state.Apps) != 0 || !state.Threads[0].Archived {
 		t.Fatalf("thread not closed and archived: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestCloseProjectPreservesPanelsOnArchiveFailure(t *testing.T) {
 		Apps:          []Application{{ID: "agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"}},
 	}
 	manager.states["test"] = state
-	if _, err := manager.CloseProject("test"); err == nil {
+	if _, err := manager.CloseProject("test", ""); err == nil {
 		t.Fatal("expected archive failure")
 	}
 	if state.Threads[0].Archived || len(state.Apps) != 1 {

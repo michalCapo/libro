@@ -599,7 +599,8 @@ html.dark .ws-note-detail{background:color-mix(in srgb,var(--ws-accent) 6%,var(-
 .ws-finish-dialog .ws-agent-actions{justify-content:flex-end;flex-wrap:wrap}
 .ws-finish-dialog [hidden]{display:none}
 .ws-thread-menu-item{display:block;width:100%;padding:9px 10px;border:0;border-radius:6px;background:transparent;color:var(--ws-fg);font:inherit;text-align:left;cursor:pointer}
-.ws-thread-menu-item:hover{background:var(--ws-hover)}
+.ws-thread-menu-item:hover:not(:disabled){background:var(--ws-hover)}
+.ws-thread-menu-item:disabled{color:var(--ws-muted);cursor:not-allowed}
 .ws-thread-menu-item:focus-visible{outline:2px solid var(--ws-accent);outline-offset:-2px}
 .ws-thread-discard{margin-top:6px;border-top:1px solid var(--ws-line);border-radius:0}
 .ws-voice-button { touch-action: none; flex-shrink: 0; }

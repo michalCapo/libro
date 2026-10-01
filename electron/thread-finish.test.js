@@ -214,3 +214,38 @@ test('thread palette closes base and worktree workspaces without a Git deletion 
     assert.deepEqual(calls, ['project.close'])
   }
 })
+
+
+test('branch menu targets its own workspace and disables new threads without a committed Git branch', () => {
+  const code = source.slice(source.indexOf('  function threadMenu('), source.indexOf('  function newThread('))
+  for (const isGit of [true, false]) {
+    const calls = []
+    const node = (tag, cls, text = '') => ({
+      textContent:text, children:[], attributes:{}, style:{}, offsetWidth:180, offsetHeight:120,
+      setAttribute(key, value) { this.attributes[key] = value },
+      append(child) { this.children.push(child) },
+      showPopover() {}, hidePopover() {}, addEventListener() {}, focus() {},
+      querySelector() { return this.children[0] },
+    })
+    const root = node('div')
+    const trigger = {getBoundingClientRect:() => ({left:200, bottom:100})}
+    vm.runInNewContext(code + ';threadMenu(project, trigger);', {
+      node, root, trigger, project:{kind:'project', name:'repo', isGit, currentBranch:isGit ? 'main' : ''},
+      document:{getElementById() {}}, innerWidth:1000, innerHeight:800,
+      call:(action, data) => calls.push([action, data.name]),
+      newThread:name => calls.push(['thread.create', name]),
+      projectSettings:name => calls.push(['settings', name]),
+      window:{__libroActiveProject:'other'},
+    })
+    const menu = root.children[0]
+    assert.equal(menu.attributes['aria-label'], 'Branch actions')
+    assert.deepEqual(menu.children.map(item => item.textContent), ['Close branch', 'New thread', 'Branch settings'])
+    assert.equal(!!menu.children[1].disabled, !isGit)
+    menu.children[0].onclick()
+    if (isGit) menu.children[1].onclick()
+    menu.children[2].onclick()
+    assert.deepEqual(calls, isGit
+      ? [['project.close', 'repo'], ['thread.create', 'repo'], ['settings', 'repo']]
+      : [['project.close', 'repo'], ['settings', 'repo']])
+  }
+})

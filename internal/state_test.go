@@ -62,7 +62,7 @@ func TestCloseProjectOnlyClearsActiveProject(t *testing.T) {
 		},
 	}
 	sm.states["test"] = s
-	apps, err := sm.CloseProject("test")
+	apps, err := sm.CloseProject("test", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,8 +84,50 @@ func TestCloseProjectOnlyClearsActiveProject(t *testing.T) {
 	if s.closedWorkspaces["work"] {
 		t.Fatal("reopened workspace still closed")
 	}
-	if apps, err := sm.CloseProject("missing"); err != nil || len(apps) != 0 {
+	if apps, err := sm.CloseProject("missing", ""); err != nil || len(apps) != 0 {
 		t.Fatal("missing session returned panels")
+	}
+}
+
+func TestCloseInactiveBranchPreservesActiveWorkspace(t *testing.T) {
+	manager := NewStateManager()
+	state := &AppState{
+		ActiveProject: "repo/feature",
+		Projects:      []Project{{Name: "repo"}, {Name: "repo/feature", Virtual: true}},
+		Apps:          []Application{{ID: "active-agent"}, {ID: "active-tool"}},
+		SelectedIndex: 1,
+		snapshots: map[string]*projectSnapshot{
+			"repo": {Apps: []Application{{ID: "base-agent"}, {ID: "base-tool"}}, SelectedIndex: 1},
+		},
+	}
+	manager.states["test"] = state
+	apps, err := manager.CloseProject("test", "repo")
+	if err != nil || len(apps) != 2 || apps[0].ID != "base-agent" {
+		t.Fatalf("wrong panels closed: %v, %v", apps, err)
+	}
+	if state.ActiveProject != "repo/feature" || len(state.Apps) != 2 || state.SelectedIndex != 1 {
+		t.Fatal("closing another branch changed the active workspace")
+	}
+	if !state.closedWorkspaces["repo"] || len(state.snapshots["repo"].Apps) != 0 || state.snapshots["repo"].SelectedIndex != 0 {
+		t.Fatal("inactive branch was not cleared and closed")
+	}
+	if !manager.SwitchProject("test", "repo") || len(state.Apps) != 0 || state.closedWorkspaces["repo"] {
+		t.Fatal("closed branch did not reopen empty")
+	}
+	if !manager.SwitchProject("test", "repo/feature") || len(state.Apps) != 2 || state.SelectedIndex != 1 {
+		t.Fatal("active workspace was not preserved")
+	}
+}
+
+func TestCloseUnknownBranchPreservesWorkspace(t *testing.T) {
+	manager := NewStateManager()
+	state := &AppState{ActiveProject: "repo", Projects: []Project{{Name: "repo"}}, Apps: []Application{{ID: "agent"}}}
+	manager.states["test"] = state
+	if _, err := manager.CloseProject("test", "unknown"); err == nil {
+		t.Fatal("unknown branch accepted")
+	}
+	if len(state.Apps) != 1 || len(state.closedWorkspaces) != 0 {
+		t.Fatal("unknown branch changed workspace state")
 	}
 }
 

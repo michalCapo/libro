@@ -767,15 +767,30 @@ func (s *AppState) removeProject(projectName string) ([]Application, bool) {
 	return apps, true
 }
 
-// CloseProject archives the active thread and clears its panels for cleanup.
-func (sm *StateManager) CloseProject(sessionID string) ([]Application, error) {
+// CloseProject clears a workspace's panels for cleanup and archives it if it is a thread.
+// An empty projectName selects the active workspace.
+func (sm *StateManager) CloseProject(sessionID, projectName string) ([]Application, error) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
 	if s == nil {
 		return nil, nil
 	}
-	if thread := s.thread(s.ActiveProject); thread != nil {
+	if projectName == "" {
+		projectName = s.ActiveProject
+	} else if s.thread(projectName) == nil {
+		found := false
+		for _, project := range s.Projects {
+			if project.Name == projectName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("project not found: %s", projectName)
+		}
+	}
+	if thread := s.thread(projectName); thread != nil {
 		if _, err := db.Exec("UPDATE threads SET archived = 1 WHERE id = ?", thread.ID); err != nil {
 			return nil, err
 		}
@@ -784,11 +799,20 @@ func (sm *StateManager) CloseProject(sessionID string) ([]Application, error) {
 	if s.closedWorkspaces == nil {
 		s.closedWorkspaces = make(map[string]bool)
 	}
-	s.closedWorkspaces[s.ActiveProject] = true
-	apps := s.Apps
-	s.Apps = nil
-	s.SelectedIndex = 0
-	return apps, nil
+	s.closedWorkspaces[projectName] = true
+	if projectName == s.ActiveProject {
+		apps := s.Apps
+		s.Apps = nil
+		s.SelectedIndex = 0
+		return apps, nil
+	}
+	if snapshot := s.snapshots[projectName]; snapshot != nil {
+		apps := snapshot.Apps
+		snapshot.Apps = nil
+		snapshot.SelectedIndex = 0
+		return apps, nil
+	}
+	return nil, nil
 }
 
 // SwitchProject switches the active project, saving and restoring app state

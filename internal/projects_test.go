@@ -88,7 +88,7 @@ func TestProjectBaseOpensOnNavigation(t *testing.T) {
 			t.Fatalf("opened bases = %d, want %d", got, want)
 		}
 	}
-	if _, err := manager.CloseProject(sid); err != nil {
+	if _, err := manager.CloseProject(sid, ""); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Count(projectsJS(state), `"baseOpened":true`); got != 1 {

@@ -1394,27 +1394,40 @@ requestAnimationFrame(function(){requestAnimationFrame(function(){if(%t && windo
 		return finalizeProjectCreate(sid, path, name, false)
 	})
 
-	// Close every panel and terminal in the active project.
+	// Close every panel and terminal in the requested workspace (active by default).
 	registerAction(app, "project.close", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
-		target := sm.Get(sid).adjacentProjectThread()
-		apps, err := sm.CloseProject(sid)
+		state := sm.Get(sid)
+		name, _ := ctx.WsData()["name"].(string)
+		if name == "" {
+			name = state.ActiveProject
+		}
+		active := name == state.ActiveProject
+		target := ""
+		if active {
+			target = state.adjacentProjectThread()
+		}
+		apps, err := sm.CloseProject(sid, name)
 		if err != nil {
-			return r.Notify("error", "Could not archive thread")
+			return r.Notify("error", "Could not close workspace: "+err.Error())
 		}
 		for _, a := range apps {
 			if a.Type == AppTypeTerminal {
 				tm.Stop(a.ID)
 			}
 		}
-		state := sm.Get(sid)
-		response := newResponse().
-			Add(parkFloatingPopupsJS()).
-			Add(closeDevtoolsForAppsJS(apps)).
-			Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
-			Replace(TopBarID, renderTopBar(state, sid)).
-			Add(projectsJS(state)).
-			Build()
+		state = sm.Get(sid)
+		resp := newResponse().Add(closeDevtoolsForAppsJS(apps))
+		if active {
+			resp.Add(parkFloatingPopupsJS()).
+				Replace(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
+				Replace(TopBarID, renderTopBar(state, sid))
+		} else {
+			for _, a := range apps {
+				resp.Add(removeAppJS(a.ID))
+			}
+		}
+		response := resp.Add(projectsJS(state)).Build()
 		if target != "" {
 			response += switchToProjectName(sid, target)
 		}
