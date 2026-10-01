@@ -121,7 +121,7 @@
     const targetDock = dock || plugin.dock;
     const grid = targetDock === 'center' && activeGrid();
     const hasAgent = grid && frames(grid).some(frame => frame.dataset.dock === 'center');
-    if (targetDock === 'center' && (replace ? !hasAgent : isThread() && hasAgent)) {
+    if (targetDock === 'center' && !replace && isThread() && hasAgent) {
       call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''});
     } else call('app.start', {
       replaceAgent: replace,

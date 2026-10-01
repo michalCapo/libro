@@ -459,7 +459,7 @@ for (const thread of [false, true]) for (const occupied of [false, true]) for (c
     call: (action, data) => calls.push([action, JSON.parse(JSON.stringify(data))]),
   })
   assert.equal(calls.length, 1)
-  const newThread = replace ? !occupied : thread && occupied
+  const newThread = !replace && thread && occupied
   assert.equal(calls[0][0], newThread ? 'thread.create' : 'app.start')
   if (newThread) {
     assert.equal(calls[0][1].agent, 'codex')
