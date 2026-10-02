@@ -160,3 +160,30 @@ func applicationLiveURL(state *AppState, path string) string {
 	}
 	return ""
 }
+
+// Worktree threads have no thread record, so agent titles are kept by path.
+// An empty title removes the entry.
+func worktreeTitle(path string) string {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	var title string
+	if db != nil {
+		_ = db.QueryRow(`SELECT value FROM settings WHERE key = ?`, "thread-title:"+applicationPath(path)).Scan(&title)
+	}
+	return title
+}
+
+func saveWorktreeTitle(path, title string) error {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	if db == nil {
+		return fmt.Errorf("settings database is unavailable")
+	}
+	key := "thread-title:" + applicationPath(path)
+	if title == "" {
+		_, err := db.Exec(`DELETE FROM settings WHERE key = ?`, key)
+		return err
+	}
+	_, err := db.Exec(`INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, title)
+	return err
+}

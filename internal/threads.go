@@ -209,6 +209,28 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) stri
 		sm.mu.Unlock()
 		return projectsJS(state)
 	})
+	registerAction(app, "worktree.title", func(ctx *r.Context) string {
+		sid := extractSID(ctx)
+		data := ctx.WsData()
+		project, _ := data["project"].(string)
+		name, _ := data["name"].(string)
+		name = strings.TrimSpace(name)
+		if len(name) > 200 {
+			name = name[:200]
+		}
+		state := sm.Get(sid)
+		for _, p := range state.Projects {
+			if p.Name != project || !p.Virtual {
+				continue
+			}
+			// Agent titles arrive on every status change; skip unchanged names.
+			if name == "" || worktreeTitle(p.Path) == name || saveWorktreeTitle(p.Path, name) != nil {
+				return ""
+			}
+			return projectsJS(state)
+		}
+		return ""
+	})
 	registerAction(app, "thread.archive", func(ctx *r.Context) string {
 		sid := extractSID(ctx)
 		id, _ := ctx.WsData()["id"].(string)
