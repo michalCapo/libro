@@ -1,6 +1,7 @@
 package components
 
 import (
+	"database/sql"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCodexActivityAcrossPTYChunks(t *testing.T) {
@@ -104,14 +106,70 @@ func TestClaudeActivityHooks(t *testing.T) {
 	if !reflect.DeepEqual(config.Permissions.Allow, []string{"mcp__libro__application", "mcp__libro__notes", "mcp__libro__children"}) {
 		t.Fatalf("Libro permissions = %v", config.Permissions.Allow)
 	}
-	for _, step := range []struct{ event, want string }{{"UserPromptSubmit", "working"}, {"Stop", "done"}, {"StopFailure", "error"}, {"SessionEnd", "idle"}, {"SessionStart", "idle"}} {
-		if output, err := exec.Command("sh", "-c", config.Hooks[step.event][0].Hooks[0].Command).CombinedOutput(); err != nil {
+	for _, step := range []struct{ event, input, want string }{
+		{"UserPromptSubmit", "", "working"}, {"Stop", `{"background_tasks":[{"id":"b1"}]}`, "working"},
+		{"Stop", `{"background_tasks":[]}`, "done"}, {"Stop", "{}", "done"},
+		{"StopFailure", "", "error"}, {"SessionEnd", "", "idle"}, {"SessionStart", "", "idle"},
+	} {
+		hook := exec.Command("sh", "-c", config.Hooks[step.event][0].Hooks[0].Command)
+		hook.Stdin = strings.NewReader(step.input)
+		if output, err := hook.CombinedOutput(); err != nil {
 			t.Fatalf("hook failed: %v: %s", err, output)
 		}
 		got, _ := os.ReadFile(activity.path)
 		if string(got) != step.want {
 			t.Fatalf("%s: %s, want %s", step.event, got, step.want)
 		}
+	}
+}
+
+func TestCodexWaitsForSpawnedAgents(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	db, err := sql.Open("sqlite", filepath.Join(home, "state_5.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	child := filepath.Join(home, "child.jsonl")
+	if _, err := db.Exec(`CREATE TABLE threads (id TEXT PRIMARY KEY, rollout_path TEXT NOT NULL);
+CREATE TABLE thread_spawn_edges (parent_thread_id TEXT NOT NULL, child_thread_id TEXT NOT NULL PRIMARY KEY, status TEXT NOT NULL);
+INSERT INTO threads VALUES ('child', ?);
+INSERT INTO thread_spawn_edges VALUES ('parent', 'child', 'open');`, child); err != nil {
+		t.Fatal(err)
+	}
+	write := func(events ...string) {
+		var lines strings.Builder
+		for _, event := range events {
+			lines.WriteString(`{"type":"event_msg","payload":{"type":"` + event + `"}}` + "\n")
+		}
+		if err := os.WriteFile(child, []byte(lines.String()), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("task_started")
+	s := &TerminalSession{activity: &agentActivity{kind: "codex"}, agentSessionID: "parent"}
+	for _, step := range []struct{ input, want string }{{"working", "working"}, {"done", "working"}, {"done", "working"}} {
+		s.setAgentStatus(step.input)
+		if s.agentStatus != step.want {
+			t.Fatalf("after %s: got %s, want %s", step.input, s.agentStatus, step.want)
+		}
+	}
+	write("task_started", "task_complete")
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		s.mu.Lock()
+		status := s.agentStatus
+		s.mu.Unlock()
+		if status == "done" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("status = %s after spawned agent finished", status)
+		}
+	}
+	write("task_started", "turn_aborted")
+	if codexAgentsRunning("parent") {
+		t.Fatal("aborted agent reported running")
 	}
 }
 
