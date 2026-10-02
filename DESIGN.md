@@ -99,8 +99,8 @@ components:
   selected-project:
     backgroundColor: "{colors.raised}"
     textColor: "{colors.fg}"
-    rounded: "{rounded.row}"
-    padding: "11px 12px"
+    rounded: "{rounded.control}"
+    padding: "6px 10px"
   size-badge:
     textColor: "{colors.muted}"
     rounded: "{rounded.badge}"
@@ -176,7 +176,7 @@ Use the frontmatter radii by role: small keycaps and size badges, gently rounded
 
 ## Components
 
-- **Navigation:** the sidebar starts with one compact utility row: search grows to fill the space, followed by icon buttons for switching projects, adding a project, and starting a new agent session. Project rows are at least 44px high. Selection uses the raised surface and primary text. Worktrees indent beneath projects. Running agents appear below their project as direct session links. Project icons show agent working and done states, and a terminal glyph on the project row marks a running bottom command shared by its threads. Standalone threads show their own terminal activity. Shortcut numbers trail all row indicators and actions. Removal appears on hover or keyboard focus and remains visible on touch devices.
+- **Navigation:** the sidebar starts with one compact utility row: search grows to fill the space, followed by icon buttons for switching projects, adding a project, and starting a new agent session. Section labels (Projects, Threads) are 12px semibold muted text. Project rows are 32px high with 13px text; the active project uses primary text at weight 600. Threads and worktrees indent beneath their project behind a thin guide line. The selected thread uses the raised surface, a fine ring, and primary text. Row actions (new thread, settings, remove, overflow) appear only on hover or keyboard focus. Running agents appear below their project as direct session links. Project icons show agent working and done states, and a terminal glyph on the project row marks a running bottom command shared by its threads. Standalone threads show their own terminal activity. Shortcut numbers trail all row indicators and actions. Actions remain visible on touch devices.
 - **Actions:** launch and new-session buttons are compact bordered raised controls, at least 36px high. Icon buttons are quiet, square controls. Hover uses the neutral hover surface; focus uses the blue outline.
 - **Fields:** ordinary popup fields use raised fill, a fine border, and an accent caret. Search fields sit inside a rounded light search surface with an icon and dismiss action. Their inner border and outline are removed; the shared search wrapper shows focus-within feedback.
 - **Size controls:** only the selected size appears in the panel toolbar, with raised fill and a fine ring. Hover or click opens a floating size picker with every preset, including the current size. Keyboard users open it with Enter, Space, or Arrow Down; Escape dismisses it. The command resize picker uses rounded rows and radio indicators.
