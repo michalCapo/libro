@@ -266,7 +266,7 @@ func handleNoteRequest(data noteRequest) map[string]any {
 }
 
 func renderNotes(app Application) *r.Node {
-	return r.Widget("notes", struct{}{}, "ws-notes").Attr("data-notes", app.ID).Render(r.Div("ws-notes-status").Attr("role", "status").Text("Loading notes…"))
+	return r.Widget("notes", struct{}{}, "ws-notes").Key("notes-"+app.ID).Attr("data-notes", app.ID).Render(r.Div("ws-notes-status").Attr("role", "status").Text("Loading notes…"))
 }
 
 func decodeNoteImage(value string) ([]byte, string, error) {

@@ -257,7 +257,7 @@ func registerFilesActions(app *r.App) {
 }
 
 func renderFiles(app Application) *r.Node {
-	return r.Widget("files", struct{}{}, "ws-files").Attr("data-files", app.ID).Render(
+	return r.Widget("files", struct{}{}, "ws-files").Key("files-"+app.ID).Attr("data-files", app.ID).Render(
 		r.Div("ws-file-preview").Render(
 			r.Div("ws-file-toolbar").Render(r.Div("ws-file-path").Text("Open file"),
 				r.Div("ws-file-image-tools").Attr("hidden", "hidden").Attr("role", "group").Attr("aria-label", "Image zoom").Render(
