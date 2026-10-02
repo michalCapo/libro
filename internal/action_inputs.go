@@ -249,6 +249,12 @@ type actionThreadRenameInput struct {
 	SID  string `json:"sid"`
 }
 
+type actionWorktreeTitleInput struct {
+	Name    string `json:"name"`
+	Project string `json:"project"`
+	SID     string `json:"sid"`
+}
+
 type actionThreadArchiveInput struct {
 	Archived bool   `json:"archived"`
 	ID       string `json:"id"`

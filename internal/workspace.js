@@ -582,11 +582,12 @@
       const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button';
       row.dataset.kind = 'worktree'; row.dataset.closed = String(!!project.closed); row.dataset.projectKey = project.name + '/' + project.branch;
       row.setAttribute('aria-current', String(!!project.isActive));
-      row.title = project.branch + ' — ' + project.path;
+      const label = project.title || project.branch;
+      row.title = label + (project.title ? '\n' + project.branch : '') + ' — ' + project.path;
       const icon = node('i', 'material-icons-round', 'account_tree'); icon.setAttribute('aria-hidden', 'true');
-      row.append(icon, node('span', '', project.branch));
+      row.append(icon, node('span', '', label));
       row.onclick = () => { closeSettings(); if (innerWidth <= 760) { prefs.projects = false; save(); } call('worktree.switch', {project:project.name, path:project.path, branch:project.branch}); };
-      const settings = button('Thread actions for ' + project.branch, 'more_horiz', event => { event.stopPropagation(); threadMenu(project, settings); });
+      const settings = button('Thread actions for ' + label, 'more_horiz', event => { event.stopPropagation(); threadMenu(project, settings); });
       settings.setAttribute('aria-haspopup', 'menu');
       row.oncontextmenu = event => { event.preventDefault(); threadMenu(project, row, {x:event.clientX, y:event.clientY}); };
       settings.classList.add('ws-project-settings');

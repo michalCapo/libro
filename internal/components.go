@@ -2727,6 +2727,7 @@ type jsProject struct {
 	DisplayName     string   `json:"displayName,omitempty"`
 	Path            string   `json:"path"`
 	Branch          string   `json:"branch,omitempty"`
+	Title           string   `json:"title,omitempty"`
 	IsGit           bool     `json:"isGit"`
 	IsActive        bool     `json:"isActive"`
 	BaseOpened      bool     `json:"baseOpened,omitempty"`
@@ -2844,6 +2845,7 @@ func projectItems(state *AppState) []jsProject {
 				Name:            p.Name,
 				Path:            wt.Path,
 				Branch:          wt.Branch,
+				Title:           worktreeTitle(wt.Path),
 				IsGit:           true,
 				IsActive:        wtActive,
 				Closed:          state.closedWorkspaces[vtName],
@@ -3353,12 +3355,17 @@ func terminalFrameSetupJS() string {
                             const end = task.lastIndexOf(' - ');
                             task = end > 4 ? task.slice(4, end).trim() : '';
                         }
+                        // Claude prefixes its generated topic with a status glyph.
+                        task = task.replace(/^[^\p{L}\p{N}]+/u, '').trim();
+                        if (task === 'Claude Code') return;
                         // Unnamed Codex sessions can emit their UUID instead of a task.
                         if (!task || /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(task)) return;
 						frame.dataset.taskTitle = task.slice(0, 240);
 						const grid = frame.closest('[data-workspace-project]');
 						const threadId = grid && grid.dataset.workspaceProject;
-						if (threadId && threadId.indexOf('thread:') === 0 && window.__ws) __ws.call('thread.rename', {sid:sid, id:threadId, name:task.slice(0, 240)});
+						if (!threadId || !window.__ws) return;
+						if (threadId.indexOf('thread:') === 0) __ws.call('thread.rename', {sid:sid, id:threadId, name:task.slice(0, 240)});
+						else if (threadId.indexOf('/') > 0) __ws.call('worktree.title', {sid:sid, project:threadId, name:task.slice(0, 240)});
 					});
 					term.onData(function(data) {
 						data = stripTerminalFocusReports(data);
