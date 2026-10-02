@@ -227,7 +227,8 @@
     const center = zone === 'center';
     const standalone = (window.__libroThreads || []).some(thread => thread.id === grid.dataset.workspaceProject);
     const heading = node(center ? 'h1' : 'h2', '', center ? (standalone ? 'What would you like to do in ' : 'What are we building on ') : zone === 'right' ? 'Tools for your workspace' : 'Your project terminal');
-    if (center) heading.append(node('span', 'ws-project-accent', grid.dataset.projectLabel), document.createTextNode('?'));
+    if (center && grid.dataset.projectLabel) heading.append(node('span', 'ws-project-accent', grid.dataset.projectLabel), document.createTextNode('?'));
+    else if (center) heading.textContent = heading.textContent.replace(/ on $/, '?');
     el.append(heading);
     el.append(node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.'));
     const actions = node('div', 'ws-agent-actions');
@@ -304,7 +305,7 @@
     const status = node('p', 'ws-finish-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     const actions = node('div', 'ws-agent-actions');
     const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
-    const submit = node('button', 'ws-launch', discard ? 'Discard and remove thread' : 'Merge and remove thread'); submit.type = 'submit'; submit.disabled = true;
+    const submit = node('button', 'ws-launch', discard ? 'Discard and remove thread' : 'Merge and remove thread'); submit.type = 'submit'; submit.disabled = true; submit.classList.toggle('ws-launch-danger', discard);
     actions.append(cancel, submit); form.append(note, status, actions); dialog.append(title, source, form); root.append(dialog);
     const state = {name, dialog, form, base, method, summary, status, submit, cancel, info:null, busy:false, request:'', discard}; finishDialog = state;
     function update() {
@@ -1240,7 +1241,8 @@
     if (selected?.dataset.appType === 'url' && !['files', 'notes'].includes(selected.dataset.plugin)) state.browser = selected.dataset.appId;
     if (selected?.dataset.dock === 'center') state.agent = selected.dataset.appId;
     grid.dataset.lastSelected = selected?.dataset.appId || '';
-    const width = frame => frame.style.width.endsWith('%') ? grid.clientWidth : parseFloat(frame.style.width) || frame.offsetWidth;
+    // Preset sizes larger than the window shrink to fit instead of scrolling.
+    const width = frame => Math.min(grid.clientWidth, frame.style.width.endsWith('%') ? grid.clientWidth : parseFloat(frame.style.width) || frame.offsetWidth);
     const center = all.filter(frame => frame.dataset.dock === 'center');
     const tools = all.filter(frame => frame.dataset.dock === 'right' && !state.hidden.has(frame.dataset.appId));
     if (grid.parentElement && grid.parentElement.style.display !== 'none' && grid.parentElement.getAttribute('aria-hidden') !== 'true') {
@@ -1252,6 +1254,7 @@
     if (selected?.dataset.dock === 'bottom') state.bottomID = selected.dataset.appId;
     const terminal = terminals.find(frame => frame.dataset.appId === state.bottomID) || terminals[0];
     const bottomVisible = terminal && state.bottom && !full;
+    if (grid === activeGrid()) document.querySelectorAll('#workspace-tool-buttons [data-tool-id]').forEach(entry => entry.setAttribute('aria-pressed', String(!full && entry.dataset.toolId === right[0]?.dataset.plugin)));
     const overlay = !full && right.length > 0 && (center.length ? center.reduce((sum, frame) => sum + width(frame), 0) : 320) + width(right[0]) > grid.clientWidth;
     const visible = full ? [full] : [...center, ...right];
     const columns = (overlay ? center : visible).map(frame => full ? grid.clientWidth + 'px' : width(frame) + 'px');

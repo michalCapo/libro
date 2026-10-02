@@ -82,6 +82,9 @@ func workspaceProjectLabel(state *AppState) string {
 	if thread := state.thread(state.ActiveProject); thread != nil {
 		return thread.Name
 	}
+	if state.ActiveProject == "" {
+		return ""
+	}
 	projectLabel := filepath.Base(state.ActiveProject)
 	for _, project := range state.Projects {
 		if project.Name == state.ActiveProject && project.Path != "" {
