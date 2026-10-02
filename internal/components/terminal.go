@@ -109,6 +109,8 @@ type TerminalSession struct {
 	reportSession  func(string)
 	agentWorked    bool
 	agentEnded     bool
+	codexReported  string // last Codex title state, before waiting for spawned agents
+	codexWaiting   bool
 	agentMu        sync.Mutex
 	processStatus  string
 	managed        *managedTerminal

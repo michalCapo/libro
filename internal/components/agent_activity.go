@@ -1,12 +1,16 @@
 package components
 
 import (
+	"bytes"
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 // ApplicationInstructions is shared by startup prompts and application tool help.
@@ -89,6 +93,10 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 			hookCommand := "printf '%s' " + shellQuote(state) + " > " + shellQuote(a.path)
 			if event == "SessionStart" {
 				hookCommand = "cat > " + shellQuote(filepath.Join(dir, "session")) + "; " + hookCommand
+			}
+			if event == "Stop" {
+				// Background shells and agents wake Claude again when they finish.
+				hookCommand = "if grep -q '\"background_tasks\":\\[[^]]'; then s=working; else s=done; fi; printf '%s' \"$s\" > " + shellQuote(a.path)
 			}
 			hooks[event] = []any{map[string]any{"hooks": []any{map[string]any{
 				"type": "command", "command": hookCommand, "timeout": 2,
@@ -257,6 +265,17 @@ func (s *TerminalSession) setAgentStatus(status string) {
 	// Keep state changes and their websocket messages in the same order.
 	s.agentMu.Lock()
 	defer s.agentMu.Unlock()
+	s.updateAgentStatus(status)
+}
+
+// updateAgentStatus requires agentMu.
+func (s *TerminalSession) updateAgentStatus(status string) {
+	codex := s.activity != nil && s.activity.kind == "codex"
+	// Codex shows Ready while spawned agents run; they wake it when finished.
+	waiting := codex && status == "done" && (s.codexWaiting || s.codexReported != "done" && codexAgentsRunning(s.agentSessionID))
+	if codex {
+		s.codexReported = status
+	}
 	s.mu.Lock()
 	if s.closed || s.agentEnded {
 		s.mu.Unlock()
@@ -269,6 +288,13 @@ func (s *TerminalSession) setAgentStatus(status string) {
 	// A freshly opened prompt is idle, not a completed task.
 	if status == "done" && s.activity != nil && s.activity.kind == "codex" && !s.agentWorked {
 		status = "idle"
+	}
+	if waiting && status == "done" {
+		status = "working"
+		if !s.codexWaiting {
+			s.codexWaiting = true
+			go s.waitCodexAgents()
+		}
 	}
 	switch status {
 	case "idle":
@@ -286,6 +312,81 @@ func (s *TerminalSession) setAgentStatus(status string) {
 		s.managed.activity(status)
 	}
 	s.broadcast(terminalWSMessage{Type: "agent-status", Data: status})
+}
+
+func (s *TerminalSession) waitCodexAgents() {
+	for running := true; running; {
+		time.Sleep(time.Second)
+		s.agentMu.Lock()
+		id, reported := s.agentSessionID, s.codexReported
+		s.agentMu.Unlock()
+		s.mu.Lock()
+		stopped := s.closed || s.agentEnded
+		s.mu.Unlock()
+		running = !stopped && reported == "done" && codexAgentsRunning(id)
+	}
+	s.agentMu.Lock()
+	defer s.agentMu.Unlock()
+	s.codexWaiting = false
+	if s.codexReported == "done" {
+		s.updateAgentStatus("done")
+	}
+}
+
+// codexAgentsRunning reports whether agents spawned by a Codex thread are in a turn.
+func codexAgentsRunning(threadID string) bool {
+	if threadID == "" {
+		return false
+	}
+	home := os.Getenv("CODEX_HOME")
+	if home == "" {
+		userHome, err := os.UserHomeDir()
+		if err != nil {
+			return false
+		}
+		home = filepath.Join(userHome, ".codex")
+	}
+	// Codex versions its state database file name.
+	paths, _ := filepath.Glob(filepath.Join(home, "state_*.sqlite"))
+	var dbPath string
+	var newest time.Time
+	for _, path := range paths {
+		if info, err := os.Stat(path); err == nil && info.ModTime().After(newest) {
+			dbPath, newest = path, info.ModTime()
+		}
+	}
+	if dbPath == "" {
+		return false
+	}
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro&_pragma=busy_timeout(1000)")
+	if err != nil {
+		return false
+	}
+	defer func() { _ = db.Close() }()
+	rows, err := db.Query(`SELECT t.rollout_path FROM thread_spawn_edges e JOIN threads t ON t.id = e.child_thread_id WHERE e.parent_thread_id = ? AND e.status = 'open'`, threadID)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var path string
+		if rows.Scan(&path) != nil {
+			continue
+		}
+		// Ignore rollouts abandoned mid-turn by a crashed or killed Codex.
+		if info, err := os.Stat(path); err != nil || time.Since(info.ModTime()) > 15*time.Minute {
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		started := bytes.LastIndex(data, []byte(`"type":"task_started"`))
+		if started > bytes.LastIndex(data, []byte(`"type":"task_complete"`)) && started > bytes.LastIndex(data, []byte(`"type":"turn_aborted"`)) {
+			return true
+		}
+	}
+	return false
 }
 
 // Parse only OSC title reports, including sequences split across PTY reads.
