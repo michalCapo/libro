@@ -926,6 +926,9 @@
       if (field.dataset.toolKey === input.dataset.toolKey) field.value = value;
     });
   }
+  document.addEventListener('input', event => {
+    if (event.target.matches('[data-tool-key]')) setShortcutValue(event.target, event.target.value);
+  });
   function resetToolKeys() { document.querySelectorAll('#tool-key-form [data-tool-key]').forEach(input => setShortcutValue(input, window.__libroDefaultToolKeys[input.dataset.toolKey] || '')); }
   function toolKeysSaved(bindings, message) {
     document.querySelectorAll('#tool-key-form [type=submit]').forEach(button => button.disabled = false);
@@ -1140,20 +1143,23 @@
     call('app.close', {id});
     refresh();
   }
-  function restartProject(update) {
-    const grid = activeGrid();
-    const selected = window.__libroSelectedApp;
-    keepBottomHidden = !!grid && !dockState(grid).bottom;
-    try {
-      update();
-    } finally {
-      if (keepBottomHidden) {
-        dockState(grid).bottom = false;
-        window.__libroSelectedApp = document.getElementById('frame-' + selected) ? selected : '';
-      }
-      refresh();
-      keepBottomHidden = false;
+  let restartGrid, restartSelected;
+  function beginProjectRestart() {
+    restartGrid = activeGrid();
+    restartSelected = window.__libroSelectedApp;
+    keepBottomHidden = !!restartGrid && !dockState(restartGrid).bottom;
+  }
+  function endProjectRestart() {
+    if (keepBottomHidden) {
+      dockState(restartGrid).bottom = false;
+      window.__libroSelectedApp = document.getElementById('frame-' + restartSelected) ? restartSelected : '';
     }
+    refresh();
+    keepBottomHidden = false;
+  }
+  function restartProject(update) {
+    beginProjectRestart();
+    try { update(); } finally { endProjectRestart(); }
   }
   function bottom() {
     const grid = activeGrid(); if (!grid) return;
@@ -1706,7 +1712,7 @@
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
     settingsSaveFinished(ok);
   }
-  window.libroWorkspace = {saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
+  window.libroWorkspace = {saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;

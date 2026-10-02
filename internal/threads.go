@@ -3,7 +3,6 @@ package libro
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -49,11 +48,6 @@ func (s *AppState) thread(id string) *Thread {
 		}
 	}
 	return nil
-}
-
-func threadsJS(state *AppState) string {
-	data, _ := json.Marshal(state.Threads)
-	return "window.__libroThreads=" + string(data) + ";"
 }
 
 func threadProjectContext(state *AppState, id string) (string, string) {
@@ -132,65 +126,62 @@ func (sm *StateManager) createProjectWorktree(sid, projectID, branch string) (st
 	return "", fmt.Errorf("project not found")
 }
 
-func registerThreadActions(app *r.App, switchWorkspace func(string, string) string) {
-	registerAction(app, "thread.create", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		name, _ := data["name"].(string)
+func registerThreadActions(app *r.App, switchWorkspace func(string, string) r.Result) {
+	actionThreadCreate = r.RegisterAction(app, "thread.create", func(_ *r.Context, in actionThreadCreateInput) (r.Result, error) {
+		sid := inputSID(in.SID)
+		name := in.Name
 		name = strings.TrimSpace(name)
 		if len(name) > 200 {
-			return r.Notify("error", "Enter a thread name (up to 200 characters)")
+			return r.Result{}.Run(r.Notify("error", "Enter a thread name (up to 200 characters)")), nil
 		}
 		if name == "" {
 			name = "New thread"
 		}
-		agentID, _ := data["agent"].(string)
+		agentID := in.Agent
 		if agentID != "" && !enabledAgentPlugin(agentID) {
-			return r.Notify("error", "This agent is not available")
+			return r.Result{}.Run(r.Notify("error", "This agent is not available")), nil
 		}
 		state := sm.Get(sid)
-		projectID, _ := data["project"].(string)
+		projectID := in.Project
 		restoreWorktreeProject(sm, sid, projectID)
 		project, path := threadProjectContext(state, projectID)
 		if projectID != "" && state.thread(projectID) == nil && project == "" {
-			return r.Notify("error", "Project not found")
+			return r.Result{}.Run(r.Notify("error", "Project not found")), nil
 		}
 		var random [16]byte
 		if _, err := rand.Read(random[:]); err != nil {
-			return r.Notify("error", "Could not create thread")
+			return r.Result{}.Run(r.Notify("error", "Could not create thread")), nil
 		}
 		if project != "" {
 			workspace, err := sm.createProjectWorktree(sid, projectID, "thread-"+hex.EncodeToString(random[:4]))
 			if err != nil {
-				return r.Notify("error", "Could not create project thread: "+err.Error())
+				return r.Result{}.Run(r.Notify("error", "Could not create project thread: "+err.Error())), nil
 			}
 			response := switchWorkspace(sid, workspace)
 			if agentID != "" {
-				payload, _ := json.Marshal(sidData(sid, "plugin", agentID, "type", "terminal", "dock", "center", "writable", true))
-				response += fmt.Sprintf("__ws.call('app.start',%s);", payload)
+				response = r.Merge(response, r.Result{}.Run(actionAppStart.Call(actionAppStartInput{SID: sid, Plugin: agentID, Type: "terminal", Dock: "center", Writable: new(true)})))
 			}
-			return response
+			return response, nil
 		}
 		thread := Thread{ID: "thread:" + hex.EncodeToString(random[:]), Name: name, Project: project, Path: path, AgentID: agentID}
 		// Project threads live only in the current session.
 		if thread.Project == "" {
 			if _, err := db.Exec("INSERT INTO threads (id, name, agent_id) VALUES (?, ?, ?)", thread.ID, thread.Name, thread.AgentID); err != nil {
-				return r.Notify("error", "Could not save thread")
+				return r.Result{}.Run(r.Notify("error", "Could not save thread")), nil
 			}
 		}
 		sm.mu.Lock()
 		sm.states[sid].Threads = append(sm.states[sid].Threads, thread)
 		sm.mu.Unlock()
-		return switchWorkspace(sid, thread.ID)
+		return switchWorkspace(sid, thread.ID), nil
 	})
-	registerAction(app, "thread.rename", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		id, _ := data["id"].(string)
-		name, _ := data["name"].(string)
+	r.RegisterAction(app, "thread.rename", func(_ *r.Context, in actionThreadRenameInput) (r.Result, error) {
+		sid := inputSID(in.SID)
+		id := in.ID
+		name := in.Name
 		name = strings.TrimSpace(name)
 		if name == "" {
-			return ""
+			return r.Result{}, nil
 		}
 		if len(name) > 200 {
 			name = name[:200]
@@ -199,32 +190,32 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) stri
 		thread := state.thread(id)
 		// Agent titles arrive on every status change; skip unchanged names.
 		if thread == nil || thread.Name == name {
-			return ""
+			return r.Result{}, nil
 		}
 		if _, err := db.Exec("UPDATE threads SET name = ? WHERE id = ?", name, id); err != nil {
-			return ""
+			return r.Result{}, nil
 		}
 		sm.mu.Lock()
 		thread.Name = name
 		sm.mu.Unlock()
-		return projectsJS(state)
+		return projectsJS(state), nil
 	})
-	registerAction(app, "thread.archive", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		id, _ := ctx.WsData()["id"].(string)
-		archived, _ := ctx.WsData()["archived"].(bool)
+	r.RegisterAction(app, "thread.archive", func(_ *r.Context, in actionThreadArchiveInput) (r.Result, error) {
+		sid := inputSID(in.SID)
+		id := in.ID
+		archived := in.Archived
 		state := sm.Get(sid)
 		if state.thread(id) == nil {
-			return r.Notify("error", "Thread not found")
+			return r.Result{}.Run(r.Notify("error", "Thread not found")), nil
 		}
 		if _, err := db.Exec("UPDATE threads SET archived = ? WHERE id = ?", archived, id); err != nil {
-			return r.Notify("error", "Could not save thread")
+			return r.Result{}.Run(r.Notify("error", "Could not save thread")), nil
 		}
 		sm.mu.Lock()
 		state.thread(id).Archived = archived
 		sm.mu.Unlock()
 		// Archiving keeps the workspace alive and recoverable without interrupting commands.
-		return projectsJS(state) + fmt.Sprintf("if(window.libroWorkspace)libroWorkspace.threadArchived(%t);", archived)
+		return r.Merge(projectsJS(state), clientScript("if(window.libroWorkspace)libroWorkspace.threadArchived(props[0]);", archived)), nil
 	})
 }
 

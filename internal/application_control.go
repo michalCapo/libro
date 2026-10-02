@@ -112,19 +112,17 @@ func RunApplicationCLI(args []string, out io.Writer) error {
 }
 
 func registerApplicationControl(app *r.App) {
-	registerAction(app, "project.command.agent", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		id, _ := data["request"].(string)
-		operation, _ := data["operation"].(string)
-		project, _ := data["project"].(string)
+	r.RegisterAction(app, "project.command.agent", func(_ *r.Context, in actionProjectCommandAgentInput) (r.Result, error) {
+		sid := inputSID(in.SID)
+		id := in.Request
+		operation := in.Operation
+		project := in.Project
 		js, result, err := controlApplication(sid, project, operation)
 		reply := map[string]any{"result": result}
 		if err != nil {
 			reply["error"] = err.Error()
 		}
-		encoded, _ := json.Marshal(reply)
-		return js + fmt.Sprintf("window.libroWorkspace.applicationResult(%s,%s);", components.JSString(id), encoded)
+		return r.Merge(js, clientScript("window.libroWorkspace.applicationResult(props[0],props[1]);", id, reply)), nil
 	})
 }
 
@@ -173,21 +171,21 @@ func applicationProject(state *AppState, requested string) (string, string, erro
 
 var applicationControlMu sync.Mutex
 
-func controlApplication(sid, project, operation string) (string, map[string]any, error) {
+func controlApplication(sid, project, operation string) (r.Result, map[string]any, error) {
 	applicationControlMu.Lock()
 	defer applicationControlMu.Unlock()
 	if operation != "status" && operation != "start" && operation != "restart" && operation != "stop" && operation != "logs" {
-		return "", nil, errors.New("unknown application action")
+		return r.Result{}, nil, errors.New("unknown application action")
 	}
 	workspace, _, err := applicationProject(sm.Get(sid), project)
 	if err != nil {
-		return "", nil, err
+		return r.Result{}, nil, err
 	}
 	path, command, settings := applicationConfiguration(sm.Get(sid), workspace)
 	port := settings.Port
 	perThread := settings.Mode == "thread"
 	if (operation == "start" || operation == "restart") && command == "" {
-		return "", nil, errors.New("set a start command in project settings first")
+		return r.Result{}, nil, errors.New("set a start command in project settings first")
 	}
 	status := "stopped"
 	var previous []string
@@ -210,28 +208,30 @@ func controlApplication(sid, project, operation string) (string, map[string]any,
 	}
 	if operation == "logs" {
 		var logs strings.Builder
+
 		truncated := false
 		for _, id := range previous {
 			output, dropped := tm.Logs(id)
 			logs.WriteString(output)
 			truncated = truncated || dropped
 		}
-		return "", map[string]any{"project": path, "configured": command != "", "status": status, "mode": settings.Mode, "port": port, "url": applicationURL(port), "logs": logs.String(), "truncated": truncated}, nil
+		return r.Result{}, map[string]any{"project": path, "configured": command != "", "status": status, "mode": settings.Mode, "port": port, "url": applicationURL(port), "logs": logs.String(), "truncated": truncated}, nil
 	}
 	if operation == "status" || operation == "start" && status != "stopped" {
-		return "", map[string]any{"project": path, "configured": command != "", "status": status, "mode": settings.Mode, "port": port, "url": applicationURL(port)}, nil
+		return r.Result{}, map[string]any{"project": path, "configured": command != "", "status": status, "mode": settings.Mode, "port": port, "url": applicationURL(port)}, nil
 	}
 	// Reject a conflicting new override before stopping a healthy application.
 	if operation != "stop" && settings.Port != 0 && (len(previous) == 0 || settings.Port != port) {
 		if _, err := allocateApplicationPort(settings.Port); err != nil {
-			return "", nil, err
+			return r.Result{}, nil, err
 		}
 	}
-	var js strings.Builder
+	var js r.Result
+
 	for _, id := range previous {
 		tm.Stop(id)
 		sm.RemoveAppByID(sid, id)
-		js.WriteString(removeAppJS(id))
+		js = js.Add(removeAppJS(id))
 	}
 	status = "stopped"
 	if operation != "stop" {
@@ -245,21 +245,21 @@ func controlApplication(sid, project, operation string) (string, map[string]any,
 				port, err = allocateApplicationPort(0)
 			}
 			if err != nil {
-				return js.String() + projectsJS(sm.Get(sid)), nil, err
+				return r.Merge(js, projectsJS(sm.Get(sid))), nil, err
 			}
 		}
 		panel, index := sm.insertProjectCommand(sid, workspace, command, port, perThread, path)
-		js.WriteString(insertAppJS(renderAppFramePlaceholder(panel, index, false, sid).Attr("data-dock-seen", "true"), false, workspace))
+		js = js.Add(insertAppJS(renderAppFramePlaceholder(panel, index, false, sid).Attr("data-dock-seen", "true"), false, workspace))
 		// Hydration also works when this workspace has never been shown.
-		js.WriteString(hydrateAppAfterScrollJS(panel.ID, sidData(sid, "id", panel.ID)))
+		js = js.Add(hydrateAppAfterScrollJS(actionAppHydrateInput{SID: sid, ID: panel.ID}))
 		status = "starting"
 	}
-	js.WriteString(projectsJS(sm.Get(sid)))
-	return js.String(), map[string]any{"project": path, "configured": command != "", "status": status, "mode": settings.Mode, "port": port, "url": applicationURL(port)}, nil
+	js = js.Add(projectsJS(sm.Get(sid)))
+	return js, map[string]any{"project": path, "configured": command != "", "status": status, "mode": settings.Mode, "port": port, "url": applicationURL(port)}, nil
 }
 
 // hydrateProjectCommand starts applications without selecting their workspace.
-func hydrateProjectCommand(sid, id string) (string, bool) {
+func hydrateProjectCommand(sid, id string) (r.Result, bool) {
 	applicationControlMu.Lock()
 	defer applicationControlMu.Unlock()
 	for _, workspace := range sm.GetAllRunningApps(sid) {
@@ -268,7 +268,7 @@ func hydrateProjectCommand(sid, id string) (string, bool) {
 				continue
 			}
 			if panel.TerminalReady {
-				return "", true
+				return r.Result{}, true
 			}
 			path := panel.ApplicationPath
 			if path == "" {
@@ -281,15 +281,15 @@ func hydrateProjectCommand(sid, id string) (string, bool) {
 			_, err := tm.StartWithEnvironment(id, panel.Command, path, panel.Writable, environment)
 			if err != nil {
 				sm.RemoveAppByID(sid, id)
-				return removeAppJS(id) + r.Notify("error", "Failed to start application: "+err.Error()), true
+				return r.Merge(removeAppJS(id), r.Result{}.Run(r.Notify("error", "Failed to start application: "+err.Error()))), true
 			}
 			if !sm.HydrateTerminalAnywhere(sid, id) {
 				tm.Stop(id)
-				return "", true
+				return r.Result{}, true
 			}
 			panel.TerminalReady = true
-			return renderAppContent(panel, sid, false, nil).ToJSReplace(appContentID(id)), true
+			return r.Result{}.Replace(appContentID(id), renderAppContent(panel, sid, false, nil)), true
 		}
 	}
-	return "", false
+	return r.Result{}, false
 }

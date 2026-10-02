@@ -2,7 +2,6 @@ package components
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 )
 
@@ -15,10 +14,4 @@ func JSString(s string) string {
 		return `""`
 	}
 	return string(b)
-}
-
-// HideJS returns the JS snippet that hides an element by ID via the "hidden"
-// class. Used as the click handler for dialog backdrops and close buttons.
-func HideJS(id string) string {
-	return fmt.Sprintf("document.getElementById('%s').classList.add('hidden');", id)
 }

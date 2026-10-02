@@ -439,8 +439,16 @@
     }
     render(s);
   }
+  function dispose(el) {
+    const s = states.get(el.dataset.files);
+    if (!s || s.el !== el) return;
+    if (s.url) URL.revokeObjectURL(s.url);
+    s.editor?.destroy();s.imageResizeObserver?.disconnect();
+    clearInterval(s.refreshTimer);clearTimeout(s.indexTimer);clearTimeout(s.searchTimer);clearTimeout(s.leaderTimer);
+    states.delete(s.id);
+  }
   function init() {
-    for (const [id,s] of states) if (!s.el.isConnected) { if (s.url) URL.revokeObjectURL(s.url); s.editor?.destroy();s.imageResizeObserver?.disconnect();clearInterval(s.refreshTimer);clearTimeout(s.indexTimer);clearTimeout(s.searchTimer);clearTimeout(s.leaderTimer);states.delete(id); }
+    for (const s of states.values()) if (!s.el.isConnected) dispose(s.el);
     document.querySelectorAll('[data-files]').forEach(el => {
       if (states.get(el.dataset.files)?.el === el) return;
       const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,sequence:0,parents:0,items:[],positions:new Map(),history:[],historyIndex:-1,recent:new Map()};
@@ -621,5 +629,5 @@
       else if(restoreFocus)focusPreview(s);
     }
   }
-  window.libroFiles = {init,receive};
+  window.libroFiles = {init,receive,dispose};
 })();

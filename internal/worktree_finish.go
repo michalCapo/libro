@@ -2,7 +2,6 @@ package libro
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -14,7 +13,6 @@ import (
 	"time"
 
 	r "github.com/michalCapo/g-sui/ui"
-	"libro/internal/components"
 )
 
 var worktreeFinishMu sync.Mutex
@@ -302,68 +300,65 @@ func finishPRRepository(remote string) (string, error) {
 }
 
 func registerFinishThreadActions(app *r.App) {
-	registerAction(app, "thread.finish.preview", func(ctx *r.Context) string {
-		name, _ := ctx.WsData()["name"].(string)
-		base, _ := ctx.WsData()["base"].(string)
-		request, _ := ctx.WsData()["request"].(string)
-		info, err := inspectFinishThread(sm.Get(extractSID(ctx)), name, base)
+	r.RegisterAction(app, "thread.finish.preview", func(_ *r.Context, in actionThreadFinishPreviewInput) (r.Result, error) {
+		name := in.Name
+		base := in.Base
+		request := in.Request
+		info, err := inspectFinishThread(sm.Get(inputSID(in.SID)), name, base)
 		reply := map[string]any{"info": info}
 		if err != nil {
 			reply["error"] = err.Error()
 		}
-		encoded, _ := json.Marshal(reply)
-		return fmt.Sprintf("libroWorkspace.finishThreadPreview(%s,%s);", components.JSString(request), encoded)
+		return clientScript("libroWorkspace.finishThreadPreview(props[0],props[1]);", request, reply), nil
 	})
-	registerAction(app, "thread.finish", func(ctx *r.Context) string {
+	r.RegisterAction(app, "thread.finish", func(_ *r.Context, in actionThreadFinishInput) (r.Result, error) {
 		worktreeFinishMu.Lock()
 		defer worktreeFinishMu.Unlock()
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		name, _ := data["name"].(string)
-		base, _ := data["base"].(string)
-		method, _ := data["method"].(string)
-		sourceHead, _ := data["sourceHead"].(string)
-		targetHead, _ := data["targetHead"].(string)
-		message, _ := data["message"].(string)
-		body, _ := data["body"].(string)
+		sid := inputSID(in.SID)
+		name := in.Name
+		base := in.Base
+		method := in.Method
+		sourceHead := in.SourceHead
+		targetHead := in.TargetHead
+		message := in.Message
+		body := in.Body
 		var agentMerge map[string]string
-		finish := func(err error, warning, url string) string {
+		finish := func(err error, warning, url string) r.Result {
 			reply := map[string]any{"warning": warning, "url": url, "agentMerge": agentMerge}
 			if err != nil {
 				reply["error"] = err.Error()
 			}
-			encoded, _ := json.Marshal(reply)
-			return fmt.Sprintf("libroWorkspace.finishThreadResult(%s,%s);", components.JSString(name), encoded)
+			return clientScript("libroWorkspace.finishThreadResult(props[0],props[1]);", name, reply)
 		}
 		info, err := inspectFinishThread(sm.Get(sid), name, base)
 		if err != nil {
-			return finish(err, "", "")
+			return finish(err, "", ""), nil
 		}
 		if sourceHead != info.SourceHead || method != "discard" && targetHead != info.TargetHead {
-			return finish(fmt.Errorf("the branches changed; refresh the preview and review again"), "", "")
+			return finish(fmt.Errorf("the branches changed; refresh the preview and review again"), "", ""), nil
 		}
 		if method == "pr" {
 			url, err := createFinishPR(info, message, body)
-			return finish(err, "", url)
+			return finish(err, "", url), nil
 		}
 		if method != "discard" {
 			if err := integrateFinishThread(info, method, message); err != nil {
 				agentMerge = mergeAgentRequest(sid, info, method)
-				return finish(err, "", "")
+				return finish(err, "", ""), nil
 			}
 		}
 		js, warning, err := cleanupFinishedThread(sid, info, method == "discard")
-		return js + finish(err, warning, "")
+		return r.Merge(js, finish(err, warning, "")), nil
 	})
 }
 
-func cleanupFinishedThread(sid string, info worktreeFinishPreview, discard bool) (string, string, error) {
+func cleanupFinishedThread(sid string, info worktreeFinishPreview, discard bool) (r.Result, string, error) {
 	name := info.Name
 	applicationControlMu.Lock()
 	defer applicationControlMu.Unlock()
 	// Move shared applications back to Base before stopping this thread's panels.
 	restoreWorktreeProject(sm, sid, name)
-	js := switchToProjectName(sid, name) + switchToProjectName(sid, info.Parent)
+	js := r.Merge(switchToProjectName(sid, name), switchToProjectName(sid, info.Parent))
 	for _, workspace := range sm.GetAllRunningApps(sid) {
 		if workspace.Name != name {
 			continue
@@ -371,7 +366,7 @@ func cleanupFinishedThread(sid string, info worktreeFinishPreview, discard bool)
 		for _, panel := range workspace.Apps {
 			tm.Stop(panel.ID)
 			sm.RemoveAppByID(sid, panel.ID)
-			js += removeAppJS(panel.ID)
+			js = r.Merge(js, removeAppJS(panel.ID))
 		}
 	}
 	warning, err := removeFinishedWorktree(info, discard)
@@ -379,8 +374,8 @@ func cleanupFinishedThread(sid string, info worktreeFinishPreview, discard bool)
 		return js, "", err
 	}
 	sm.RemoveProject(sid, name)
-	js += fmt.Sprintf("document.getElementById(%s)?.remove();", components.JSString(projectMainID(name)))
-	return js + projectsJS(sm.Get(sid)), warning, nil
+	js = r.Merge(js, r.Result{}.Run(r.Remove(projectMainID(name))))
+	return r.Merge(js, projectsJS(sm.Get(sid))), warning, nil
 }
 
 // Only the failed thread's agent may receive this request.

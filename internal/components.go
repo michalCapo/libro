@@ -1,7 +1,6 @@
 package libro
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -374,17 +373,6 @@ func appFrameStyle(app Application, index int) string {
 	return fmt.Sprintf("order:%d;width:%s;flex:0 0 %s", index, width, width)
 }
 
-// sidData creates a data map with the session ID included
-func sidData(sid string, extra ...any) map[string]any {
-	m := map[string]any{"sid": sid}
-	for i := 0; i+1 < len(extra); i += 2 {
-		if key, ok := extra[i].(string); ok {
-			m[key] = extra[i+1]
-		}
-	}
-	return m
-}
-
 // projectMainID returns the DOM ID for a project's main area div
 func projectMainID(projectName string) string {
 	return "project-main-" + projectName
@@ -454,23 +442,23 @@ func renderAppStripWithPlaceholder(state *AppState, sid, placeholderAppID string
 
 func selectedAppID(state *AppState) string {
 	if state.SelectedIndex >= 0 && state.SelectedIndex < len(state.Apps) {
-		return components.JSString(state.Apps[state.SelectedIndex].ID)
+		return state.Apps[state.SelectedIndex].ID
 	}
-	return "''"
+	return ""
 }
 
-func centerSelectedJS(state *AppState) string {
-	return fmt.Sprintf(`
-		window.__libroSelectedApp=%s;
+func centerSelectedNode(state *AppState) *r.Node {
+	return clientScriptNode(`
+		window.__libroSelectedApp=props[0];
 		if (window.__libroSelectedApp && window.__libroApplyBrowserMode && window.__libroGetBrowserMode) {
 			window.__libroApplyBrowserMode(window.__libroSelectedApp, window.__libroGetBrowserMode(window.__libroSelectedApp));
 		}
 		(function centerApp() {
 			requestAnimationFrame(function() {
 				requestAnimationFrame(function() {
-					var strip = document.getElementById('%s');
-					if (!strip || %d === 0) return;
-					var idx = %d;
+					var strip = document.getElementById(props[1]);
+					if (!strip || props[2] === 0) return;
+					var idx = props[3];
 					var sorted = window.__libroSortedApps ? window.__libroSortedApps(strip) : Array.from(strip.querySelectorAll(':scope > [data-app-id]'));
 					var app = sorted[idx];
 					if (app && window.__libroScrollToApp) {
@@ -484,23 +472,24 @@ func centerSelectedJS(state *AppState) string {
 
 // moveAppJS reorders app frames visually using CSS order (no DOM moves,
 // so Electron webviews are preserved). Then runs navigateJS for selection visuals.
-func moveAppJS(state *AppState, sid string, _ string) string {
+func moveAppJS(state *AppState, sid string, _ string) r.Result {
 	return navigateJS(state, sid)
 }
 
-func navigateJS(state *AppState, sid string) string {
+func navigateJS(state *AppState, sid string) r.Result {
 	return navigateProjectJS(state.ActiveProject, state.Apps, state.SelectedIndex, sid)
 }
 
-func navigateProjectJS(_ string, apps []Application, selectedIndex int, _ string) string {
-	var js strings.Builder
+func navigateProjectJS(_ string, apps []Application, selectedIndex int, _ string) r.Result {
+	var js r.Result
+
 	for i, app := range apps {
-		fmt.Fprintf(&js, "var e=document.getElementById(%s);if(e){e.style.order=%s;e.dataset.dock=%s;}", components.JSString("frame-"+app.ID), components.JSString(fmt.Sprint(i)), components.JSString(appDock(app)))
+		js = js.Add(clientScript("var e=document.getElementById(props[0]);if(e)e.style.order=props[1];", "frame-"+app.ID, fmt.Sprint(i)).Run(r.SetAttr("frame-"+app.ID, "data-dock", appDock(app))))
 	}
 	if selectedIndex >= 0 && selectedIndex < len(apps) {
-		fmt.Fprintf(&js, "window.__libroSelectedApp=%s;if(window.libroWorkspace)libroWorkspace.select(%s,false);", components.JSString(apps[selectedIndex].ID), components.JSString(apps[selectedIndex].ID))
+		js = js.Add(clientScript("window.__libroSelectedApp=props[0];if(window.libroWorkspace)libroWorkspace.select(props[1],false);", apps[selectedIndex].ID, apps[selectedIndex].ID))
 	}
-	return "(function(){" + js.String() + "})();"
+	return js
 }
 
 // popupRegistryJS registers the global helper used by every popup opener to
@@ -709,7 +698,7 @@ func toastSetupJS() string {
 }
 
 // showToastJS preserves the message detail while using g-sui's standard toast.
-func showToastJS(title, subtitle, variant string) string {
+func showToastJS(title, subtitle, variant string) r.Result {
 	if subtitle != "" {
 		title += ": " + subtitle
 	}
@@ -718,7 +707,7 @@ func showToastJS(title, subtitle, variant string) string {
 	default:
 		variant = "info"
 	}
-	return r.Notify(variant, title)
+	return r.Result{}.Run(r.Notify(variant, title))
 }
 
 func appWidthPolicyJS(sid string) string {
@@ -852,17 +841,13 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			Attr("title", w.Label()).
 			Attr("aria-label", "Resize panel to "+w.Label()).
 			Text(w.ShortLabel()).
-			OnClick(r.JS(fmt.Sprintf(
-				"this.closest('[popover]').hidePopover();if(window.__libroResizeApp){window.__libroResizeApp(%s,%s,%s)}",
-				components.JSString(app.ID),
-				components.JSString(string(w)),
-				components.JSString(sid),
-			))))
+			Attr("data-resize-app", app.ID).Attr("data-sid", sid).
+			OnClick(r.UnsafeJS("el.closest('[popover]').hidePopover();if(window.__libroResizeApp)window.__libroResizeApp(el.dataset.resizeApp,el.dataset.resizeWidth,el.dataset.sid);")))
 	}
 	closeButton := r.Button("ws-button ws-panel-close").
 		Attr("title", "Close panel").Attr("aria-label", "Close panel").
 		Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("close")).
-		OnClick(r.JS(fmt.Sprintf("event.stopPropagation();__ws.call('app.close',{sid:%s,id:%s})", components.JSString(sid), components.JSString(app.ID))))
+		OnClick(r.Seq(r.UnsafeJS("event.stopPropagation();"), actionAppClose.Call(actionAppCloseInput{SID: sid, ID: app.ID})))
 
 	rightButtons := r.Div("flex gap-0.5 items-center shrink-0").
 		Attr("data-size-badges", "").
@@ -895,26 +880,28 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		// Back button
 		backBtn := r.Button(btnCls).
 			Attr("title", "Back").
-			OnClick(r.JS(fmt.Sprintf(`window.__libroWvBack('%s')`, app.ID)))
+			Attr("data-browser-app", app.ID).OnClick(r.UnsafeJS("window.__libroWvBack(el.dataset.browserApp);"))
 		backBtn.Render(r.I("material-icons-round text-sm").Text("arrow_back"))
 
 		// Forward button
 		forwardBtn := r.Button(btnCls).
 			Attr("title", "Forward").
-			OnClick(r.JS(fmt.Sprintf(`window.__libroWvForward('%s')`, app.ID)))
+			Attr("data-browser-app", app.ID).OnClick(r.UnsafeJS("window.__libroWvForward(el.dataset.browserApp);"))
 		forwardBtn.Render(r.I("material-icons-round text-sm").Text("arrow_forward"))
 
 		// Copy button
-		copyURLScript := fmt.Sprintf(`var inp=document.getElementById('%s');if(inp){navigator.clipboard.writeText(inp.value);var btn=event.currentTarget;btn.style.color='rgb(20,184,166)';setTimeout(function(){btn.style.color='';},800);}`, urlInputID)
+		copyURL := func(buttonID string) *r.Action {
+			return r.Seq(r.CopyFrom(urlInputID), r.SetAttr(buttonID, "style", "color:rgb(20,184,166)"), r.Delay(800*time.Millisecond, r.RemoveAttr(buttonID, "style")))
+		}
 		copyBtn := r.Button(btnCls).
-			Attr("title", "Copy URL").
-			OnClick(r.JS(copyURLScript))
+			ID("copy-url-"+app.ID).Attr("title", "Copy URL").
+			OnClick(copyURL("copy-url-" + app.ID))
 		copyBtn.Render(r.I("material-icons-round text-sm").Text("content_copy"))
 
-		consoleScript := fmt.Sprintf(`if(window.__libroOpenConsole)window.__libroOpenConsole(%s)`, components.JSString(app.ID))
+		consoleAction := r.UnsafeJS("if(window.__libroOpenConsole)window.__libroOpenConsole(el.dataset.browserApp);")
 		consoleBtn := r.Button(btnCls).
 			Attr("title", "Open browser console").Attr("aria-label", "Open browser console").
-			OnClick(r.JS(consoleScript)).
+			Attr("data-browser-app", app.ID).OnClick(consoleAction).
 			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("code"))
 
 		menuID := "browser-actions-" + app.ID
@@ -923,17 +910,18 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		var menuGroup *r.Node
 		lastGroup := ""
 		for _, action := range []struct {
-			label, shortcut, script, mode, group string
+			label, shortcut, mode, group string
+			run                          *r.Action
 		}{
-			{"Reload", "R", fmt.Sprintf(`window.__libroWvReload(%s)`, components.JSString(app.ID)), "", "Browser"},
-			{"Copy URL", "", copyURLScript, "", "Browser"},
-			{"Open browser console", "", consoleScript, "", "Browser"},
-			{"Annotate element", "A", fmt.Sprintf(`window.__libroTogglePageTool(%s,'annotate')`, components.JSString(app.ID)), "annotate", "Annotation"},
-			{"Anotate area", "D", fmt.Sprintf(`window.__libroTogglePageTool(%s,'area')`, components.JSString(app.ID)), "area", "Annotation"},
-			{"Annotate page", "P", fmt.Sprintf(`window.__libroTogglePageTool(%s,'page')`, components.JSString(app.ID)), "page", "Annotation"},
-			{"Zoom out", "-", fmt.Sprintf(`window.__libroWvZoom(%s,-1)`, components.JSString(app.ID)), "", "Zoom"},
-			{"Reset zoom to 100%", "0", fmt.Sprintf(`window.__libroWvZoom(%s,0)`, components.JSString(app.ID)), "", "Zoom"},
-			{"Zoom in", "=", fmt.Sprintf(`window.__libroWvZoom(%s,1)`, components.JSString(app.ID)), "", "Zoom"},
+			{"Reload", "R", "", "Browser", r.UnsafeJS("window.__libroWvReload(el.dataset.browserApp);")},
+			{"Copy URL", "", "", "Browser", copyURL("copy-url-menu-" + app.ID)},
+			{"Open browser console", "", "", "Browser", consoleAction},
+			{"Annotate element", "A", "annotate", "Annotation", r.UnsafeJS("window.__libroTogglePageTool(el.dataset.browserApp,'annotate');")},
+			{"Anotate area", "D", "area", "Annotation", r.UnsafeJS("window.__libroTogglePageTool(el.dataset.browserApp,'area');")},
+			{"Annotate page", "P", "page", "Annotation", r.UnsafeJS("window.__libroTogglePageTool(el.dataset.browserApp,'page');")},
+			{"Zoom out", "-", "", "Zoom", r.UnsafeJS("window.__libroWvZoom(el.dataset.browserApp,-1);")},
+			{"Reset zoom to 100%", "0", "", "Zoom", r.UnsafeJS("window.__libroWvZoom(el.dataset.browserApp,0);")},
+			{"Zoom in", "=", "", "Zoom", r.UnsafeJS("window.__libroWvZoom(el.dataset.browserApp,1);")},
 		} {
 			if action.group != lastGroup {
 				menuGroup = r.Div("ws-browser-menu-group").Attr("role", "group").Attr("aria-label", action.group)
@@ -941,8 +929,11 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 				lastGroup = action.group
 			}
 			item := r.Button("ws-browser-menu-item").Attr("type", "button").
-				OnClick(r.JS(`this.closest('[popover]').hidePopover();`+action.script)).
+				Attr("data-browser-app", app.ID).OnClick(r.Seq(r.UnsafeJS("el.closest('[popover]').hidePopover();"), action.run)).
 				Render(r.Span("").Text(action.label), r.Span("ws-browser-menu-key").Text(action.shortcut))
+			if action.label == "Copy URL" {
+				item.ID("copy-url-menu-" + app.ID)
+			}
 			if action.mode != "" {
 				item.Attr("data-page-tool", action.mode).Attr("aria-pressed", "false")
 			}
@@ -967,7 +958,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			Attr("spellcheck", "false").
 			Attr("autocomplete", "off").
 			Attr("aria-label", "Browser address").
-			On("keydown", r.JS(fmt.Sprintf(`if(event.key==='Enter'){event.preventDefault();if(window.__libroNavigateAddress(%s,event.target.value))event.target.blur();}`, components.JSString(app.ID))))
+			Attr("data-browser-app", app.ID).On("keydown", r.UnsafeJS("if(event.key==='Enter'){event.preventDefault();if(window.__libroNavigateAddress(el.dataset.browserApp,el.value))el.blur();}"))
 
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
 			Render(backBtn, forwardBtn, urlInput, copyBtn, consoleBtn, moreBtn, menu)
@@ -1011,10 +1002,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 	if !selected {
 		clickOverlay = r.Div("absolute inset-0 z-40 cursor-pointer").
 			Attr("data-click-overlay", "").
-			On("mousedown", &r.Action{
-				Name: "app.select",
-				Data: sidData(sid, "index", index),
-			})
+			On("mousedown", actionAppSelect.Call(actionAppSelectInput{SID: sid, Index: new(float64(index))}))
 	}
 
 	// Toolbar: always visible, sits above the iframe
@@ -1026,10 +1014,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 	}
 	toolbar = r.Div(toolbarCls)
 	if !selected {
-		toolbar = toolbar.OnClick(&r.Action{
-			Name: "app.select",
-			Data: sidData(sid, "index", index),
-		})
+		toolbar = toolbar.OnClick(actionAppSelect.Call(actionAppSelectInput{SID: sid, Index: new(float64(index))}))
 	}
 	toolbar = toolbar.Attr("data-app-toolbar", "")
 	if appDock(app) == "center" {
@@ -1039,7 +1024,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 	}
 
 	frame := r.Div("group relative flex flex-col "+app.Width.ContainerClasses()+" h-full "+borderClass+" rounded-md overflow-hidden bg-white dark:bg-zinc-950 transition-colors duration-75").
-		ID(fmt.Sprintf("frame-%s", app.ID)).
+		ID(fmt.Sprintf("frame-%s", app.ID)).Key(app.ID).
 		Attr("data-app-id", app.ID).
 		Attr("data-app-name", workspaceAppName(app)).
 		Attr("data-app-type", string(app.Type)).
@@ -1128,7 +1113,7 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			Attr("type", "button").
 			Attr("title", "Close DevTools").
 			Attr("aria-label", "Close DevTools").
-			Attr("onclick", fmt.Sprintf("if(window.__libroCloseConsole)window.__libroCloseConsole('%s')", app.ID)).
+			Attr("data-browser-app", app.ID).OnClick(r.UnsafeJS("if(window.__libroCloseConsole)window.__libroCloseConsole(el.dataset.browserApp);")).
 			Render(r.I("material-icons-round text-sm").Attr("aria-hidden", "true").Text("close"), r.Span("").Text("Close"))
 		webviewWrapper := r.Div("relative flex-1 min-h-0").Render(wv, browserFallback)
 		// Keep controls outside both native views so Electron cannot cover their hit targets.
@@ -1176,7 +1161,7 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 	if terminalID == "" {
 		terminalID = app.ID
 	}
-	return r.Div("relative w-full h-full overflow-hidden bg-zinc-950").
+	return r.Widget("terminal", struct{}{}, "relative w-full h-full overflow-hidden bg-zinc-950").Key(terminalID).
 		ID(frameID).
 		Attr("data-terminal", terminalID).
 		Attr("data-terminal-app", app.ID).
@@ -1193,29 +1178,29 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 
 // insertAppJS returns JS that inserts a new app frame into the existing strip.
 // The node is compiled to JS and inserted after the left spacer (prepend) or before the right spacer (append).
-func insertAppJS(node *r.Node, _ bool, projectName string) string {
+func insertAppJS(node *r.Node, _ bool, projectName string) r.Result {
 	// CSS order on the app frame (set in renderAppFrame) handles visual positioning,
 	// so we just append to the strip — no DOM repositioning needed.
-	return node.ToJSAppend(stripID(projectName)) + `(function(){if(window.__libroEnforceAppWidthPolicy)window.__libroEnforceAppWidthPolicy();})();`
+	return r.Merge(r.Result{}.Append(stripID(projectName), node), trustedResponse(`(function(){if(window.__libroEnforceAppWidthPolicy)window.__libroEnforceAppWidthPolicy();})();`))
 }
 
-func settleAppFrameJS(appID string) string {
-	return fmt.Sprintf(`
+func settleAppFrameJS(appID string) r.Result {
+	return clientScript(`
 (function(){
-	var appID=%s;
+	var appID=props[0];
 	function run(){
 		if(window.__libroSettleAppFrame)window.__libroSettleAppFrame(appID);
 	}
 	run();
 })();
-`, components.JSString(appID))
+`, appID)
 }
 
 // hideAllProjectsJS returns JS that hides all project divs inside the wrapper.
-func hideAllProjectsJS() string {
-	return fmt.Sprintf(`
+func hideAllProjectsJS() r.Result {
+	return clientScript(`
 (function(){
-	var w=document.getElementById('%s');
+	var w=document.getElementById(props[0]);
 	if(!w)return;
 	var nodes=w.querySelectorAll(':scope > [id^="project-main-"]');
 	for(var i=0;i<nodes.length;i++){
@@ -1236,10 +1221,10 @@ func hideAllProjectsJS() string {
 }
 
 // showProjectJS returns JS that makes a project div visible.
-func showProjectJS(projectName string) string {
-	return fmt.Sprintf(`
+func showProjectJS(projectName string) r.Result {
+	return clientScript(`
 (function(){
-	var el=document.getElementById('%s');
+	var el=document.getElementById(props[0]);
 	if(!el)return;
 	el.style.display='flex';
 	el.style.visibility='visible';
@@ -1256,38 +1241,39 @@ func showProjectJS(projectName string) string {
 
 // switchProjectJS returns JS that hides all project divs and shows the target.
 // If the target div doesn't exist yet, newContent is appended to the wrapper.
-func switchProjectJS(toProject string, newContent *r.Node) string {
+func switchProjectJS(toProject string, newContent *r.Node) r.Result {
 	hideJS := hideAllProjectsJS()
 
 	if newContent != nil {
 		// Hide all existing, then append new content (which is visible by default)
-		return hideJS + newContent.ToJSAppend(MainAreaID)
+		return r.Merge(hideJS, r.Result{}.Append(MainAreaID, newContent))
 	}
 
 	// Target already exists in DOM — hide all, show target
-	return hideJS + showProjectJS(toProject)
+	return r.Merge(hideJS, showProjectJS(toProject))
 }
 
 // closeDevtoolsForAppJS returns JS that closes the Electron devtools overlay
 // for a specific app before its project is hidden.
-func closeDevtoolsForAppJS(appID string) string {
+func closeDevtoolsForAppJS(appID string) r.Result {
 	if appID == "" {
-		return ""
+		return r.Result{}
 	}
-	return fmt.Sprintf(`
+	return clientScript(`
 (function(){
-	if(window.__libroCloseConsole) window.__libroCloseConsole(%s);
-})();`, components.JSString(appID))
+	if(window.__libroCloseConsole) window.__libroCloseConsole(props[0]);
+})();`, appID)
 }
 
 // closeDevtoolsForAppsJS closes Electron devtools overlays for all apps in a project
 // before that project's DOM is hidden during a project/worktree switch.
-func closeDevtoolsForAppsJS(apps []Application) string {
+func closeDevtoolsForAppsJS(apps []Application) r.Result {
 	if len(apps) == 0 {
-		return ""
+		return r.Result{}
 	}
 	seen := make(map[string]struct{}, len(apps))
-	var js strings.Builder
+	var js r.Result
+
 	for _, app := range apps {
 		if app.ID == "" {
 			continue
@@ -1296,35 +1282,31 @@ func closeDevtoolsForAppsJS(apps []Application) string {
 			continue
 		}
 		seen[app.ID] = struct{}{}
-		js.WriteString(closeDevtoolsForAppJS(app.ID))
+		js = js.Add(closeDevtoolsForAppJS(app.ID))
 	}
-	return js.String()
+	return js
 }
 
 // focusSelectedAppJS returns JS that focuses the selected app's iframe after a short delay
 // and updates the tracked selected app ID for shortcut handlers.
-func focusSelectedAppJS(state *AppState) string {
+func focusSelectedAppJS(state *AppState) r.Result {
 	appID := ""
 	if state.SelectedIndex >= 0 && state.SelectedIndex < len(state.Apps) {
 		appID = state.Apps[state.SelectedIndex].ID
 	}
-	return fmt.Sprintf(`
-window.__libroSelectedApp=%s;
+	return clientScript(`
+window.__libroSelectedApp=props[0];
 if(window.__libroCenterSelectedApp) window.__libroCenterSelectedApp();
 setTimeout(function(){
 	if(window.__libroCenterSelectedApp) window.__libroCenterSelectedApp();
-	if(window.__libroFocusApp) window.__libroFocusApp(%d);
-}, 30);`, components.JSString(appID), state.SelectedIndex)
+	if(window.__libroFocusApp) window.__libroFocusApp(props[1]);
+}, 30);`, appID, state.SelectedIndex)
 }
 
 // removeAppJS disposes the app frame. Browser cookies stay in persist:libro;
 // moving a live webview to another parent invalidates its Electron guest.
-func removeAppJS(appID string) string {
-	return parkFloatingPopupsJS() + fmt.Sprintf(`
-(function(){
-	var el=document.querySelector('[data-app-id="%s"]');
-	if(el)el.remove();
-})();`, appID)
+func removeAppJS(appID string) r.Result {
+	return r.Merge(trustedResponse(parkFloatingPopupsJS()), r.Result{}.Run(r.Remove("frame-"+appID)))
 }
 
 // renderURLPopup renders the URL/search popup opened by bare 'o'.
@@ -1603,7 +1585,7 @@ func commandPopupJS(sid string) string {
 
 	function openPalette(){
 		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
-		dlg.classList.remove('hidden');
+		__gsui.show(null,dlg.id);
 		inp.value='';
 		filter();
 		armHoverAfterPointerMove();
@@ -1736,7 +1718,7 @@ func worktreeCreatePopupJS(sid string) string {
 		}
 		renderBranches(active,parent);
 		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
-		dlg.classList.remove('hidden');
+		__gsui.show(null,dlg.id);
 		inp.value='';
 		setTimeout(function(){inp.focus();},50);
 	}
@@ -1856,7 +1838,7 @@ func resizePopupJS(sid string) string {
 		if(!btnAllowed(btns[idx]))idx=nextAllowedIndex(-1,1);
 		if(btns.length>0)highlightFocused(idx);
 		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
-		dlg.classList.remove('hidden');
+		__gsui.show(null,dlg.id);
 		setTimeout(function(){dlg.focus();},50);
 	}
 
@@ -1961,33 +1943,26 @@ func closeDialogJS(sid string) string {
 }
 
 // resizeJS returns JS that updates an app frame's width without replacing the DOM
-func resizeJS(_ *AppState, width Width, appID string) string {
-	// Build a map of width value -> container classes
-	widthMap := ""
-	pixelMap := ""
+func resizeJS(_ *AppState, width Width, appID string) r.Result {
+	widthsMap := map[string]string{}
+	pixelsMap := map[string]string{}
 	widths := AllWidths()
 	if width.customPixels() > 0 {
 		widths = append(widths, width)
 	}
 	for _, w := range widths {
-		if widthMap != "" {
-			widthMap += ","
-		}
-		if pixelMap != "" {
-			pixelMap += ","
-		}
-		widthMap += fmt.Sprintf("'%s':'%s'", string(w), w.ContainerClasses())
-		pixelMap += fmt.Sprintf("'%s':'%s'", string(w), w.PixelWidth())
+		widthsMap[string(w)] = w.ContainerClasses()
+		pixelsMap[string(w)] = w.PixelWidth()
 	}
 
-	return fmt.Sprintf(`
+	return clientScript(`
 (function(){
-	var el = document.querySelector('[data-app-id="%s"]');
+	var el = document.getElementById('frame-'+props[0]);
 	if (!el) return;
 
-	var widths = {%s};
-	var pixels = {%s};
-	var newWidth = '%s';
+	var widths = props[1];
+	var pixels = props[2];
+	var newWidth = props[3];
 	var newCls = widths[newWidth];
 	var newPixel = pixels[newWidth] || '960px';
 
@@ -2038,13 +2013,13 @@ func resizeJS(_ *AppState, width Width, appID string) string {
 			if(window.__libroScrollToApp)window.__libroScrollToApp(el);
 		}, 80);
 	});
-	if((window.__libroSelectedApp||'')==='%s'&&window.__libroFocusAppByID){
-		window.__libroFocusAppByID('%s');
-		setTimeout(function(){window.__libroFocusAppByID('%s');},40);
-		setTimeout(function(){window.__libroFocusAppByID('%s');},120);
+	if((window.__libroSelectedApp||'')===props[4]&&window.__libroFocusAppByID){
+		window.__libroFocusAppByID(props[5]);
+		setTimeout(function(){window.__libroFocusAppByID(props[6]);},40);
+		setTimeout(function(){window.__libroFocusAppByID(props[7]);},120);
 	}
 })();
-`, appID, widthMap, pixelMap, string(width), appID, appID, appID, appID)
+`, appID, widthsMap, pixelsMap, string(width), appID, appID, appID, appID)
 }
 
 // renderTopBar renders the workspace title and panel controls.
@@ -2054,25 +2029,25 @@ func renderTopBar(state *AppState, sid string) *r.Node {
 
 // updateAppPreviewJS returns JS that updates the selected state of preview cards
 // without re-rendering the entire top bar. Used for lightweight navigate/select actions.
-func updateAppPreviewJS(state *AppState) string {
+func updateAppPreviewJS(state *AppState) r.Result {
 	selectedCls := "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-75 bg-blue-600 text-white shadow-sm"
 	normalCls := "shrink-0 flex items-center gap-1.5 px-2.5 h-7 rounded-md cursor-pointer transition-all duration-75 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700 hover:text-gray-800 dark:hover:text-zinc-200"
 
-	return fmt.Sprintf(`
+	return clientScript(`
 		(function(){
 			var strip = document.getElementById('app-preview-strip');
 			if (!strip) return;
 			var btns = strip.querySelectorAll(':scope > button');
 			for (var i = 0; i < btns.length; i++) {
-				if (i === %d) {
-					btns[i].className = %s;
+				if (i === props[0]) {
+					btns[i].className = props[1];
 					btns[i].scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});
 				} else {
-					btns[i].className = %s;
+					btns[i].className = props[2];
 				}
 			}
 		})();
-	`, state.SelectedIndex, components.JSString(selectedCls), components.JSString(normalCls))
+	`, state.SelectedIndex, selectedCls, normalCls)
 }
 
 // projectDialogJS wires the unified project dialog: project search keeps
@@ -2453,7 +2428,7 @@ func projectDialogJS(sid string) string {
 			return;
 		}
 		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
-		dlg.classList.remove('hidden');
+		__gsui.show(null,dlg.id);
 		inp.value='';
 		filter();
 		var scrollTop=function(){var res=getResults();if(res)res.scrollTop=0;};
@@ -2710,7 +2685,7 @@ func moveProjectPopupJS(sid string) string {
 			return;
 		}
 		if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dlg);
-		dlg.classList.remove('hidden');
+		__gsui.show(null,dlg.id);
 		inp.value='';
 		filter();
 		armHoverAfterPointerMove();
@@ -2746,34 +2721,36 @@ func moveProjectPopupJS(sid string) string {
 `, MoveProjectPopupID, sid)
 }
 
+type jsProject struct {
+	Kind            string   `json:"kind"`
+	Name            string   `json:"name"`
+	DisplayName     string   `json:"displayName,omitempty"`
+	Path            string   `json:"path"`
+	Branch          string   `json:"branch,omitempty"`
+	IsGit           bool     `json:"isGit"`
+	IsActive        bool     `json:"isActive"`
+	BaseOpened      bool     `json:"baseOpened,omitempty"`
+	Closed          bool     `json:"closed,omitempty"`
+	Branches        []string `json:"branches,omitempty"`
+	CurrentBranch   string   `json:"currentBranch,omitempty"`
+	WorktreeRefs    []string `json:"worktreeRefs,omitempty"`
+	Transient       bool     `json:"transient,omitempty"`
+	Command         string   `json:"command,omitempty"`
+	ApplicationMode string   `json:"applicationMode"`
+	ApplicationPort int      `json:"applicationPort,omitempty"`
+	ApplicationURL  string   `json:"applicationURL,omitempty"`
+}
+
 // projectsJS publishes the list of projects (and their worktrees) into
 // window.__libroProjects for the project dialog.
-func projectsJS(state *AppState) string {
+func projectItems(state *AppState) []jsProject {
 	displayProjectName := func(name, path string) string {
 		if path == "" {
 			return name
 		}
 		return filepath.Base(path)
 	}
-	type jsProject struct {
-		Kind            string   `json:"kind"`
-		Name            string   `json:"name"`
-		DisplayName     string   `json:"displayName,omitempty"`
-		Path            string   `json:"path"`
-		Branch          string   `json:"branch,omitempty"`
-		IsGit           bool     `json:"isGit"`
-		IsActive        bool     `json:"isActive"`
-		BaseOpened      bool     `json:"baseOpened,omitempty"`
-		Closed          bool     `json:"closed,omitempty"`
-		Branches        []string `json:"branches,omitempty"`
-		CurrentBranch   string   `json:"currentBranch,omitempty"`
-		WorktreeRefs    []string `json:"worktreeRefs,omitempty"`
-		Transient       bool     `json:"transient,omitempty"`
-		Command         string   `json:"command,omitempty"`
-		ApplicationMode string   `json:"applicationMode"`
-		ApplicationPort int      `json:"applicationPort,omitempty"`
-		ApplicationURL  string   `json:"applicationURL,omitempty"`
-	}
+
 	var all []jsProject
 	for _, p := range state.Projects {
 		if p.Virtual {
@@ -2873,16 +2850,22 @@ func projectsJS(state *AppState) string {
 			})
 		}
 	}
-	b, _ := json.Marshal(all)
-	if b == nil {
-		b = []byte("[]")
-	}
+	return all
+}
+
+func projectsJS(state *AppState) r.Result {
+	nodes := projectScriptNodes(state)
+	return r.Result{}.Append(ActionEffectsID, nodes[0]).Append(ActionEffectsID, nodes[1])
+}
+
+func projectScriptNodes(state *AppState) []*r.Node {
+	all := projectItems(state)
 	path, _, settings := applicationConfiguration(state, state.ActiveProject)
 	url := applicationLiveURL(state, path)
 	if url == "" {
 		url = applicationURL(settings.Port)
 	}
-	return threadsJS(state) + fmt.Sprintf("window.__libroActiveProject=%s;window.__libroApplicationURL=%s;window.__libroProjects=%s;if(window.libroWorkspace)libroWorkspace.refresh();", components.JSString(state.ActiveProject), components.JSString(url), string(b))
+	return []*r.Node{clientScriptNode("window.__libroThreads=props[0];", state.Threads), clientScriptNode("window.__libroActiveProject=props[0];window.__libroApplicationURL=props[1];window.__libroProjects=props[2];if(window.libroWorkspace)libroWorkspace.refresh();", state.ActiveProject, url, all)}
 }
 
 // renderProjectDialog renders the create project modal
@@ -2891,12 +2874,12 @@ func renderProjectDialog(_ bool, sid string) *r.Node {
 }
 
 // updateHashJS returns JS that updates the URL hash to the given project name
-func updateHashJS(name string) string {
+func updateHashJS(name string) r.Result {
 	title := "Libro"
 	if name != "" {
 		title = name + " — Libro"
 	}
-	return fmt.Sprintf("history.replaceState(null,'',%s);document.title=%s;", components.JSString("#"+name), components.JSString(title))
+	return clientScript("history.replaceState(null,'',props[0]);", "#"+name).Run(r.SetTitle(title))
 }
 
 // initHashJS handles hash-based project navigation on page load.
@@ -3472,29 +3455,22 @@ func terminalFrameSetupJS() string {
 				terminals.forEach(applyTerminalTheme);
 			};
 
-			function scan(root) {
-				var scope = root && root.querySelectorAll ? root : document;
-				if (scope.matches && scope.matches('[data-terminal]')) initTerminal(scope);
-				scope.querySelectorAll('[data-terminal]').forEach(initTerminal);
-			}
+            window.__libroMountTerminal = initTerminal;
+            window.__libroDisposeTerminal = function(el) {
+                observed.delete(el);
+                var controller=terminals.get(el);
+                if(!controller)return;
+                controller.closed=true;
+                clearTimeout(controller.reconnectTimer);
+                clearTimeout(controller.fitTimer);
+                if(controller.fitFrame)cancelAnimationFrame(controller.fitFrame);
+                if(controller.ws){controller.ws.onclose=null;controller.ws.close();}
+                if(resizeObserver)resizeObserver.unobserve(el);
+                if(intersectionObserver)intersectionObserver.unobserve(el);
+                controller.term.dispose();
+                terminals.delete(el);
+            };
 
-			scan(document);
-			new MutationObserver(function(mutations) {
-				mutations.forEach(function(mutation) { mutation.addedNodes.forEach(scan); });
-				terminals.forEach(function(controller, el) {
-					if (el.isConnected) return;
-					controller.closed = true;
-					clearTimeout(controller.reconnectTimer);
-					clearTimeout(controller.fitTimer);
-					if (controller.fitFrame) cancelAnimationFrame(controller.fitFrame);
-					if (controller.ws) { controller.ws.onclose = null; controller.ws.close(); }
-					if (resizeObserver) resizeObserver.unobserve(el);
-					if (intersectionObserver) intersectionObserver.unobserve(el);
-					controller.term.dispose();
-					terminals.delete(el);
-					observed.delete(el);
-				});
-			}).observe(document.body, { childList: true, subtree: true });
 			new MutationObserver(function() {
 				window.__libroRefreshTerminalThemes();
 			}).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });

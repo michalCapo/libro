@@ -4,7 +4,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -26,7 +27,7 @@ func TestProjectDoesNotInheritParentRepository(t *testing.T) {
 		t.Fatal("could not add project")
 	}
 	state := manager.Get("test")
-	if state.Projects[0].IsGitRepo || strings.Contains(projectsJS(state), `"kind":"worktree"`) {
+	if state.Projects[0].IsGitRepo || slices.ContainsFunc(projectItems(state), func(p jsProject) bool { return p.Kind == "worktree" }) {
 		t.Fatal("new project inherited the home repository")
 	}
 	if trees, err := GitListWorktrees(project); err != nil || len(trees) != 0 {
@@ -65,7 +66,7 @@ func TestProjectRepositoryAliases(t *testing.T) {
 		t.Fatal("repository symlink not recognized")
 	}
 	state := &AppState{Projects: []Project{{Name: "repo", Path: alias, IsGitRepo: true}}}
-	if got := strings.Count(projectsJS(state), `"kind":"worktree"`); got != 1 {
+	if got := len(slices.DeleteFunc(projectItems(state), func(p jsProject) bool { return p.Kind != "worktree" })); got != 1 {
 		t.Fatalf("worktree rows = %d, want only the linked worktree", got)
 	}
 }
@@ -84,12 +85,11 @@ func TestNewProjectThreadsStayLast(t *testing.T) {
 		if _, err := manager.createProjectWorktree("test", "repo", branch); err != nil {
 			t.Fatal(err)
 		}
-		js := projectsJS(state)
-		last := strings.LastIndex(js, `"kind":"worktree"`)
-		if last < 0 || !strings.Contains(js[last:], `"branch":"`+branch+`"`) {
+		items := projectItems(state)
+		if len(items) == 0 || items[len(items)-1].Branch != branch {
 			t.Fatalf("new thread %s is not the last worktree", branch)
 		}
-		if got := projectsJS(state); got != js {
+		if !reflect.DeepEqual(projectItems(state), items) {
 			t.Fatal("refresh changed the thread order")
 		}
 	}

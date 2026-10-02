@@ -25,10 +25,11 @@ func ResizePopup(_ string, widths []string) *r.Node {
 	return r.Div("ws-popup absolute inset-0 z-[60] flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden outline-none").
 		ID(ResizePopupID).
 		Attr("tabindex", "-1").
-		OnClick(r.JS(HideJS(ResizePopupID))).
+		OnClick(r.Hide(ResizePopupID)).
+		OnKey("Escape", r.Hide(ResizePopupID)).
 		Render(
 			r.Div("bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden").
-				OnClick(r.JS("event.stopPropagation()")).
+				OnClick(r.UnsafeJS("event.stopPropagation();")).
 				Render(
 					r.Div("px-4 py-3 border-b border-gray-200 dark:border-zinc-700/50 flex items-center gap-3").Render(
 						r.I("material-icons-round text-blue-600 dark:text-blue-400 text-lg").Text("aspect_ratio"),

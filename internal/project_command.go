@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	r "github.com/michalCapo/g-sui/ui"
-	"libro/internal/components"
 )
 
 func projectCommand(path string) string {
@@ -36,28 +35,27 @@ func setProjectCommand(path, command string) error {
 func registerProjectCommandActions(app *r.App) {
 	registerApplicationControl(app)
 	registerChildControl(app)
-	registerAction(app, "project.command.save", func(ctx *r.Context) string {
+	r.RegisterAction(app, "project.command.save", func(_ *r.Context, in actionProjectCommandSaveInput) (r.Result, error) {
 		applicationControlMu.Lock()
 		defer applicationControlMu.Unlock()
-		sid := extractSID(ctx)
-		data := ctx.WsData()
-		name, _ := data["name"].(string)
-		command, _ := data["command"].(string)
-		mode, _ := data["mode"].(string)
-		portText, _ := data["port"].(string)
+		sid := inputSID(in.SID)
+		name := in.Name
+		command := in.Command
+		mode := in.Mode
+		portText := in.Port
 		port := 0
 		if portText != "" {
 			var err error
 			port, err = strconv.Atoi(portText)
 			if err != nil || port < 1 || port > 65535 {
-				return r.Notify("error", "Enter a port between 1 and 65535, or leave it blank")
+				return r.Result{}.Run(r.Notify("error", "Enter a port between 1 and 65535, or leave it blank")), nil
 			}
 		}
 		restoreWorktreeProject(sm, sid, name)
 		state := sm.Get(sid)
 		_, path := threadProjectContext(state, name)
 		if path == "" {
-			return r.Notify("error", "Project not found")
+			return r.Result{}.Run(r.Notify("error", "Project not found")), nil
 		}
 		root := applicationRoot(state, name)
 		settings := loadApplicationSettings(root)
@@ -65,10 +63,10 @@ func registerProjectCommandActions(app *r.App) {
 			mode = settings.Mode
 		}
 		if mode != "shared" && mode != "thread" {
-			return r.Notify("error", "Choose shared or per-thread application mode")
+			return r.Result{}.Run(r.Notify("error", "Choose shared or per-thread application mode")), nil
 		}
 		if strings.ContainsRune(command, 0) {
-			return r.Notify("error", "Command cannot contain a null character")
+			return r.Result{}.Run(r.Notify("error", "Command cannot contain a null character")), nil
 		}
 		if settings.Mode != mode {
 			for _, running := range sm.GetAllRunningApps(sid) {
@@ -77,7 +75,7 @@ func registerProjectCommandActions(app *r.App) {
 				}
 				for _, panel := range running.Apps {
 					if panel.PluginID == "project-command" {
-						return r.Notify("error", "Stop the project's applications before changing application mode")
+						return r.Result{}.Run(r.Notify("error", "Stop the project's applications before changing application mode")), nil
 					}
 				}
 			}
@@ -91,27 +89,27 @@ func registerProjectCommandActions(app *r.App) {
 			settings.Port = port
 		}
 		if err := saveApplicationSettings(root, settings); err != nil {
-			return r.Notify("error", err.Error())
+			return r.Result{}.Run(r.Notify("error", err.Error())), nil
 		}
 		if path != root {
 			if err := saveApplicationSettings(path, applicationSettings{Mode: mode, Port: port}); err != nil {
-				return r.Notify("error", err.Error())
+				return r.Result{}.Run(r.Notify("error", err.Error())), nil
 			}
 		}
 		if err := setProjectCommand(path, command); err != nil {
-			return r.Notify("error", "Could not save command: "+err.Error())
+			return r.Result{}.Run(r.Notify("error", "Could not save command: "+err.Error())), nil
 		}
-		return projectsJS(state) + `document.getElementById('project-command-dialog')?.close();`
+		return r.Merge(projectsJS(state), r.Result{}.Run(r.CloseDialog("project-command-dialog"))), nil
 	})
-	registerAction(app, "project.command.run", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
+	r.RegisterAction(app, "project.command.run", func(_ *r.Context, in sessionInput) (r.Result, error) {
+		sid := inputSID(in.SID)
 		state := sm.Get(sid)
 		if state.ActiveProject == "" {
-			return r.Notify("error", "Open a project first")
+			return r.Result{}.Run(r.Notify("error", "Open a project first")), nil
 		}
 		_, command, _ := applicationConfiguration(state, state.ActiveProject)
 		if command == "" {
-			return fmt.Sprintf(`libroWorkspace.projectSettings(%s);`, components.JSString(state.ActiveProject))
+			return clientScript("libroWorkspace.projectSettings(props[0]);", state.ActiveProject), nil
 		}
 		hadCommand := false
 		for _, panel := range state.Apps {
@@ -121,25 +119,25 @@ func registerProjectCommandActions(app *r.App) {
 		}
 		js, _, err := controlApplication(sid, sm.GetActiveProjectPath(sid), "restart")
 		if err != nil {
-			return js + r.Notify("error", err.Error())
+			return r.Merge(js, r.Result{}.Run(r.Notify("error", err.Error()))), nil
 		}
 		for _, panel := range sm.Get(sid).Apps {
 			if panel.PluginID == "project-command" {
-				js += navigateJS(sm.Get(sid), sid) + fmt.Sprintf(`libroWorkspace.select(%s);`, components.JSString(panel.ID))
+				js = r.Merge(js, navigateJS(sm.Get(sid), sid), clientScript("libroWorkspace.select(props[0]);", panel.ID))
 				break
 			}
 		}
 		if hadCommand {
-			js = "libroWorkspace.restartProject(function(){" + js + "});"
+			js = r.Merge(trustedResponse("libroWorkspace.beginProjectRestart();"), js, trustedResponse("libroWorkspace.endProjectRestart();"))
 		}
-		return js
+		return js, nil
 	})
-	registerAction(app, "project.command.stop", func(ctx *r.Context) string {
-		sid := extractSID(ctx)
+	r.RegisterAction(app, "project.command.stop", func(_ *r.Context, in sessionInput) (r.Result, error) {
+		sid := inputSID(in.SID)
 		js, _, err := controlApplication(sid, sm.GetActiveProjectPath(sid), "stop")
 		if err != nil {
-			return js + r.Notify("error", err.Error())
+			return r.Merge(js, r.Result{}.Run(r.Notify("error", err.Error()))), nil
 		}
-		return js + r.Notify("info", "Application stopped")
+		return r.Merge(js, r.Result{}.Run(r.Notify("info", "Application stopped"))), nil
 	})
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	r "github.com/michalCapo/g-sui/ui"
-	"libro/internal/components"
 	"net/url"
 	"strings"
 )
@@ -107,25 +106,13 @@ func saveToolsWithEditor(list []Plugin, editor string, saveEditor bool, shortcut
 }
 
 func registerToolSettings(app *r.App) {
-	registerAction(app, "settings.tools", func(ctx *r.Context) string {
-		raw, _ := json.Marshal(ctx.WsData()["tools"])
-		var list []Plugin
-		err := json.Unmarshal(raw, &list)
-		if err == nil {
-			keyJSON, _ := json.Marshal(ctx.WsData()["bindings"])
-			var bindings map[string]string
-			err = json.Unmarshal(keyJSON, &bindings)
-			if err == nil {
-				editor, saveEditor := ctx.WsData()["editor"].(string)
-				err = saveToolsWithEditor(list, editor, saveEditor, bindings)
-			}
-		}
+	r.RegisterAction(app, "settings.tools", func(_ *r.Context, in actionSettingsToolsInput) (r.Result, error) {
+		editor, saveEditor := inputField(in.Editor)
+		err := saveToolsWithEditor(in.Tools, editor, saveEditor, in.Bindings)
 		if err != nil {
-			return fmt.Sprintf("libroWorkspace.toolsSaved(null,%s);", components.JSString(err.Error()))
+			return clientScript("libroWorkspace.toolsSaved(null,props[0]);", err.Error()), nil
 		}
-		updated, _ := json.Marshal(plugins())
-		keys, _ := json.Marshal(toolKeybindings())
-		return fmt.Sprintf("libroWorkspace.toolsSaved(%s,'Saved. Shortcuts are active now. Other changes apply to new sessions.',%s);", updated, keys)
+		return clientScript("libroWorkspace.toolsSaved(props[0],'Saved. Shortcuts are active now. Other changes apply to new sessions.',props[1]);", plugins(), toolKeybindings()), nil
 	})
 }
 
@@ -134,13 +121,13 @@ func renderToolSettings() *r.Node {
 		r.El("h2", "ws-shortcut-heading").Text("Tools"),
 		r.P("ws-settings-status").Text("Configure Nvim, Git, Database, and custom CLI tools and websites. Changes apply across projects to new sessions."),
 		r.P("ws-settings-status").ID("tool-shortcut-help").Text("Select a shortcut field and press Ctrl, Alt, or Meta with a letter, number, comma, period, brackets, = or -. Clear it to disable the shortcut."),
-		r.El("form", "").ID("tool-commands-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveAllSettings()")).Render(
+		r.El("form", "").ID("tool-commands-form").OnSubmit(r.UnsafeJS("libroWorkspace.saveAllSettings()")).Render(
 			r.Div("ws-settings-group").Render(
 				r.Div("").ID("tool-command-rows"),
 				r.Div("ws-settings-row").Render(
 					r.Div("ws-settings-actions").Render(
-						r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomTool()")).Text("Add custom tool"),
-						r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomTool('url')")).Text("Add website"),
+						r.Button("ws-launch").Attr("type", "button").OnClick(r.UnsafeJS("libroWorkspace.addCustomTool()")).Text("Add custom tool"),
+						r.Button("ws-launch").Attr("type", "button").OnClick(r.UnsafeJS("libroWorkspace.addCustomTool('url')")).Text("Add website"),
 					),
 				),
 			), r.P("ws-settings-status").Attr("role", "status"),

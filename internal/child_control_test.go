@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -127,7 +128,7 @@ func TestChildrenApplicationAndProcessIsolation(t *testing.T) {
 		if sm.Get(sid).thread(child.ID) == nil {
 			t.Fatal("child is not a visible thread")
 		}
-		if js := projectAutolaunchJS(&AppState{ActiveProject: child.ID, Threads: []Thread{{ID: child.ID, Managed: true}}}, sid); js != "" {
+		if js := projectAutolaunchJS(&AppState{ActiveProject: child.ID, Threads: []Thread{{ID: child.ID, Managed: true}}}, sid); !reflect.ValueOf(js).IsZero() {
 			t.Fatal("managed child autolaunched an unrelated agent")
 		}
 		childAction(t, sid, root, childCommand{Action: "launch", ID: id, Command: []string{pi, "-p"}, Provider: "openrouter", Model: "deepseek/deepseek-v4.1-flash", Thinking: "high"})

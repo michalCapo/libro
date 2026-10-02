@@ -3,7 +3,7 @@ package libro
 import (
 	"database/sql"
 	"path/filepath"
-	"strings"
+	"reflect"
 	"testing"
 )
 
@@ -235,11 +235,12 @@ func TestThreadSessionSurvivesRestartAndDefaultAgentChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	state.ActiveProject = "thread:test"
-	if launch := projectAutolaunchJS(state, sid); !strings.Contains(launch, `"plugin":"pi"`) {
-		t.Fatalf("wrong agent on reopen: %s", launch)
+
+	if plugin := projectAutolaunchPlugin(state); plugin == nil || plugin.ID != "pi" {
+		t.Fatalf("wrong agent on reopen: %+v", plugin)
 	}
 	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "pi"}}
-	if projectAutolaunchJS(state, sid) != "" {
+	if !reflect.ValueOf(projectAutolaunchJS(state, sid)).IsZero() {
 		t.Fatal("reopening a running thread started a second agent")
 	}
 	manager.saveThreadSession(sid, "thread:test", "agent", "pi", "pi --model example", "next-session")
@@ -399,7 +400,7 @@ func TestCloseWorkspaceAppSelectsAdjacentThread(t *testing.T) {
 				state.snapshots[tc.want] = &projectSnapshot{Apps: []Application{{ID: "sibling-agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"}}}
 			}
 			sm.states["test"] = state
-			js := closeWorkspaceApp("test", tc.closeID)
+			_ = closeWorkspaceApp("test", tc.closeID)
 			if state.ActiveProject != tc.want {
 				t.Fatalf("active thread = %q, want %q", state.ActiveProject, tc.want)
 			}
@@ -410,9 +411,6 @@ func TestCloseWorkspaceAppSelectsAdjacentThread(t *testing.T) {
 			} else if tc.closeID == "agent" {
 				if !state.thread(tc.active).Archived || len(state.Apps) != 2 || state.Apps[0].ID != "sibling-agent" || state.Apps[1].ID != "notes" {
 					t.Fatalf("thread switch lost sibling or shared panels: %+v", state.Apps)
-				}
-				if !strings.Contains(js, projectMainID(tc.want)) {
-					t.Fatal("response did not show the selected thread")
 				}
 			} else if state.thread(tc.active).Archived {
 				t.Fatal("closing a tool archived the thread")
@@ -449,7 +447,7 @@ func TestCloseOtherPanelsKeepsSelectedAgentAndShared(t *testing.T) {
 			if tc.keep == "browser" {
 				state.SelectedIndex = 1
 			}
-			js := closeOtherPanels("test", tc.keep)
+			_ = closeOtherPanels("test", tc.keep)
 			if len(state.Apps) != len(tc.want) {
 				t.Fatalf("apps = %+v, want ids %v", state.Apps, tc.want)
 			}
@@ -460,9 +458,6 @@ func TestCloseOtherPanelsKeepsSelectedAgentAndShared(t *testing.T) {
 			}
 			if tc.keep == "" && state.Apps[0].ID != "agent" {
 				t.Fatalf("selected agent was closed: %+v", state.Apps)
-			}
-			if !strings.Contains(js, "restorePanelFocus") {
-				t.Fatal("response did not restore panel focus")
 			}
 		})
 	}

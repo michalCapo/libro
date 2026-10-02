@@ -3,7 +3,6 @@ package libro
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	r "github.com/michalCapo/g-sui/ui"
 	"github.com/yuin/goldmark"
@@ -191,13 +190,12 @@ func filesRoot(projectPath string, parents int) string {
 
 func registerFilesActions(app *r.App) {
 	for _, action := range []string{"files.read", "files.open", "files.index", "files.search", "files.navigate"} {
-		registerAction(app, action, func(ctx *r.Context) string {
-			sid := extractSID(ctx)
-			data := ctx.WsData()
-			id, _ := data["id"].(string)
-			path, _ := data["path"].(string)
-			request, _ := data["request"].(string)
-			parents, _ := data["parents"].(float64)
+		r.RegisterAction(app, action, func(_ *r.Context, in actionFilesInput) (r.Result, error) {
+			sid := inputSID(in.SID)
+			id := in.ID
+			path := in.Path
+			request := in.Request
+			parents := in.Parents
 			if parents < 0 || parents > 1024 {
 				parents = 0
 			}
@@ -223,18 +221,25 @@ func registerFilesActions(app *r.App) {
 				var err error
 				switch action {
 				case "files.navigate":
-					kind, _ := data["kind"].(string)
-					version, _ := data["version"].(string)
-					line, _ := data["line"].(float64)
-					column, _ := data["column"].(float64)
+					kind := in.Kind
+
+					version := in.Version
+
+					line := in.Line
+
+					column := in.Column
+
 					value, err = navigateProjectFile(sm.GetActiveProjectPath(sid), path, kind, version, int(parents), int(line), int(column))
 				case "files.index", "files.search":
-					query, _ := data["query"].(string)
-					ignored, _ := data["ignored"].(bool)
+					query := in.Query
+
+					ignored := in.Ignored
+
 					// Search always targets the active workspace, even after browsing a parent.
 					value, err = searchProjectFiles(sm.GetActiveProjectPath(sid), query, ignored, action == "files.index")
 				default:
-					version, _ := data["version"].(string)
+					version := in.Version
+
 					value, err = readProjectFileVersion(root, path, version)
 				}
 				result = value
@@ -246,14 +251,13 @@ func registerFilesActions(app *r.App) {
 			} else {
 				result.Error = "Switch to this project to browse its files"
 			}
-			raw, _ := json.Marshal(result)
-			return fmt.Sprintf("window.libroFiles.receive(%s);", raw)
+			return clientScript("window.libroFiles.receive(props[0]);", result), nil
 		})
 	}
 }
 
 func renderFiles(app Application) *r.Node {
-	return r.Div("ws-files").Attr("data-files", app.ID).Render(
+	return r.Widget("files", struct{}{}, "ws-files").Attr("data-files", app.ID).Render(
 		r.Div("ws-file-preview").Render(
 			r.Div("ws-file-toolbar").Render(r.Div("ws-file-path").Text("Open file"),
 				r.Div("ws-file-image-tools").Attr("hidden", "hidden").Attr("role", "group").Attr("aria-label", "Image zoom").Render(

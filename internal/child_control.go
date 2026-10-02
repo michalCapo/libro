@@ -202,20 +202,20 @@ func refreshChild(child *childRecord) {
 	}
 }
 
-func controlChildren(sid, scope string, args childCommand) (string, any, error) {
+func controlChildren(sid, scope string, args childCommand) (r.Result, any, error) {
 	childControlMu.Lock()
 	defer childControlMu.Unlock()
 	owner := applicationPath(scope)
 	workspace, _, err := applicationProject(sm.Get(sid), scope)
 	if err != nil {
-		return "", nil, err
+		return r.Result{}, nil, err
 	}
 	if args.Action == "create" {
 		return createChild(sid, owner, workspace, args)
 	}
 	children, err := loadChildren(owner)
 	if err != nil {
-		return "", nil, err
+		return r.Result{}, nil, err
 	}
 	result := []map[string]any{}
 	for i := range children {
@@ -223,7 +223,7 @@ func controlChildren(sid, scope string, args childCommand) (string, any, error) 
 		refreshChild(child)
 		attachChild(sid, child)
 		if err = saveChild(child); err != nil {
-			return "", nil, err
+			return r.Result{}, nil, err
 		}
 		if args.Action == "list" {
 			result = append(result, childView(sid, child))
@@ -232,12 +232,12 @@ func controlChildren(sid, scope string, args childCommand) (string, any, error) 
 		if child.ID != args.ID {
 			continue
 		}
-		var js string
+		var js r.Result
 		switch args.Action {
 		case "status":
 		case "launch":
 			if tm.IsRunning(child.Agent) {
-				return "", nil, errors.New("agent is already running; use followup, interrupt or restart")
+				return r.Result{}, nil, errors.New("agent is already running; use followup, interrupt or restart")
 			}
 			if len(args.Command) > 0 {
 				child.Command = slices.Clone(args.Command)
@@ -256,7 +256,7 @@ func controlChildren(sid, scope string, args childCommand) (string, any, error) 
 			js, err = launchChild(sid, child)
 		case "followup":
 			if strings.TrimSpace(args.Prompt) == "" {
-				return "", nil, errors.New("followup prompt is required")
+				return r.Result{}, nil, errors.New("followup prompt is required")
 			}
 			tm.InterruptManaged(child.Agent)
 			refreshChild(child)
@@ -268,42 +268,42 @@ func controlChildren(sid, scope string, args childCommand) (string, any, error) 
 		case "cleanup":
 			js, err = cleanupChild(sid, child)
 		default:
-			return "", nil, errors.New("unknown child action")
+			return r.Result{}, nil, errors.New("unknown child action")
 		}
 		if saveErr := saveChild(child); err == nil {
 			err = saveErr
 		}
-		return js + projectsJS(sm.Get(sid)), childView(sid, child), err
+		return r.Merge(js, projectsJS(sm.Get(sid))), childView(sid, child), err
 	}
 	if args.Action == "list" {
 		return projectsJS(sm.Get(sid)), result, nil
 	}
-	return "", nil, errors.New("child not found in this orchestrator's workspace")
+	return r.Result{}, nil, errors.New("child not found in this orchestrator's workspace")
 }
 
-func createChild(sid, owner, workspace string, args childCommand) (string, any, error) {
+func createChild(sid, owner, workspace string, args childCommand) (r.Result, any, error) {
 	if strings.TrimSpace(args.Name) == "" || len(args.Name) > 200 || strings.TrimSpace(args.Prompt) == "" || args.Base == "" {
-		return "", nil, errors.New("name (up to 200 bytes), base branch and prompt are required")
+		return r.Result{}, nil, errors.New("name (up to 200 bytes), base branch and prompt are required")
 	}
 	root := applicationRoot(sm.Get(sid), workspace)
 	if loadApplicationSettings(root).Mode != "thread" {
-		return "", nil, errors.New("choose per-thread application mode in project settings before creating isolated children")
+		return r.Result{}, nil, errors.New("choose per-thread application mode in project settings before creating isolated children")
 	}
 	branches, err := GitListBranches(root)
 	if err != nil {
-		return "", nil, err
+		return r.Result{}, nil, err
 	}
 	if !slices.Contains(branches, args.Base) {
-		return "", nil, errors.New("choose an existing local base branch")
+		return r.Result{}, nil, errors.New("choose an existing local base branch")
 	}
 	var random [16]byte
 	if _, err = rand.Read(random[:]); err != nil {
-		return "", nil, err
+		return r.Result{}, nil, err
 	}
 	token := hex.EncodeToString(random[:])
 	dir, err := libroDataDir()
 	if err != nil {
-		return "", nil, err
+		return r.Result{}, nil, err
 	}
 	project := sm.Get(sid).projectScope(workspace)
 	for _, p := range sm.Get(sid).Projects {
@@ -314,39 +314,39 @@ func createChild(sid, owner, workspace string, args childCommand) (string, any, 
 	}
 	child := &childRecord{ID: "thread:" + token, Name: args.Name, Owner: owner, Project: project, Root: root, Path: filepath.Join(filepath.Dir(root), filepath.Base(root)+"-qa-"+token), Branch: "libro-qa-" + token, Base: args.Base, Prompt: args.Prompt, Browser: "libro-qa-" + token, Results: filepath.Join(dir, "children", token), Phase: "creating", State: components.ManagedStatus{Status: "waiting", LastActivity: time.Now().UTC()}}
 	if err = os.MkdirAll(child.Results, 0o700); err != nil {
-		return "", nil, err
+		return r.Result{}, nil, err
 	}
 	if err = saveChild(child); err != nil {
-		return "", nil, err
+		return r.Result{}, nil, err
 	}
 	if _, err = worktreeGit(root, "worktree", "add", "-b", child.Branch, child.Path, "refs/heads/"+args.Base); err != nil {
-		return "", nil, err
+		return r.Result{}, nil, err
 	}
 	child.Phase = "ready"
 	if err = saveChild(child); err != nil {
-		return "", nil, err
+		return r.Result{}, nil, err
 	}
 	attachChild(sid, child)
 	return projectsJS(sm.Get(sid)), childView(sid, child), nil
 }
 
-func launchChild(sid string, child *childRecord) (string, error) {
+func launchChild(sid string, child *childRecord) (r.Result, error) {
 	if child.Phase != "ready" {
-		return "", errors.New("child is not ready; finish cleanup or create another child")
+		return r.Result{}, errors.New("child is not ready; finish cleanup or create another child")
 	}
 	if tm.IsRunning(child.Agent) {
-		return "", errors.New("agent is already running; use followup, interrupt or restart")
+		return r.Result{}, errors.New("agent is already running; use followup, interrupt or restart")
 	}
 	if len(child.Command) == 0 {
-		return "", errors.New("launch the child with an agent command first")
+		return r.Result{}, errors.New("launch the child with an agent command first")
 	}
 	// Executable and arguments are separate data, never arbitrary shell scripts.
 	if !childExecutablePattern.MatchString(child.Command[0]) {
-		return "", errors.New("command must be an executable followed by separate arguments")
+		return r.Result{}, errors.New("command must be an executable followed by separate arguments")
 	}
 	environment, err := components.BashEnvironment()
 	if err != nil {
-		return "", err
+		return r.Result{}, err
 	}
 	var sensitive []string
 	for name, value := range agentEnvironment() {
@@ -364,12 +364,12 @@ func launchChild(sid string, child *childRecord) (string, error) {
 	child.Agent = fmt.Sprintf("qa-%s-%d", strings.TrimPrefix(child.ID, "thread:"), child.Attempt)
 	child.State = components.ManagedStatus{Status: "running", LastActivity: time.Now().UTC()}
 	if err = saveChild(child); err != nil {
-		return "", err
+		return r.Result{}, err
 	}
 	logPath := filepath.Join(child.Results, fmt.Sprintf("attempt-%d.log", child.Attempt))
 	if _, err = tm.StartManaged(child.Agent, command, child.Path, logPath, environment, sensitive...); err != nil {
 		child.State.Status = "failed"
-		return "", err
+		return r.Result{}, err
 	}
 	tm.Stop(old)
 	sm.RemoveAppByID(sid, old)
@@ -392,28 +392,19 @@ func launchChild(sid string, child *childRecord) (string, error) {
 	}
 	sm.mu.Unlock()
 	// A ready panel attaches to its owned PTY when the child is selected.
-	return removeAppJS(old) + insertAppJS(renderAppFrame(panel, index, false, sid), false, child.ID), nil
+	return r.Merge(removeAppJS(old), insertAppJS(renderAppFrame(panel, index, false, sid), false, child.ID)), nil
 }
 
 func registerChildControl(app *r.App) {
-	registerAction(app, "children.control", func(ctx *r.Context) string {
-		data := ctx.WsData()
-		request, _ := data["request"].(string)
-		scope, _ := data["project"].(string)
-		encoded, _ := json.Marshal(data["command"])
-		var args childCommand
-		err := json.Unmarshal(encoded, &args)
-		var js string
-		var result any
-		if err == nil {
-			js, result, err = controlChildren(extractSID(ctx), scope, args)
-		}
+	r.RegisterAction(app, "children.control", func(_ *r.Context, in actionChildrenControlInput) (r.Result, error) {
+		request := in.Request
+		scope := in.Project
+		js, result, err := controlChildren(inputSID(in.SID), scope, in.Command)
 		reply := map[string]any{"result": result}
 		if err != nil {
 			reply["error"] = err.Error()
 		}
-		encoded, _ = json.Marshal(reply)
-		return js + fmt.Sprintf("window.libroWorkspace.applicationResult(%s,%s);", components.JSString(request), encoded)
+		return r.Merge(js, clientScript("window.libroWorkspace.applicationResult(props[0],props[1]);", request, reply)), nil
 	})
 }
 
@@ -483,24 +474,25 @@ func archiveChild(child *childRecord) error {
 	}
 	return os.Rename(target+".tmp", target)
 }
-func cleanupChild(sid string, child *childRecord) (string, error) {
+func cleanupChild(sid string, child *childRecord) (r.Result, error) {
 	if child.Phase == "cleaned" {
-		return "", nil
+		return r.Result{}, nil
 	}
 	child.Phase = "stopping"
 	if err := saveChild(child); err != nil {
-		return "", err
+		return r.Result{}, err
 	}
 	tm.InterruptManaged(child.Agent)
 	refreshChild(child)
-	var js strings.Builder
+	var js r.Result
+
 	// Never stop a shared application, even if settings changed after creation.
 	if loadApplicationSettings(child.Root).Mode == "thread" {
-		response, _, err := controlApplication(sid, child.Path, "stop")
+		effects, _, err := controlApplication(sid, child.Path, "stop")
 		if err != nil {
-			return "", err
+			return r.Result{}, err
 		}
-		js.WriteString(response)
+		js = js.Add(effects)
 	}
 	for _, workspace := range sm.GetAllRunningApps(sid) {
 		if workspace.Name == child.ID {
@@ -510,7 +502,7 @@ func cleanupChild(sid string, child *childRecord) (string, error) {
 				}
 				tm.Stop(panel.ID)
 				sm.RemoveAppByID(sid, panel.ID)
-				js.WriteString(removeAppJS(panel.ID))
+				js = js.Add(removeAppJS(panel.ID))
 			}
 		}
 	}
@@ -520,7 +512,7 @@ func cleanupChild(sid string, child *childRecord) (string, error) {
 	// agent-browser owns its session; never use a PID or another session's port.
 	environment, err := components.BashEnvironment()
 	if err != nil {
-		return js.String(), err
+		return js, err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -529,60 +521,60 @@ func cleanupChild(sid string, child *childRecord) (string, error) {
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
 	if err = cmd.Run(); err != nil {
-		return js.String(), errors.New("could not close child browser; retry cleanup")
+		return js, errors.New("could not close child browser; retry cleanup")
 	}
 
 	child.Phase = "preserving"
 	if err := saveChild(child); err != nil {
-		return js.String(), err
+		return js, err
 	}
 	trees, err := GitListWorktrees(child.Root)
 	if err != nil {
-		return js.String(), err
+		return js, err
 	}
 	exists := false
 	for _, tree := range trees {
 		if applicationPath(tree.Path) == applicationPath(child.Path) {
 			if tree.Branch != child.Branch {
-				return js.String(), errors.New("child worktree branch changed; refusing cleanup")
+				return js, errors.New("child worktree branch changed; refusing cleanup")
 			}
 			exists = true
 		}
 	}
 	if exists {
 		if err = archiveChild(child); err != nil {
-			return js.String(), err
+			return js, err
 		}
 		bundle := filepath.Join(child.Results, "commits.bundle")
 		if !fileExists(bundle) {
 			if _, err = worktreeGit(child.Root, "bundle", "create", bundle+".tmp", "refs/heads/"+child.Branch); err != nil {
-				return js.String(), err
+				return js, err
 			}
 			if err = os.Rename(bundle+".tmp", bundle); err != nil {
-				return js.String(), err
+				return js, err
 			}
 		}
 	}
 	child.Phase = "removing"
 	if err = saveChild(child); err != nil {
-		return js.String(), err
+		return js, err
 	}
 	if exists {
 		if _, err = worktreeGit(child.Root, "worktree", "remove", "--force", child.Path); err != nil {
-			return js.String(), err
+			return js, err
 		}
 	}
 	branches, err := GitListBranches(child.Root)
 	if err != nil {
-		return js.String(), err
+		return js, err
 	}
 	if slices.Contains(branches, child.Branch) {
 		if _, err = worktreeGit(child.Root, "branch", "-D", child.Branch); err != nil {
-			return js.String(), err
+			return js, err
 		}
 	}
 	if sm.Get(sid).ActiveProject == child.ID {
-		js.WriteString(switchToProjectName(sid, child.Project))
+		js = js.Add(switchToProjectName(sid, child.Project))
 	}
 	sm.mu.Lock()
 	state := sm.states[sid]
@@ -604,10 +596,10 @@ func cleanupChild(sid string, child *childRecord) (string, error) {
 	state.Threads = slices.DeleteFunc(state.Threads, func(thread Thread) bool { return thread.ID == child.ID })
 	delete(state.snapshots, child.ID)
 	sm.mu.Unlock()
-	js.WriteString(reparentProjectAppsJS(shared, child.Project))
-	fmt.Fprintf(&js, "document.getElementById(%s)?.remove();", components.JSString(projectMainID(child.ID)))
+	js = js.Add(reparentProjectAppsJS(shared, child.Project))
+	js = js.Add(r.Result{}.Run(r.Remove(projectMainID(child.ID))))
 	child.Phase = "cleaned"
-	return js.String(), saveChild(child)
+	return js, saveChild(child)
 }
 
 // Restore visible child threads after desktop restart without reviving stale PIDs.

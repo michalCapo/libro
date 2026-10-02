@@ -3,7 +3,7 @@ package libro
 import (
 	"database/sql"
 	"path/filepath"
-	"strings"
+	"slices"
 	"testing"
 )
 
@@ -76,7 +76,7 @@ func TestProjectBaseOpensOnNavigation(t *testing.T) {
 	manager := NewStateManager()
 	sid := manager.NewSession()
 	state := manager.Get(sid)
-	if state.ActiveProject != "" || strings.Contains(projectsJS(state), `"baseOpened":true`) {
+	if state.ActiveProject != "" || slices.ContainsFunc(projectItems(state), func(p jsProject) bool { return p.BaseOpened }) {
 		t.Fatal("projects opened before navigation")
 	}
 	for i, name := range []string{"second", "first", "second"} {
@@ -84,20 +84,20 @@ func TestProjectBaseOpensOnNavigation(t *testing.T) {
 			t.Fatal("cannot open project")
 		}
 		want := min(i+1, 2)
-		if got := strings.Count(projectsJS(state), `"baseOpened":true`); got != want {
+		if got := len(slices.DeleteFunc(projectItems(state), func(p jsProject) bool { return !p.BaseOpened })); got != want {
 			t.Fatalf("opened bases = %d, want %d", got, want)
 		}
 	}
 	if _, err := manager.CloseProject(sid, ""); err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Count(projectsJS(state), `"baseOpened":true`); got != 1 {
+	if got := len(slices.DeleteFunc(projectItems(state), func(p jsProject) bool { return !p.BaseOpened })); got != 1 {
 		t.Fatalf("closed base still numbered: %d open bases", got)
 	}
 	if !manager.SwitchProject(sid, "second") {
 		t.Fatal("cannot reopen active base")
 	}
-	if got := strings.Count(projectsJS(state), `"baseOpened":true`); got != 2 {
+	if got := len(slices.DeleteFunc(projectItems(state), func(p jsProject) bool { return !p.BaseOpened })); got != 2 {
 		t.Fatalf("reopened base missing: %d open bases", got)
 	}
 

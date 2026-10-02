@@ -8,7 +8,8 @@ import (
 
 // renderPage renders the full page layout
 func renderPage(state *AppState, sid string) *r.Node {
-	page := r.Div("h-screen w-screen flex flex-col overflow-hidden").ID("libro-workspace").Render(
+	css, _ := workspaceAssets.ReadFile("workspace.css")
+	page := r.Widget("workspace", map[string]any{"sid": sid, "plugins": plugins(), "keys": toolKeybindings(), "defaults": defaultToolKeybindings(), "autoexecute": browserPageToolsAutoExecute(), "css": string(css)}, "h-screen w-screen flex flex-col overflow-hidden").ID("libro-workspace").Render(
 		renderTopBar(state, sid),
 		renderMainAreaWrapper(state, sid),
 		r.Div("ws-statusbar").Render(r.Span("").Text("Local workspace"), r.Span("").Text("Agents, tools, and terminals • Libro")),
@@ -22,11 +23,10 @@ func renderPage(state *AppState, sid string) *r.Node {
 		renderWorktreeCreatePopup(),
 		r.Div("hidden").ID(ActionEffectsID).Attr("aria-hidden", "true"),
 	)
-	page.JS(popupRegistryJS() +
+	page.UnsafeJS(popupRegistryJS() +
 		uxHardenJS() +
 		flashCSS() +
 		termIconSetupJS() +
-		terminalFrameSetupJS() +
 		toastSetupJS() +
 		appWidthPolicyJS(sid) +
 		keyboardShortcutsJS(sid) +
@@ -34,13 +34,12 @@ func renderPage(state *AppState, sid string) *r.Node {
 		closeDialogJS(sid) +
 		components.BrowserJS() +
 		projectDialogJS(sid) +
-		projectsJS(state) +
 		urlPopupJS(sid) +
 		resizePopupJS(sid) +
 		commandPopupJS(sid) +
 		moveProjectPopupJS(sid) +
-		worktreeCreatePopupJS(sid) +
-		workspaceJS(sid),
+		worktreeCreatePopupJS(sid),
 	)
+	page.Render(projectScriptNodes(state)...)
 	return page
 }

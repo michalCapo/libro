@@ -9,11 +9,12 @@ import (
 func WorktreeCreatePopup() *r.Node {
 	return r.Div("ws-popup fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
 		ID(WorktreeCreatePopupID).
-		OnClick(r.JS(HideJS(WorktreeCreatePopupID))).
+		OnClick(r.Hide(WorktreeCreatePopupID)).
+		OnKey("Escape", r.Hide(WorktreeCreatePopupID)).
 		Render(
 			r.Div("bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden").
 				Attr("role", "dialog").Attr("aria-modal", "true").Attr("aria-label", "New worktree").
-				OnClick(r.JS("event.stopPropagation()")).
+				OnClick(r.UnsafeJS("event.stopPropagation();")).
 				Render(
 					r.Div("ws-command-search").Render(
 						r.I("material-icons-round").Attr("aria-hidden", "true").Text("search"),
@@ -24,7 +25,7 @@ func WorktreeCreatePopup() *r.Node {
 							Attr("autocomplete", "off").
 							Attr("spellcheck", "false"),
 						r.Span("text-[11px] font-mono text-gray-500 dark:text-zinc-500").ID("worktree-create-context").Text(""),
-						r.Button("ws-command-dismiss").Attr("type", "button").Attr("aria-label", "Close worktree picker").OnClick(r.JS(HideJS(WorktreeCreatePopupID))).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("close")),
+						r.Button("ws-command-dismiss").Attr("type", "button").Attr("aria-label", "Close worktree picker").OnClick(r.Hide(WorktreeCreatePopupID)).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("close")),
 					),
 					r.Div("max-h-80 overflow-y-auto").
 						ID("worktree-create-branches"),

@@ -203,13 +203,18 @@
       list.append(empty);
     }
   }
+  function dispose(el) {
+    const s = states.get(el.dataset.notes);
+    if (!s || s.el !== el) return;
+    clearTimeout(s.saveTimer);s.editor?.destroy();states.delete(s.id);
+  }
   function init() {
     const activeGrid = Array.from(document.querySelectorAll('[data-workspace-project]')).find(el => el.parentElement.style.display !== 'none');
     const workspace = activeGrid?.dataset.workspaceProject || '';
     const switched = activeWorkspace !== workspace;
     activeWorkspace = workspace;
     activeProject = activeGrid?.dataset.noteProject || '';
-    for (const [id, s] of states) if (!s.el.isConnected || s.el.closest('[data-workspace-project]')?.dataset.noteProject !== s.project) { clearTimeout(s.saveTimer); s.editor?.destroy(); states.delete(id); }
+    for (const [id, s] of states) if (!s.el.isConnected || s.el.closest('[data-workspace-project]')?.dataset.noteProject !== s.project) dispose(s.el);
     document.querySelectorAll('[data-notes]').forEach(el => {
       const project = el.closest('[data-workspace-project]')?.dataset.noteProject;
       if (project !== activeProject) return;
@@ -291,5 +296,5 @@
     }
     return reply.result;
   }
-  window.libroNotes = {init, receive, control};
+  window.libroNotes = {init, receive, control, dispose};
 })();

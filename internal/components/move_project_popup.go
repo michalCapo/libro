@@ -8,11 +8,12 @@ import (
 func MoveProjectPopup() *r.Node {
 	return r.Div("ws-popup fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
 		ID(MoveProjectPopupID).
-		OnClick(r.JS(HideJS(MoveProjectPopupID))).
+		OnClick(r.Hide(MoveProjectPopupID)).
+		OnKey("Escape", r.Hide(MoveProjectPopupID)).
 		Render(
 			r.Div("bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden").
 				Attr("role", "dialog").Attr("aria-modal", "true").Attr("aria-label", "Move to project").
-				OnClick(r.JS("event.stopPropagation()")).
+				OnClick(r.UnsafeJS("event.stopPropagation();")).
 				Render(
 					r.Div("ws-command-search").Render(
 						r.I("material-icons-round").Attr("aria-hidden", "true").Text("search"),
@@ -22,7 +23,7 @@ func MoveProjectPopup() *r.Node {
 							Attr("placeholder", "Type project or branch...").
 							Attr("autocomplete", "off").
 							Attr("spellcheck", "false"),
-						r.Button("ws-command-dismiss").Attr("type", "button").Attr("aria-label", "Close project picker").OnClick(r.JS(HideJS(MoveProjectPopupID))).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("close")),
+						r.Button("ws-command-dismiss").Attr("type", "button").Attr("aria-label", "Close project picker").OnClick(r.Hide(MoveProjectPopupID)).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("close")),
 					),
 					r.Div("max-h-80 overflow-y-auto").ID("move-project-results"),
 					r.Div("px-4 py-2 border-t border-gray-100 dark:border-zinc-800 flex items-center gap-4 text-[10px] font-mono text-gray-400 dark:text-zinc-600").Render(

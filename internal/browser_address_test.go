@@ -20,7 +20,7 @@ let script='';process.stdin.on('data',d=>script+=d);process.stdin.on('end',async
   const input=element(),results=element(),dialog=element(),address=element();address.value='about:blank';
   const nodes={'url-popup':dialog,'url-popup-input':input,'url-popup-results':results,'urlinput-a':address,'frame-a':{querySelector(){return element()}}};
   const window={libroElectron:electron,__libroSelectedApp:'a',__libroNavigateAddress(id,url){navigated=url;return true}};
-  vm.runInNewContext(script,{window,document:{getElementById(id){return nodes[id]},createElement:element},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},Date});
+  vm.runInNewContext(script,{window,__gsui:{show:()=>{dialog.hidden=false;dialog.classList.remove('hidden');}},document:{getElementById(id){return nodes[id]},createElement:element},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},Date});
   return {window,input,results,dialog};
  }
  let app=boot();app.window.__libroRememberURL('http://localhost:1411/');app.window.__libroRememberURL('https://example.com/');app.window.__libroRememberURL('http://localhost:1411/');

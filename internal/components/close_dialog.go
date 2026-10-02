@@ -1,20 +1,18 @@
 package components
 
 import (
-	"fmt"
-
 	r "github.com/michalCapo/g-sui/ui"
 )
 
 // CloseDialog renders the shared project-close and quit confirmation dialog.
 // Its app list and confirmation action are populated when opened.
-func CloseDialog(sid string) *r.Node {
+func CloseDialog(_ string) *r.Node {
 	return r.Div("ws-popup fixed inset-0 z-[70] flex items-start justify-center pt-[15vh] bg-black/40 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-75 hidden").
-		ID(CloseDialogID).
+		ID(CloseDialogID).OnKey("Escape", r.Hide(CloseDialogID)).
 		Render(
 			r.Div("ws-close-panel").
 				Attr("role", "dialog").Attr("aria-modal", "true").Attr("aria-labelledby", "close-dialog-title").
-				OnClick(r.JS("event.stopPropagation()")).
+				OnClick(r.UnsafeJS("event.stopPropagation();")).
 				Render(
 					r.Div("ws-close-heading").Render(
 						r.I("material-icons-round text-amber-500 text-lg").Text("warning"),
@@ -29,11 +27,11 @@ func CloseDialog(sid string) *r.Node {
 						r.Div("flex items-center gap-2").Render(
 							r.Button("ws-close-button").Attr("type", "button").
 								Text("Cancel").
-								Attr("onclick", HideJS(CloseDialogID)),
+								OnClick(r.Hide(CloseDialogID)),
 							r.Button("ws-close-button ws-close-quit").Attr("type", "button").
 								ID("close-dialog-confirm").Attr("autofocus", "").
 								Text("Quit").
-								Attr("onclick", fmt.Sprintf("__ws.call('app.close.all',{sid:'%s'});", sid)),
+								OnClick(r.Hide(CloseDialogID)),
 						),
 					),
 				),

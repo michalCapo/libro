@@ -309,16 +309,16 @@ func TestDefaultThreadAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := projectAutolaunchJS(state, "test"); !strings.Contains(got, `"plugin":"codex"`) {
-		t.Fatalf("thread preference not persisted: %s", got)
+	if got := projectAutolaunchPlugin(state); got == nil || got.ID != "codex" {
+		t.Fatalf("thread preference not persisted: %+v", got)
 	}
 	state.ActiveProject = "project"
-	if got := projectAutolaunchJS(state, "test"); got != "" {
-		t.Fatalf("base workspace must start empty: %s", got)
+	if got := projectAutolaunchPlugin(state); got != nil {
+		t.Fatalf("base workspace must start empty: %+v", got)
 	}
 	state.ActiveProject = "thread:test"
 	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "pi", Dock: "center"}}
-	if projectAutolaunchJS(state, "test") != "" {
+	if projectAutolaunchPlugin(state) != nil {
 		t.Fatal("duplicate agent launched")
 	}
 	state.Apps = nil
@@ -328,7 +328,7 @@ func TestDefaultThreadAgent(t *testing.T) {
 	if setDefaultThreadAgent("codex") == nil {
 		t.Fatal("accepted disabled agent")
 	}
-	if projectAutolaunchJS(state, "test") != "" {
+	if projectAutolaunchPlugin(state) != nil {
 		t.Fatal("launched disabled agent")
 	}
 	if err := setDefaultThreadAgent(""); err != nil {

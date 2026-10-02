@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	r "github.com/michalCapo/g-sui/ui"
-	"libro/internal/components"
 )
 
 var toolKeys = []struct{ ID, Name, Key string }{
@@ -142,18 +141,12 @@ func setToolKeybindings(bindings map[string]string) error {
 }
 
 func registerKeybindingActions(app *r.App) {
-	registerAction(app, "settings.tool-keys", func(ctx *r.Context) string {
-		raw, _ := json.Marshal(ctx.WsData()["bindings"])
-		var bindings map[string]string
-		err := json.Unmarshal(raw, &bindings)
-		if err == nil {
-			err = setToolKeybindings(bindings)
-		}
+	r.RegisterAction(app, "settings.tool-keys", func(_ *r.Context, in actionSettingsToolKeysInput) (r.Result, error) {
+		err := setToolKeybindings(in.Bindings)
 		if err != nil {
-			return fmt.Sprintf("libroWorkspace.toolKeysSaved(null,%s);", components.JSString(err.Error()))
+			return clientScript("libroWorkspace.toolKeysSaved(null,props[0]);", err.Error()), nil
 		}
-		encoded, _ := json.Marshal(bindings)
-		return fmt.Sprintf("libroWorkspace.toolKeysSaved(%s,'Saved. Shortcuts are active now.');", encoded)
+		return clientScript("libroWorkspace.toolKeysSaved(props[0],'Saved. Shortcuts are active now.');", in.Bindings), nil
 	})
 }
 
@@ -181,7 +174,7 @@ func renderToolKeybindings() *r.Node {
 				rows = append(rows, r.Div("ws-settings-row ws-agent-command-row").Render(
 					r.El("label", "").Attr("for", id).Text(tool.Name),
 					r.Input("ws-agent-command").ID(id).Attr("data-tool-key", tool.ID).Attr("readonly", "").Attr("placeholder", "Press shortcut"),
-					workspaceButton("Clear "+tool.Name+" shortcut", "close", "libroWorkspace.setShortcutValue(document.getElementById('"+id+"'),'')"),
+					workspaceButton("Clear "+tool.Name+" shortcut", "close", r.SetValue(id, "")),
 				))
 			}
 		}
@@ -194,8 +187,8 @@ func renderToolKeybindings() *r.Node {
 		content = append(content, r.El("h3", "ws-shortcut-heading").Text(group.Name), r.Div("ws-settings-group").Render(rows...))
 	}
 	content = append(content,
-		r.Div("ws-settings-row ws-settings-actions").Render(r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.resetToolKeys()")).Text("Restore defaults")),
+		r.Div("ws-settings-row ws-settings-actions").Render(r.Button("ws-launch").Attr("type", "button").OnClick(r.UnsafeJS("libroWorkspace.resetToolKeys()")).Text("Restore defaults")),
 		r.P("ws-settings-status").ID("tool-key-status").Attr("role", "status"),
 	)
-	return r.El("form", "").ID("tool-key-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveAllSettings()")).Render(content...)
+	return r.El("form", "").ID("tool-key-form").OnSubmit(r.UnsafeJS("libroWorkspace.saveAllSettings()")).Render(content...)
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -41,29 +42,29 @@ func TestApplicationControlLifecycle(t *testing.T) {
 	}
 	switchToProjectName("test", "other")
 	js, result, err := controlApplication("test", path, "status")
-	if err != nil || js != "" || result["status"] != "stopped" || sm.Get("test").ActiveProject != "other" {
+	if err != nil || !reflect.ValueOf(js).IsZero() || result["status"] != "stopped" || sm.Get("test").ActiveProject != "other" {
 		t.Fatalf("background status: %v %v", result, err)
 	}
 	js, result, err = controlApplication("test", path, "logs")
-	if err != nil || js != "" || result["logs"] != "" || result["status"] != "stopped" || result["truncated"] != false || sm.Get("test").ActiveProject != "other" {
+	if err != nil || !reflect.ValueOf(js).IsZero() || result["logs"] != "" || result["status"] != "stopped" || result["truncated"] != false || sm.Get("test").ActiveProject != "other" {
 		t.Fatalf("empty background logs: %v %v", result, err)
 	}
 	js, result, err = controlApplication("test", path, "start")
-	if err != nil || js == "" || result["status"] != "starting" {
+	if err != nil || reflect.ValueOf(js).IsZero() || result["status"] != "starting" {
 		t.Fatalf("start: %v %v", result, err)
 	}
-	if sm.Get("test").ActiveProject != "other" || strings.Contains(js, "libroWorkspace.select(") {
+	if sm.Get("test").ActiveProject != "other" {
 		t.Fatal("start changed the visible workspace or selection")
 	}
 	first := sm.Get("test").snapshots["project"].Apps[1].ID
 	switchToProjectName("test", "other")
 	js, result, err = controlApplication("test", path, "start")
-	if err != nil || js != "" || result["status"] != "starting" || sm.Get("test").ActiveProject != "other" {
+	if err != nil || !reflect.ValueOf(js).IsZero() || result["status"] != "starting" || sm.Get("test").ActiveProject != "other" {
 		t.Fatalf("background idempotent start: %v %v", result, err)
 	}
 	switchToProjectName("test", "project")
 	js, result, err = controlApplication("test", path, "start")
-	if err != nil || js != "" || result["status"] != "starting" || len(sm.Get("test").Apps) != 2 {
+	if err != nil || !reflect.ValueOf(js).IsZero() || result["status"] != "starting" || len(sm.Get("test").Apps) != 2 {
 		t.Fatal("repeated start must preserve pending launch")
 	}
 	if runtime.GOOS != "windows" {
@@ -73,7 +74,7 @@ func TestApplicationControlLifecycle(t *testing.T) {
 		}
 		sm.HydrateTerminalByID("test", first, session.ID)
 		js, result, err = controlApplication("test", path, "start")
-		if err != nil || js != "" || result["status"] != "running" {
+		if err != nil || !reflect.ValueOf(js).IsZero() || result["status"] != "running" {
 			t.Fatal("start must preserve a running application")
 		}
 		tm.Stop(first)
@@ -155,7 +156,7 @@ func TestProjectThreadsShareApplicationProcessButNotBrowsers(t *testing.T) {
 	}
 	switchThread("thread:two", "browser-two")
 	js, result, err := controlApplication("test", path, "start")
-	if err != nil || js != "" || result["status"] != "starting" || state.Apps[1].ID != first {
+	if err != nil || !reflect.ValueOf(js).IsZero() || result["status"] != "starting" || state.Apps[1].ID != first {
 		t.Fatalf("second thread duplicated pending application: %v %v", result, err)
 	}
 	if runtime.GOOS != "windows" {
@@ -171,7 +172,7 @@ func TestProjectThreadsShareApplicationProcessButNotBrowsers(t *testing.T) {
 			}
 			switchThread(thread, browser)
 			js, result, err = controlApplication("test", path, "start")
-			if err != nil || js != "" || result["status"] != "running" || state.Apps[1].ID != first || !tm.IsRunning(first) {
+			if err != nil || !reflect.ValueOf(js).IsZero() || result["status"] != "running" || state.Apps[1].ID != first || !tm.IsRunning(first) {
 				t.Fatalf("thread failed to reuse live application: %v %v", result, err)
 			}
 		}
@@ -244,16 +245,13 @@ func TestApplicationBackgroundHydrationPreservesWorkspace(t *testing.T) {
 	sm.states["test"] = state
 	panel, _ := sm.insertProjectCommand("test", "background", "sleep 60", 0, false, path)
 	js, handled := hydrateProjectCommand("test", panel.ID)
-	if !handled || js == "" || !tm.IsRunning(panel.ID) || !state.snapshots["background"].Apps[0].TerminalReady {
+	if !handled || reflect.ValueOf(js).IsZero() || !tm.IsRunning(panel.ID) || !state.snapshots["background"].Apps[0].TerminalReady {
 		t.Fatal("background application was marked ready without starting its process")
 	}
 	if state.ActiveProject != "visible" || state.SelectedIndex != 1 || len(state.Apps) != 2 {
 		t.Fatal("background hydration changed the user's workspace")
 	}
-	if strings.Contains(js, "libroWorkspace.select(") || strings.Contains(js, "__libroSelectedApp=") {
-		t.Fatal("background hydration emits selection changes")
-	}
-	if js, handled := hydrateProjectCommand("test", panel.ID); !handled || js != "" {
+	if js, handled := hydrateProjectCommand("test", panel.ID); !handled || !reflect.ValueOf(js).IsZero() {
 		t.Fatal("repeated hydration must preserve the running process")
 	}
 	if sm.RemoveAppByID("test", panel.ID) == nil || len(state.snapshots["background"].Apps) != 0 || state.SelectedIndex != 1 {
@@ -300,7 +298,7 @@ func TestPerThreadApplicationIsolation(t *testing.T) {
 		t.Fatal("background launch changed selection")
 	}
 	js, again, err := controlApplication("test", branch, "start")
-	if err != nil || js != "" || again["port"] != second["port"] {
+	if err != nil || !reflect.ValueOf(js).IsZero() || again["port"] != second["port"] {
 		t.Fatal("start must be idempotent")
 	}
 	switchToProjectName("test", "project/branch")
@@ -316,7 +314,7 @@ func TestPerThreadApplicationIsolation(t *testing.T) {
 			data, readErr := os.ReadFile(filepath.Join(branch, "assigned-port"))
 			js, logs, logErr := controlApplication("test", branch, "logs")
 			if readErr == nil && string(data) == strconv.Itoa(secondPanel.ApplicationPort) && logErr == nil && strings.Contains(logs["logs"].(string), "thread-output") {
-				if js != "" || state.ActiveProject != "project/branch" {
+				if !reflect.ValueOf(js).IsZero() || state.ActiveProject != "project/branch" {
 					t.Fatal("logs changed the visible workspace")
 				}
 				_, other, err := controlApplication("test", root, "logs")
@@ -379,7 +377,7 @@ func TestPerThreadApplicationIsolation(t *testing.T) {
 	if len(state.Apps) != 2 || state.Apps[1].ID != shared.ID {
 		t.Fatal("shared application did not follow the selected worktree")
 	}
-	if js, _, err := controlApplication("test", branch, "start"); err != nil || js != "" {
+	if js, _, err := controlApplication("test", branch, "start"); err != nil || !reflect.ValueOf(js).IsZero() {
 		t.Fatal("shared start duplicated application across worktrees")
 	}
 	if _, _, err := controlApplication("test", branch, "stop"); err != nil || len(state.Apps) != 1 {

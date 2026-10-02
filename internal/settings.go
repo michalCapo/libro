@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	r "github.com/michalCapo/g-sui/ui"
-	"libro/internal/components"
 	"regexp"
 	"slices"
 	"sort"
@@ -339,11 +338,11 @@ func setDefaultThreadAgent(id string) error {
 }
 
 func renderAgentCommands() *r.Node {
-	return r.El("form", "").ID("agent-commands-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveAllSettings()")).Render(
+	return r.El("form", "").ID("agent-commands-form").OnSubmit(r.UnsafeJS("libroWorkspace.saveAllSettings()")).Render(
 		r.Div("ws-settings-group").Render(
 			r.Div("").ID("agent-command-rows"),
 			r.Div("ws-settings-row").Render(
-				r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addCustomAgent()")).Text("Add custom agent"),
+				r.Button("ws-launch").Attr("type", "button").OnClick(r.UnsafeJS("libroWorkspace.addCustomAgent()")).Text("Add custom agent"),
 			),
 		),
 		r.P("ws-settings-status").Attr("role", "status"),
@@ -351,96 +350,55 @@ func renderAgentCommands() *r.Node {
 }
 
 func registerSettingsActions(app *r.App) {
-	registerAction(app, "settings.agent-environment", func(ctx *r.Context) string {
-		raw, _ := json.Marshal(ctx.WsData()["entries"])
-		var entries []environmentInput
-		err := json.Unmarshal(raw, &entries)
-		if err == nil {
-			err = setAgentEnvironment(entries)
-		}
+	r.RegisterAction(app, "settings.agent-environment", func(_ *r.Context, in actionSettingsAgentEnvironmentInput) (r.Result, error) {
+		err := setAgentEnvironment(in.Entries)
 		message := "Saved. Applies to new agent sessions."
 		if err != nil {
 			message = "Could not save: " + err.Error()
 		}
-		names, _ := json.Marshal(agentEnvironmentNames())
-		return fmt.Sprintf("libroWorkspace.agentEnvironmentSaved(%t,%s,%s);", err == nil, components.JSString(message), names)
+		return clientScript("libroWorkspace.agentEnvironmentSaved(props[0],props[1],props[2]);", err == nil, message, agentEnvironmentNames()), nil
 	})
-	registerAction(app, "settings.thread-agent", func(ctx *r.Context) string {
-		id, ok := ctx.WsData()["agent"].(string)
+	r.RegisterAction(app, "settings.thread-agent", func(_ *r.Context, in actionSettingsThreadAgentInput) (r.Result, error) {
+		id, ok := inputField(in.Agent)
 		saved := ok && setDefaultThreadAgent(id) == nil
-		return fmt.Sprintf("libroWorkspace.threadAgentSaved(%t,%s);", saved, components.JSString(defaultThreadAgent()))
+		return clientScript("libroWorkspace.threadAgentSaved(props[0],props[1]);", saved, defaultThreadAgent()), nil
 	})
-	registerAction(app, "settings.page-tools", func(ctx *r.Context) string {
-		enabled, ok := ctx.WsData()["autoexecute"].(bool)
+	r.RegisterAction(app, "settings.page-tools", func(_ *r.Context, in actionSettingsPageToolsInput) (r.Result, error) {
+		enabled, ok := inputField(in.Autoexecute)
 		saved := ok && setBrowserPageToolsAutoExecute(enabled) == nil
-		return fmt.Sprintf("libroWorkspace.pageToolsSaved(%t,%t);", saved, browserPageToolsAutoExecute())
+		return clientScript("libroWorkspace.pageToolsSaved(props[0],props[1]);", saved, browserPageToolsAutoExecute()), nil
 	})
 	registerKeybindingActions(app)
 	registerProjectCommandActions(app)
 	registerToolSettings(app)
-	registerAction(app, "settings.agent-command", func(ctx *r.Context) string {
-		raw, _ := json.Marshal(ctx.WsData()["commands"])
-		var commands map[string]string
-		err := json.Unmarshal(raw, &commands)
-		if err == nil {
-			var disabled map[string]bool
-			var custom []Plugin
-			disabledRaw, _ := json.Marshal(ctx.WsData()["disabled"])
-			customRaw, _ := json.Marshal(ctx.WsData()["custom"])
-			err = json.Unmarshal(disabledRaw, &disabled)
-			if err == nil {
-				err = json.Unmarshal(customRaw, &custom)
-			}
-			if err == nil {
-				var names map[string]string
-				namesRaw, _ := json.Marshal(ctx.WsData()["names"])
-				err = json.Unmarshal(namesRaw, &names)
-				if err == nil {
-					var removed map[string]bool
-					raw, _ := json.Marshal(ctx.WsData()["removed"])
-					err = json.Unmarshal(raw, &removed)
-					if err == nil {
-						var order []string
-						raw, _ := json.Marshal(ctx.WsData()["order"])
-						err = json.Unmarshal(raw, &order)
-						if err == nil {
-							err = saveAgentSettings(commands, disabled, custom, names, removed, order)
-						}
-					}
-				}
-			}
-		}
+	r.RegisterAction(app, "settings.agent-command", func(_ *r.Context, in actionSettingsAgentCommandInput) (r.Result, error) {
+		err := saveAgentSettings(in.Commands, in.Disabled, in.Custom, in.Names, in.Removed, in.Order)
 		message := "Saved. Applies to new sessions."
 		if err != nil {
 			message = "Could not save: " + err.Error()
 		}
-		list, _ := json.Marshal(plugins())
-		return fmt.Sprintf("libroWorkspace.agentCommandSaved(%s,%s,%t);", components.JSString(message), list, err == nil)
+		return clientScript("libroWorkspace.agentCommandSaved(props[0],props[1],props[2]);", message, plugins(), err == nil), nil
 	})
-	registerAction(app, "settings.open", func(_ *r.Context) string {
+	r.RegisterAction(app, "settings.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		commands := map[string]string{}
 		for _, plugin := range plugins() {
 			if plugin.Dock == "center" && plugin.Type == AppTypeTerminal {
 				commands[plugin.ID] = agentCommand(plugin)
 			}
 		}
-		encoded, _ := json.Marshal(commands)
-		keys, _ := json.Marshal(toolKeybindings())
-		list, _ := json.Marshal(plugins())
-		environment, _ := json.Marshal(agentEnvironmentNames())
-		return fmt.Sprintf("window.__libroPlugins=%s;libroWorkspace.showSettings(%s,%s,%s,%s,%s,%t,%s,%s);", list, components.JSString(string(DBDefaultPanelWidth())), encoded, keys, components.JSString(string(DBDefaultToolPanelWidth())), components.JSString(defaultThreadAgent()), browserPageToolsAutoExecute(), environment, components.JSString(editorToolID()))
+		return clientScript("window.__libroPlugins=props[0];libroWorkspace.showSettings(props[1],props[2],props[3],props[4],props[5],props[6],props[7],props[8]);", plugins(), string(DBDefaultPanelWidth()), commands, toolKeybindings(), string(DBDefaultToolPanelWidth()), defaultThreadAgent(), browserPageToolsAutoExecute(), agentEnvironmentNames(), editorToolID()), nil
 	})
-	registerAction(app, "settings.width", func(ctx *r.Context) string {
-		value, _ := ctx.WsData()["width"].(string)
-		tool, _ := ctx.WsData()["tool"].(bool)
+	r.RegisterAction(app, "settings.width", func(_ *r.Context, in actionSettingsWidthInput) (r.Result, error) {
+		value := in.Width
+		tool := in.Tool
 		setter := DBSetDefaultPanelWidth
 		if tool {
 			setter = DBSetDefaultToolPanelWidth
 		}
 		if err := setter(Width(value)); err != nil {
-			return fmt.Sprintf("libroWorkspace.settingsSaved(false,%t);", tool)
+			return clientScript("libroWorkspace.settingsSaved(false,props[0]);", tool), nil
 		}
-		return fmt.Sprintf("libroWorkspace.settingsSaved(true,%t);", tool)
+		return clientScript("libroWorkspace.settingsSaved(true,props[0]);", tool), nil
 	})
 }
 
@@ -513,11 +471,11 @@ func renderWorkspaceSettings() *r.Node {
 			r.P("ws-settings-status").ID("page-tools-autoexecute-status").Attr("role", "status"),
 			r.El("h2", "ws-shortcut-heading").Text("Agent environment"),
 			r.P("ws-settings-status").Text("Environment variables passed to new agent sessions. Saved values stay hidden in Settings."),
-			r.El("form", "").ID("agent-environment-form").On("submit", r.JS("event.preventDefault();libroWorkspace.saveAllSettings()")).Render(
+			r.El("form", "").ID("agent-environment-form").OnSubmit(r.UnsafeJS("libroWorkspace.saveAllSettings()")).Render(
 				r.Div("ws-settings-group").Render(
 					r.Div("").ID("agent-environment-rows"),
 					r.Div("ws-settings-row").Render(
-						r.Button("ws-launch").Attr("type", "button").OnClick(r.JS("libroWorkspace.addAgentEnvironment()")).Text("Add variable"),
+						r.Button("ws-launch").Attr("type", "button").OnClick(r.UnsafeJS("libroWorkspace.addAgentEnvironment()")).Text("Add variable"),
 					),
 				),
 				r.P("ws-settings-status").Attr("role", "status"),
@@ -561,8 +519,8 @@ func renderWorkspaceSettings() *r.Node {
 		),
 		r.Div("ws-settings-footer").Render(
 			r.P("ws-settings-status").ID("settings-save-status").Attr("role", "status").Attr("aria-live", "polite"),
-			r.Button("ws-launch").ID("settings-cancel").Attr("type", "button").OnClick(r.JS("libroWorkspace.closeSettings()")).Text("Cancel"),
-			r.Button("ws-launch").ID("settings-save").Attr("type", "button").OnClick(r.JS("libroWorkspace.saveAllSettings()")).Text("Save"),
+			r.Button("ws-launch").ID("settings-cancel").Attr("type", "button").OnClick(r.UnsafeJS("libroWorkspace.closeSettings()")).Text("Cancel"),
+			r.Button("ws-launch").ID("settings-save").Attr("type", "button").OnClick(r.UnsafeJS("libroWorkspace.saveAllSettings()")).Text("Save"),
 		),
 	)
 }
