@@ -181,11 +181,11 @@
     });
     return false;
   };
-  function launcher(dock, onLaunch, replace = false) {
+  function launcher(dock, onLaunch, replace = false, newThread = false) {
     if (dock === 'bottom') { bottom(); return; }
     let dialog = document.getElementById('workspace-plugin-dialog');
     if (dialog) dialog.remove();
-    dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-plugin-dialog'; dialog.setAttribute('aria-label', dock === 'center' ? (replace ? 'Replace agent' : 'New agent session') : 'Open an app');
+    dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-plugin-dialog'; dialog.setAttribute('aria-label', dock === 'center' ? (newThread ? 'New thread with agent' : replace ? 'Replace agent' : 'New agent session') : 'Open an app');
     const searchBar = node('div', 'ws-command-search');
     const search = node('input', 'ws-palette-search'); search.placeholder = dock === 'center' ? 'Search agents…' : 'Search apps…'; search.setAttribute('aria-label', dock === 'center' ? 'Search agents' : 'Search apps'); search.autocomplete = 'off'; search.spellcheck = false;
     const dismiss = node('button', 'ws-command-dismiss'); dismiss.append(node('i', 'material-icons-round', 'close')); dismiss.firstChild.setAttribute('aria-hidden', 'true'); dismiss.type = 'button'; dismiss.setAttribute('aria-label', 'Close app launcher'); dismiss.onclick = () => dialog.close();
@@ -199,7 +199,7 @@
     const entries = node('div', 'ws-plugin-list');
     list.forEach(plugin => {
       const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; const icon = node('i', 'material-icons-round', plugin.type === 'url' ? 'language' : 'terminal'); icon.setAttribute('aria-hidden', 'true'); const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', plugin.name), node('small', '', plugin.description || plugin.command || 'Browser app')); entry.append(icon, copy); applyToolIcon(entry, plugin);
-      entry.onclick = () => { dialog.close(); openPlugin(plugin.id, dock, entry, replace); onLaunch?.(); }; entries.append(entry);
+      entry.onclick = () => { dialog.close(); if (newThread) call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''}); else openPlugin(plugin.id, dock, entry, replace); onLaunch?.(); }; entries.append(entry);
     });
     dialog.append(entries);
     let active = 0;
@@ -932,6 +932,7 @@
     if (bindings) { toolKeys = bindings; fillToolKeys(bindings); updateToolHints(); }
   }
   let lastCtrlA = 0;
+  let lastCtrlAGrid;
   function hideTools() {
     const grid = activeGrid(); if (!grid) return;
     maximized = '';
@@ -980,10 +981,11 @@
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
       if (event.repeat) return;
       const now = performance.now();
-      if (lastCtrlA && now - lastCtrlA < 450) {
+      const grid = activeGrid();
+      if (grid && grid === lastCtrlAGrid && lastCtrlA && now - lastCtrlA < 450) {
         lastCtrlA = 0; event.preventDefault(); event.stopImmediatePropagation(); hideTools(); return;
       }
-      lastCtrlA = now;
+      lastCtrlA = now; lastCtrlAGrid = grid;
     } else if (!['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) lastCtrlA = 0;
     const number = /^[1-9]$/.test(event.key) ? event.key : /^Digit[1-9]$/.test(event.code || '') ? event.code.slice(-1) : '';
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && number) {
@@ -1052,6 +1054,11 @@
     if (binding && binding === toolKeys['new-thread']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) newThread();
+      return;
+    }
+    if (binding && binding === toolKeys['new-thread-agent']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) launcher('center', undefined, false, true);
       return;
     }
     if (binding && binding === toolKeys['replace-agent']) {

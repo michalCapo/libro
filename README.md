@@ -358,7 +358,7 @@ libro notes '{"action":"delete","id":"NOTE_ID"}'
 
 New thread is available in the command palette and has no default shortcut.
 Ctrl+Shift+P opens the project list. Meta+; opens the command palette.
-Ctrl+Shift+A opens Replace agent for the current thread. These shortcuts can be
+Ctrl+Shift+A opens the agent picker and starts the chosen agent in a new thread. Ctrl+A focuses or opens an agent within the selected thread. These shortcuts can be
 changed in Settings. Ctrl+N and Ctrl+P are unbound by default.
 Use the sidebar button to toggle projects.
 

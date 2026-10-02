@@ -581,9 +581,9 @@ test('double Ctrl+A hides all tools and the bottom terminal without closing them
   const handler = source.slice(source.indexOf('  let lastCtrlA'), source.indexOf("  window.addEventListener('keydown', event => {"))
   const detection = source.slice(source.indexOf("    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a')"), source.indexOf("    const number = /^[1-9]$/"))
   const state = {hidden:new Set(), bottom:true}
-  let now = 100, focused = 0
+  let now = 100, focused = 0, grid = {}
   const context = vm.createContext({
-    performance:{now:() => now}, activeGrid:() => ({}), dockState:() => state,
+    performance:{now:() => now}, activeGrid:() => grid, dockState:() => state,
     frames:() => ['center', 'right', 'right', 'bottom'].map((dock, i) => ({dataset:{dock, appId:String(i)}})),
     restoreAgentFocus:() => focused++, maximized:'tool',
     event:{ctrlKey:true, key:'a', preventDefault(){}, stopImmediatePropagation(){}},
@@ -602,6 +602,13 @@ test('double Ctrl+A hides all tools and the bottom terminal without closing them
   now = 1500
   vm.runInContext('press()', context)
   assert.equal(focused, 1)
+  now = 1600
+  grid = {}
+  vm.runInContext('press()', context)
+  assert.equal(focused, 1, 'presses in different threads must not hide tools')
+  now = 1700
+  vm.runInContext('press()', context)
+  assert.equal(focused, 2)
 })
 
 test('address popup reclaims native focus only for the workspace sender', () => {
@@ -995,5 +1002,65 @@ test('command palette uses its configured shortcut and ignores repeated presses'
       window: {__libroOpenCommandPalette(){opened++}},
     })
     assert.equal(opened, configured && !repeat ? 1 : 0)
+  }
+})
+
+
+test('new thread with agent shortcut opens a picker and ignores repeats', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf("    if (binding && binding === toolKeys['new-thread-agent'])"), source.indexOf("    if (binding && binding === toolKeys['replace-agent'])"))
+  for (const binding of ['Ctrl+Shift+A', 'Alt+A']) for (const repeat of [false, true]) {
+    const launches = []
+    vm.runInNewContext('(function(){' + handler + '})()', {
+      binding, toolKeys: { 'new-thread-agent': binding },
+      event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
+      launcher: (...args) => launches.push(args),
+    })
+    assert.deepEqual(launches, repeat ? [] : [['center', undefined, false, true]])
+  }
+})
+
+test('agent picker creates a new thread only in the new thread mode', () => {
+  const { JSDOM } = require('jsdom')
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const launcher = source.slice(source.indexOf('  function launcher('), source.indexOf('  function empty('))
+  for (const project of ['', 'thread:standalone', 'project', 'project/branch']) {
+    for (const [replace, newThread] of [[false, false], [true, false], [false, true]]) {
+      const dom = new JSDOM('<div id="root"></div>')
+      const { document } = dom.window
+      dom.window.HTMLDialogElement.prototype.showModal = function() {}
+      dom.window.HTMLDialogElement.prototype.close = function() {}
+      const calls = []
+      vm.runInNewContext(launcher + ';launcher("center", undefined, replace, newThread)', {
+        replace, newThread, document, root: document.getElementById('root'),
+        window: { __libroActiveProject: project, __libroPlugins: [{id:'codex', name:'Codex', dock:'center', type:'terminal'}] },
+        node(tag, cls, text) { const el = document.createElement(tag); el.className = cls; if (text) el.textContent = text; return el },
+        applyToolIcon() {},
+        call: (action, data) => calls.push([action, JSON.parse(JSON.stringify(data))]),
+        openPlugin: (...args) => calls.push(['openPlugin', args[0], args[1], args[3]]),
+      })
+      assert.equal(calls.length, 0, 'opening or dismissing the picker must not create a thread')
+      document.querySelector('.ws-plugin-entry').click()
+      assert.deepEqual(calls, newThread ? [['thread.create', {agent:'codex', project}]] : [['openPlugin', 'codex', 'center', replace]])
+      dom.window.close()
+    }
+  }
+})
+
+test('Ctrl+A stays in the selected thread even when another thread has an agent', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf("    if (binding === 'Ctrl+A')"), source.indexOf("    if (binding === 'Ctrl+D'"))
+  for (const occupied of [false, true]) {
+    const selectedGrid = { querySelector: () => null }
+    const otherGrid = {}
+    const calls = []
+    vm.runInNewContext('(function(){' + handler + '})()', {
+      binding: 'Ctrl+A', activeGrid: () => selectedGrid,
+      frames: grid => grid === otherGrid || occupied ? [{dataset:{appId:grid === otherGrid ? 'other-agent' : 'selected-agent', dock:'center'}}] : [],
+      dockState: () => ({agent:'other-agent'}),
+      launcher: dock => calls.push(['launcher', dock]), select: id => calls.push(['select', id]),
+      event: { preventDefault() {}, stopImmediatePropagation() {} },
+    })
+    assert.deepEqual(calls, occupied ? [['select', 'selected-agent']] : [['launcher', 'center']])
   }
 })

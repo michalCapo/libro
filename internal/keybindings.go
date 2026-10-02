@@ -35,7 +35,8 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"new-thread", "New thread", ""},
 	{"finish-thread", "Finish current thread…", ""},
 	{"thread-actions", "Thread actions", "Ctrl+;"},
-	{"replace-agent", "Replace agent", "Ctrl+Shift+A"},
+	{"replace-agent", "Replace agent", ""},
+	{"new-thread-agent", "New thread with agent", "Ctrl+Shift+A"},
 	{"previous-agent", "Previous panel", "Ctrl+H"},
 	{"next-agent", "Next panel", "Ctrl+L"},
 	{"command-palette", "Command palette", "Meta+;"},
@@ -157,6 +158,10 @@ func toolKeybindings() map[string]string {
 					saved["replace-agent"] = "Ctrl+Shift+A"
 				}
 			}
+			if _, exists := saved["new-thread-agent"]; !exists && saved["replace-agent"] == "Ctrl+Shift+A" {
+				saved["replace-agent"] = ""
+				saved["new-thread-agent"] = "Ctrl+Shift+A"
+			}
 			for _, shortcut := range toolKeys {
 				if _, exists := saved[shortcut.ID]; exists {
 					continue
@@ -218,7 +223,7 @@ func renderToolKeybindings() *r.Node {
 	}{
 		{"General", []string{"command-palette", "settings", "voice"}},
 		{"Projects & threads", []string{"project-picker", "close-project", "new-thread", "finish-thread", "thread-actions", "run-project", "stop-project"}},
-		{"Agents", []string{"new-agent", "replace-agent"}},
+		{"Agents", []string{"new-agent", "new-thread-agent", "replace-agent"}},
 		{"Tools", []string{"terminal", "browser", "new-browser", "previous-browser", "next-browser", "files", "notes"}},
 		{"Panels", []string{"previous-agent", "next-agent", "close-panel", "panel-size-down", "panel-size-up", "panel-size-max"}},
 		{"Zoom", []string{"zoom-in", "zoom-out", "zoom-reset"}},

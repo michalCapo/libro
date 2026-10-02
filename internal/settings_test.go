@@ -2,6 +2,7 @@ package libro
 
 import (
 	"database/sql"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -512,7 +513,7 @@ func TestReplaceAgentShortcutMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	keys := toolKeybindings()
-	if keys["new-agent"] != "" || keys["replace-agent"] != "Ctrl+Shift+A" || keys["new-thread"] != "" || keys["terminal"] != "Ctrl+Alt+T" {
+	if keys["new-agent"] != "" || keys["replace-agent"] != "" || keys["new-thread-agent"] != "Ctrl+Shift+A" || keys["new-thread"] != "" || keys["terminal"] != "Ctrl+Alt+T" {
 		t.Fatalf("incorrect shortcut migration: %v", keys)
 	}
 	if err := validateToolKeybindings(keys); err != nil {
@@ -524,6 +525,57 @@ func TestReplaceAgentShortcutMigration(t *testing.T) {
 	}
 	if toolKeybindings()["replace-agent"] != "Ctrl+Alt+N" {
 		t.Fatal("migration overwrote a customized replacement shortcut")
+	}
+}
+
+func TestNewThreadAgentShortcutMigration(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "settings.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	for _, test := range []struct {
+		name, replace, threadAgent, terminal string
+	}{
+		{"previous default", "Ctrl+Shift+A", "Ctrl+Shift+A", "Ctrl+T"},
+		{"custom replacement", "Alt+A", "Ctrl+Shift+A", "Ctrl+T"},
+		{"disabled replacement", "", "Ctrl+Shift+A", "Ctrl+T"},
+		{"shortcut collision", "Alt+A", "", "Ctrl+Shift+A"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			saved := defaultToolKeybindings()
+			delete(saved, "new-thread-agent")
+			saved["replace-agent"] = test.replace
+			saved["terminal"] = test.terminal
+			raw, err := json.Marshal(saved)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec(`INSERT OR REPLACE INTO settings (key,value) VALUES ('tool_keybindings',?)`, string(raw)); err != nil {
+				t.Fatal(err)
+			}
+			keys := toolKeybindings()
+			replacement := test.replace
+			if replacement == "Ctrl+Shift+A" {
+				replacement = ""
+			}
+			if keys["new-thread-agent"] != test.threadAgent || keys["replace-agent"] != replacement || keys["terminal"] != test.terminal {
+				t.Fatalf("incorrect shortcut migration: %v", keys)
+			}
+			keys["new-thread-agent"] = "Alt+N"
+			keys["replace-agent"] = "Ctrl+Shift+A"
+			keys["terminal"] = "Ctrl+T"
+			if err := setToolKeybindings(keys); err != nil {
+				t.Fatal(err)
+			}
+			keys = toolKeybindings()
+			if keys["new-thread-agent"] != "Alt+N" || keys["replace-agent"] != "Ctrl+Shift+A" {
+				t.Fatal("migration overwrote saved custom shortcuts")
+			}
+		})
 	}
 }
 
