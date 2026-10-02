@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
-	"net/url"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -16,43 +14,6 @@ import (
 
 	"libro/internal/components"
 )
-
-// urlParse is a convenience wrapper around url.Parse.
-func urlParse(rawURL string) (*url.URL, error) {
-	return url.Parse(rawURL)
-}
-
-func faviconURL(rawURL string, size int) string {
-	rawURL = strings.TrimSpace(rawURL)
-	if rawURL == "" {
-		return ""
-	}
-	if size <= 0 {
-		size = 32
-	}
-
-	u, err := urlParse(rawURL)
-	if err == nil && strings.EqualFold(u.Scheme, "file") {
-		return ""
-	}
-	if err != nil || u.Hostname() == "" {
-		u, err = urlParse("https://" + rawURL)
-	}
-	if err != nil || u.Hostname() == "" || strings.EqualFold(u.Scheme, "file") {
-		return ""
-	}
-
-	host := strings.ToLower(u.Hostname())
-	if host == "localhost" || strings.HasSuffix(host, ".localhost") || !strings.Contains(host, ".") || net.ParseIP(host) != nil {
-		return ""
-	}
-
-	target := u.Hostname()
-	if u.Scheme != "" && u.Host != "" {
-		target = u.Scheme + "://" + u.Host
-	}
-	return fmt.Sprintf("https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=%s&size=%d", url.QueryEscape(target), size)
-}
 
 const (
 	MainAreaID = "main-area"

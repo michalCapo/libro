@@ -2,7 +2,6 @@ package libro
 
 import (
 	"database/sql"
-	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -47,13 +46,13 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	if err := DBSetDefaultPanelWidth(Width("invalid")); err == nil {
 		t.Fatal("accepted invalid width")
 	}
-	if err := setAgentCommand("codex", "codex --model custom-model"); err != nil {
+	if err := saveAgentSettings(map[string]string{"codex": "codex --model custom-model"}, nil, nil, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := setAgentCommand("codex", "  "); err == nil {
+	if err := saveAgentSettings(map[string]string{"codex": "  "}, nil, nil, nil, nil, nil); err == nil {
 		t.Fatal("accepted empty command")
 	}
-	if err := setAgentCommand("browser", "anything"); err == nil {
+	if err := saveAgentSettings(map[string]string{"browser": "anything"}, nil, nil, nil, nil, nil); err == nil {
 		t.Fatal("accepted tool override")
 	}
 	if got := agentCommand(builtinPlugins[1]); got != "pi" {
@@ -66,10 +65,10 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	custom := Plugin{ID: "custom-test", Name: "My agent", Type: AppTypeTerminal, Dock: "center", Command: "my-agent --chat", Custom: true}
-	if err := saveAgentConfig(map[string]string{"custom-test": custom.Command}, map[string]bool{"codex": true, "custom-test": true}, []Plugin{custom}, map[string]string{"codex": "My Codex", "custom-test": "My agent"}); err != nil {
+	if err := saveAgentSettings(map[string]string{"custom-test": custom.Command}, map[string]bool{"codex": true, "custom-test": true}, []Plugin{custom}, map[string]string{"codex": "My Codex", "custom-test": "My agent"}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := saveAgentConfig(map[string]string{"custom-test": ""}, map[string]bool{"codex": false}, []Plugin{custom}, map[string]string{"codex": "My Codex", "custom-test": "My agent"}); err == nil {
+	if err := saveAgentSettings(map[string]string{"custom-test": ""}, map[string]bool{"codex": false}, []Plugin{custom}, map[string]string{"codex": "My Codex", "custom-test": "My agent"}, nil, nil); err == nil {
 		t.Fatal("accepted empty custom command")
 	}
 	if err := db.Close(); err != nil {
@@ -119,10 +118,10 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 			t.Errorf("%s width = %s, want %s", app.PluginID, got, want)
 		}
 	}
-	if err := saveAgentConfig(nil, map[string]bool{"codex": false}, nil, nil, map[string]bool{"codex": true}); err == nil {
+	if err := saveAgentSettings(nil, map[string]bool{"codex": false}, nil, nil, map[string]bool{"codex": true}, nil); err == nil {
 		t.Fatal("removed enabled agent")
 	}
-	if err := saveAgentConfig(nil, map[string]bool{"codex": true, "custom-test": true}, []Plugin{}, nil, map[string]bool{"codex": true, "custom-test": true}); err != nil {
+	if err := saveAgentSettings(nil, map[string]bool{"codex": true, "custom-test": true}, []Plugin{}, nil, map[string]bool{"codex": true, "custom-test": true}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -147,7 +146,7 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	keys = toolKeybindings()
 	keys["custom-tool-monitor"] = "Ctrl+Alt+M"
 	keys["custom-tool-docs"] = "Ctrl+Alt+D"
-	if err := saveTools(tools, keys); err != nil {
+	if err := saveToolsWithEditor(tools, "", false, keys); err != nil {
 		t.Fatal(err)
 	}
 	if got := toolKeybindings(); got["custom-tool-docs"] != "Ctrl+Alt+D" || got["nvim"] != keys["nvim"] {
@@ -155,7 +154,7 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	}
 	keys["custom-tool-docs"] = keys["terminal"]
 	tools[0].Name = "Should not save"
-	if err := saveTools(tools, keys); err == nil {
+	if err := saveToolsWithEditor(tools, "", false, keys); err == nil {
 		t.Fatal("accepted duplicate tool shortcut")
 	}
 	for _, p := range plugins() {
@@ -163,7 +162,7 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 			t.Fatal("saved tool despite invalid shortcut")
 		}
 	}
-	if err := saveTools([]Plugin{{ID: "codex", Name: "Bad", Command: "bad", Dock: "right", Type: AppTypeTerminal}}); err == nil {
+	if err := saveToolsWithEditor([]Plugin{{ID: "codex", Name: "Bad", Command: "bad", Dock: "right", Type: AppTypeTerminal}}, "", false); err == nil {
 		t.Fatal("allowed tool to replace agent")
 	}
 	if err := db.Close(); err != nil {
@@ -189,43 +188,6 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 		t.Fatal("tool settings did not persist")
 	}
 
-}
-
-func TestBrowserPageToolsAutoExecutePersistence(t *testing.T) {
-	original := db
-	path := filepath.Join(t.TempDir(), "settings.db")
-	var err error
-	db, err = sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close(); db = original })
-	createTables()
-	if browserPageToolsAutoExecute() {
-		t.Fatal("page tools should be disabled by default")
-	}
-	if err := setBrowserPageToolsAutoExecute(true); err != nil {
-		t.Fatal(err)
-	}
-	if !browserPageToolsAutoExecute() {
-		t.Fatal("enabled page tools setting was not read")
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-	db, err = sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !browserPageToolsAutoExecute() {
-		t.Fatal("page tools setting did not persist")
-	}
-	if err := setBrowserPageToolsAutoExecute(false); err != nil {
-		t.Fatal(err)
-	}
-	if browserPageToolsAutoExecute() {
-		t.Fatal("page tools setting did not disable")
-	}
 }
 
 func TestAgentEnvironmentPersistence(t *testing.T) {
@@ -268,108 +230,6 @@ func TestAgentEnvironmentPersistence(t *testing.T) {
 	}
 }
 
-func TestSaveNewAgentWithQuotedCommand(t *testing.T) {
-	original := db
-	var err error
-	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "settings.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close(); db = original })
-	createTables()
-	custom := Plugin{
-		ID: "custom-12345678-1234-4234-8234-123456789abc", Name: "luna",
-		Command: `codex -m gpt-5.6-luna -c 'model_reasoning_effort="xhigh"'`,
-		Type:    AppTypeTerminal, Dock: "center", Custom: true,
-	}
-	autolaunch := ""
-	if err := saveAgentSettings(
-		map[string]string{custom.ID: custom.Command}, map[string]bool{custom.ID: false},
-		[]Plugin{custom}, map[string]string{custom.ID: custom.Name}, map[string]bool{},
-		&autolaunch, []string{custom.ID},
-	); err != nil {
-		t.Fatal(err)
-	}
-	for _, plugin := range plugins() {
-		if plugin.ID == custom.ID {
-			if plugin.Name != "luna" || plugin.Disabled || !plugin.Custom || agentCommand(plugin) != custom.Command {
-				t.Fatalf("new agent changed: %+v", plugin)
-			}
-			return
-		}
-	}
-	t.Fatal("new agent was not saved")
-}
-
-func TestAgentAutolaunch(t *testing.T) {
-	original := db
-	var err error
-	path := filepath.Join(t.TempDir(), "settings.db")
-	db, err = sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close(); db = original })
-	createTables()
-	state := &AppState{ActiveProject: "project"}
-	if projectAutolaunchJS(state, "test") != "" {
-		t.Fatal("default should not autolaunch")
-	}
-	save := func(id string, disabled map[string]bool) error {
-		return saveAgentSettings(nil, disabled, nil, nil, nil, &id, nil)
-	}
-	for _, id := range []string{"browser", "missing"} {
-		if save(id, nil) == nil {
-			t.Fatalf("accepted %s", id)
-		}
-	}
-	if save("codex", map[string]bool{"codex": true}) == nil {
-		t.Fatal("accepted disabled agent")
-	}
-	if err := save("codex", nil); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-	db, err = sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := projectAutolaunchJS(state, "test"); got != "" {
-		t.Fatalf("base workspace must start empty: %s", got)
-	}
-	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "pi", Dock: "center"}}
-	if projectAutolaunchJS(state, "test") != "" {
-		t.Fatal("launched with an existing agent")
-	}
-	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "terminal", Dock: "bottom"}}
-	if projectAutolaunchJS(state, "test") != "" {
-		t.Fatal("base workspace must not autolaunch an agent")
-	}
-	if err := save("pi", nil); err != nil {
-		t.Fatal(err)
-	}
-	count := 0
-	for _, p := range plugins() {
-		if p.Autolaunch {
-			count++
-			if p.ID != "pi" {
-				t.Fatal("old choice retained")
-			}
-		}
-	}
-	if count != 1 {
-		t.Fatalf("selected %d agents", count)
-	}
-	if err := save("", nil); err != nil {
-		t.Fatal(err)
-	}
-	if projectAutolaunchJS(state, "test") != "" {
-		t.Fatal("clearing choice did not restore default")
-	}
-}
-
 func TestAgentOrderPersistence(t *testing.T) {
 	original := db
 	path := filepath.Join(t.TempDir(), "settings.db")
@@ -382,11 +242,11 @@ func TestAgentOrderPersistence(t *testing.T) {
 	createTables()
 	custom := Plugin{ID: "custom-first", Name: "First", Type: AppTypeTerminal, Dock: "center", Command: "first", Custom: true}
 	order := []string{"custom-first", "claude", "codex", "pi"}
-	if err := saveAgentSettings(nil, map[string]bool{"claude": true}, []Plugin{custom}, nil, nil, nil, order); err != nil {
+	if err := saveAgentSettings(nil, map[string]bool{"claude": true}, []Plugin{custom}, nil, nil, order); err != nil {
 		t.Fatal(err)
 	}
 	for _, invalid := range [][]string{{"codex", "codex"}, {"browser"}, {"missing"}} {
-		if saveAgentSettings(nil, nil, nil, nil, nil, nil, invalid) == nil {
+		if saveAgentSettings(nil, nil, nil, nil, nil, invalid) == nil {
 			t.Fatalf("accepted invalid order %v", invalid)
 		}
 	}
@@ -412,7 +272,7 @@ func TestAgentOrderPersistence(t *testing.T) {
 	if strings.Join(enabled[:3], ",") != "custom-first,codex,pi" {
 		t.Fatalf("enabled order = %v", enabled)
 	}
-	if err := setAgentCommand("codex", "codex --help"); err != nil {
+	if err := saveAgentSettings(map[string]string{"codex": "codex --help"}, nil, nil, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if plugins()[0].ID != "custom-first" {
@@ -439,13 +299,6 @@ func TestDefaultThreadAgent(t *testing.T) {
 			t.Fatalf("accepted %s", id)
 		}
 	}
-	projectAgent := "pi"
-	if err := saveAgentSettings(nil, nil, nil, nil, nil, &projectAgent, nil); err != nil {
-		t.Fatal(err)
-	}
-	if projectAutolaunchJS(state, "test") != "" {
-		t.Fatal("thread used project preference")
-	}
 	if err := setDefaultThreadAgent("codex"); err != nil {
 		t.Fatal(err)
 	}
@@ -469,7 +322,7 @@ func TestDefaultThreadAgent(t *testing.T) {
 		t.Fatal("duplicate agent launched")
 	}
 	state.Apps = nil
-	if err := saveAgentConfig(map[string]string{"codex": "codex"}, map[string]bool{"codex": true}, nil, nil); err != nil {
+	if err := saveAgentSettings(map[string]string{"codex": "codex"}, map[string]bool{"codex": true}, nil, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if setDefaultThreadAgent("codex") == nil {
@@ -488,135 +341,15 @@ func TestDefaultThreadAgent(t *testing.T) {
 
 func TestWebsiteToolValidation(t *testing.T) {
 	for _, address := range []string{"", "example.com", "https://", "javascript:alert(1)", "file:///tmp/test", "https://bad host"} {
-		err := saveTools([]Plugin{{ID: "custom-tool-website", Name: "Website", Type: AppTypeURL, Dock: "right", URL: address}})
+		err := saveToolsWithEditor([]Plugin{{ID: "custom-tool-website", Name: "Website", Type: AppTypeURL, Dock: "right", URL: address}}, "", false)
 		if err == nil || !strings.Contains(err.Error(), "valid website URL") {
 			t.Errorf("URL %q: got %v", address, err)
 		}
 	}
 	for _, id := range []string{"browser", "files", "terminal", "codex"} {
-		if err := saveTools([]Plugin{{ID: id, Name: "Website", Type: AppTypeURL, Dock: "right", URL: "https://example.com"}}); err == nil {
+		if err := saveToolsWithEditor([]Plugin{{ID: id, Name: "Website", Type: AppTypeURL, Dock: "right", URL: "https://example.com"}}, "", false); err == nil {
 			t.Errorf("allowed replacing %s", id)
 		}
-	}
-}
-
-func TestReplaceAgentShortcutMigration(t *testing.T) {
-	original := db
-	var err error
-	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "settings.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close(); db = original })
-	createTables()
-	if _, err := db.Exec(`INSERT INTO settings (key, value) VALUES ('tool_keybindings', '{"new-agent":"Ctrl+N","new-thread":"Ctrl+Shift+N","terminal":"Ctrl+Alt+T"}')`); err != nil {
-		t.Fatal(err)
-	}
-	keys := toolKeybindings()
-	if keys["new-agent"] != "" || keys["replace-agent"] != "" || keys["new-thread-agent"] != "Ctrl+Shift+A" || keys["new-thread"] != "" || keys["terminal"] != "Ctrl+Alt+T" {
-		t.Fatalf("incorrect shortcut migration: %v", keys)
-	}
-	if err := validateToolKeybindings(keys); err != nil {
-		t.Fatal(err)
-	}
-	keys["replace-agent"] = "Ctrl+Alt+N"
-	if err := setToolKeybindings(keys); err != nil {
-		t.Fatal(err)
-	}
-	if toolKeybindings()["replace-agent"] != "Ctrl+Alt+N" {
-		t.Fatal("migration overwrote a customized replacement shortcut")
-	}
-}
-
-func TestNewThreadAgentShortcutMigration(t *testing.T) {
-	original := db
-	var err error
-	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "settings.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close(); db = original })
-	createTables()
-	for _, test := range []struct {
-		name, replace, threadAgent, terminal string
-	}{
-		{"previous default", "Ctrl+Shift+A", "Ctrl+Shift+A", "Ctrl+T"},
-		{"custom replacement", "Alt+A", "Ctrl+Shift+A", "Ctrl+T"},
-		{"disabled replacement", "", "Ctrl+Shift+A", "Ctrl+T"},
-		{"shortcut collision", "Alt+A", "", "Ctrl+Shift+A"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			saved := defaultToolKeybindings()
-			delete(saved, "new-thread-agent")
-			saved["replace-agent"] = test.replace
-			saved["terminal"] = test.terminal
-			raw, err := json.Marshal(saved)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := db.Exec(`INSERT OR REPLACE INTO settings (key,value) VALUES ('tool_keybindings',?)`, string(raw)); err != nil {
-				t.Fatal(err)
-			}
-			keys := toolKeybindings()
-			replacement := test.replace
-			if replacement == "Ctrl+Shift+A" {
-				replacement = ""
-			}
-			if keys["new-thread-agent"] != test.threadAgent || keys["replace-agent"] != replacement || keys["terminal"] != test.terminal {
-				t.Fatalf("incorrect shortcut migration: %v", keys)
-			}
-			keys["new-thread-agent"] = "Alt+N"
-			keys["replace-agent"] = "Ctrl+Shift+A"
-			keys["terminal"] = "Ctrl+T"
-			if err := setToolKeybindings(keys); err != nil {
-				t.Fatal(err)
-			}
-			keys = toolKeybindings()
-			if keys["new-thread-agent"] != "Alt+N" || keys["replace-agent"] != "Ctrl+Shift+A" {
-				t.Fatal("migration overwrote saved custom shortcuts")
-			}
-		})
-	}
-}
-
-func TestProjectShortcutMigration(t *testing.T) {
-	original := db
-	var err error
-	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "settings.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close(); db = original })
-	createTables()
-	for _, test := range []struct {
-		name, saved, thread, picker string
-	}{
-		{"old defaults", `{"new-thread":"Ctrl+N","project-picker":"Ctrl+P","toggle-projects":"Ctrl+Shift+P"}`, "", "Ctrl+Shift+P"},
-		{"custom shortcuts", `{"new-thread":"Alt+N","project-picker":"Alt+P","toggle-projects":"Ctrl+Shift+P"}`, "Alt+N", "Alt+P"},
-		{"collision", `{"new-thread":"Ctrl+N","project-picker":"Ctrl+P","terminal":"Ctrl+Shift+P"}`, "", ""},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if _, err := db.Exec(`INSERT OR REPLACE INTO settings (key,value) VALUES ('tool_keybindings',?)`, test.saved); err != nil {
-				t.Fatal(err)
-			}
-			keys := toolKeybindings()
-			if keys["new-thread"] != test.thread || keys["project-picker"] != test.picker || keys["command-palette"] != "Meta+;" {
-				t.Fatalf("incorrect migration: %v", keys)
-			}
-			if _, exists := keys["toggle-projects"]; exists {
-				t.Fatal("sidebar shortcut still present")
-			}
-			keys["new-thread"] = "Ctrl+N"
-			keys["project-picker"] = "Ctrl+P"
-			keys["command-palette"] = "Alt+K"
-			if err := setToolKeybindings(keys); err != nil {
-				t.Fatal(err)
-			}
-			keys = toolKeybindings()
-			if keys["new-thread"] != "Ctrl+N" || keys["project-picker"] != "Ctrl+P" || keys["command-palette"] != "Alt+K" {
-				t.Fatal("user reassignment was overwritten")
-			}
-		})
 	}
 }
 

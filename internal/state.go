@@ -53,13 +53,6 @@ type projectSnapshot struct {
 	SelectedIndex int
 }
 
-func cloneApplications(apps []Application) []Application {
-	if len(apps) == 0 {
-		return nil
-	}
-	return append([]Application(nil), apps...)
-}
-
 // AppState holds the per-session state
 type AppState struct {
 	Apps          []Application
@@ -167,35 +160,6 @@ func sortAppsByName(s *AppState, selectedAppID string) {
 	}
 }
 
-// addApp is the internal helper that adds a URL app and sorts by name.
-func (sm *StateManager) addApp(sessionID, url string, width Width, name string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		s = &AppState{
-			snapshots: make(map[string]*projectSnapshot),
-		}
-		sm.states[sessionID] = s
-	}
-	sm.nextID++
-	app := Application{
-		ID:    fmt.Sprintf("app-%d", sm.nextID),
-		Type:  AppTypeURL,
-		URL:   url,
-		Width: width,
-		Name:  name,
-	}
-	s.Apps = append(s.Apps, app)
-	sortAppsByName(s, app.ID)
-	s.LastAppCreatedProject = s.ActiveProject
-}
-
-// AddApp adds a new URL application, sorted by name.
-func (sm *StateManager) AddApp(sessionID, url string, width Width, name string) {
-	sm.addApp(sessionID, url, width, name)
-}
-
 // InsertApp adds a new URL application at the given index position.
 // If index is out of range, it falls back to append + sort by name.
 func (sm *StateManager) InsertApp(sessionID, url string, width Width, name string, index int) {
@@ -226,39 +190,6 @@ func (sm *StateManager) InsertApp(sessionID, url string, width Width, name strin
 		s.SelectedIndex = index
 	}
 	s.LastAppCreatedProject = s.ActiveProject
-}
-
-// addTerminalApp is the internal helper that adds a terminal app and sorts by name.
-// appID must be pre-generated via NextAppID to avoid race conditions with terminal startup.
-func (sm *StateManager) addTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		s = &AppState{
-			snapshots: make(map[string]*projectSnapshot),
-		}
-		sm.states[sessionID] = s
-	}
-	app := Application{
-		ID:            appID,
-		Type:          AppTypeTerminal,
-		Command:       command,
-		Width:         width,
-		Writable:      writable,
-		Name:          name,
-		IconURL:       iconURL,
-		TerminalID:    appID,
-		TerminalReady: port > 0,
-	}
-	s.Apps = append(s.Apps, app)
-	sortAppsByName(s, app.ID)
-	s.LastAppCreatedProject = s.ActiveProject
-}
-
-// AddTerminalApp adds a new terminal application, sorted by name.
-func (sm *StateManager) AddTerminalApp(sessionID string, appID string, command string, port int, writable bool, width Width, name string, iconURL string) {
-	sm.addTerminalApp(sessionID, appID, command, port, writable, width, name, iconURL)
 }
 
 // InsertTerminalPlaceholder adds a terminal shell before its PTY has been started.
@@ -386,17 +317,6 @@ func (sm *StateManager) TerminalBelongsToSession(sessionID, terminalID string) b
 		}
 	}
 	return false
-}
-
-// RemoveApp removes an application by index and returns it (for cleanup)
-func (sm *StateManager) RemoveApp(sessionID string, index int) *Application {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
-	s := sm.states[sessionID]
-	if s == nil || index < 0 || index >= len(s.Apps) {
-		return nil
-	}
-	return removeApp(s, index)
 }
 
 // RemoveAppByID removes an application by its ID and returns it (for cleanup)
@@ -686,11 +606,6 @@ func (sm *StateManager) SelectApp(sessionID string, index int) {
 	if s != nil && index >= 0 && index < len(s.Apps) {
 		s.SelectedIndex = index
 	}
-}
-
-// AddProject adds a new persisted project to the session. Returns false if name already exists.
-func (sm *StateManager) AddProject(sessionID, name, path string) bool {
-	return sm.AddProjectWithOptions(sessionID, name, path, false)
 }
 
 // AddProjectWithOptions adds a project to the session. Transient projects are
@@ -1067,22 +982,6 @@ func (sm *StateManager) AddVirtualProject(sessionID, name, path, parentProject s
 		ParentProject: parentProject,
 	})
 	return true
-}
-
-// GetProjectPath returns the path for a named project
-func (sm *StateManager) GetProjectPath(sessionID, projectName string) string {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	s := sm.states[sessionID]
-	if s == nil {
-		return ""
-	}
-	for _, p := range s.Projects {
-		if p.Name == projectName {
-			return p.Path
-		}
-	}
-	return ""
 }
 
 // insertProjectCommand keeps the user's workspace and selection unchanged.

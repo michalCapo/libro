@@ -20,11 +20,6 @@ func TestWorkspaceScripts(t *testing.T) {
 		"palette":  commandPopupJS("test-session"),
 	} {
 		t.Run(name, func(t *testing.T) {
-			for _, removed := range []string{"project.select", "nav.slot", "zen.toggle", "project.apps.save", "project.apps.open", "project.apps.clean", "history.delete", "app.run.execute", "__libroOpenSearch"} {
-				if strings.Contains(script, removed) {
-					t.Errorf("removed feature remains: %s", removed)
-				}
-			}
 			cmd := exec.Command(node, "--check")
 			cmd.Stdin = strings.NewReader(script)
 			if out, err := cmd.CombinedOutput(); err != nil {

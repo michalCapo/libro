@@ -367,7 +367,7 @@ func TestChildCleanupAfterGitRemovalAndSharedApp(t *testing.T) {
 	if err := saveApplicationSettings(root, applicationSettings{Mode: "shared"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tm.Start("shared-app", "sleep 30", root, true); err != nil {
+	if _, err := tm.StartWithEnvironment("shared-app", "sleep 30", root, true, nil); err != nil {
 		t.Fatal(err)
 	}
 	sm.Get(sid).snapshots[child.ID] = &projectSnapshot{Apps: []Application{{ID: "shared-app", PluginID: "project-command", Dock: "bottom", Type: AppTypeTerminal, TerminalReady: true, ApplicationPath: root}}}

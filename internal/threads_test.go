@@ -28,7 +28,7 @@ func TestStandaloneThreadPersistenceAndIsolation(t *testing.T) {
 	sid := manager.NewSession()
 	state := manager.Get(sid)
 	manager.SwitchProject(sid, "project")
-	manager.AddApp(sid, "https://example.com", WidthMD, "Project browser")
+	manager.InsertApp(sid, "https://example.com", WidthMD, "Project browser", -1)
 	if !manager.SwitchProject(sid, "thread:test") {
 		t.Fatal("cannot switch to thread")
 	}
@@ -41,7 +41,7 @@ func TestStandaloneThreadPersistenceAndIsolation(t *testing.T) {
 	if workspaceProjectLabel(state) != "Fix server" {
 		t.Fatal("thread label missing")
 	}
-	manager.AddTerminalApp(sid, "agent", "codex", 0, true, WidthFull, "Thread agent", "")
+	manager.InsertTerminalPlaceholder(sid, "agent", WidthFull, "codex", true, "Thread agent", "", -1)
 	if !manager.SwitchProject(sid, "project") || len(state.Apps) != 1 || state.Apps[0].Name != "Project browser" {
 		t.Fatal("project panels lost")
 	}
@@ -224,7 +224,7 @@ func TestThreadSessionSurvivesRestartAndDefaultAgentChange(t *testing.T) {
 	manager := NewStateManager()
 	sid := manager.NewSession()
 	manager.SwitchProject(sid, "thread:test")
-	manager.AddTerminalApp(sid, "agent", "pi --model example", 0, true, WidthFull, "Pi", "")
+	manager.InsertTerminalPlaceholder(sid, "agent", WidthFull, "pi --model example", true, "Pi", "", -1)
 	manager.saveThreadSession(sid, "thread:test", "agent", "pi", "pi --model example", "saved-session")
 	state := newAppStateFromDB()
 	thread := state.thread("thread:test")
@@ -483,9 +483,9 @@ func TestReplaceThreadAgentStartsFreshAndKeepsTools(t *testing.T) {
 	manager := NewStateManager()
 	sid := manager.NewSession()
 	manager.SwitchProject(sid, "thread:test")
-	manager.AddTerminalApp(sid, "old", "pi", 0, true, WidthFull, "Pi", "")
+	manager.InsertTerminalPlaceholder(sid, "old", WidthFull, "pi", true, "Pi", "", -1)
 	manager.SetAppPlugin(sid, "old", "pi", "center")
-	manager.AddApp(sid, "https://example.com", WidthMD, "Browser")
+	manager.InsertApp(sid, "https://example.com", WidthMD, "Browser", -1)
 	state := manager.Get(sid)
 	browserID := state.Apps[state.SelectedIndex].ID
 	removed, err := manager.ReplaceThreadAgent(sid, "pi", "pi --model new")
@@ -500,7 +500,7 @@ func TestReplaceThreadAgentStartsFreshAndKeepsTools(t *testing.T) {
 	if thread.SessionID != "" || thread.AgentCommand != "pi --model new" || thread.Archived {
 		t.Fatalf("replacement retained resume metadata: %+v", thread)
 	}
-	manager.AddTerminalApp(sid, "new", "pi --model new", 0, true, WidthFull, "Pi", "")
+	manager.InsertTerminalPlaceholder(sid, "new", WidthFull, "pi --model new", true, "Pi", "", -1)
 	manager.saveThreadSession(sid, "thread:test", "new", "pi", "pi --model new", "new-session")
 	if loadThreads()[0].SessionID != "new-session" {
 		t.Fatal("new panel session was not saved")

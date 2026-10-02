@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	r "github.com/michalCapo/g-sui/ui"
 )
@@ -74,8 +75,11 @@ func deleteNote(project, id string) error {
 
 func saveNote(project string, note projectNote) (projectNote, error) {
 	note.Title = strings.TrimSpace(note.Title)
+	if note.Title == "" {
+		note.Title = noteTitle(note.Body)
+	}
 	if note.Title == "" || len(note.Title) > 200 || len(note.Body) > 1024*1024 {
-		return note, fmt.Errorf("enter a title up to 200 bytes and a note up to 1 MB")
+		return note, fmt.Errorf("write a note up to 1 MB with a title up to 200 bytes")
 	}
 	if note.State != "new" && note.State != "archived" {
 		return note, fmt.Errorf("note state must be new or archived")
@@ -114,6 +118,31 @@ func saveNote(project string, note projectNote) (projectNote, error) {
 		err = fmt.Errorf("note not found in this project")
 	}
 	return note, err
+}
+
+// noteTitle uses the first text line of the Markdown body, so notes need no separate title.
+func noteTitle(body string) string {
+	for line := range strings.Lines(body) {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "![") {
+			continue
+		}
+		line = strings.TrimLeft(line, "#>-*+ ")
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(line, "[ ]"), "[x]"))
+		line = strings.NewReplacer("**", "", "__", "", "~~", "", "`", "").Replace(line)
+		if line == "" {
+			continue
+		}
+		if len(line) > 120 {
+			cut := 120
+			for !utf8.RuneStart(line[cut]) {
+				cut--
+			}
+			line = strings.TrimSpace(line[:cut]) + "…"
+		}
+		return line
+	}
+	return ""
 }
 
 func moveNote(project, target, id string) error {
@@ -260,7 +289,10 @@ func decodeNoteImage(value string) ([]byte, string, error) {
 }
 
 func notePrompt(note projectNote) (string, error) {
-	prompt := "Execute this note:\n\n" + note.Title + "\n\n" + note.Body
+	prompt := "Execute this note:\n\n" + note.Body
+	if noteTitle(note.Body) != note.Title {
+		prompt = "Execute this note:\n\n" + note.Title + "\n\n" + note.Body
+	}
 	if len(note.Images) == 0 {
 		return prompt, nil
 	}

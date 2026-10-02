@@ -148,11 +148,6 @@ func NewTerminalManager() *TerminalManager {
 	return &TerminalManager{sessions: make(map[string]*TerminalSession), logs: make(map[string]*terminalLog)}
 }
 
-// Start launches (or returns) a PTY session for the given app.
-func (tm *TerminalManager) Start(appID, command, cwd string, writable bool) (*TerminalSession, error) {
-	return tm.StartWithEnvironment(appID, command, cwd, writable, nil)
-}
-
 // StartWithEnvironment launches a PTY session with additional environment
 // variables. Entries override variables inherited from Libro.
 func (tm *TerminalManager) StartWithEnvironment(appID, command, cwd string, writable bool, environment []string) (*TerminalSession, error) {
@@ -455,11 +450,6 @@ func (tm *TerminalManager) Stop(appID string) {
 		s.close(true)
 		log.Printf("terminal stopped for app %s", appID)
 	}
-}
-
-// Restart kills the PTY session for an app, then starts it again.
-func (tm *TerminalManager) Restart(appID, command string, writable bool, cwd string) error {
-	return tm.RestartWithEnvironment(appID, command, writable, cwd, nil)
 }
 
 // RestartWithEnvironment restarts a PTY session with additional environment variables.

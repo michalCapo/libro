@@ -285,3 +285,20 @@ func TestDeleteNoteFromPanel(t *testing.T) {
 		t.Fatalf("other project changed: %v %v", notes, err)
 	}
 }
+
+func TestNoteTitleUsesFirstBodyLine(t *testing.T) {
+	for body, want := range map[string]string{
+		"## **Fix** login\n\nSteps":           "Fix login",
+		"\n![Shot](note-image:a)\n- [ ] Ship": "Ship",
+		"   ":                                 "",
+		strings.Repeat("é", 100):              strings.Repeat("é", 60) + "…",
+	} {
+		if got := noteTitle(body); got != want {
+			t.Errorf("noteTitle(%q) = %q, want %q", body, got, want)
+		}
+	}
+	prompt, err := notePrompt(projectNote{Title: "Fix login", Body: "# Fix login\n\nSteps"})
+	if err != nil || strings.Count(prompt, "Fix login") != 1 {
+		t.Fatalf("prompt repeats title: %q %v", prompt, err)
+	}
+}

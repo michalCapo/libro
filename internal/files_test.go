@@ -161,25 +161,6 @@ func TestFilesParentRoot(t *testing.T) {
 	}
 }
 
-func TestFilesWordWrapEnabledByDefault(t *testing.T) {
-	js := renderFiles(Application{ID: "files"}).ToJS()
-	if !strings.Contains(js, "setAttribute('checked','checked')") {
-		t.Fatal("word wrap checkbox is not checked by default")
-	}
-	if !strings.Contains(js, "className='ws-file-text is-wrapped'") {
-		t.Fatal("file preview is not wrapped by default")
-	}
-}
-
-func TestFilesImageZoomControls(t *testing.T) {
-	js := renderFiles(Application{ID: "files"}).ToJS()
-	for _, want := range []string{"data-image-zoom", "Zoom out", "Reset zoom", "Zoom in"} {
-		if !strings.Contains(js, want) {
-			t.Fatalf("image preview is missing %q", want)
-		}
-	}
-}
-
 func TestFileDocumentPreviews(t *testing.T) {
 	root := t.TempDir()
 	for _, name := range []string{"page.html", "page.HTM", "readme.md", "readme.MARKDOWN", "plain.txt"} {

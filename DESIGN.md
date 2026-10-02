@@ -187,15 +187,15 @@ Use the frontmatter radii by role: small keycaps and size badges, gently rounded
 
 ### Notes
 
-Notes extends the quiet desktop controls inside a project tool panel. Open it to a list filtered to New, with New, Archived, and All options and an Add note action. Rows use fine bottom dividers, a wrapping title, and muted state text; their minimum height is 48px. Show a plain empty message when the filter has no notes.
+Notes extends the quiet desktop controls inside a project tool panel. Open it to a list filtered to New, with New, Archived, and All options and an Add note action. Rows are 44px rounded cards with a 2px gap, a wrapping title, and muted state text; hover uses the hover fill. Show an icon and a plain message when the filter or search has no notes. Search matches title and body.
 
 The note list header includes the project name. Lists stay bound to their project and refresh when switching projects.
 
-Selecting a row expands its inline editor in an accordion, with one note open at a time. Search and filters stay visible. The editor has a title beside a status circle. The circle archives or reopens the note. Description and Actions use labeled section headings; Send to agent belongs in Actions. The Markdown editor keeps pasted images inline with the text.
+Selecting a row expands its inline editor in an accordion, with one note open at a time. The open card uses the raised fill with a fine ring and hides its row title, so the title is not shown twice. Search and filters stay visible. Notes have no title field: the first text line of the body is the title, styled at 17px semibold in the editor. Older notes with a separate title get it as the first heading when opened. The Markdown editor is borderless, with a quiet icon toolbar, and keeps pasted images inline with the text.
 
-A destination project select and Move note button sit below the existing Actions buttons. Moving requires a saved note with no unsaved changes and a selected destination. The row wraps at narrow widths and reuses the existing select and button styles.
+One action row sits below a fine divider: Send to agent (primary, icon and label), the destination project select, an icon Move button, the status line, and a quiet icon Delete that turns red on hover. Moving requires a saved note with no unsaved changes and a selected destination. The row wraps at narrow widths.
 
-Save note keeps the editor open and shows Saved. Cancel discards draft changes and returns to the list. Send to agent sends the saved note to the active agent in the same project; it is disabled until the note is saved and has no unsaved changes. Keep loading, unsaved, saving, sending, success, and error messages in the status area. Controls reuse raised fills, neutral borders, and blue keyboard-focus outlines. Notes opens with Ctrl+O by default; the shortcut is configurable in Settings.
+Save note keeps the editor open and shows Saved. Cancel discards draft changes and returns to the list. Send to agent sends the saved note to the active agent in the same project; it is disabled until the note is saved and has no unsaved changes. Keep loading, unsaved, saving, sending, success, and error messages in the status area. Controls reuse raised fills, neutral borders, and blue keyboard-focus outlines. Notes opens with Ctrl+I by default; the shortcut is configurable in Settings.
 
 ## Do's and Don'ts
 
@@ -208,9 +208,11 @@ Save note keeps the editor open and shows Saved. Cancel discards draft changes a
 
 ## Settings and panel controls
 
-Settings is a workspace page reached from the sidebar. Grouped rows provide the global default panel widths for agent and tool panels (XS–2XL), initially MD (640px) and LG (960px). Changes save to SQLite and apply only to newly opened panels. The page also holds theme (Auto, Light, Dark), an agent-done notification sound, agent command management (edit, rename, disable, remove, custom agents, autolaunch), tool command management (edit, disable, remove, and add custom CLI tools), and remappable keyboard shortcuts. Section labels are 12px semibold muted text above rounded groups; empty status lines collapse so sections keep an even gap.
+Settings is a workspace page reached from the sidebar. Grouped rows provide the global default panel widths for agent and tool panels (XS–2XL), initially MD (640px) and LG (960px). Changes save to SQLite and apply only to newly opened panels. The page also holds theme (Auto, Light, Dark), an agent-done notification sound, agent command management (edit, rename, disable, remove, custom agents), tool command management (edit, disable, remove, and add custom CLI tools), and remappable keyboard shortcuts. Section labels are 12px semibold muted text above rounded groups; empty status lines collapse so sections keep an even gap.
 
 The Editor section follows Tools and uses the existing grouped-row layout: a File editor label and help text beside a select control. It lists enabled CLI tools by name, including custom tools, with Off to clear the selection. Websites and disabled or removed tools are excluded. Nvim is selected by default. Tool name and enabled-state changes update the choices before saving; disabling or removing the selected tool clears the selection. Save persists the editor choice with tool settings across projects.
+
+Files uses a 40px chrome toolbar. The path shows the folder muted and the file name in 13px semibold. Tree rows match the project sidebar: 28px, 6px radius, muted files, foreground folders. The open file is bold; the keyboard cursor row uses the raised fill with a fine ring. Workspace shortcuts win over Files' Ctrl+O and Ctrl+I history moves, so panel and tool shortcuts work while a file is open.
 
 In Files, `e` opens the previewed file or selected tree file in that tool in the right dock. It replaces the source viewer’s Vim end-of-word motion, while navigation results retain `e` to open a result. Shortcut help lists Open in editor; text fields retain normal typing.
 

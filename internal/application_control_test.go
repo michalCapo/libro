@@ -1,7 +1,6 @@
 package libro
 
 import (
-	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -68,7 +67,7 @@ func TestApplicationControlLifecycle(t *testing.T) {
 		t.Fatal("repeated start must preserve pending launch")
 	}
 	if runtime.GOOS != "windows" {
-		session, startErr := tm.Start(first, "", path, true)
+		session, startErr := tm.StartWithEnvironment(first, "", path, true, nil)
 		if startErr != nil {
 			t.Fatal(startErr)
 		}
@@ -96,18 +95,6 @@ func TestApplicationControlLifecycle(t *testing.T) {
 	_, result, err = controlApplication("test", path, "status")
 	if err != nil || result["status"] != "stopped" || result["configured"] != true {
 		t.Fatal("incorrect stopped status")
-	}
-}
-
-func TestApplicationCLIValidation(t *testing.T) {
-	var output bytes.Buffer
-	if err := RunApplicationCLI([]string{"--help"}, &output); err != nil || !strings.Contains(output.String(), "project settings") {
-		t.Fatal("missing help")
-	}
-	for _, args := range [][]string{{"shell"}, {"start", "/project", "command"}} {
-		if err := RunApplicationCLI(args, &output); err == nil {
-			t.Fatal("invalid command accepted")
-		}
 	}
 }
 
@@ -172,7 +159,7 @@ func TestProjectThreadsShareApplicationProcessButNotBrowsers(t *testing.T) {
 		t.Fatalf("second thread duplicated pending application: %v %v", result, err)
 	}
 	if runtime.GOOS != "windows" {
-		session, err := tm.Start(first, "", path, true)
+		session, err := tm.StartWithEnvironment(first, "", path, true, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

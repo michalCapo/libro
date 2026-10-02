@@ -183,26 +183,7 @@ func agentCommand(plugin Plugin) string {
 	return plugin.Command
 }
 
-func setAgentCommand(id, command string) error {
-	return setAgentCommands(map[string]string{id: command})
-}
-
-func setAgentCommands(commands map[string]string) error {
-	return saveAgentConfig(commands, nil, nil, nil)
-}
-
-func saveAgentConfig(commands map[string]string, disabled map[string]bool, custom []Plugin, names map[string]string, removals ...map[string]bool) error {
-	if len(commands) == 0 && len(removals) == 0 {
-		return fmt.Errorf("no agent commands supplied")
-	}
-	var removed map[string]bool
-	if len(removals) > 0 {
-		removed = removals[0]
-	}
-	return saveAgentSettings(commands, disabled, custom, names, removed, nil, nil)
-}
-
-func saveAgentSettings(commands map[string]string, disabled map[string]bool, custom []Plugin, names map[string]string, removed map[string]bool, autolaunch *string, order []string) error {
+func saveAgentSettings(commands map[string]string, disabled map[string]bool, custom []Plugin, names map[string]string, removed map[string]bool, order []string) error {
 	agents := map[string]bool{}
 	for _, plugin := range plugins() {
 		if plugin.Dock == "center" && plugin.Type == AppTypeTerminal {
@@ -248,9 +229,6 @@ func saveAgentSettings(commands map[string]string, disabled map[string]bool, cus
 		if strings.TrimSpace(command) == "" || strings.ContainsRune(command, 0) {
 			return fmt.Errorf("enter a CLI command")
 		}
-	}
-	if autolaunch != nil && *autolaunch != "" && (!agents[*autolaunch] || disabled[*autolaunch] || removed[*autolaunch]) {
-		return fmt.Errorf("autolaunch requires an enabled agent")
 	}
 	seen := map[string]bool{}
 	for _, id := range order {
@@ -315,11 +293,6 @@ func saveAgentSettings(commands map[string]string, disabled map[string]bool, cus
 					return err
 				}
 			}
-		}
-	}
-	if autolaunch != nil {
-		if _, err := tx.Exec(`INSERT INTO settings (key,value) VALUES ('autolaunch_agent',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, *autolaunch); err != nil {
-			return err
 		}
 	}
 	if order != nil {
@@ -427,16 +400,11 @@ func registerSettingsActions(app *r.App) {
 					raw, _ := json.Marshal(ctx.WsData()["removed"])
 					err = json.Unmarshal(raw, &removed)
 					if err == nil {
-						autolaunch, ok := ctx.WsData()["autolaunch"].(string)
-						if !ok {
-							err = fmt.Errorf("invalid autolaunch agent")
-						} else {
-							var order []string
-							raw, _ := json.Marshal(ctx.WsData()["order"])
-							err = json.Unmarshal(raw, &order)
-							if err == nil {
-								err = saveAgentSettings(commands, disabled, custom, names, removed, &autolaunch, order)
-							}
+						var order []string
+						raw, _ := json.Marshal(ctx.WsData()["order"])
+						err = json.Unmarshal(raw, &order)
+						if err == nil {
+							err = saveAgentSettings(commands, disabled, custom, names, removed, order)
 						}
 					}
 				}
@@ -584,16 +552,6 @@ func renderWorkspaceSettings() *r.Node {
 				),
 			),
 			r.P("ws-settings-status").ID("default-thread-agent-status").Attr("role", "status"),
-			r.El("h2", "ws-shortcut-heading").Text("Autolaunch"),
-			r.Div("ws-settings-group").Render(
-				r.Div("ws-settings-row").Render(
-					r.Div("ws-settings-copy").Render(
-						r.El("label", "").Attr("for", "autolaunch-agent").Text("Autolaunch agent"),
-						r.P("").ID("autolaunch-agent-help").Text("Start this agent when you open a project with no agent panels. Choose Off to start manually."),
-					),
-					r.El("select", "ws-settings-select").ID("autolaunch-agent").Attr("form", "agent-commands-form").Attr("aria-describedby", "autolaunch-agent-help"),
-				),
-			),
 			r.El("h2", "ws-shortcut-heading").Text("Agent commands"),
 			r.P("ws-settings-status").Text("CLI commands used to start agents in new threads. Drag the handles or use the arrows to reorder agents, then save. The first three enabled agents appear on the welcome screen. Include any flags you need. Running sessions are unchanged."),
 			renderAgentCommands(),

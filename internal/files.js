@@ -286,8 +286,9 @@
     let action;
     if(navigation && !typing && !event.metaKey && !event.altKey){
       if(!event.ctrlKey && !event.shiftKey && event.key==='e' && s.leader==null)action=()=>{if(!event.repeat)openEditor(s);};
-      else if(event.ctrlKey && event.key.toLowerCase()==='o')action=()=>historyMove(s,-1);
-      else if((event.ctrlKey && event.key.toLowerCase()==='i') || source && event.key==='Tab'&&!event.shiftKey)action=()=>historyMove(s,1);
+      // Workspace shortcuts win over Vim's Ctrl+O and Ctrl+I; Tab still moves forward in source.
+      else if(event.ctrlKey && event.key.toLowerCase()==='o' && !window.libroWorkspace?.bound('Ctrl+O'))action=()=>historyMove(s,-1);
+      else if((event.ctrlKey && event.key.toLowerCase()==='i' && !window.libroWorkspace?.bound('Ctrl+I')) || source && event.key==='Tab'&&!event.shiftKey)action=()=>historyMove(s,1);
       else if(!event.ctrlKey && (event.key===' ' || s.leader!=null)){
         if(s.leader==null)s.leader='';else s.leader+=event.key;
         clearTimeout(s.leaderTimer);
@@ -424,6 +425,7 @@
     });
     if (s.items.length) s.tree.setAttribute('aria-activedescendant','file-row-' + s.id + '-' + s.index);
     else { s.tree.removeAttribute('aria-activedescendant'); s.tree.textContent = s.filter.value ? 'No matching project files.' : 'This folder is empty.'; }
+    markOpen(s);
   }
   function open(s, expandOnly = false) {
     const item = s.items[s.index]; if (!item) return;
@@ -502,9 +504,15 @@
       },3000);
     });
   }
+  function markOpen(s) {
+    s.tree.querySelectorAll('.ws-file-row').forEach((row, index) => row.setAttribute('aria-current', String(!s.items[index].dir && s.items[index].path === s.file?.path)));
+  }
   function showFile(s) {
+    markOpen(s);
     const result = s.file;
-    s.el.querySelector('.ws-file-path').textContent = result.path;
+    // The folder sits muted before the file name.
+    const path = s.el.querySelector('.ws-file-path'), cut = result.path.lastIndexOf('/') + 1;
+    path.dataset.dir = result.path.slice(0, cut); path.textContent = result.path.slice(cut);
     const text = s.el.querySelector('.ws-file-text'), media = s.el.querySelector('.ws-file-media');
     clearImageView(s);
     media.onwheel = media.onkeydown = media.onpointerdown = null;
@@ -590,7 +598,7 @@
       s.expanded.clear();
       s.filter.value = '';
       s.index = 0;
-      s.el.querySelector('.ws-file-path').textContent = 'Open file';
+      Object.assign(s.el.querySelector('.ws-file-path'), {textContent:'Open file'}).dataset.dir = '';
       showText(s, '', 'Select a file from the tree.');
       s.el.querySelector('.ws-file-text').hidden = false;
       s.el.querySelector('.ws-file-media').replaceChildren();

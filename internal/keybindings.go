@@ -102,66 +102,7 @@ func toolKeybindings() map[string]string {
 		var raw string
 		var saved map[string]string
 		if db.QueryRow(`SELECT value FROM settings WHERE key = 'tool_keybindings'`).Scan(&raw) == nil && json.Unmarshal([]byte(raw), &saved) == nil {
-			if saved["voice"] == "Ctrl+Alt+V" || saved["voice"] == "Tab" {
-				saved["voice"] = "CapsLock"
-			}
-			if saved["notes"] == "Ctrl+O" {
-				available := true
-				for _, key := range saved {
-					if key == "Ctrl+I" {
-						available = false
-					}
-				}
-				if available {
-					saved["notes"] = "Ctrl+I"
-				}
-			}
-			if _, exists := saved["new-agent"]; saved["nvim"] == "Ctrl+Alt+N" || (!exists && saved["nvim"] == "Ctrl+N") {
-				saved["nvim"] = "Ctrl+E"
-				for id, key := range saved {
-					if id != "nvim" && key == "Ctrl+E" {
-						saved["nvim"] = ""
-						break
-					}
-				}
-			}
-			if _, exists := saved["replace-agent"]; !exists {
-				for id, key := range saved {
-					if key == "Ctrl+Shift+N" {
-						saved[id] = ""
-					}
-				}
-				saved["replace-agent"] = "Ctrl+Shift+N"
-			}
-			if saved["new-agent"] == "Ctrl+N" {
-				saved["new-agent"] = ""
-			}
-			// The command-palette field marks settings saved with the new defaults.
-			if _, current := saved["command-palette"]; !current {
-				if saved["new-thread"] == "Ctrl+N" {
-					saved["new-thread"] = ""
-				}
-				if saved["project-picker"] == "Ctrl+P" {
-					delete(saved, "project-picker")
-				}
-			}
-			delete(saved, "toggle-projects")
-			if saved["replace-agent"] == "Ctrl+Shift+N" {
-				saved["replace-agent"] = ""
-				available := true
-				for _, key := range saved {
-					if key == "Ctrl+Shift+A" {
-						available = false
-					}
-				}
-				if available {
-					saved["replace-agent"] = "Ctrl+Shift+A"
-				}
-			}
-			if _, exists := saved["new-thread-agent"]; !exists && saved["replace-agent"] == "Ctrl+Shift+A" {
-				saved["replace-agent"] = ""
-				saved["new-thread-agent"] = "Ctrl+Shift+A"
-			}
+			// New shortcuts get their default unless the key is already taken.
 			for _, shortcut := range toolKeys {
 				if _, exists := saved[shortcut.ID]; exists {
 					continue

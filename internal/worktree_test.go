@@ -22,7 +22,7 @@ func TestProjectDoesNotInheritParentRepository(t *testing.T) {
 	}
 	manager := NewStateManager()
 	manager.states["test"] = &AppState{}
-	if !manager.AddProject("test", "new-project", project) {
+	if !manager.AddProjectWithOptions("test", "new-project", project, false) {
 		t.Fatal("could not add project")
 	}
 	state := manager.Get("test")
@@ -114,7 +114,7 @@ func TestRestoreWorktreeWithSlashesInProjectAndBranch(t *testing.T) {
 	manager := NewStateManager()
 	manager.states["test"] = &AppState{Projects: []Project{{Name: "live/nisa", Path: repo, IsGitRepo: true}}}
 	restoreWorktreeProject(manager, "test", "live/nisa/feature/test")
-	if got := manager.GetProjectPath("test", "live/nisa/feature/test"); got != worktree {
+	if got := projectPath(manager, "live/nisa/feature/test"); got != worktree {
 		t.Fatalf("worktree path = %q, want %q", got, worktree)
 	}
 }
@@ -139,13 +139,13 @@ func TestProjectThreadsBranchFromBase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	firstPath := manager.GetProjectPath("test", first)
+	firstPath := projectPath(manager, first)
 	git(firstPath, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "worktree only")
 	second, err := manager.createProjectWorktree("test", first, "second")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := git(manager.GetProjectPath("test", second), "rev-parse", "HEAD"); got != base {
+	if got := git(projectPath(manager, second), "rev-parse", "HEAD"); got != base {
 		t.Fatal("new thread branched from worktree instead of base")
 	}
 	if _, err := manager.createProjectWorktree("test", "repo", "first"); err == nil {
@@ -185,4 +185,13 @@ func TestProjectThreadRequiresCommittedBranch(t *testing.T) {
 	if len(manager.states["test"].Projects) != 1 {
 		t.Fatal("failed creation registered a workspace")
 	}
+}
+
+func projectPath(manager *StateManager, name string) string {
+	for _, project := range manager.Get("test").Projects {
+		if project.Name == name {
+			return project.Path
+		}
+	}
+	return ""
 }

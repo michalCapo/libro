@@ -268,28 +268,6 @@ func DBSaveProject(name, path string) {
 	}
 }
 
-// DBFindProjectByPath returns the most specific project whose path
-// matches the given working directory exactly or as an ancestor.
-func DBFindProjectByPath(path string) (Project, bool) {
-	projects := DBLoadProjects()
-	cleanPath := filepath.Clean(path)
-
-	var best Project
-	bestLen := -1
-	for _, p := range projects {
-		projectPath := filepath.Clean(p.Path)
-		if cleanPath != projectPath && !strings.HasPrefix(cleanPath, projectPath+string(os.PathSeparator)) {
-			continue
-		}
-		if len(projectPath) > bestLen {
-			best = p
-			bestLen = len(projectPath)
-		}
-	}
-
-	return best, bestLen >= 0
-}
-
 // DBRemoveProject deletes a project and its apps (via CASCADE).
 func DBRemoveProject(name string) {
 	dbMu.Lock()

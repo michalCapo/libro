@@ -237,15 +237,3 @@ func TestNoteControlHTTP(t *testing.T) {
 		t.Fatal("accepted foreign origin")
 	}
 }
-
-func TestNotesCLIHelpAndValidation(t *testing.T) {
-	var output bytes.Buffer
-	if err := RunNotesCLI([]string{"--help"}, &output); err != nil || !strings.Contains(output.String(), "set_status") {
-		t.Fatal("missing CLI help")
-	}
-	for _, args := range [][]string{{"not-json"}, {`{}`, "extra"}} {
-		if err := RunNotesCLI(args, &output); err == nil {
-			t.Fatal("accepted invalid CLI arguments")
-		}
-	}
-}

@@ -13,10 +13,6 @@ func configurableTool(p Plugin) bool {
 	return p.Dock == "right" && (p.Type == AppTypeTerminal || p.Type == AppTypeURL) && p.ID != "terminal" && p.ID != "browser" && p.ID != "files" && p.ID != "notes"
 }
 
-func saveTools(list []Plugin, shortcuts ...map[string]string) error {
-	return saveToolsWithEditor(list, "", false, shortcuts...)
-}
-
 func editorToolID() string {
 	dbMu.Lock()
 	defer dbMu.Unlock()

@@ -42,9 +42,10 @@
     clearTimeout(s.saveTimer);
     if (!s.draft || s.busy || s.saving || s.reading > 0 || !dirty(s)) return;
     Object.assign(s.draft, s.editor.serialize());
-    if (!s.draft.id && !s.draft.title.trim() && !s.draft.body.trim() && !s.draft.images.length) return;
+    if (!s.draft.id && !s.draft.body.trim() && !s.draft.images.length) return;
     s.savingNote = structuredClone(s.draft);
-    const note = {...s.savingNote, title:s.draft.title.trim() || 'Untitled note'};
+    // The server titles the note from its first line; image-only notes keep a fallback.
+    const note = {...s.savingNote, title:s.draft.body.trim() ? '' : 'Untitled note'};
     if (new TextEncoder().encode(JSON.stringify(note)).length > 9 * 1024 * 1024) {
       status(s, 'This note is too large. Remove an image or shorten the text.'); return;
     }
@@ -74,22 +75,19 @@
   }
   function edit(s, note) {
     if (!canClose(s)) return;
-    s.saved = structuredClone(note);
-    s.draft = structuredClone(note);
-    s.saved.images ||= []; s.draft.images ||= [];
+    // Older notes kept the title apart from the body; show it as the first line.
+    const body = note.title && !note.body.includes(note.title) ? '# ' + note.title + (note.body ? '\n\n' + note.body : '') : note.body;
+    s.saved = {...structuredClone(note), body, images:note.images || []};
+    s.draft = structuredClone(s.saved);
     renderList(s);
-    (note.id ? s.detail.previousElementSibling : s.detail.querySelector('.ws-note-title')).focus();
+    (note.id ? s.detail.previousElementSibling : s.detail.querySelector('.ws-note-body')).focus();
   }
   function renderEditor(s) {
     const note = s.draft;
     s.reading = 0;
     const form = element('form', 'ws-note-editor');
-    const header = element('div', 'ws-note-editor-header');
-    const title = element('input', 'ws-note-title'); title.value = note.title; title.maxLength = 200;
-    title.placeholder = 'Note title'; title.setAttribute('aria-label', 'Title');
-    header.append(title);
     const body = element('div', 'ws-note-rich-editor');
-    const hint = element('p', 'ws-note-hint', 'Use Markdown shortcuts or the toolbar. Paste screenshots anywhere in the text.');
+    const hint = element('p', 'ws-note-hint', 'The first line is the title. Use Markdown shortcuts or the toolbar, and paste screenshots anywhere.');
     const description = element('div', 'ws-note-section');
     description.append(body, hint);
     s.status = element('div', 'ws-notes-status'); s.status.setAttribute('role', 'status');
@@ -105,10 +103,7 @@
       s.busy = true; updateActions(s); status(s, 'Deleting…');
       request(s, 'delete', {noteID:s.draft.id});
       s.editor.setEditable(false);
-      title.disabled = true;
     });
-    header.append(s.remove);
-    actions.append(s.send);
     s.target = element('select');
     s.target.setAttribute('aria-label', 'Move note to project');
     const placeholder = element('option', '', 'Choose project…'); placeholder.value = '';
@@ -124,19 +119,21 @@
       s.editor.setEditable(false);
       form.querySelectorAll('input,textarea,select,button').forEach(el => { el.disabled = true; });
     });
-    actions.append(s.target, s.move);
+    actions.append(s.send, s.target, s.move, s.status, s.remove);
     for (const [control, label, icon] of [[s.send, 'Send to agent', 'send'], [s.remove, 'Delete note', 'delete_outline'], [s.move, 'Move note', 'drive_file_move']]) {
-      control.classList.add('ws-note-icon-button');
       control.title = label;
       control.setAttribute('aria-label', label);
       const glyph = element('span', 'material-icons-round', icon);
       glyph.setAttribute('aria-hidden', 'true');
       control.replaceChildren(glyph);
+      if (control === s.send) control.append(label);
+      else control.classList.add('ws-note-icon-button');
     }
-    actionsSection.append(actions, s.status);
-    form.append(header, description, actionsSection);
+    s.send.classList.add('ws-notes-primary');
+    s.remove.classList.add('ws-note-delete');
+    actionsSection.append(actions);
+    form.append(description, actionsSection);
     s.detail.append(form);
-    title.oninput = () => { s.draft.title = title.value; changed(s); };
     s.editor = libroNoteEditor.create({
       element: body, note: s.draft,
       onChange: value => { Object.assign(s.draft, value); changed(s); },
@@ -151,7 +148,7 @@
     s.editor?.destroy(); s.editor = null;
     s.el.replaceChildren();
     const heading = element('div', 'ws-notes-heading');
-    heading.append(element('span', 'ws-notes-title', 'Notes · ' + s.project));
+    heading.append(element('span', 'ws-notes-title', 'Notes'), element('span', 'ws-notes-project', s.project));
     const toolbar = element('div', 'ws-notes-toolbar');
     const search = element('input', 'ws-notes-search');
     search.type = 'search'; search.placeholder = 'Search notes…'; search.value = s.search; search.setAttribute('aria-label', 'Search notes');
@@ -168,7 +165,7 @@
     s.editor?.destroy(); s.editor = null;
     list.replaceChildren();
     const query = s.search.trim().toLowerCase();
-    const notes = s.notes.filter(note => !query || note.title.toLowerCase().includes(query));
+    const notes = s.notes.filter(note => !query || (note.title + '\n' + note.body).toLowerCase().includes(query));
     if (s.draft && !notes.some(note => note.id === s.draft.id)) notes.unshift(s.draft);
     notes.forEach(note => {
       const expanded = s.draft?.id === note.id;
@@ -199,7 +196,9 @@
     if (s.draft) renderEditor(s);
     if (!notes.length) {
       const empty = element('div', 'ws-notes-empty');
-      empty.append(element('div', 'ws-notes-empty-icon', '✓'),
+      const icon = element('span', 'material-icons-round ws-notes-empty-icon', query ? 'search_off' : 'sticky_note_2');
+      icon.setAttribute('aria-hidden', 'true');
+      empty.append(icon,
         element('p', 'ws-notes-empty-text', query ? 'No notes match your search.' : 'No notes yet. Add one to track a task.'));
       list.append(empty);
     }

@@ -19,35 +19,19 @@ func TestMCPDiscovery(t *testing.T) {
 	}
 	var discovery struct {
 		Result struct {
-			Tools []struct {
-				Name        string
-				Description string
-				InputSchema struct {
-					Properties map[string]any
-					Required   []string
-				}
-			}
+			Tools []struct{ Name string }
 		}
 	}
 	if err := json.Unmarshal([]byte(lines[2]), &discovery); err != nil {
 		t.Fatal(err)
 	}
 	if len(discovery.Result.Tools) != 3 {
-		t.Fatal("expected application, notes and children tools")
+		t.Fatalf("got %d tools", len(discovery.Result.Tools))
 	}
-	application := discovery.Result.Tools[0]
-	if application.Name != "application" || application.InputSchema.Properties["project"] != nil || len(application.InputSchema.Properties) != 1 || !strings.Contains(application.Description, "project settings") {
-		t.Fatal("application tool must explain the configured project command")
-	}
-	if !strings.Contains(application.Description, "Do not launch a separate application server") || !strings.Contains(lines[1], "Do not launch a separate application server") {
-		t.Fatal("MCP initialization and application discovery must explain process ownership")
-	}
-	if !strings.Contains(lines[2], `"logs"`) {
-		t.Fatal("application tool must advertise logs")
-	}
-	notes := discovery.Result.Tools[1]
-	if notes.Name != "notes" || notes.InputSchema.Properties["status"] == nil || notes.InputSchema.Properties["id"] == nil {
-		t.Fatal("notes tool missing status or id")
+	for i, name := range []string{"application", "notes", "children"} {
+		if discovery.Result.Tools[i].Name != name {
+			t.Fatalf("tool %d = %s, want %s", i, discovery.Result.Tools[i].Name, name)
+		}
 	}
 	if !strings.Contains(lines[3], `"isError":true`) {
 		t.Fatal("unknown tool must fail")

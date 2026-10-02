@@ -88,7 +88,7 @@ func TestStopAllStopsEveryTerminal(t *testing.T) {
 	t.Cleanup(tm.StopAll)
 	var sessions []*TerminalSession
 	for _, id := range []string{"active-project", "hidden-project"} {
-		s, err := tm.Start(id, "sleep 60", t.TempDir(), true)
+		s, err := tm.StartWithEnvironment(id, "sleep 60", t.TempDir(), true, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -113,12 +113,12 @@ func TestProjectCommandRestartPreservesOtherTerminals(t *testing.T) {
 	tm := NewTerminalManager()
 	t.Cleanup(tm.StopAll)
 	cwd := t.TempDir()
-	other, err := tm.Start("shell", "", cwd, true)
+	other, err := tm.StartWithEnvironment("shell", "", cwd, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	command := "pwd > command-cwd; printf PROJECT_READY; sleep 60"
-	first, err := tm.Start("project", command, cwd, true)
+	first, err := tm.StartWithEnvironment("project", command, cwd, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestProjectCommandRestartPreservesOtherTerminals(t *testing.T) {
 	if err != nil || strings.TrimSpace(string(actual)) != cwd {
 		t.Fatalf("wrong working directory: %q, %v", actual, err)
 	}
-	if err := tm.Restart("project", command, true, cwd); err != nil {
+	if err := tm.RestartWithEnvironment("project", command, true, cwd, nil); err != nil {
 		t.Fatal(err)
 	}
 	second := tm.session("project")

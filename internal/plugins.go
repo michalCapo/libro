@@ -16,7 +16,6 @@ import (
 // Plugins never need to implement PTY, webview, tab, or project lifecycle code.
 type Plugin struct {
 	Icon        string  `json:"icon,omitempty"`
-	Autolaunch  bool    `json:"autolaunch,omitempty"`
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
 	Type        AppType `json:"type"`
@@ -135,11 +134,6 @@ func plugins() (result []Plugin) {
 				a, b := rank[result[i].ID], rank[result[j].ID]
 				return a != 0 && (b == 0 || a < b)
 			})
-		}
-		var autolaunch string
-		_ = db.QueryRow(`SELECT value FROM settings WHERE key = 'autolaunch_agent'`).Scan(&autolaunch)
-		for i := range result {
-			result[i].Autolaunch = result[i].ID == autolaunch
 		}
 		var names map[string]string
 		if db.QueryRow(`SELECT value FROM settings WHERE key = 'agent_names'`).Scan(&raw) == nil && json.Unmarshal([]byte(raw), &names) == nil {

@@ -1017,7 +1017,7 @@
       const all = grid ? frames(grid) : [];
       const panels = [
         ...all.filter(frame => frame.dataset.dock === 'center'),
-        ...all.filter(frame => frame.dataset.dock === 'right' && frame.dataset.dockVisible === 'true' && frame.dataset.toolOverlay !== 'true')
+        ...all.filter(frame => frame.dataset.dock === 'right' && frame.dataset.dockVisible === 'true')
       ];
       if (panels.length < 2) return;
       event.preventDefault(); event.stopImmediatePropagation();
@@ -1025,11 +1025,13 @@
       const state = dockState(grid);
       const selected = panels.findIndex(frame => frame.dataset.appId === window.__libroSelectedApp);
       const current = selected >= 0 ? selected : Math.max(0, panels.findIndex(frame => frame.dataset.appId === state.agent));
-      if (grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
+      const step = binding === toolKeys['previous-agent'] ? -1 : 1;
+      const target = panels[Math.max(0, Math.min(current + step, panels.length - 1))];
+      // Leaving an overlay tool hides it so the panel underneath shows.
+      if (target.dataset.toolOverlay !== 'true' && grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
         frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => state.hidden.add(frame.dataset.appId));
       }
-      const step = binding === toolKeys['previous-agent'] ? -1 : 1;
-      select(panels[Math.max(0, Math.min(current + step, panels.length - 1))].dataset.appId);
+      select(target.dataset.appId);
       return;
     }
     if (binding && binding === toolKeys['new-browser']) {
@@ -1471,8 +1473,6 @@
     fillEditorTools(editor);
     removedAgents = Object.fromEntries(window.__libroPlugins.filter(p => p.removed && p.dock === 'center' && p.type === 'terminal').map(p => [p.id, true]));
     window.__libroPlugins.filter(p => !p.removed && p.dock === 'center' && p.type === 'terminal').forEach(p => addAgentRow(p, commands[p.id] || p.command));
-    fillAutolaunchAgents();
-    document.getElementById('autolaunch-agent').value = window.__libroPlugins.find(p => p.autolaunch && !p.disabled && !p.removed)?.id || '';
     document.querySelector('#agent-commands-form [role=status]').textContent = '';
     savedWidth = width;
     savedToolWidth = toolWidth;
@@ -1558,9 +1558,9 @@
     remove.hidden = checkbox.checked;
     checkbox.onchange = () => {
       remove.hidden = checkbox.checked;
-      if (!toolRow) fillAutolaunchAgents(); else fillEditorTools();
+      if (toolRow) fillEditorTools();
     };
-    name.oninput = toolRow ? () => fillEditorTools() : fillAutolaunchAgents;
+    if (toolRow) name.oninput = () => fillEditorTools();
     row.prepend(toggle, name, input); row.append(remove); document.getElementById(toolRow ? 'tool-command-rows' : 'agent-command-rows').append(row);
     if (toolRow) {
       const field = node('div', 'ws-tool-shortcut');
@@ -1624,19 +1624,7 @@
     }
     return row;
   }
-  function fillAutolaunchAgents() {
-    const select = document.getElementById('autolaunch-agent');
-    const selected = select.value;
-    select.replaceChildren(new Option('Off', ''));
-    document.querySelectorAll('#agent-command-rows [data-agent-id]').forEach(row => {
-      if (row.querySelector('[data-agent-enabled]').checked) {
-        select.add(new Option(row.querySelector('[data-agent-name]').value.trim() || 'Custom agent', row.dataset.agentId));
-      }
-    });
-    select.value = [...select.options].some(option => option.value === selected) ? selected : '';
-  }
   function updateAgentOrderButtons() {
-    fillAutolaunchAgents();
     const rows = [...document.getElementById('agent-command-rows').children];
     rows.forEach((row, i) => row.querySelectorAll('[data-agent-move]').forEach(move => {
       move.disabled = Number(move.dataset.agentMove) < 0 ? i === 0 : i === rows.length - 1;
@@ -1694,7 +1682,7 @@
     });
     form.querySelector('[role=status]').textContent = 'Saving…';
     Object.keys(removedAgents).forEach(id => disabled[id] = true);
-    call('settings.agent-command', {commands, disabled, custom, names, order, removed:removedAgents, autolaunch:document.getElementById('autolaunch-agent').value});
+    call('settings.agent-command', {commands, disabled, custom, names, order, removed:removedAgents});
   }
   function agentCommandSaved(message, plugins, ok = true) {
     const form = document.getElementById('agent-commands-form');
@@ -1718,7 +1706,7 @@
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
     settingsSaveFinished(ok);
   }
-  window.libroWorkspace = {saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
+  window.libroWorkspace = {saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;

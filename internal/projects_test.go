@@ -28,7 +28,7 @@ func TestHomeProjectIsOptional(t *testing.T) {
 	}
 	DBSaveProject("home", home)
 	removeDefaultHomeProject()
-	if project, ok := DBFindProjectByPath(filepath.Join(home, "child")); !ok || project.Name != "home" {
+	if projects := DBLoadProjects(); len(projects) != 1 || projects[0].Name != "home" {
 		t.Fatal("manually added home project is missing")
 	}
 	DBRemoveProject("home")
@@ -57,7 +57,7 @@ func TestRemoveActiveProject(t *testing.T) {
 	if !ok || len(apps) != 2 || len(state.Projects) != 0 || len(state.Apps) != 0 || state.ActiveProject != "" || state.SelectedIndex != 0 {
 		t.Fatalf("last project removal failed: %+v", state)
 	}
-	if !sm.AddProject("test", "home", t.TempDir()) || !sm.SwitchProject("test", "home") {
+	if !sm.AddProjectWithOptions("test", "home", t.TempDir(), false) || !sm.SwitchProject("test", "home") {
 		t.Fatal("cannot add home after removing last project")
 	}
 }

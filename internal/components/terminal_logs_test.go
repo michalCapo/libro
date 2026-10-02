@@ -35,7 +35,7 @@ func TestTerminalLogsSurviveExit(t *testing.T) {
 	}
 	tm := NewTerminalManager()
 	t.Cleanup(tm.StopAll)
-	session, err := tm.Start("app", "printf stdout; printf stderr >&2; exit 0", t.TempDir(), false)
+	session, err := tm.StartWithEnvironment("app", "printf stdout; printf stderr >&2; exit 0", t.TempDir(), false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

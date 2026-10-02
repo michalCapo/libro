@@ -258,28 +258,18 @@ func closeOtherPanels(sid, keepID string) string {
 	return js.String() + "if(window.libroWorkspace)libroWorkspace.restorePanelFocus();" + renderTopBar(state, sid).ToJSReplace(TopBarID) + projectsJS(state)
 }
 
-// Autolaunch starts an agent panel directly in the active workspace.
+// Autolaunch starts the thread's agent when a thread has no agent panel.
 func projectAutolaunchJS(state *AppState, sid string) string {
-	if state.ActiveProject == "" || state.thread(state.ActiveProject) == nil {
-		return ""
-	}
-	if slices.ContainsFunc(state.Apps, isAgentApp) {
-		return ""
-	}
 	thread := state.thread(state.ActiveProject)
-	if thread != nil && thread.Managed {
+	if thread == nil || thread.Managed || slices.ContainsFunc(state.Apps, isAgentApp) {
 		return ""
 	}
-	threadAgent := defaultThreadAgent()
-	if thread != nil && thread.AgentID != "" {
-		threadAgent = thread.AgentID
+	threadAgent := thread.AgentID
+	if threadAgent == "" {
+		threadAgent = defaultThreadAgent()
 	}
 	for _, plugin := range plugins() {
-		autolaunch := plugin.Autolaunch
-		if thread != nil {
-			autolaunch = plugin.ID == threadAgent
-		}
-		if !autolaunch || plugin.Disabled || plugin.Removed || plugin.Dock != "center" || plugin.Type != AppTypeTerminal {
+		if plugin.ID != threadAgent || plugin.Disabled || plugin.Removed || plugin.Dock != "center" || plugin.Type != AppTypeTerminal {
 			continue
 		}
 		payload, _ := json.Marshal(sidData(sid, "type", string(plugin.Type), "plugin", plugin.ID, "name", plugin.Name, "dock", "center", "writable", true, "autolaunchProject", state.ActiveProject))
