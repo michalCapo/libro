@@ -30,7 +30,7 @@ async function harness(options = {}) {
     }
   }
   vm.runInNewContext(source, {
-    window, document:{querySelectorAll:() => [], addEventListener() {}, getElementById:id => id === 'libro-workspace' ? {} : frames[id.replace('frame-', '')]},
+    window, document:{querySelectorAll:() => options.buttons || [], addEventListener() {}, getElementById:id => id === 'libro-workspace' ? {} : frames[id.replace('frame-', '')]},
     navigator:{mediaDevices:{getUserMedia:options.getUserMedia || (() => Promise.resolve(stream))}},
     MediaRecorder:Recorder,
     AudioContext:class {
@@ -40,7 +40,7 @@ async function harness(options = {}) {
     MutationObserver:class { constructor(callback) { mutation = callback } observe() {} },
     async fetch(url, init) {
       calls.requests.push({url, ...init})
-      if (url === '/voice/status') return {ok:true, json:async () => ({state:'ready'})}
+      if (url === '/voice/status') return {ok:true, json:async () => options.status || {state:'ready'}}
       if (url === '/voice/transcribe') return options.transcribe ? options.transcribe(init) : {ok:true, json:async () => ({text:'Hello Libro'})}
       return {ok:true}
     },
@@ -126,6 +126,16 @@ test('silence does not invoke transcription', async () => {
   await h.voice.toggle('agent')
   await tick()
   assert.equal(h.calls.requests.filter(r => r.url === '/voice/transcribe').length, 0)
+})
+
+test('without an OpenRouter key, pressing shows how to add one and does not record', async () => {
+  const status = {}
+  const button = {dataset:{voiceButton:'agent'}, setAttribute() {}, querySelector:() => ({}), parentElement:{querySelector:() => status}}
+  const h = await harness({buttons:[button], status:{state:'error', message:'Add an OpenRouter API key in Settings → OpenRouter to use voice typing.'}})
+  await h.voice.toggle('agent')
+  assert.equal(h.calls.recordings, 0)
+  assert.match(status.textContent, /Settings → OpenRouter/)
+  assert.equal(status.hidden, false)
 })
 
 test('microphone denial permits another attempt', async () => {

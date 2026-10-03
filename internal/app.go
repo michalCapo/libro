@@ -508,7 +508,6 @@ func Run(assets embed.FS, desktop bool) error {
 	registerFilesActions(app)
 	registerNotesActions(app)
 	registerVoiceRoutes(app)
-	voice.prepare()
 	r.RegisterAction(app, "app.notify", func(_ *r.Context, in actionAppNotifyInput) (r.Result, error) {
 		title := in.Title
 		subtitle := in.Subtitle
