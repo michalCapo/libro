@@ -37,7 +37,7 @@ When finished, close only your session with agent-browser --session <name> close
 // status and session metadata are written to temporary activity files.
 var agentCommandPattern = regexp.MustCompile(`^([a-zA-Z0-9_./-]+)(\s.*)?$`)
 var agentSessionPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
-var codexSessionPattern = regexp.MustCompile(`^([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})(?: [^|]*)?(?: \| |$)`)
+var codexSessionPattern = regexp.MustCompile(`(?i)^([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}|[0-9a-f]{8}-[0-9a-f-]+\.\.\.)(?: [^|]*)?(?: \| |$)`)
 var ollamaClaudePattern = regexp.MustCompile(`^(\s+launch\s+claude(?:\s+(?:--model(?:=|\s+)(?:"[^"]*"|'[^']*'|[^\s;&|]+)|--yes|-y))*)(?:\s+--(\s.*)?)?\s*$`)
 
 type agentActivity struct {
@@ -91,7 +91,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 		hooks := map[string]any{}
 		for event, state := range map[string]string{"UserPromptSubmit": "working", "PreToolUse": "working", "Stop": "done", "StopFailure": "error", "SessionEnd": "idle", "SessionStart": "idle"} {
 			hookCommand := "printf '%s' " + shellQuote(state) + " > " + shellQuote(a.path)
-			if event == "SessionStart" {
+			if event == "SessionStart" || event == "UserPromptSubmit" {
 				hookCommand = "cat > " + shellQuote(filepath.Join(dir, "session")) + "; " + hookCommand
 			}
 			if event == "Stop" {
@@ -114,21 +114,25 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 		content = `import { writeFileSync } from 'node:fs';
 export default function (pi) {
   const status = value => { try { writeFileSync(` + string(pathJSON) + `, value); } catch {} };
+  const reportSession = ctx => {
+    try { writeFileSync(` + string(sessionJSON) + `, JSON.stringify({session_id:ctx.sessionManager.getSessionId(), title:pi.getSessionName()})); } catch {}
+  };
   const nameSession = text => {
     if (pi.getSessionName()) return;
     const name = text.replace(/[\x00-\x1f\x7f-\x9f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
     if (name) pi.setSessionName(name);
   };
   pi.on('session_start', (_event, ctx) => {
-    try { writeFileSync(` + string(sessionJSON) + `, JSON.stringify({session_id:ctx.sessionManager.getSessionId()})); } catch {}
     status('idle');
     const entry = ctx.sessionManager.getBranch().find(entry => entry.type === 'message' && entry.message.role === 'user');
     if (entry) {
       const content = entry.message.content;
       nameSession(typeof content === 'string' ? content : content.filter(part => part.type === 'text').map(part => part.text).join(' '));
     }
+    reportSession(ctx);
   });
-  pi.on('input', event => { if (event.source !== 'extension') nameSession(event.text); });
+  pi.on('input', (event, ctx) => { if (event.source !== 'extension') { nameSession(event.text); reportSession(ctx); } });
+  pi.on('session_info_changed', (_event, ctx) => reportSession(ctx));
   pi.on('agent_start', () => status('working'));
   pi.on('agent_end', event => { if (!event.willRetry) status('done'); });
   pi.on('session_shutdown', () => status('idle'));
@@ -209,18 +213,23 @@ func (a *agentActivity) cleanup() {
 }
 
 func (s *TerminalSession) watchAgentActivity() {
-	if s.activity == nil || s.activity.path == "" {
+	if s.activity == nil {
 		return
 	}
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
-	for range ticker.C {
-		s.readAgentSession()
+	var nextTitleRead time.Time
+	for now := range ticker.C {
 		s.mu.Lock()
 		stopped := s.closed || s.agentEnded
 		s.mu.Unlock()
 		if stopped {
 			return
+		}
+		s.readAgentSession()
+		if s.activity.kind == "codex" && !now.Before(nextTitleRead) {
+			s.readCodexTitle()
+			nextTitleRead = now.Add(time.Second)
 		}
 		if data, err := os.ReadFile(s.activity.path); err == nil {
 			s.setAgentStatus(string(data))
@@ -234,26 +243,50 @@ func (s *TerminalSession) readAgentSession() {
 	}
 	data, err := os.ReadFile(filepath.Join(s.activity.dir, "session"))
 	var payload struct {
-		SessionID string `json:"session_id"`
+		SessionID      string `json:"session_id"`
+		Title          string `json:"title"`
+		Prompt         string `json:"prompt"`
+		TranscriptPath string `json:"transcript_path"`
 	}
-	if err == nil && json.Unmarshal(data, &payload) == nil {
+	if err == nil && json.Unmarshal(data, &payload) == nil && agentSessionPattern.MatchString(payload.SessionID) {
 		s.setAgentStatus("session:" + payload.SessionID)
+		s.agentMu.Lock()
+		defer s.agentMu.Unlock()
+		s.setAgentTitle(payload.Title, 2)
+		if s.activity.kind == "claude" {
+			s.mu.Lock()
+			unnamed := s.agentTitle == ""
+			s.mu.Unlock()
+			if unnamed {
+				// A resumed session keeps its original prompt, not the next follow-up.
+				s.setAgentTitle(claudeFirstPrompt(payload.TranscriptPath), 1)
+				s.setAgentTitle(payload.Prompt, 1)
+			}
+		}
 	}
 }
 
 func (s *TerminalSession) setAgentStatus(status string) {
+	if title, ok := strings.CutPrefix(status, "title:"); ok {
+		s.agentMu.Lock()
+		defer s.agentMu.Unlock()
+		s.setAgentTitle(title, 2)
+		return
+	}
 	if id, ok := strings.CutPrefix(status, "session:"); ok {
+		if s.activity != nil && s.activity.kind == "codex" && strings.HasSuffix(id, "...") {
+			s.agentMu.Lock()
+			s.codexSessionPrefix = strings.TrimSuffix(id, "...")
+			s.agentMu.Unlock()
+			return
+		}
 		if !agentSessionPattern.MatchString(id) {
 			return
 		}
 		s.agentMu.Lock()
 		defer s.agentMu.Unlock()
-		if id != s.agentSessionID {
-			s.agentSessionID = id
-			if s.reportSession != nil {
-				s.reportSession(id)
-			}
-		}
+		s.codexSessionPrefix = ""
+		s.updateAgentSession(id)
 		return
 	}
 	switch status {
@@ -266,6 +299,20 @@ func (s *TerminalSession) setAgentStatus(status string) {
 	s.agentMu.Lock()
 	defer s.agentMu.Unlock()
 	s.updateAgentStatus(status)
+}
+
+// updateAgentSession requires agentMu.
+func (s *TerminalSession) updateAgentSession(id string) {
+	if id == s.agentSessionID {
+		return
+	}
+	s.agentSessionID = id
+	s.mu.Lock()
+	s.agentTitle, s.titlePriority = "", 0
+	s.mu.Unlock()
+	if s.reportSession != nil {
+		s.reportSession(id)
+	}
 }
 
 // updateAgentStatus requires agentMu.
@@ -338,28 +385,8 @@ func codexAgentsRunning(threadID string) bool {
 	if threadID == "" {
 		return false
 	}
-	home := os.Getenv("CODEX_HOME")
-	if home == "" {
-		userHome, err := os.UserHomeDir()
-		if err != nil {
-			return false
-		}
-		home = filepath.Join(userHome, ".codex")
-	}
-	// Codex versions its state database file name.
-	paths, _ := filepath.Glob(filepath.Join(home, "state_*.sqlite"))
-	var dbPath string
-	var newest time.Time
-	for _, path := range paths {
-		if info, err := os.Stat(path); err == nil && info.ModTime().After(newest) {
-			dbPath, newest = path, info.ModTime()
-		}
-	}
-	if dbPath == "" {
-		return false
-	}
-	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro&_pragma=busy_timeout(1000)")
-	if err != nil {
+	db := openCodexStateDB()
+	if db == nil {
 		return false
 	}
 	defer func() { _ = db.Close() }()
@@ -387,6 +414,34 @@ func codexAgentsRunning(threadID string) bool {
 		}
 	}
 	return false
+}
+
+func openCodexStateDB() *sql.DB {
+	home := os.Getenv("CODEX_HOME")
+	if home == "" {
+		userHome, err := os.UserHomeDir()
+		if err != nil {
+			return nil
+		}
+		home = filepath.Join(userHome, ".codex")
+	}
+	// Codex versions its state database file name.
+	paths, _ := filepath.Glob(filepath.Join(home, "state_*.sqlite"))
+	var dbPath string
+	var newest time.Time
+	for _, path := range paths {
+		if info, err := os.Stat(path); err == nil && info.ModTime().After(newest) {
+			dbPath, newest = path, info.ModTime()
+		}
+	}
+	if dbPath == "" {
+		return nil
+	}
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?mode=ro&_pragma=busy_timeout(1000)")
+	if err != nil {
+		return nil
+	}
+	return db
 }
 
 // Parse only OSC title reports, including sequences split across PTY reads.
@@ -420,6 +475,11 @@ func (a *agentActivity) output(data []byte, report func(string)) {
 						report("done")
 					case "Starting", "":
 						report("idle")
+					}
+				}
+				if strings.HasPrefix(title, "0;") || strings.HasPrefix(title, "2;") {
+					if name := agentWindowTitle(a.kind, title[2:]); name != "" {
+						report("title:" + name)
 					}
 				}
 				a.inOSC, a.escape, a.osc = false, false, nil

@@ -13,6 +13,9 @@ Run Codex, Claude, Pi, OpenCode, or any other CLI agent in its own thread. Open 
 - Includes Browser, Notes, Files, Terminal, and other tools, with support for your own commands and web addresses.
 - Keeps all your projects in one place. Switch between them with one click.
 - Shows when an assistant is busy (its icon spins) or finished (green check).
+- Shows agent session names or the first prompt in thread labels. Codex, Pi, and
+  Claude descriptions survive reloads; older Codex UUID labels are recovered
+  from local session history when the ID matches one session.
 - Plays a sound when an assistant finishes its work.
 - Strong keyboard support — nearly every action has a shortcut.
 

@@ -60,6 +60,48 @@ func TestStandaloneThreadPersistenceAndIsolation(t *testing.T) {
 	}
 }
 
+func TestSavedUUIDDescriptionsRecoveredAndPersisted(t *testing.T) {
+	oldDB := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "libro.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = oldDB })
+	createTables()
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	codex, err := sql.Open("sqlite", filepath.Join(home, "state_5.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = codex.Close() }()
+	const id = "01a1008a-b13f-74f0-88cb-1b46fd1303c4"
+	const hint = "01a1008a-b13f-74f0-88cb-1b46f..."
+	if _, err := codex.Exec(`CREATE TABLE threads (id TEXT, title TEXT, first_user_message TEXT);
+INSERT INTO threads VALUES (?, 'Existing task description', '')`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO threads (id, name) VALUES ('thread:test', ?)`, hint); err != nil {
+		t.Fatal(err)
+	}
+	path := t.TempDir()
+	if err := saveWorktreeTitle(path, hint); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadThreads()[0].Name; got != "Existing task description" {
+		t.Fatalf("thread description = %q", got)
+	}
+	if got := worktreeTitle(path); got != "Existing task description" {
+		t.Fatalf("worktree description = %q", got)
+	}
+	// Once repaired, descriptions survive without the agent's history database.
+	t.Setenv("CODEX_HOME", t.TempDir())
+	if loadThreads()[0].Name != "Existing task description" || worktreeTitle(path) != "Existing task description" {
+		t.Fatal("recovered descriptions were not saved")
+	}
+}
+
 func TestProjectThreadKeepsItsProjectDirectory(t *testing.T) {
 	projectPath := t.TempDir()
 	manager := NewStateManager()

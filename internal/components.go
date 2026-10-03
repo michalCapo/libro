@@ -3300,6 +3300,7 @@ func terminalFrameSetupJS() string {
                                 window.dispatchEvent(new Event('libro-process-status'));
                                 return;
                             }
+                            if (msg.type === 'agent-title') { updateAgentTitle(msg.data); return; }
 							if (msg.type === 'agent-status') {
 								window.__libroAgentStatuses = window.__libroAgentStatuses || {};
 								window.__libroAgentStatuses[appID] = msg.data;
@@ -3340,33 +3341,17 @@ func terminalFrameSetupJS() string {
 						ws.onerror = function() { try { ws.close(); } catch (err) {} };
 					}
 
-					term.onTitleChange(function(title) {
-						const frame = document.getElementById('frame-' + appID);
-						if (!frame || frame.dataset.dock !== 'center') return;
-						const codexTitle = /^(Working|Thinking|Waiting|Ready|Starting)(?:\s*[·|—-]\s*|$)/;
-                        let task = title.replace(codexTitle, '').trim();
-                        if (codexTitle.test(title)) {
-                            task = task.replace(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}(?: [^|]*)?(?: \| |$)/i, '');
-                            task = task.replace(/\s*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]$/, '').trim();
-                            if (task === 'renaming...') return;
-                        }
-                        // Pi's window title includes its app name and working directory.
-                        if (task.startsWith('π - ')) {
-                            const end = task.lastIndexOf(' - ');
-                            task = end > 4 ? task.slice(4, end).trim() : '';
-                        }
-                        // Claude prefixes its generated topic with a status glyph.
-                        task = task.replace(/^[^\p{L}\p{N}]+/u, '').trim();
-                        if (task === 'Claude Code') return;
-                        // Unnamed Codex sessions can emit their UUID instead of a task.
-                        if (!task || /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(task)) return;
-						frame.dataset.taskTitle = task.slice(0, 240);
-						const grid = frame.closest('[data-workspace-project]');
-						const threadId = grid && grid.dataset.workspaceProject;
-						if (!threadId || !window.__ws) return;
-						if (threadId.indexOf('thread:') === 0) __ws.call('thread.rename', {sid:sid, id:threadId, name:task.slice(0, 240)});
-						else if (threadId.indexOf('/') > 0) __ws.call('worktree.title', {sid:sid, project:threadId, name:task.slice(0, 240)});
-					});
+                    function updateAgentTitle(task) {
+                        const frame = document.getElementById('frame-' + appID);
+                        if (!frame || frame.dataset.dock !== 'center' || !task) return;
+                        frame.dataset.taskTitle = task;
+                        const grid = frame.closest('[data-workspace-project]');
+                        const threadId = grid && grid.dataset.workspaceProject;
+                        if (!threadId || !window.__ws) return;
+                        if (threadId.indexOf('thread:') === 0) __ws.call('thread.rename', {sid:sid, id:threadId, name:task});
+                        else if (threadId.indexOf('/') > 0) __ws.call('worktree.title', {sid:sid, project:threadId, name:task});
+                    }
+
 					term.onData(function(data) {
 						data = stripTerminalFocusReports(data);
 						if (!data) return;

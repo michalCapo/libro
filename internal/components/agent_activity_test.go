@@ -18,7 +18,7 @@ func TestCodexActivityAcrossPTYChunks(t *testing.T) {
 	for _, chunk := range []string{"Ready in ordinary output", "\x1b", "]0;Work", "ing\x07", "\x1b]2;Thinking\x1b", "\\", "\x1b]0;Ready\x07", "\x1b]2;Working | Fix sidebar\x07", "\x1b]2;Ready | Fix sidebar\x07", "\x1b]777;libro;exited\x07"} {
 		a.output([]byte(chunk), func(status string) { got = append(got, status) })
 	}
-	if want := []string{"working", "working", "done", "working", "done", "exited"}; !reflect.DeepEqual(got, want) {
+	if want := []string{"working", "working", "done", "working", "title:Fix sidebar", "done", "title:Fix sidebar", "exited"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("statuses = %v, want %v", got, want)
 	}
 }
@@ -229,15 +229,23 @@ const check = expected => assert.equal(readFileSync(process.argv[2], 'utf8'), ex
 let name;
 plugin({on:(event, handler) => hooks[event] = handler, getSessionName:() => name, setSessionName:value => name = value});
 const ctx = {sessionManager:{getSessionId:() => 'pi-session', getBranch:() => []}};
-hooks.input({text:'Fix\n login', source:'interactive'});
+hooks.input({text:'Fix\n login', source:'interactive'}, ctx);
 assert.equal(name, 'Fix login');
-hooks.input({text:'Second prompt', source:'interactive'});
+const metadata = () => JSON.parse(readFileSync(process.argv[2].replace(/status$/, 'session'), 'utf8'));
+assert.equal(metadata().title, 'Fix login');
+hooks.input({text:'Second prompt', source:'interactive'}, ctx);
 assert.equal(name, 'Fix login');
+assert.equal(metadata().title, 'Fix login');
+name = 'Renamed session';
+hooks.session_info_changed({name}, ctx);
+assert.equal(metadata().title, 'Renamed session');
 name = undefined;
 hooks.input({text:'Extension instructions', source:'extension'});
 assert.equal(name, undefined);
-hooks.session_start({reason:'resume'}, {sessionManager:{getBranch:() => [{type:'message', message:{role:'user', content:[{type:'image'}, {type:'text', text:'Restore title'}]}}]}});
+hooks.session_start({reason:'resume'}, {sessionManager:{getSessionId:() => 'resumed', getBranch:() => [{type:'message', message:{role:'user', content:[{type:'image'}, {type:'text', text:'Restore title'}]}}]}});
 assert.equal(name, 'Restore title');
+assert.equal(metadata().title, 'Restore title');
+assert.equal(metadata().session_id, 'resumed');
 hooks.agent_start({}); check('working');
 hooks.agent_end({willRetry:true}); check('working');
 hooks.agent_end({willRetry:false}); check('done');

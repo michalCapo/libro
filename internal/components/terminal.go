@@ -95,25 +95,28 @@ type TerminalSession struct {
 	outputDone  chan struct{}
 	processDone chan struct{}
 
-	mu             sync.Mutex
-	clients        map[*terminalClient]bool
-	closed         bool
-	log            *terminalLog
-	pendingOutput  []byte // startup output retained until the first client connects
-	connected      bool
-	cols           uint16
-	rows           uint16
-	activity       *agentActivity
-	agentStatus    string
-	agentSessionID string
-	reportSession  func(string)
-	agentWorked    bool
-	agentEnded     bool
-	codexReported  string // last Codex title state, before waiting for spawned agents
-	codexWaiting   bool
-	agentMu        sync.Mutex
-	processStatus  string
-	managed        *managedTerminal
+	mu                 sync.Mutex
+	clients            map[*terminalClient]bool
+	closed             bool
+	log                *terminalLog
+	pendingOutput      []byte // startup output retained until the first client connects
+	connected          bool
+	cols               uint16
+	rows               uint16
+	activity           *agentActivity
+	agentStatus        string
+	agentSessionID     string
+	codexSessionPrefix string
+	agentTitle         string
+	titlePriority      int
+	reportSession      func(string)
+	agentWorked        bool
+	agentEnded         bool
+	codexReported      string // last Codex title state, before waiting for spawned agents
+	codexWaiting       bool
+	agentMu            sync.Mutex
+	processStatus      string
+	managed            *managedTerminal
 }
 
 type terminalClient struct {
@@ -542,6 +545,9 @@ func (s *TerminalSession) addClient(c *terminalClient) {
 	}
 	if status != "" {
 		_ = c.send(terminalWSMessage{Type: "agent-status", Data: status})
+	}
+	if s.agentTitle != "" {
+		_ = c.send(terminalWSMessage{Type: "agent-title", Data: s.agentTitle})
 	}
 	s.mu.Unlock()
 	if cols > 0 && rows > 0 && s.ptyFile != nil {

@@ -646,48 +646,24 @@ test('new thread shortcut uses the current project and ignores repeats', () => {
   }
 })
 
-test('thread title updates use the terminal session and do not rename from tools', () => {
+test('backend title updates rename their own thread or worktree, including hidden workspaces', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/components.go'), 'utf8')
-  const handler = source.slice(source.indexOf('term.onTitleChange(function(title)'), source.indexOf('term.onData(function(data)', source.indexOf('term.onTitleChange(function(title)')))
-  for (const dock of ['center', 'right', 'bottom']) {
-    let onTitle
+  const start = source.indexOf('function updateAgentTitle(task)')
+  const handler = source.slice(start, source.indexOf('term.onData(function(data)', start))
+  assert.ok(source.includes("if (msg.type === 'agent-title') { updateAgentTitle(msg.data); return; }"))
+  assert.ok(!source.includes('term.onTitleChange('), 'raw terminal titles must not bypass backend validation')
+  for (const dock of ['center', 'right', 'bottom']) for (const project of ['thread:test', 'project/branch', 'project']) {
     const calls = []
-    const frame = { dataset: { dock }, closest: () => ({ dataset: { workspaceProject: 'thread:test' } }) }
-    const ws = { call(action, data) { calls.push([action, data.sid, data.id, data.name]) } }
-    vm.runInNewContext(handler, {
-      term: { onTitleChange(fn) { onTitle = fn } },
-      sid: 'session-7', appID: 'agent', window: { __ws: ws }, __ws: ws,
+    const frame = { dataset: { dock }, closest: () => ({ dataset: { workspaceProject: project } }) }
+    const ws = { call(action, data) { calls.push([action, data.sid, data.id || data.project, data.name]) } }
+    const context = vm.createContext({
+      sid: 'session-7', appID: 'agent', window: { __ws: ws, __libroActiveProject: 'another-project' }, __ws: ws,
       document: { getElementById: () => frame },
     })
-    onTitle('Fix login')
-    assert.deepEqual(calls, dock === 'center' ? [['thread.rename', 'session-7', 'thread:test', 'Fix login']] : [])
-  }
-})
-
-
-test('thread titles ignore harness placeholders and extract task names', () => {
-  const source = fs.readFileSync(path.join(__dirname, '../internal/components.go'), 'utf8')
-  const start = source.indexOf('term.onTitleChange(function(title)')
-  const handler = source.slice(start, source.indexOf('term.onData(function(data)', start))
-  for (const project of ['thread:test', 'project']) {
-    let onTitle
-    const calls = []
-    const frame = { dataset: { dock: 'center', taskTitle: 'Existing task' }, closest: () => ({ dataset: { workspaceProject: project } }) }
-    const ws = { call(action, data) { calls.push(data.name) } }
-    vm.runInNewContext(handler, {
-      term: { onTitleChange(fn) { onTitle = fn } }, sid: 'session', appID: 'agent',
-      window: { __ws: ws }, __ws: ws, document: { getElementById: () => frame },
-    })
-    for (const title of ['π - capo', 'Ready', 'Ready | renaming... ⠋', 'Ready | ⠙', 'Working | 01a0c304-7225-78c3-b807-123456789abc', 'Ready | 01a0c304-7225-78c3-b807-123456789abc ⠼']) {
-      onTitle(title)
-      assert.equal(frame.dataset.taskTitle, 'Existing task')
-    }
-    assert.deepEqual(calls, [])
-    onTitle('π - Fix login - capo')
-    assert.equal(frame.dataset.taskTitle, 'Fix login')
-    onTitle('Thinking | 01a0c304-7225-78c3-b807-123456789abc ⠋ | Fix sidebar ⠹')
-    assert.equal(frame.dataset.taskTitle, 'Fix sidebar')
-    assert.deepEqual(calls, project.startsWith('thread:') ? ['Fix login', 'Fix sidebar'] : [])
+    vm.runInContext(handler + "updateAgentTitle('Fix login'); updateAgentTitle('');", context)
+    const action = project.startsWith('thread:') ? 'thread.rename' : 'worktree.title'
+    assert.deepEqual(calls, dock === 'center' && project !== 'project' ? [[action, 'session-7', project, 'Fix login']] : [])
+    if (dock === 'center') assert.equal(frame.dataset.taskTitle, 'Fix login')
   }
 })
 

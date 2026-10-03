@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 
+	"libro/internal/components"
+
 	r "github.com/michalCapo/g-sui/ui"
 )
 
@@ -36,6 +38,13 @@ func loadThreads() []Thread {
 		var thread Thread
 		if rows.Scan(&thread.ID, &thread.Name, &thread.Archived, &thread.Project, &thread.Path, &thread.SessionID, &thread.AgentID, &thread.AgentCommand) == nil {
 			threads = append(threads, thread)
+		}
+	}
+	_ = rows.Close()
+	for i := range threads {
+		if title := components.RecoverCodexTitle(threads[i].Name); title != threads[i].Name {
+			threads[i].Name = title
+			_, _ = db.Exec("UPDATE threads SET name = ? WHERE id = ?", title, threads[i].ID)
 		}
 	}
 	return threads
@@ -183,8 +192,8 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) r.Re
 		if name == "" {
 			return r.Result{}, nil
 		}
-		if len(name) > 200 {
-			name = name[:200]
+		if runes := []rune(name); len(runes) > 200 {
+			name = string(runes[:200])
 		}
 		state := sm.Get(sid)
 		thread := state.thread(id)
@@ -203,8 +212,8 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) r.Re
 	r.RegisterAction(app, "worktree.title", func(_ *r.Context, in actionWorktreeTitleInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		name := strings.TrimSpace(in.Name)
-		if len(name) > 200 {
-			name = name[:200]
+		if runes := []rune(name); len(runes) > 200 {
+			name = string(runes[:200])
 		}
 		state := sm.Get(sid)
 		for _, p := range state.Projects {

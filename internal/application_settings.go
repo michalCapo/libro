@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+
+	"libro/internal/components"
 )
 
 // Application mode belongs to the project; port overrides belong to a worktree.
@@ -165,10 +167,14 @@ func applicationLiveURL(state *AppState, path string) string {
 // An empty title removes the entry.
 func worktreeTitle(path string) string {
 	dbMu.Lock()
-	defer dbMu.Unlock()
 	var title string
 	if db != nil {
 		_ = db.QueryRow(`SELECT value FROM settings WHERE key = ?`, "thread-title:"+applicationPath(path)).Scan(&title)
+	}
+	dbMu.Unlock()
+	if recovered := components.RecoverCodexTitle(title); recovered != title {
+		title = recovered
+		_ = saveWorktreeTitle(path, title)
 	}
 	return title
 }
