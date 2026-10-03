@@ -54,18 +54,20 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-row:has(.ws-project-terminal)>span{flex:0 1 auto}
 .ws-project-row:has(.ws-project-terminal) .ws-project-terminal{margin-right:auto}
 /* A project owns its original branch first, then its worktrees. */
-.ws-project-group>.ws-project-threads{display:flex;flex-direction:column;gap:2px;margin:2px 0 6px 18px;padding-left:6px;border-left:1px solid var(--ws-control-line)}
+.ws-project-group>.ws-project-threads{display:flex;flex-direction:column;gap:4px;margin:2px 0 8px}
 .ws-project-threads .ws-project-threads{display:contents}
 .ws-project-threads:empty,.ws-project-group>.ws-project-threads:not(:has(.ws-project-item)){display:none}
-.ws-thread-row{min-height:30px;padding-left:8px}
+.ws-thread-row{min-height:30px}
 /* Described rows use the first line for the description and the second for details. */
-.ws-row-two-line{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"icon title title title" ". meta end badge";column-gap:8px;align-items:center}
+.ws-row-two-line{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"icon title title title" ". meta end badge";gap:2px 8px;align-items:center}
 .ws-row-two-line>.material-icons-round{grid-area:icon}
 .ws-row-two-line>span{grid-area:title}
 .ws-row-two-line>.ws-project-terminal{grid-area:end}
 .ws-row-two-line>.ws-project-shortcut{grid-area:badge}
 .ws-row-meta{grid-area:meta;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;line-height:16px;color:var(--ws-muted)}
 .ws-thread-row .material-icons-round{font-size:16px}
+.ws-project-item:has(>.ws-row-two-line){background:var(--ws-bg);box-shadow:inset 0 0 0 1px var(--ws-line)}
+.ws-project-item:has(>.ws-row-two-line):hover{background:var(--ws-hover)}
 .ws-project-item:has(>.ws-thread-row[aria-current=true]){background:var(--ws-raised);box-shadow:0 0 0 1px var(--ws-line),0 1px 2px #0000000a}
 .ws-project-item[data-archived=true]{opacity:.52}
 .ws-project-item[data-archived=true]:is(:hover,:focus-within),.ws-project-item[data-archived=true]:has(.ws-project-row[aria-current=true]){opacity:1}

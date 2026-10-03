@@ -47,9 +47,8 @@ func validateVoiceWAV(data []byte) error {
 	return nil
 }
 
-// transcribeOpenRouter sends the recording to GPT-4o Transcribe. An empty
-// language lets the model detect it.
-func transcribeOpenRouter(ctx context.Context, address, key, language string, data []byte) (string, error) {
+// transcribeOpenRouter sends the recording to GPT-4o Transcribe with automatic language detection.
+func transcribeOpenRouter(ctx context.Context, address, key string, data []byte) (string, error) {
 	if err := validateVoiceWAV(data); err != nil {
 		return "", err
 	}
@@ -57,9 +56,6 @@ func transcribeOpenRouter(ctx context.Context, address, key, language string, da
 		"model":       "openai/gpt-4o-transcribe",
 		"input_audio": map[string]string{"data": base64.StdEncoding.EncodeToString(data), "format": "wav"},
 		"temperature": 0,
-	}
-	if language != "" {
-		payload["language"] = language
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -138,7 +134,7 @@ func registerVoiceRoutes(app *r.App) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		text, err := transcribeOpenRouter(req.Context(), openRouterTranscriptionURL, key, voiceLanguage(), data)
+		text, err := transcribeOpenRouter(req.Context(), openRouterTranscriptionURL, key, data)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return

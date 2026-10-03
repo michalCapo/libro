@@ -1469,13 +1469,12 @@
     if (ok) fillAgentEnvironment(names);
     settingsSaveFinished(ok, message);
   }
-  function saveVoice(language) {
+  function saveVoice() {
     const key = document.getElementById('openrouter-key');
     document.getElementById('voice-status').textContent = 'Saving…';
-    call('settings.voice', {language, key:key.value, clearKey:key.dataset.clear === '1'});
+    call('settings.voice', {key:key.value, clearKey:key.dataset.clear === '1'});
   }
   function fillVoice(voice) {
-    document.getElementById('voice-language').value = voice.language;
     const key = document.getElementById('openrouter-key');
     key.value = ''; delete key.dataset.clear;
     key.placeholder = voice.savedKey ? 'Saved key' : 'sk-or-…';
@@ -1490,7 +1489,7 @@
     const key = document.getElementById('openrouter-key');
     key.value = ''; key.dataset.clear = '1'; key.placeholder = 'Key will be removed on Save';
   }
-  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '', pageToolsAutoExecute = false, environment = [], editor = 'nvim', voice = {language:'', savedKey:false}) {
+  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '', pageToolsAutoExecute = false, environment = [], editor = 'nvim', voice = {savedKey:false}) {
     window.__libroPageToolsAutoExecute = !!pageToolsAutoExecute;
     savedThreadAgent = threadAgent;
     fillThreadAgents();
@@ -1549,7 +1548,7 @@
       () => saveAgentCommand(document.getElementById('agent-commands-form')),
       () => saveTools(document.getElementById('tool-commands-form')),
       () => saveAgentEnvironment(document.getElementById('agent-environment-form')),
-      () => saveVoice(value('voice-language')),
+      saveVoice,
       () => settingsSaveFinished(saveAgentAutoUpdate(value('agent-auto-update')), 'Could not save automatic updates. Please try again.'),
       () => saveThreadAgent(agent),
       () => savePageTools(pageTools),

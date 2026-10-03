@@ -110,18 +110,15 @@ func TestVoiceOpenRouterTranscription(t *testing.T) {
 		_, _ = w.Write([]byte(`{"text":"Vytvor pull request.\nEnter"}`))
 	}))
 	defer server.Close()
-	text, err := transcribeOpenRouter(context.Background(), server.URL, "test-key", "sk", audio)
+	text, err := transcribeOpenRouter(context.Background(), server.URL, "test-key", audio)
 	if err != nil || text != "Vytvor pull request. Enter" {
 		t.Fatalf("text = %q, err = %v", text, err)
 	}
-	if got.Model != "openai/gpt-4o-transcribe" || got.InputAudio["format"] != "wav" || got.InputAudio["data"] != base64.StdEncoding.EncodeToString(audio) || got.Language == nil || *got.Language != "sk" {
+	if got.Model != "openai/gpt-4o-transcribe" || got.InputAudio["format"] != "wav" || got.InputAudio["data"] != base64.StdEncoding.EncodeToString(audio) || got.Language != nil {
 		t.Fatalf("request = %+v", got)
 	}
-	if _, err := transcribeOpenRouter(context.Background(), server.URL, "test-key", "", audio); err != nil || got.Language != nil {
-		t.Fatalf("auto-detect sent language %v, err = %v", got.Language, err)
-	}
 	status = http.StatusUnauthorized
-	if _, err := transcribeOpenRouter(context.Background(), server.URL, "test-key", "", audio); err == nil || !strings.Contains(err.Error(), "Invalid key") {
+	if _, err := transcribeOpenRouter(context.Background(), server.URL, "test-key", audio); err == nil || !strings.Contains(err.Error(), "Invalid key") {
 		t.Fatalf("err = %v", err)
 	}
 }

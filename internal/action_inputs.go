@@ -219,7 +219,6 @@ type actionSettingsPageToolsInput struct {
 }
 
 type actionSettingsVoiceInput struct {
-	Language string `json:"language"`
 	Key      string `json:"key"`
 	ClearKey bool   `json:"clearKey"`
 	SID      string `json:"sid"`

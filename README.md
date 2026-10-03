@@ -60,10 +60,9 @@ are limited to 60 seconds. Change the shortcut in Settings → Shortcuts.
 
 Voice typing uses OpenRouter GPT-4o Transcribe. Add an API key in Settings →
 OpenRouter, or set `OPENROUTER_API_KEY` in Libro's environment. Without a key,
-pressing the microphone shows how to add one. Audio is sent to OpenRouter. In
-Settings → Voice typing, set the dictation language to Slovak or English for
-best accuracy, or keep Auto-detect for mixed speech. Allow microphone access
-when your system asks.
+pressing the microphone shows how to add one. Audio is sent to OpenRouter.
+The dictation language is always detected automatically, including mixed Slovak
+and English speech. Allow microphone access when your system asks.
 
 ## Development instances
 

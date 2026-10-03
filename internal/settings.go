@@ -351,7 +351,7 @@ func renderAgentCommands() *r.Node {
 
 func registerSettingsActions(app *r.App) {
 	r.RegisterAction(app, "settings.voice", func(_ *r.Context, in actionSettingsVoiceInput) (r.Result, error) {
-		saved := setVoiceSettings(in.Language, in.Key, in.ClearKey) == nil
+		saved := setVoiceSettings(in.Key, in.ClearKey) == nil
 		return clientScript("libroWorkspace.voiceSaved(props[0],props[1]);", saved, voiceSettingsState()), nil
 	})
 	r.RegisterAction(app, "settings.agent-environment", func(_ *r.Context, in actionSettingsAgentEnvironmentInput) (r.Result, error) {
