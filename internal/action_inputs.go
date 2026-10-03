@@ -218,9 +218,11 @@ type actionSettingsPageToolsInput struct {
 	SID         string `json:"sid"`
 }
 
-type actionSettingsVoiceLanguageInput struct {
-	Language *string `json:"language"`
-	SID      string  `json:"sid"`
+type actionSettingsVoiceInput struct {
+	Language string `json:"language"`
+	Key      string `json:"key"`
+	ClearKey bool   `json:"clearKey"`
+	SID      string `json:"sid"`
 }
 
 type actionSettingsAgentCommandInput struct {

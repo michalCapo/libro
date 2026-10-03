@@ -2,10 +2,9 @@
 // and editable text in the original terminal. It never submits the prompt.
 (function () {
   if (window.libroVoice) return;
-  let setup = {state: 'installing', message: 'Preparing voice typing…'};
+  let setup = {state: 'ready'};
   let current = null;
   let message = '';
-  let pollTimer;
   const headers = () => ({'X-Libro-Session': window.__libroWorkspaceSID});
   const target = id => document.getElementById('frame-' + id);
   const available = id => {
@@ -17,39 +16,29 @@
     const shortcut = window.libroWorkspace?.shortcutFor('voice') || '';
     document.querySelectorAll('[data-voice-button]').forEach(button => {
       const active = current?.indicatorID === button.dataset.voiceButton;
-      const state = active ? current.state : setup.state;
-      const label = active ? (state === 'recording' ? 'Listening… Press again to transcribe' : state === 'permission' ? 'Waiting for microphone…' : 'Transcribing…') :
-        message || (state === 'ready' ? '' : state === 'error' ? 'Voice setup failed · Retry' : setup.message);
+      const state = active ? current.state : 'ready';
+      const label = active ? (state === 'recording' ? 'Listening… Press again to transcribe' : state === 'permission' ? 'Waiting for microphone…' : 'Transcribing…') : message;
       button.dataset.state = state;
       button.setAttribute('aria-pressed', String(active && state === 'recording'));
-      button.title = state === 'error' ? setup.message : 'Press to start or stop voice typing' + (shortcut ? ' (' + shortcut + ')' : '') + '. Escape cancels.';
+      button.title = 'Press to start or stop voice typing' + (shortcut ? ' (' + shortcut + ')' : '') + '. Escape cancels.';
       button.setAttribute('aria-label', button.title);
-      button.querySelector('i').textContent = state === 'error' ? 'refresh' : 'mic';
+      button.querySelector('i').textContent = 'mic';
       const status = button.parentElement.querySelector('.ws-voice-status');
       if (status.textContent !== label) status.textContent = label;
       status.hidden = !label;
     });
   }
 
+  // Status only reports whether an OpenRouter key is set; it is shown when
+  // the user tries to dictate.
   async function poll() {
-    clearTimeout(pollTimer);
     try {
       const response = await fetch('/voice/status', {headers: headers()});
-      if (!response.ok) throw new Error('Cannot reach voice typing. Click the microphone to retry.');
+      if (!response.ok) throw new Error('Cannot reach voice typing. Please try again.');
       setup = await response.json();
     } catch (error) { setup = {state:'error', message:error.message}; }
+    if (setup.state === 'ready') message = '';
     render();
-    if (setup.state === 'installing' || setup.state === 'idle') pollTimer = setTimeout(poll, 1500);
-  }
-
-  async function retry() {
-    setup = {state:'installing', message:'Preparing voice typing…'};
-    message = ''; render();
-    try {
-      const response = await fetch('/voice/setup', {method:'POST', headers: headers()});
-      if (!response.ok) throw new Error('Could not start voice setup. Click to retry.');
-      await poll();
-    } catch (error) { setup = {state:'error', message:error.message}; render(); }
   }
 
   function releaseResources(attempt) {
@@ -83,8 +72,8 @@
     if (available(selected) && target(selected).querySelector('[data-terminal-app]') &&
         target(selected).closest('[data-workspace-project]') === target(id)?.closest('[data-workspace-project]')) id = selected;
     if (!available(id)) return;
-    if (setup.state === 'error' || setup.state === 'idle') { await retry(); return; }
-    if (setup.state !== 'ready') return;
+    if (setup.state !== 'ready') await poll();
+    if (setup.state !== 'ready') { message = setup.message; render(); return; }
     message = '';
     const attempt = {id, indicatorID, state:'permission', abort:new AbortController(), chunks:[]};
     current = attempt; render();
@@ -176,6 +165,6 @@
   window.addEventListener('blur', cancel);
   document.addEventListener('visibilitychange', () => { if (document.hidden) cancel(); });
   new MutationObserver(() => { if (current && !available(current.id)) cancel(); }).observe(document.getElementById('libro-workspace'), {subtree:true, childList:true, attributes:true, attributeFilter:['aria-hidden']});
-  window.libroVoice = {toggle, cancel, mount, refresh:render};
+  window.libroVoice = {toggle, cancel, mount, poll, refresh:render};
   void poll();
 })();

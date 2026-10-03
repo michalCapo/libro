@@ -350,10 +350,9 @@ func renderAgentCommands() *r.Node {
 }
 
 func registerSettingsActions(app *r.App) {
-	r.RegisterAction(app, "settings.voice-language", func(_ *r.Context, in actionSettingsVoiceLanguageInput) (r.Result, error) {
-		language, ok := inputField(in.Language)
-		saved := ok && setVoiceLanguage(language) == nil
-		return clientScript("libroWorkspace.voiceLanguageSaved(props[0],props[1]);", saved, voiceLanguage()), nil
+	r.RegisterAction(app, "settings.voice", func(_ *r.Context, in actionSettingsVoiceInput) (r.Result, error) {
+		saved := setVoiceSettings(in.Language, in.Key, in.ClearKey) == nil
+		return clientScript("libroWorkspace.voiceSaved(props[0],props[1]);", saved, voiceSettingsState()), nil
 	})
 	r.RegisterAction(app, "settings.agent-environment", func(_ *r.Context, in actionSettingsAgentEnvironmentInput) (r.Result, error) {
 		err := setAgentEnvironment(in.Entries)
@@ -391,7 +390,7 @@ func registerSettingsActions(app *r.App) {
 				commands[plugin.ID] = agentCommand(plugin)
 			}
 		}
-		return clientScript("window.__libroPlugins=props[0];libroWorkspace.showSettings(props[1],props[2],props[3],props[4],props[5],props[6],props[7],props[8],props[9]);", plugins(), string(DBDefaultPanelWidth()), commands, toolKeybindings(), string(DBDefaultToolPanelWidth()), defaultThreadAgent(), browserPageToolsAutoExecute(), agentEnvironmentNames(), editorToolID(), voiceLanguage()), nil
+		return clientScript("window.__libroPlugins=props[0];libroWorkspace.showSettings(props[1],props[2],props[3],props[4],props[5],props[6],props[7],props[8],props[9]);", plugins(), string(DBDefaultPanelWidth()), commands, toolKeybindings(), string(DBDefaultToolPanelWidth()), defaultThreadAgent(), browserPageToolsAutoExecute(), agentEnvironmentNames(), editorToolID(), voiceSettingsState()), nil
 	})
 	r.RegisterAction(app, "settings.width", func(_ *r.Context, in actionSettingsWidthInput) (r.Result, error) {
 		value := in.Width
@@ -447,7 +446,7 @@ func renderWorkspaceSettings() *r.Node {
 			),
 			r.P("ws-settings-status").ID("notification-sound-status").Attr("role", "status"),
 			renderVoiceSettings(),
-			r.P("ws-settings-status").ID("voice-language-status").Attr("role", "status"),
+			r.P("ws-settings-status").ID("voice-status").Attr("role", "status"),
 			r.El("h2", "ws-shortcut-heading").Text("Agent updates"),
 			r.Div("ws-settings-group").Render(
 				r.Div("ws-settings-row").Render(

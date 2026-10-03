@@ -58,23 +58,12 @@ Press or click again to stop and insert the transcript into the selected termina
 Escape, switching threads, or leaving the window cancels dictation. Recordings
 are limited to 60 seconds. Change the shortcut in Settings → Shortcuts.
 
-Dictation automatically handles Slovak and English. It keeps either detected
-language and retries other detections, such as Russian, with Slovak specified.
-Choose **Settings → Voice typing → Dictation language** for all-language
-auto-detection, Slovak only, or English only. The saved choice applies across projects.
-
-Libro automatically downloads its local speech engine and multilingual Whisper
-tiny model on first launch (about 135 MB on Linux x64). `make install` prepares
-them during installation. Setup runs in the background and the microphone shows
-its status; click it to retry a failed download. Allow microphone access when
-your system asks. Once setup finishes, dictation works offline. Audio stays on
-your computer and temporary recordings are deleted after transcription.
-
-Voice files are stored in Libro's data directory under `voice/`, shared by its
-instances. `libro voice install` can also prepare them ahead of time. The engine
-is [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), using Whisper tiny with
-automatic language detection or a language selected in Settings. No Python,
-compiler, API key, or GPU is required.
+Voice typing uses OpenRouter GPT-4o Transcribe. Add an API key in Settings →
+OpenRouter, or set `OPENROUTER_API_KEY` in Libro's environment. Without a key,
+pressing the microphone shows how to add one. Audio is sent to OpenRouter. In
+Settings → Voice typing, set the dictation language to Slovak or English for
+best accuracy, or keep Auto-detect for mixed speech. Allow microphone access
+when your system asks.
 
 ## Development instances
 

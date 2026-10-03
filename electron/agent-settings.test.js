@@ -23,7 +23,7 @@ test('saving a new agent excludes removed tools and preserves removed agents', (
   }
   let payload
   vm.runInNewContext(show + save + ';showSettings("md");saveAgentCommand(form)', {
-    form, prefs: {}, toolKeys: {},
+    form, prefs: {}, toolKeys: {}, fillVoice() {},
     window: { __libroPlugins: [
       { id: 'custom-tool-old', dock: 'right', type: 'terminal', removed: true },
       { id: 'custom-tool-site', dock: 'right', type: 'url', removed: true },
@@ -64,13 +64,13 @@ test('saving agent environment preserves masked values', () => {
 const saveAutoUpdate = workspace.slice(workspace.indexOf('  function saveAgentAutoUpdate('), workspace.indexOf('  let savedThreadAgent ='))
 const saveAll = workspace.slice(workspace.indexOf('  let settingsSaveSteps ='), workspace.indexOf('  let removedAgents ='))
 const close = workspace.slice(workspace.indexOf('  function closeSettings('), workspace.indexOf('  function saveSettings('))
-const voiceLanguage = workspace.slice(workspace.indexOf('  function saveVoiceLanguage('), workspace.indexOf('  function showSettings('))
+const voice = workspace.slice(workspace.indexOf('  function saveVoice('), workspace.indexOf('  function showSettings('))
 
 function settingsHarness(valid = true) {
   const elements = new Map()
   const content = { inert: false }
   const get = id => {
-    if (!elements.has(id)) elements.set(id, { value: id, disabled: false, textContent: '', hidden: false })
+    if (!elements.has(id)) elements.set(id, { value: id, disabled: false, textContent: '', hidden: false, dataset: {} })
     return elements.get(id)
   }
   get('workspace-settings').querySelectorAll = () => [{ reportValidity: () => valid }]
@@ -87,14 +87,14 @@ function settingsHarness(valid = true) {
     saveAgentCommand: () => calls.push('agents'),
     saveTools: () => calls.push('tools'),
     saveAgentEnvironment: () => calls.push('environment'),
-    call: (action, data) => { assert.equal(action, 'settings.voice-language'); calls.push(data.language) },
+    call: (action, data) => { assert.equal(action, 'settings.voice'); calls.push({...data}) },
     saveThreadAgent: value => calls.push(value),
     savePageTools: () => calls.push('page-tools'),
     saveSettings: (value, tool) => calls.push(tool ? 'tool-width' : 'width'),
     saveTheme: () => { calls.push('theme'); return true },
     saveNotificationSound: () => { calls.push('sound'); return true },
   })
-  vm.runInContext(saveAutoUpdate + saveAll + close + voiceLanguage, context)
+  vm.runInContext(saveAutoUpdate + saveAll + close + voice, context)
   return { get, content, calls, toasts, context, stored: () => stored, run: code => vm.runInContext(code, context) }
 }
 
@@ -106,7 +106,7 @@ test('one Save waits for every section before showing a toast and keeps settings
   assert.equal(h.content.inert, true)
   assert.deepEqual(h.toasts, [])
   for (let i = 0; i < 8; i++) h.run('settingsSaveFinished(true)')
-  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', 'voice-language', 'default-thread-agent', 'page-tools', 'width', 'tool-width', 'theme', 'sound'])
+  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', {language:'voice-language', key:'openrouter-key', clearKey:false}, 'default-thread-agent', 'page-tools', 'width', 'tool-width', 'theme', 'sound'])
   assert.equal(h.get('workspace-settings').hidden, false)
   assert.deepEqual(h.toasts, [['Settings saved', '', 'success']])
   assert.equal(h.get('settings-save').disabled, false)
@@ -134,21 +134,21 @@ test('Cancel closes without saving and invalid fields prevent any save', () => {
   assert.deepEqual(h.calls, [])
 })
 
-test('dictation language saves through Settings and preserves the choice on failure', () => {
+test('OpenRouter key is sent once, never shown, and can be removed', () => {
   const h = settingsHarness()
-  h.get('voice-language').value = 'sk-en'
-  h.run("saveVoiceLanguage('sk-en')")
-  assert.deepEqual(h.calls, ['sk-en'])
-  assert.equal(h.get('voice-language').disabled, true)
-  h.run("voiceLanguageSaved(false, '')")
-  assert.equal(h.get('voice-language').disabled, false)
-  assert.equal(h.get('voice-language').value, 'sk-en')
-  assert.match(h.get('voice-language-status').textContent, /Could not save/)
-  h.run("saveVoiceLanguage(''); voiceLanguageSaved(true, '')")
-  assert.equal(h.get('voice-language').value, '')
-  assert.equal(h.get('voice-language-status').textContent, 'Saved.')
+  h.get('openrouter-key').value = 'sk-or-new'
+  h.run("saveVoice('sk')")
+  assert.deepEqual(h.calls, [{language:'sk', key:'sk-or-new', clearKey:false}])
+  h.run("voiceSaved(false, null)")
+  assert.equal(h.get('openrouter-key').value, 'sk-or-new')
+  assert.match(h.get('voice-status').textContent, /Could not save/)
+  h.run("voiceSaved(true, {language:'sk', savedKey:true})")
+  assert.equal(h.get('openrouter-key').value, '')
+  assert.equal(h.get('openrouter-key').placeholder, 'Saved key')
+  assert.equal(h.get('voice-language').value, 'sk')
+  h.run("clearOpenRouterKey(); saveVoice('')")
+  assert.deepEqual(h.calls[1], {language:'', key:'', clearKey:true})
 })
-
 
 test('automatic update preference persists without replacing other settings', () => {
   const h = settingsHarness()

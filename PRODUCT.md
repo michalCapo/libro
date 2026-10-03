@@ -38,9 +38,7 @@ Worktree threads have a right-click / overflow menu with Merge thread, Squash th
 
 ## Voice typing
 
-Hold Tab or the microphone beside the agent tab to dictate. Release to insert the transcript into the selected terminal (or the agent when a browser is selected) without submitting it. Escape, window blur, or switching threads cancels dictation. Libro automatically installs the local sherpa-onnx engine and multilingual Whisper tiny model during `make install` or first launch. After the download, transcription runs locally and works offline.
-
-Settings → Voice typing offers a saved Dictation language choice across projects. Slovak + English is the default: keep detected Slovak or English and retry other detections with Slovak specified. All-language auto-detection, Slovak only, and English only are also available.
+Press Caps Lock or click the microphone beside the agent tab to dictate. Press again to insert the transcript into the selected terminal (or the agent when a browser is selected) without submitting it. Escape, window blur, or switching threads cancels dictation. Libro transcribes with OpenRouter GPT-4o Transcribe, using the API key from Settings → OpenRouter (or `OPENROUTER_API_KEY`) and the dictation language from Settings → Voice typing; audio is sent to OpenRouter. Without a key, pressing the microphone shows how to add one.
 
 ## Files and editor
 
