@@ -1457,13 +1457,27 @@
     if (ok) fillAgentEnvironment(names);
     settingsSaveFinished(ok, message);
   }
-  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '', pageToolsAutoExecute = false, environment = [], editor = 'nvim') {
+  function saveVoiceLanguage(language) {
+    document.getElementById('voice-language').disabled = true;
+    document.getElementById('voice-language-status').textContent = 'Saving…';
+    call('settings.voice-language', {language});
+  }
+  function voiceLanguageSaved(ok, language) {
+    const select = document.getElementById('voice-language');
+    select.disabled = false;
+    if (ok) select.value = language;
+    document.getElementById('voice-language-status').textContent = ok ? 'Saved.' : 'Could not save dictation language. Please try again.';
+    settingsSaveFinished(ok);
+  }
+  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '', pageToolsAutoExecute = false, environment = [], editor = 'nvim', voiceLanguage = 'sk-en') {
     window.__libroPageToolsAutoExecute = !!pageToolsAutoExecute;
     savedThreadAgent = threadAgent;
     fillThreadAgents();
     document.getElementById('default-thread-agent-status').textContent = '';
     document.getElementById('notification-sound').value = prefs.notificationSound === false ? 'off' : 'on';
     document.getElementById('notification-sound-status').textContent = '';
+    document.getElementById('voice-language').value = voiceLanguage;
+    document.getElementById('voice-language-status').textContent = '';
     document.getElementById('agent-auto-update').value = prefs.agentAutoUpdate === false ? 'off' : 'on';
     document.getElementById('agent-auto-update-status').textContent = '';
     document.getElementById('page-tools-autoexecute').value = pageToolsAutoExecute ? 'on' : 'off';
@@ -1514,6 +1528,7 @@
       () => saveAgentCommand(document.getElementById('agent-commands-form')),
       () => saveTools(document.getElementById('tool-commands-form')),
       () => saveAgentEnvironment(document.getElementById('agent-environment-form')),
+      () => saveVoiceLanguage(value('voice-language')),
       () => settingsSaveFinished(saveAgentAutoUpdate(value('agent-auto-update')), 'Could not save automatic updates. Please try again.'),
       () => saveThreadAgent(agent),
       () => savePageTools(pageTools),
@@ -1713,7 +1728,7 @@
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
     settingsSaveFinished(ok);
   }
-  window.libroWorkspace = {saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
+  window.libroWorkspace = {voiceLanguageSaved, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;
