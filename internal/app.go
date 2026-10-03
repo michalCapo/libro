@@ -681,6 +681,13 @@ func Run(assets embed.FS, desktop bool) error {
 		if threadState.needsProjectThread(candidate) {
 			return r.Result{}.Run(actionThreadCreate.Call(actionThreadCreateInput{SID: sid, Agent: pluginID, Project: threadState.ActiveProject})), nil
 		}
+		// A new agent in a project checkout or worktree starts a fresh
+		// conversation, so it drops the previous agent's description.
+		if isAgentApp(candidate) && threadState.thread(threadState.ActiveProject) == nil {
+			if _, path := threadProjectContext(threadState, threadState.ActiveProject); path != "" {
+				_ = saveWorktreeTitle(path, "")
+			}
+		}
 		if threadState.thread(threadState.ActiveProject) != nil {
 			if !threadState.canStartThreadApp(candidate) {
 				return r.Result{}, nil
