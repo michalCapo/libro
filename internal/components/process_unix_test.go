@@ -14,6 +14,23 @@ import (
 	"time"
 )
 
+func BenchmarkTerminalHasChildren(b *testing.B) {
+	cmd := exec.Command("bash", "--noprofile", "--norc")
+	if _, err := cmd.StdinPipe(); err != nil {
+		b.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	b.ResetTimer()
+	for b.Loop() {
+		if terminalHasChildren(cmd.Process.Pid) {
+			b.Fatal("idle shell reported as running a command")
+		}
+	}
+}
+
 func TestKillTerminalProcessStopsChildJobs(t *testing.T) {
 	cmd := exec.Command("bash", "-c", "set -m; sleep 60 & echo $!; wait")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}

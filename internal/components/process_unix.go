@@ -5,12 +5,34 @@ package components
 import (
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
 )
 
 func terminalHasChildren(pid int) bool {
+	if runtime.GOOS == "linux" {
+		// Read the kernel's child lists instead of spawning pgrep and scanning
+		// every process once per second for each open terminal.
+		path := "/proc/" + strconv.Itoa(pid) + "/task"
+		if tasks, err := os.ReadDir(path); err == nil {
+			complete := true
+			for _, task := range tasks {
+				children, err := os.ReadFile(path + "/" + task.Name() + "/children")
+				if err != nil {
+					complete = false
+					continue
+				}
+				if strings.TrimSpace(string(children)) != "" {
+					return true
+				}
+			}
+			if complete {
+				return false
+			}
+		}
+	}
 	return exec.Command("pgrep", "-P", strconv.Itoa(pid)).Run() == nil
 }
 
