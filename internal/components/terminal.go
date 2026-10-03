@@ -465,13 +465,6 @@ func (tm *TerminalManager) Stop(appID string) {
 	}
 }
 
-// RestartWithEnvironment restarts a PTY session with additional environment variables.
-func (tm *TerminalManager) RestartWithEnvironment(appID, command string, writable bool, cwd string, environment []string) error {
-	tm.Stop(appID)
-	_, err := tm.StartWithEnvironment(appID, command, cwd, writable, environment)
-	return err
-}
-
 // StopAll terminates all sessions managed by this TerminalManager.
 func (tm *TerminalManager) StopAll() {
 	tm.launchMu.Lock()

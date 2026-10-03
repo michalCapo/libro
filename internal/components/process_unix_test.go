@@ -160,7 +160,8 @@ func TestProjectCommandRestartPreservesOtherTerminals(t *testing.T) {
 	if err != nil || strings.TrimSpace(string(actual)) != cwd {
 		t.Fatalf("wrong working directory: %q, %v", actual, err)
 	}
-	if err := tm.RestartWithEnvironment("project", command, true, cwd, nil); err != nil {
+	tm.Stop("project")
+	if _, err := tm.StartWithEnvironment("project", command, cwd, true, nil); err != nil {
 		t.Fatal(err)
 	}
 	second := tm.session("project")

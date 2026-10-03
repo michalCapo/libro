@@ -222,6 +222,37 @@ func closeOtherPanels(sid, keepID string) r.Result {
 	return r.Merge(js, trustedResponse("if(window.libroWorkspace)libroWorkspace.restorePanelFocus();"), r.Result{}.Morph(TopBarID, renderTopBar(state, sid)), projectsJS(state))
 }
 
+// agentLaunch resumes a thread's saved agent session and keeps reporting new
+// session IDs. Other terminals run their own command.
+func agentLaunch(sid string, term Application) (string, func(string)) {
+	if !isAgentApp(term) {
+		return term.Command, nil
+	}
+	// Session reports write these fields under the same lock.
+	sm.mu.RLock()
+	state := sm.states[sid]
+	var thread Thread
+	found := false
+	if state != nil {
+		if t := state.thread(state.ActiveProject); t != nil {
+			thread, found = *t, true
+		}
+	}
+	sm.mu.RUnlock()
+	if !found {
+		return term.Command, nil
+	}
+	threadID := thread.ID
+	command, baseCommand := term.Command, term.Command
+	if thread.SessionID != "" && thread.AgentID == term.PluginID {
+		baseCommand = thread.AgentCommand
+		command = components.ResumeAgentCommand(baseCommand, thread.SessionID)
+	}
+	return command, func(id string) {
+		sm.saveThreadSession(sid, threadID, term.ID, term.PluginID, baseCommand, id)
+	}
+}
+
 // Autolaunch starts the thread's agent when a thread has no agent panel.
 func projectAutolaunchJS(state *AppState, sid string) r.Result {
 	plugin := projectAutolaunchPlugin(state)
@@ -831,19 +862,7 @@ func Run(assets embed.FS, desktop bool) error {
 			if isAgentApp(term) {
 				environment = append(agentEnvironmentList(), "LIBRO_APPLICATION_PATH="+pwd)
 			}
-			command := term.Command
-			var reportSession func(string)
-			if thread := state.thread(state.ActiveProject); thread != nil && isAgentApp(term) {
-				threadID := thread.ID
-				baseCommand := command
-				if thread.SessionID != "" && thread.AgentID == term.PluginID {
-					baseCommand = thread.AgentCommand
-					command = components.ResumeAgentCommand(baseCommand, thread.SessionID)
-				}
-				reportSession = func(id string) {
-					sm.saveThreadSession(sid, threadID, term.ID, term.PluginID, baseCommand, id)
-				}
-			}
+			command, reportSession := agentLaunch(sid, term)
 			session, err := tm.StartWithSessionReporter(term.ID, command, pwd, term.Writable, environment, reportSession)
 			if err != nil {
 				sm.RemoveAppByID(sid, term.ID)
@@ -936,10 +955,19 @@ func Run(assets embed.FS, desktop bool) error {
 		if isAgentApp(*term) {
 			environment = append(agentEnvironmentList(), "LIBRO_APPLICATION_PATH="+pwd)
 		}
-		if err := tm.RestartWithEnvironment(term.ID, term.Command, term.Writable, pwd, environment); err != nil {
+		// Stopping saves the final session ID, which the resume command needs.
+		tm.Stop(term.ID)
+		command, reportSession := agentLaunch(sid, *term)
+		if _, err := tm.StartWithSessionReporter(term.ID, command, pwd, term.Writable, environment, reportSession); err != nil {
 			return r.Result{}.Run(r.Notify("error", "Failed to restart terminal: "+err.Error())), nil
 		}
-		return r.Merge(clientScript("(function(){if(window.__libroRestartTerminal)window.__libroRestartTerminal(props[0]);})();", term.ID), settleAppFrameJS(term.ID), r.Result{}.Run(r.Notify("success", "Terminal restarted"))), nil
+		// Without a thread record there is no session to resume, so the
+		// restarted agent starts fresh and drops the old description.
+		var js r.Result
+		if isAgentApp(*term) && state.thread(state.ActiveProject) == nil && saveWorktreeTitle(pwd, "") == nil {
+			js = projectsJS(state)
+		}
+		return r.Merge(js, clientScript("(function(){if(window.__libroRestartTerminal)window.__libroRestartTerminal(props[0]);})();", term.ID), settleAppFrameJS(term.ID), r.Result{}.Run(r.Notify("success", "Terminal restarted"))), nil
 	})
 	// Navigate left - JS-only update to preserve iframes
 	r.RegisterAction(app, "app.navigate.left", func(_ *r.Context, in sessionInput) (r.Result, error) {
