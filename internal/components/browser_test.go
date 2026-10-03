@@ -117,8 +117,8 @@ process.stdin.on('end', () => {
       assert.equal(iframe.style.display, 'none');
       assert.equal(notice.style.display, 'none');
       // The init observer runs before cleanup when hydration replaces a guest.
-      currentWebview = {...webview};
-      observers[0]();
+      currentWebview = {...webview, nodeType: 1, isConnected: true, matches: () => true};
+      observers[0]([{target: document.body, addedNodes: [currentWebview]}]);
       assert.equal(window.__libroWebviews.test, currentWebview);
       const removedFrame = {nodeType: 1, querySelectorAll: () => [webview]};
       observers[1]([{removedNodes: [removedFrame]}]);

@@ -1108,16 +1108,25 @@ function bindWebviewEvents(wv) {
 	// more reliable than the renderer-side <webview> DOM event.
 }
 
-function initAll() {
+function initAll(root) {
 	// Plain browsers expose <webview> as an inert element. Registering it would
 	// route navigation into a guest that never becomes ready instead of the iframe.
 	if (!window.libroElectron) return;
-	document.querySelectorAll('webview[data-webview-app]').forEach(initWebview);
+	if (root.matches && root.matches('webview[data-webview-app]')) initWebview(root);
+	if (root.querySelectorAll) root.querySelectorAll('webview[data-webview-app]').forEach(initWebview);
 }
 
-initAll();
+initAll(document);
 
-var bodyObserver = new MutationObserver(function() { initAll(); });
+var bodyObserver = new MutationObserver(function(mutations) {
+	mutations.forEach(function(mutation) {
+		// Terminal redraws cannot add browser panels. Avoid scanning their output.
+		if (mutation.target.closest && mutation.target.closest('[data-terminal]')) return;
+		mutation.addedNodes.forEach(function(node) {
+			if (node.nodeType === 1 && node.isConnected) initAll(node);
+		});
+	});
+});
 bodyObserver.observe(document.body, { childList: true, subtree: true });
 window.addEventListener('resize', function() {
 	Object.keys(window.__libroWebviews).forEach(function(appID) {
