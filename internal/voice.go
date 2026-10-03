@@ -276,7 +276,10 @@ func validateVoiceWAV(data []byte) error {
 	return nil
 }
 
-func transcribeVoice(ctx context.Context, dir string, data []byte) (string, error) {
+func transcribeVoice(ctx context.Context, dir string, data []byte, language string) (string, error) {
+	if !validVoiceLanguage(language) {
+		return "", fmt.Errorf("choose a supported dictation language")
+	}
 	if err := validateVoiceWAV(data); err != nil {
 		return "", err
 	}
@@ -293,20 +296,26 @@ func transcribeVoice(ctx context.Context, dir string, data []byte) (string, erro
 	if closeErr != nil {
 		return "", closeErr
 	}
-	model := filepath.Join(dir, "model")
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, voiceExecutable(dir), "--whisper-encoder="+filepath.Join(model, "tiny-encoder.int8.onnx"), "--whisper-decoder="+filepath.Join(model, "tiny-decoder.int8.onnx"), "--tokens="+filepath.Join(model, "tiny-tokens.txt"), "--whisper-task=transcribe", "--num-threads=2", f.Name())
-	cmd.Dir = filepath.Dir(voiceExecutable(dir))
-	output, err := cmd.Output()
+	engineLanguage := language
+	if language == voiceSlovakEnglish {
+		engineLanguage = ""
+	}
+	result, err := recognizeVoice(ctx, dir, f.Name(), engineLanguage)
 	if err != nil {
-		return "", fmt.Errorf("transcription failed; please try again: %w", err)
+		return "", err
 	}
-	var result struct {
-		Text string `json:"text"`
-	}
-	if err := json.Unmarshal(bytes.TrimSpace(output), &result); err != nil {
-		return "", fmt.Errorf("invalid speech engine response: %w", err)
+	// Tiny can mistake short Slovak recordings for Russian or other languages.
+	// Keep detected English/Slovak; retry other guesses with Slovak specified.
+	if language == voiceSlovakEnglish && result.Language != "en" && result.Language != "sk" {
+		result, err = recognizeVoice(ctx, dir, f.Name(), "sk")
+		if err != nil {
+			return "", err
+		}
+		if result.Language != "sk" {
+			return "", fmt.Errorf("could not recognize Slovak speech; please try again")
+		}
 	}
 	// Dictation is one editable input, never terminal control characters or Enter.
 	return strings.Join(strings.Fields(strings.Map(func(c rune) rune {
@@ -315,6 +324,26 @@ func transcribeVoice(ctx context.Context, dir string, data []byte) (string, erro
 		}
 		return c
 	}, result.Text)), " "), nil
+}
+
+type voiceResult struct {
+	Text     string `json:"text"`
+	Language string `json:"lang"`
+}
+
+func recognizeVoice(ctx context.Context, dir, file, language string) (voiceResult, error) {
+	model := filepath.Join(dir, "model")
+	cmd := exec.CommandContext(ctx, voiceExecutable(dir), "--whisper-encoder="+filepath.Join(model, "tiny-encoder.int8.onnx"), "--whisper-decoder="+filepath.Join(model, "tiny-decoder.int8.onnx"), "--tokens="+filepath.Join(model, "tiny-tokens.txt"), "--whisper-task=transcribe", "--whisper-language="+language, "--num-threads=2", file)
+	cmd.Dir = filepath.Dir(voiceExecutable(dir))
+	output, err := cmd.Output()
+	var result voiceResult
+	if err != nil {
+		return result, fmt.Errorf("transcription failed; please try again: %w", err)
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(output), &result); err != nil {
+		return result, fmt.Errorf("invalid speech engine response: %w", err)
+	}
+	return result, nil
 }
 
 func registerVoiceRoutes(app *r.App) {
@@ -360,7 +389,7 @@ func registerVoiceRoutes(app *r.App) {
 			http.Error(w, "Cannot access voice files", http.StatusInternalServerError)
 			return
 		}
-		text, err := transcribeVoice(req.Context(), dir, data)
+		text, err := transcribeVoice(req.Context(), dir, data, voiceLanguage())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

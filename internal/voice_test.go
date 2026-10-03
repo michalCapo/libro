@@ -5,17 +5,130 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	r "github.com/michalCapo/g-sui/ui"
 )
+
+func TestVoiceLanguagePersistence(t *testing.T) {
+	original := db
+	var err error
+	path := filepath.Join(t.TempDir(), "settings.db")
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	if got := voiceLanguage(); got != voiceSlovakEnglish {
+		t.Fatalf("default language = %q", got)
+	}
+	for _, language := range []string{"sk", "en", "", voiceSlovakEnglish} {
+		if err := setVoiceLanguage(language); err != nil {
+			t.Fatal(err)
+		}
+		_ = db.Close()
+		db, err = sql.Open("sqlite", path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := voiceLanguage(); got != language {
+			t.Fatalf("saved %q, loaded %q", language, got)
+		}
+	}
+	for _, language := range []string{"unknown", "sk-SK", "sk,en", "--whisper-task=translate"} {
+		if err := setVoiceLanguage(language); err == nil {
+			t.Fatalf("accepted language %q", language)
+		}
+		if got := voiceLanguage(); got != voiceSlovakEnglish {
+			t.Fatalf("invalid save changed language to %q", got)
+		}
+	}
+}
+
+func TestVoiceSlovakEnglishTranscription(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("speech engine stub requires a POSIX shell")
+	}
+	for _, test := range []struct {
+		name, language, detected, text, fallback, want, calls string
+		failRetry                                             bool
+	}{
+		{"russian guess", voiceSlovakEnglish, "ru", "Это функция.", "sk", "Je to funkcia.", "\nsk\n", false},
+		{"czech guess", voiceSlovakEnglish, "cs", "Je to funkce.", "sk", "Je to funkcia.", "\nsk\n", false},
+		{"english", voiceSlovakEnglish, "en", "This is a feature.", "sk", "This is a feature.", "\n", false},
+		{"slovak", voiceSlovakEnglish, "sk", "  Je to\n funkcia.\t", "sk", "Je to funkcia.", "\n", false},
+		{"all languages", "", "ru", "Это функция.", "sk", "Это функция.", "\n", false},
+		{"fixed slovak", "sk", "ru", "Это функция.", "sk", "Je to funkcia.", "sk\n", false},
+		{"fixed english", "en", "ru", "Это функция.", "sk", "This is a feature.", "en\n", false},
+		{"failed retry", voiceSlovakEnglish, "ru", "Это функция.", "sk", "", "\nsk\n", true},
+		{"wrong retry language", voiceSlovakEnglish, "ru", "Это функция.", "ru", "", "\nsk\n", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			bin := filepath.Dir(voiceExecutable(dir))
+			if err := os.MkdirAll(bin, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			script := `#!/bin/sh
+for arg do
+  case "$arg" in
+    --whisper-language=*) language=${arg#*=} ;;
+    --whisper-task=transcribe) task=transcribe ;;
+  esac
+done
+[ "$task" = transcribe ] && [ -f "$arg" ] || exit 1
+printf '%s\n' "$language" >> calls
+printf '%s' "$arg" > recording
+cat "response-$language.json"
+`
+			if err := os.WriteFile(voiceExecutable(dir), []byte(script), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			for language, response := range map[string]voiceResult{
+				"":   {Text: test.text, Language: test.detected},
+				"sk": {Text: "Je to funkcia.", Language: test.fallback},
+				"en": {Text: "This is a feature.", Language: "en"},
+			} {
+				if language == "sk" && test.failRetry {
+					continue
+				}
+				data, err := json.Marshal(response)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(bin, "response-"+language+".json"), data, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			text, err := transcribeVoice(context.Background(), dir, voiceTestWAV(1600), test.language)
+			if (err != nil) != (test.want == "") || text != test.want {
+				t.Fatalf("text = %q, err = %v; want %q", text, err, test.want)
+			}
+			calls, err := os.ReadFile(filepath.Join(bin, "calls"))
+			if err != nil || string(calls) != test.calls {
+				t.Fatalf("engine calls = %q, err = %v; want %q", calls, err, test.calls)
+			}
+			recording, err := os.ReadFile(filepath.Join(bin, "recording"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(string(recording)); !os.IsNotExist(err) {
+				t.Fatalf("temporary recording remains: %v", err)
+			}
+		})
+	}
+}
 
 func voiceTestWAV(samples int) []byte {
 	data := make([]byte, 44+samples*2)
@@ -158,7 +271,7 @@ func TestVoiceRealTranscription(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text, err := transcribeVoice(context.Background(), dir, sample)
+	text, err := transcribeVoice(context.Background(), dir, sample, voiceSlovakEnglish)
 	if err != nil {
 		t.Fatal(err)
 	}
