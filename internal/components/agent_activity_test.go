@@ -141,7 +141,9 @@ INSERT INTO thread_spawn_edges VALUES ('parent', 'child', 'open');`, child); err
 	write := func(events ...string) {
 		var lines strings.Builder
 		for _, event := range events {
-			lines.WriteString(`{"type":"event_msg","payload":{"type":"` + event + `"}}` + "\n")
+			lines.WriteString(`{"type":"event_msg","payload":{"type":"`)
+			lines.WriteString(event)
+			lines.WriteString(`"}}` + "\n")
 		}
 		if err := os.WriteFile(child, []byte(lines.String()), 0600); err != nil {
 			t.Fatal(err)
