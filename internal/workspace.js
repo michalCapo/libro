@@ -440,6 +440,14 @@
     dialog.addEventListener('close', () => dialog.remove());
     highlight(); root.append(dialog); dialog.showModal(); search.focus();
   }
+  // A described row keeps its description on one full line. Branch, agent,
+  // and shortcut details move to a second line.
+  function rowLabel(row, label, described, branch) {
+    row.append(node('span', '', label));
+    if (!described) return;
+    row.classList.add('ws-row-two-line'); row.dataset.branch = branch;
+    row.append(node('small', 'ws-row-meta', branch));
+  }
   function threadMenu(project, trigger, point) {
     document.getElementById('thread-actions-menu')?.remove();
     const worktree = project.kind === 'worktree';
@@ -485,7 +493,7 @@
       const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button'; row.title = thread.name; row.dataset.projectKey = thread.id; row.dataset.kind = 'thread';
       row.setAttribute('aria-current', String(thread.id === window.__libroActiveProject));
       const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
-      row.append(icon, node('span', '', thread.name));
+      row.append(icon); rowLabel(row, thread.name, thread.name !== 'New thread', '');
       row.onclick = () => {
         closeSettings();
         if (innerWidth <= 760) { prefs.projects = false; save(); }
@@ -558,10 +566,11 @@
         const base = node('button', 'ws-project-row ws-thread-row'); base.type = 'button';
         base.dataset.kind = 'base'; base.dataset.projectKey = project.name;
         base.setAttribute('aria-current', String(!!project.isActive));
-        const baseLabel = project.currentBranch || projectName;
-        base.title = baseLabel + ' — ' + project.path;
+        const branch = project.currentBranch || projectName;
+        const baseLabel = project.title || branch;
+        base.title = baseLabel + (project.title ? '\n' + branch : '') + ' — ' + project.path;
         const baseIcon = node('i', 'material-icons-round', 'chat_bubble_outline'); baseIcon.setAttribute('aria-hidden', 'true');
-        base.append(baseIcon, node('span', '', baseLabel));
+        base.append(baseIcon); rowLabel(base, baseLabel, !!project.title, branch);
         base.onclick = row.onclick;
         const actions = button('Branch actions for ' + baseLabel, 'more_horiz', event => { event.stopPropagation(); threadMenu(project, actions); });
         actions.setAttribute('aria-haspopup', 'menu');
@@ -585,7 +594,7 @@
       const label = project.title || project.branch;
       row.title = label + (project.title ? '\n' + project.branch : '') + ' — ' + project.path;
       const icon = node('i', 'material-icons-round', 'account_tree'); icon.setAttribute('aria-hidden', 'true');
-      row.append(icon, node('span', '', label));
+      row.append(icon); rowLabel(row, label, !!project.title, project.branch);
       row.onclick = () => { closeSettings(); if (innerWidth <= 760) { prefs.projects = false; save(); } call('worktree.switch', {project:project.name, path:project.path, branch:project.branch}); };
       const settings = button('Thread actions for ' + label, 'more_horiz', event => { event.stopPropagation(); threadMenu(project, settings); });
       settings.setAttribute('aria-haspopup', 'menu');
@@ -730,14 +739,17 @@
       }
       tab.setAttribute('aria-label', tab.querySelector('span').textContent + (status ? ': ' + status : ''));
     });
-    const projects = new Map();
+    const projects = new Map(), agentNames = new Map();
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
       const agents = frames(grid).filter(frame => frame.dataset.dock === 'center');
+      agentNames.set(grid.dataset.workspaceProject, [...new Set(agents.map(frame => frame.dataset.appName).filter(Boolean))].join(', '));
       const states = agents.map(frame => acknowledgedAgents.has(frame.dataset.appId) && statuses[frame.dataset.appId] === 'done' ? 'idle' : statuses[frame.dataset.appId]);
       projects.set(grid.dataset.workspaceProject, states.includes('working') ? 'working' :
         states.includes('done') && states.every(state => state === 'done' || state === 'idle') ? 'done' : '');
     });
     document.querySelectorAll('.ws-project-row').forEach(row => {
+      const meta = row.querySelector('.ws-row-meta');
+      if (meta) meta.textContent = [row.dataset.branch, agentNames.get(row.dataset.projectKey)].filter(Boolean).join(' · ');
       const state = projects.get(row.dataset.projectKey) || '';
       if (row.dataset.agentStatus === state) return;
       row.dataset.agentStatus = state;

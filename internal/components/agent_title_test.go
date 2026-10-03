@@ -93,11 +93,11 @@ INSERT INTO threads VALUES (?, 'Verify Codex sidebar descriptions', 'Original pr
 	}
 	var reported string
 	for _, hint := range []string{id, "01a1008a-b13f-74f0-88cb-1b46f..."} {
-		if title := RecoverCodexTitle(hint); title != "Verify Codex sidebar descriptions" {
+		if title := RecoverCodexTitle(hint, ""); title != "Verify Codex sidebar descriptions" {
 			t.Fatalf("saved UUID was not recovered: %q", title)
 		}
 	}
-	if title := RecoverCodexTitle("Keep my name"); title != "Keep my name" {
+	if title := RecoverCodexTitle("Keep my name", ""); title != "Keep my name" {
 		t.Fatal("human name changed")
 	}
 	s := &TerminalSession{activity: &agentActivity{kind: "codex"}, reportSession: func(id string) { reported = id }}
@@ -116,7 +116,7 @@ INSERT INTO threads VALUES (?, 'Verify Codex sidebar descriptions', 'Original pr
 	if reported != "" {
 		t.Fatal("ambiguous prefix matched another session")
 	}
-	if hint := "01a1008a-b13f-74f0-88cb-1b46f..."; RecoverCodexTitle(hint) != hint {
+	if hint := "01a1008a-b13f-74f0-88cb-1b46f..."; RecoverCodexTitle(hint, "") != hint {
 		t.Fatal("ambiguous saved ID was renamed")
 	}
 }
@@ -190,5 +190,25 @@ func TestAgentTitleReplayedOnReconnect(t *testing.T) {
 		if msg.Type != "agent-title" || msg.Data != "Fix sidebar descriptions" {
 			t.Fatalf("reconnected client missed title: %+v", msg)
 		}
+	}
+}
+
+func TestTitleBeforeSessionIDIsKept(t *testing.T) {
+	s := &TerminalSession{activity: &agentActivity{kind: "claude"}, clients: make(map[*terminalClient]bool)}
+	s.setAgentStatus("title:Login repair")
+	s.setAgentStatus("session:one")
+	s.setAgentTitle("First prompt", 1)
+	if s.agentTitle != "Login repair" {
+		t.Fatalf("first session ID dropped native title: %q", s.agentTitle)
+	}
+	s.setAgentStatus("session:two")
+	if s.agentTitle != "" {
+		t.Fatalf("new session kept old title: %q", s.agentTitle)
+	}
+	// Codex's own title repeats the first prompt until the thread is named.
+	s.setAgentTitle("Say hi", 1)
+	s.setAgentStatus("title:Say hi")
+	if s.titlePriority != 1 {
+		t.Fatal("first prompt was promoted over a saved description")
 	}
 }

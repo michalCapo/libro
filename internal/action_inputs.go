@@ -249,15 +249,17 @@ type actionThreadCreateInput struct {
 }
 
 type actionThreadRenameInput struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	SID  string `json:"sid"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	SID      string `json:"sid"`
+	Fallback bool   `json:"fallback"`
 }
 
 type actionWorktreeTitleInput struct {
-	Name    string `json:"name"`
-	Project string `json:"project"`
-	SID     string `json:"sid"`
+	Name     string `json:"name"`
+	Project  string `json:"project"`
+	SID      string `json:"sid"`
+	Fallback bool   `json:"fallback"`
 }
 
 type actionThreadArchiveInput struct {

@@ -2763,6 +2763,7 @@ func projectItems(state *AppState) []jsProject {
 			Name:        p.Name,
 			DisplayName: displayProjectName(p.Name, p.Path),
 			Path:        p.Path,
+			Title:       worktreeTitle(p.Path),
 			IsGit:       p.IsGitRepo,
 			IsActive:    isActive,
 			BaseOpened:  !state.closedWorkspaces[p.Name] && (state.ActiveProject == p.Name || state.snapshots[p.Name] != nil),
@@ -3300,7 +3301,7 @@ func terminalFrameSetupJS() string {
                                 window.dispatchEvent(new Event('libro-process-status'));
                                 return;
                             }
-                            if (msg.type === 'agent-title') { updateAgentTitle(msg.data); return; }
+                            if (msg.type === 'agent-title') { updateAgentTitle(msg.data || '', !!msg.fallback); return; }
 							if (msg.type === 'agent-status') {
 								window.__libroAgentStatuses = window.__libroAgentStatuses || {};
 								window.__libroAgentStatuses[appID] = msg.data;
@@ -3341,15 +3342,16 @@ func terminalFrameSetupJS() string {
 						ws.onerror = function() { try { ws.close(); } catch (err) {} };
 					}
 
-                    function updateAgentTitle(task) {
+                    // An empty task clears the description when the agent starts a new session.
+                    function updateAgentTitle(task, fallback) {
                         const frame = document.getElementById('frame-' + appID);
-                        if (!frame || frame.dataset.dock !== 'center' || !task) return;
+                        if (!frame || frame.dataset.dock !== 'center') return;
                         frame.dataset.taskTitle = task;
                         const grid = frame.closest('[data-workspace-project]');
                         const threadId = grid && grid.dataset.workspaceProject;
                         if (!threadId || !window.__ws) return;
-                        if (threadId.indexOf('thread:') === 0) __ws.call('thread.rename', {sid:sid, id:threadId, name:task});
-                        else if (threadId.indexOf('/') > 0) __ws.call('worktree.title', {sid:sid, project:threadId, name:task});
+                        if (threadId.indexOf('thread:') === 0) __ws.call('thread.rename', {sid:sid, id:threadId, name:task, fallback:fallback});
+                        else __ws.call('worktree.title', {sid:sid, project:threadId, name:task, fallback:fallback});
                     }
 
 					term.onData(function(data) {

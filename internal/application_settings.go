@@ -172,7 +172,7 @@ func worktreeTitle(path string) string {
 		_ = db.QueryRow(`SELECT value FROM settings WHERE key = ?`, "thread-title:"+applicationPath(path)).Scan(&title)
 	}
 	dbMu.Unlock()
-	if recovered := components.RecoverCodexTitle(title); recovered != title {
+	if recovered := components.RecoverCodexTitle(title, agentEnvironment()["CODEX_HOME"]); recovered != title {
 		title = recovered
 		_ = saveWorktreeTitle(path, title)
 	}

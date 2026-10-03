@@ -58,6 +58,13 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-threads .ws-project-threads{display:contents}
 .ws-project-threads:empty,.ws-project-group>.ws-project-threads:not(:has(.ws-project-item)){display:none}
 .ws-thread-row{min-height:30px;padding-left:8px}
+/* Described rows use the first line for the description and the second for details. */
+.ws-row-two-line{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"icon title title title" ". meta end badge";column-gap:8px;align-items:center}
+.ws-row-two-line>.material-icons-round{grid-area:icon}
+.ws-row-two-line>span{grid-area:title}
+.ws-row-two-line>.ws-project-terminal{grid-area:end}
+.ws-row-two-line>.ws-project-shortcut{grid-area:badge}
+.ws-row-meta{grid-area:meta;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;line-height:16px;color:var(--ws-muted)}
 .ws-thread-row .material-icons-round{font-size:16px}
 .ws-project-item:has(>.ws-thread-row[aria-current=true]){background:var(--ws-raised);box-shadow:0 0 0 1px var(--ws-line),0 1px 2px #0000000a}
 .ws-project-item[data-archived=true]{opacity:.52}
@@ -198,11 +205,12 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 #libro-workspace[data-projects=false] .ws-sidebar-heading>.ws-button,
 #libro-workspace[data-projects=false] .ws-sidebar-search,
 #libro-workspace[data-projects=false] .ws-sidebar-action,
-#libro-workspace[data-projects=false] .ws-project-row{width:36px;min-width:36px;min-height:36px;height:36px;padding:0;justify-content:center;flex:none}
+#libro-workspace[data-projects=false] .ws-project-row{display:flex;width:36px;min-width:36px;min-height:36px;height:36px;padding:0;justify-content:center;flex:none}
 #libro-workspace[data-projects=false] .ws-sidebar span,
 #libro-workspace[data-projects=false] .ws-no-threads,
 #libro-workspace[data-projects=false] #workspace-thread-list [data-archived=true],
 #libro-workspace[data-projects=false] .ws-project-row .ws-project-terminal,#libro-workspace[data-projects=false] .ws-thread-status,
+#libro-workspace[data-projects=false] .ws-row-meta,
 #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-shortcut)>.material-icons-round,
 #libro-workspace[data-projects=false] .ws-project-item>.ws-button{display:none}
 #libro-workspace[data-projects=false] .ws-sidebar-heading{justify-content:center;min-height:36px;padding:8px 0 0;margin:0;border-top:1px solid var(--ws-line);font-size:0;line-height:0}

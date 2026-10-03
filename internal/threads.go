@@ -41,8 +41,9 @@ func loadThreads() []Thread {
 		}
 	}
 	_ = rows.Close()
+	codexHome := agentEnvironment()["CODEX_HOME"]
 	for i := range threads {
-		if title := components.RecoverCodexTitle(threads[i].Name); title != threads[i].Name {
+		if title := components.RecoverCodexTitle(threads[i].Name, codexHome); title != threads[i].Name {
 			threads[i].Name = title
 			_, _ = db.Exec("UPDATE threads SET name = ? WHERE id = ?", title, threads[i].ID)
 		}
@@ -187,18 +188,23 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) r.Re
 	r.RegisterAction(app, "thread.rename", func(_ *r.Context, in actionThreadRenameInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		id := in.ID
-		name := in.Name
-		name = strings.TrimSpace(name)
-		if name == "" {
-			return r.Result{}, nil
-		}
+		name := strings.TrimSpace(in.Name)
 		if runes := []rune(name); len(runes) > 200 {
 			name = string(runes[:200])
 		}
 		state := sm.Get(sid)
 		thread := state.thread(id)
+		// Child threads keep the name their parent chose. A first prompt only
+		// names a new thread, so a resumed session keeps its saved description.
+		if thread == nil || thread.Managed || in.Fallback && thread.Name != "New thread" {
+			return r.Result{}, nil
+		}
+		// A new agent session has no description yet.
+		if name == "" {
+			name = "New thread"
+		}
 		// Agent titles arrive on every status change; skip unchanged names.
-		if thread == nil || thread.Name == name {
+		if thread.Name == name {
 			return r.Result{}, nil
 		}
 		if _, err := db.Exec("UPDATE threads SET name = ? WHERE id = ?", name, id); err != nil {
@@ -216,12 +222,16 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) r.Re
 			name = string(runes[:200])
 		}
 		state := sm.Get(sid)
+		// The project's base checkout is saved by path, the same as a worktree.
 		for _, p := range state.Projects {
-			if p.Name != in.Project || !p.Virtual {
+			if p.Name != in.Project {
 				continue
 			}
 			// Agent titles arrive on every status change; skip unchanged names.
-			if name == "" || worktreeTitle(p.Path) == name || saveWorktreeTitle(p.Path, name) != nil {
+			// A first prompt never replaces a saved description, and an empty
+			// name clears the description of a previous agent session.
+			saved := worktreeTitle(p.Path)
+			if saved == name || in.Fallback && saved != "" || saveWorktreeTitle(p.Path, name) != nil {
 				return r.Result{}, nil
 			}
 			return projectsJS(state), nil
@@ -309,10 +319,16 @@ func (sm *StateManager) ReplaceThreadAgent(sid, agentID, command string) ([]Appl
 	if thread == nil {
 		return nil, nil
 	}
-	if _, err := db.Exec("UPDATE threads SET session_id = '', agent_id = ?, agent_command = ?, archived = 0 WHERE id = ?", agentID, command, thread.ID); err != nil {
+	// A fresh conversation gets a new description. Child threads keep the name
+	// their parent chose.
+	name := thread.Name
+	if !thread.Managed {
+		name = "New thread"
+	}
+	if _, err := db.Exec("UPDATE threads SET name = ?, session_id = '', agent_id = ?, agent_command = ?, archived = 0 WHERE id = ?", name, agentID, command, thread.ID); err != nil {
 		return nil, err
 	}
-	thread.SessionID, thread.AgentID, thread.AgentCommand = "", agentID, command
+	thread.Name, thread.SessionID, thread.AgentID, thread.AgentCommand = name, "", agentID, command
 	thread.Archived = false
 	var removed, kept []Application
 	for _, app := range state.Apps {

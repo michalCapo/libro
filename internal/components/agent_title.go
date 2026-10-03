@@ -80,14 +80,23 @@ func (s *TerminalSession) setAgentTitle(title string, priority int) {
 		s.mu.Unlock()
 		return
 	}
-	s.titlePriority = priority
+	// The agent's own title may repeat the first prompt. It stays a fallback.
 	if title == s.agentTitle {
 		s.mu.Unlock()
 		return
 	}
-	s.agentTitle = title
+	s.agentTitle, s.titlePriority, s.titleCleared = title, priority, false
 	s.mu.Unlock()
-	s.broadcast(terminalWSMessage{Type: "agent-title", Data: title})
+	s.broadcast(terminalWSMessage{Type: "agent-title", Data: title, Fallback: priority == 1})
+}
+
+// clearAgentTitle requires agentMu. A new agent session drops the old
+// description, including one saved before Libro restarted.
+func (s *TerminalSession) clearAgentTitle() {
+	s.mu.Lock()
+	s.agentTitle, s.titlePriority, s.titleCleared = "", 0, true
+	s.mu.Unlock()
+	s.broadcast(terminalWSMessage{Type: "agent-title"})
 }
 
 func (s *TerminalSession) readCodexTitle() {
@@ -97,7 +106,7 @@ func (s *TerminalSession) readCodexTitle() {
 	if s.codexSessionPrefix != "" && !strings.HasPrefix(hint, s.codexSessionPrefix) {
 		hint = s.codexSessionPrefix + "..."
 	}
-	id, title, priority := codexThreadTitle(hint)
+	id, title, priority := codexThreadTitle(s.activity.codexHome, hint)
 	if id != "" {
 		s.updateAgentSession(id)
 		s.setAgentTitle(title, priority)
@@ -106,21 +115,21 @@ func (s *TerminalSession) readCodexTitle() {
 
 // RecoverCodexTitle repairs UUID labels saved by older Libro versions. Human
 // names and missing/ambiguous sessions are left alone.
-func RecoverCodexTitle(title string) string {
+func RecoverCodexTitle(title, codexHome string) string {
 	match := codexSessionPattern.FindStringSubmatch(title)
 	if match != nil && match[1] == title {
-		if _, recovered, _ := codexThreadTitle(title); recovered != "" {
+		if _, recovered, _ := codexThreadTitle(codexHome, title); recovered != "" {
 			return recovered
 		}
 	}
 	return title
 }
 
-func codexThreadTitle(hint string) (string, string, int) {
+func codexThreadTitle(home, hint string) (string, string, int) {
 	if hint == "" {
 		return "", "", 0
 	}
-	db := openCodexStateDB()
+	db := openCodexStateDB(home)
 	if db == nil {
 		return "", "", 0
 	}

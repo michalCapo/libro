@@ -43,9 +43,10 @@ var ollamaClaudePattern = regexp.MustCompile(`^(\s+launch\s+claude(?:\s+(?:--mod
 type agentActivity struct {
 	kind, dir, path string
 	env             []string
+	codexHome       string // CODEX_HOME seen by the launched agent
+	codexSession    string // session ID shown in Codex's title
 	osc             []byte
 	escape, inOSC   bool
-	hasThreadTitle  bool
 }
 
 func prepareAgentActivity(command string) (string, *agentActivity, error) {
@@ -274,6 +275,13 @@ func (s *TerminalSession) setAgentStatus(status string) {
 		return
 	}
 	if id, ok := strings.CutPrefix(status, "session:"); ok {
+		if id == "" {
+			s.agentMu.Lock()
+			defer s.agentMu.Unlock()
+			s.agentSessionID, s.codexSessionPrefix = "", ""
+			s.clearAgentTitle()
+			return
+		}
 		if s.activity != nil && s.activity.kind == "codex" && strings.HasSuffix(id, "...") {
 			s.agentMu.Lock()
 			s.codexSessionPrefix = strings.TrimSuffix(id, "...")
@@ -306,10 +314,11 @@ func (s *TerminalSession) updateAgentSession(id string) {
 	if id == s.agentSessionID {
 		return
 	}
+	// Titles seen before the first session ID belong to that session.
+	if s.agentSessionID != "" {
+		s.clearAgentTitle()
+	}
 	s.agentSessionID = id
-	s.mu.Lock()
-	s.agentTitle, s.titlePriority = "", 0
-	s.mu.Unlock()
 	if s.reportSession != nil {
 		s.reportSession(id)
 	}
@@ -319,7 +328,7 @@ func (s *TerminalSession) updateAgentSession(id string) {
 func (s *TerminalSession) updateAgentStatus(status string) {
 	codex := s.activity != nil && s.activity.kind == "codex"
 	// Codex shows Ready while spawned agents run; they wake it when finished.
-	waiting := codex && status == "done" && (s.codexWaiting || s.codexReported != "done" && codexAgentsRunning(s.agentSessionID))
+	waiting := codex && status == "done" && (s.codexWaiting || s.codexReported != "done" && codexAgentsRunning(s.activity.codexHome, s.agentSessionID))
 	if codex {
 		s.codexReported = status
 	}
@@ -370,7 +379,7 @@ func (s *TerminalSession) waitCodexAgents() {
 		s.mu.Lock()
 		stopped := s.closed || s.agentEnded
 		s.mu.Unlock()
-		running = !stopped && reported == "done" && codexAgentsRunning(id)
+		running = !stopped && reported == "done" && codexAgentsRunning(s.activity.codexHome, id)
 	}
 	s.agentMu.Lock()
 	defer s.agentMu.Unlock()
@@ -381,11 +390,11 @@ func (s *TerminalSession) waitCodexAgents() {
 }
 
 // codexAgentsRunning reports whether agents spawned by a Codex thread are in a turn.
-func codexAgentsRunning(threadID string) bool {
+func codexAgentsRunning(home, threadID string) bool {
 	if threadID == "" {
 		return false
 	}
-	db := openCodexStateDB()
+	db := openCodexStateDB(home)
 	if db == nil {
 		return false
 	}
@@ -416,8 +425,11 @@ func codexAgentsRunning(threadID string) bool {
 	return false
 }
 
-func openCodexStateDB() *sql.DB {
-	home := os.Getenv("CODEX_HOME")
+// openCodexStateDB uses the agent's CODEX_HOME, then Libro's, then ~/.codex.
+func openCodexStateDB(home string) *sql.DB {
+	if home == "" {
+		home = os.Getenv("CODEX_HOME")
+	}
 	if home == "" {
 		userHome, err := os.UserHomeDir()
 		if err != nil {
@@ -444,6 +456,8 @@ func openCodexStateDB() *sql.DB {
 	return db
 }
 
+var codexStates = map[string]bool{"Working": true, "Thinking": true, "Waiting": true, "Ready": true, "Starting": true, "": true}
+
 // Parse only OSC title reports, including sequences split across PTY reads.
 // Arbitrary terminal text and periods without output are never completion signals.
 func (a *agentActivity) output(data []byte, report func(string)) {
@@ -457,17 +471,25 @@ func (a *agentActivity) output(data []byte, report func(string)) {
 				if title == "777;libro;exited" {
 					report("exited")
 				}
-				if a.kind == "codex" && (strings.HasPrefix(title, "0;") || strings.HasPrefix(title, "2;")) {
-					state, threadTitle, _ := strings.Cut(title[2:], " | ")
+				state, threadTitle, _ := strings.Cut(title[min(len(title), 2):], " | ")
+				// Only Codex titles carry its state. A shell title after Codex exits does not.
+				if a.kind == "codex" && (strings.HasPrefix(title, "0;") || strings.HasPrefix(title, "2;")) && codexStates[state] {
+					var session string
 					if match := codexSessionPattern.FindStringSubmatch(threadTitle); match != nil {
-						report("session:" + match[1])
-						threadTitle = strings.TrimPrefix(threadTitle, match[0])
+						session = match[1]
 					}
-					// /new drops the old thread title before the new session is ready.
-					if a.hasThreadTitle && threadTitle == "" {
-						report("idle")
+					// /new drops the session ID, then shows the new one. The thread
+					// name may blink while working, so it is not a session signal.
+					if !sameCodexSession(a.codexSession, session) {
+						if a.codexSession != "" {
+							report("session:")
+							report("idle")
+						}
+						if session != "" {
+							report("session:" + session)
+						}
 					}
-					a.hasThreadTitle = threadTitle != ""
+					a.codexSession = session
 					switch state {
 					case "Working", "Thinking", "Waiting":
 						report("working")
@@ -495,6 +517,15 @@ func (a *agentActivity) output(data []byte, report func(string)) {
 		}
 		a.escape = b == 27
 	}
+}
+
+// sameCodexSession compares IDs that Codex may abbreviate with "...".
+func sameCodexSession(a, b string) bool {
+	a, b = strings.TrimSuffix(a, "..."), strings.TrimSuffix(b, "...")
+	if a == "" || b == "" {
+		return a == b
+	}
+	return strings.HasPrefix(a, b) || strings.HasPrefix(b, a)
 }
 
 // ResumeAgentCommand preserves configured flags and uses the agent's session selector.

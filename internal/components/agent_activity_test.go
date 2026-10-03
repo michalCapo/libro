@@ -168,7 +168,7 @@ INSERT INTO thread_spawn_edges VALUES ('parent', 'child', 'open');`, child); err
 		}
 	}
 	write("task_started", "turn_aborted")
-	if codexAgentsRunning("parent") {
+	if codexAgentsRunning("", "parent") {
 		t.Fatal("aborted agent reported running")
 	}
 }
@@ -277,25 +277,34 @@ await send('a','idle'); check('error');`
 }
 
 func TestCodexActivityNewSession(t *testing.T) {
-	for _, reset := range []string{"Starting", "Ready"} {
-		t.Run(reset, func(t *testing.T) {
-			s := &TerminalSession{activity: &agentActivity{kind: "codex"}}
-			for _, step := range []struct{ title, want string }{
-				{"Ready | old-thread", "idle"},
-				{"Working | old-thread", "working"},
-				{"Ready | old-thread", "done"},
-				{reset, "idle"},
-				{"Ready | new-thread", "idle"},
-				{"Ready | new-thread", "idle"},
-				{"Working | new-thread", "working"},
-				{"Ready | new-thread", "done"},
-			} {
-				s.activity.output([]byte("\x1b]2;"+step.title+"\x07"), s.setAgentStatus)
-				if s.agentStatus != step.want {
-					t.Fatalf("after %s: got %s, want %s", step.title, s.agentStatus, step.want)
-				}
-			}
-		})
+	// Titles captured from Codex 0.160 across /new.
+	const old, next = "01a101e9-e968-7e01-8597-97c1f...", "01a101ea-6f5f-71c3-b1cd-2f28c..."
+	s := &TerminalSession{activity: &agentActivity{kind: "codex"}, clients: make(map[*terminalClient]bool)}
+	for _, step := range []struct{ title, want string }{
+		{"Ready", "idle"},
+		{"Ready | " + old, "idle"},
+		{"Working | " + old, "working"},
+		{"Working | " + old + " ⠼ | ⠼", "working"},
+		{"Working | " + old, "working"}, // The thread name blinks while working.
+		{"Working | " + old + " | Say hi", "working"},
+		{"Ready | " + old + " | Say hi", "done"},
+		{"Ready", "idle"},
+		{"Ready | " + next, "idle"},
+		{"Working | " + next, "working"},
+		{"Ready | " + next + " | Say bye", "done"},
+	} {
+		s.activity.output([]byte("\x1b]2;"+step.title+"\x07"), s.setAgentStatus)
+		if s.agentStatus != step.want {
+			t.Fatalf("after %s: got %s, want %s", step.title, s.agentStatus, step.want)
+		}
+		if step.title == "Ready" && (s.agentTitle != "" || s.codexSessionPrefix != "") {
+			t.Fatalf("new session kept %q, %q", s.agentTitle, s.codexSessionPrefix)
+		}
+	}
+	// The shell's own title after Codex exits is not a new session.
+	s.activity.output([]byte("\x1b]0;capo@fedora:~/project\x07"), s.setAgentStatus)
+	if s.agentTitle != "Say bye" || s.codexSessionPrefix != strings.TrimSuffix(next, "...") {
+		t.Fatalf("title %q, session %q", s.agentTitle, s.codexSessionPrefix)
 	}
 }
 

@@ -109,6 +109,7 @@ type TerminalSession struct {
 	codexSessionPrefix string
 	agentTitle         string
 	titlePriority      int
+	titleCleared       bool // replay the clear to clients that missed it
 	reportSession      func(string)
 	agentWorked        bool
 	agentEnded         bool
@@ -131,6 +132,8 @@ type terminalWSMessage struct {
 	Rows    uint16 `json:"rows,omitempty"`
 	Code    int    `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
+	// Fallback marks a first-prompt title that must not replace a saved name.
+	Fallback bool `json:"fallback,omitempty"`
 }
 
 // terminalBinaryDataFrame prefixes binary WebSocket payloads that carry raw
@@ -203,6 +206,11 @@ func (tm *TerminalManager) startTerminal(appID, command, cwd string, writable bo
 	cmd.Env = mergeEnvironment(os.Environ(), append(environment, "TERM=xterm-256color", "COLORTERM=truecolor"))
 	if activity != nil {
 		cmd.Env = append(cmd.Env, activity.env...)
+		for _, value := range cmd.Env {
+			if home, ok := strings.CutPrefix(value, "CODEX_HOME="); ok {
+				activity.codexHome = home
+			}
+		}
 	}
 
 	ptyFile, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: 100, Rows: 30})
@@ -546,8 +554,8 @@ func (s *TerminalSession) addClient(c *terminalClient) {
 	if status != "" {
 		_ = c.send(terminalWSMessage{Type: "agent-status", Data: status})
 	}
-	if s.agentTitle != "" {
-		_ = c.send(terminalWSMessage{Type: "agent-title", Data: s.agentTitle})
+	if s.agentTitle != "" || s.titleCleared {
+		_ = c.send(terminalWSMessage{Type: "agent-title", Data: s.agentTitle, Fallback: s.titlePriority == 1})
 	}
 	s.mu.Unlock()
 	if cols > 0 && rows > 0 && s.ptyFile != nil {

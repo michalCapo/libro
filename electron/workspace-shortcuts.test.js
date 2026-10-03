@@ -10,6 +10,9 @@ const matching = main.slice(main.indexOf('let workspaceShortcuts'), main.indexOf
 const defaults = [...fs.readFileSync(path.join(__dirname, '../internal/keybindings.go'), 'utf8').split('var shortcutPattern')[0]
   .matchAll(/\{"[^"\n]+", "[^"\n]+", "([^"]+)"\}/g)].map(match => match[1])
 
+const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+const rowLabel = workspace.slice(workspace.indexOf('  function rowLabel('), workspace.indexOf('  function threadMenu('))
+
 const toolIDs = [...fs.readFileSync(path.join(__dirname, '../internal/plugins.go'), 'utf8')
   .matchAll(/ID: "([^"]+)"[^\n]+Dock: "right"/g)].map(match => match[1])
 
@@ -646,24 +649,24 @@ test('new thread shortcut uses the current project and ignores repeats', () => {
   }
 })
 
-test('backend title updates rename their own thread or worktree, including hidden workspaces', () => {
+test('backend title updates rename their own thread, worktree, or base project, including hidden workspaces', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/components.go'), 'utf8')
-  const start = source.indexOf('function updateAgentTitle(task)')
+  const start = source.indexOf('function updateAgentTitle(task, fallback)')
   const handler = source.slice(start, source.indexOf('term.onData(function(data)', start))
-  assert.ok(source.includes("if (msg.type === 'agent-title') { updateAgentTitle(msg.data); return; }"))
+  assert.ok(source.includes("if (msg.type === 'agent-title') { updateAgentTitle(msg.data || '', !!msg.fallback); return; }"))
   assert.ok(!source.includes('term.onTitleChange('), 'raw terminal titles must not bypass backend validation')
   for (const dock of ['center', 'right', 'bottom']) for (const project of ['thread:test', 'project/branch', 'project']) {
     const calls = []
     const frame = { dataset: { dock }, closest: () => ({ dataset: { workspaceProject: project } }) }
-    const ws = { call(action, data) { calls.push([action, data.sid, data.id || data.project, data.name]) } }
+    const ws = { call(action, data) { calls.push([action, data.sid, data.id || data.project, data.name, data.fallback]) } }
     const context = vm.createContext({
       sid: 'session-7', appID: 'agent', window: { __ws: ws, __libroActiveProject: 'another-project' }, __ws: ws,
       document: { getElementById: () => frame },
     })
-    vm.runInContext(handler + "updateAgentTitle('Fix login'); updateAgentTitle('');", context)
+    vm.runInContext(handler + "updateAgentTitle('Fix login', true); updateAgentTitle('', false);", context)
     const action = project.startsWith('thread:') ? 'thread.rename' : 'worktree.title'
-    assert.deepEqual(calls, dock === 'center' && project !== 'project' ? [[action, 'session-7', project, 'Fix login']] : [])
-    if (dock === 'center') assert.equal(frame.dataset.taskTitle, 'Fix login')
+    assert.deepEqual(calls, dock === 'center' ? [[action, 'session-7', project, 'Fix login', true], [action, 'session-7', project, '', false]] : [])
+    if (dock === 'center') assert.equal(frame.dataset.taskTitle, '')
   }
 })
 
@@ -754,7 +757,7 @@ test('shared panel focus moves from an agent to Files and preserves file input f
 
 test('thread list keeps all open threads and only the newest ten archived threads', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const handler = source.slice(source.indexOf('  function renderThreads()'), source.indexOf('  function renderProjects()'))
+  const handler = rowLabel + source.slice(source.indexOf('  function renderThreads()'), source.indexOf('  function renderProjects()'))
   const node = () => ({ dataset: {}, children: [], classList: { add() {} }, setAttribute() {}, append(...items) { this.children.push(...items) }, replaceChildren() { this.children = [] } })
   const list = node(), calls = []
   const threads = Array.from({ length: 25 }, (_, id) => ({ id: String(id), name: 'Thread ' + id, archived: id % 2 === 0 }))
@@ -793,7 +796,7 @@ test('closing panels restores focus without revealing hidden terminals', () => {
 
 test('project threads hide archived agents and stay separate from standalone threads', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const handler = source.slice(source.indexOf('  function renderThreads()'), source.indexOf('  function renderProjects()'))
+  const handler = rowLabel + source.slice(source.indexOf('  function renderThreads()'), source.indexOf('  function renderProjects()'))
   const node = () => ({ dataset: {}, children: [], classList: { add() {} }, setAttribute() {}, append(...items) { this.children.push(...items) }, replaceChildren() { this.children = [] } })
   const standalone = node(), project = node(), other = node()
   project.dataset.projectThreads = 'project'
@@ -883,7 +886,7 @@ test('workspace dividers resize, clamp, persist, and clean up cancelled drags', 
 
 test('project groups contain the original branch first and number every worktree', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const render = source.slice(source.indexOf('  function renderProjects()'), source.indexOf('  function toolOverlapsFrame('))
+  const render = rowLabel + source.slice(source.indexOf('  function renderProjects()'), source.indexOf('  function toolOverlapsFrame('))
   const shortcuts = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  let notificationAudio;'))
   function node(tag, classes = '', text = '') {
     const el = {
