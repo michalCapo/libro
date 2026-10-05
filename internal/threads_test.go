@@ -102,6 +102,71 @@ INSERT INTO threads VALUES (?, 'Existing task description', '')`, id); err != ni
 	}
 }
 
+func TestClosingCheckoutClearsAgentDescription(t *testing.T) {
+	oldDB, oldSM := db, sm
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "libro.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db, sm = oldDB, oldSM })
+	createTables()
+	for _, tc := range []struct {
+		name, closeID       string
+		background, virtual bool
+		closeWorkspace      bool
+		want                string
+	}{
+		{name: "base agent", closeID: "agent"},
+		{name: "worktree agent", closeID: "agent", virtual: true},
+		{name: "hidden agent", closeID: "agent", background: true},
+		{name: "tool", closeID: "files", want: "Previous task"},
+		{name: "missing panel", closeID: "missing", want: "Previous task"},
+		{name: "close workspace", closeWorkspace: true},
+		{name: "close hidden workspace", closeWorkspace: true, background: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path, otherPath := t.TempDir(), t.TempDir()
+			for _, p := range []string{path, otherPath} {
+				if err := saveWorktreeTitle(p, "Previous task"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			sm = NewStateManager()
+			state := &AppState{
+				ActiveProject: "project",
+				Projects: []Project{
+					{Name: "project", Path: path, Virtual: tc.virtual},
+					{Name: "other", Path: otherPath},
+				},
+				Apps: []Application{
+					{ID: "agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"},
+					{ID: "files", Type: AppTypeURL, PluginID: "files", Dock: "right"},
+				},
+				snapshots: make(map[string]*projectSnapshot),
+			}
+			if tc.background {
+				state.snapshots["project"] = &projectSnapshot{Apps: state.Apps}
+				state.ActiveProject, state.Apps = "other", nil
+			}
+			sm.states["test"] = state
+			if tc.closeWorkspace {
+				if _, err := sm.CloseProject("test", "project"); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				_ = closeWorkspaceApp("test", tc.closeID)
+			}
+			if got := worktreeTitle(path); got != tc.want {
+				t.Fatalf("description after close = %q, want %q", got, tc.want)
+			}
+			if got := worktreeTitle(otherPath); got != "Previous task" {
+				t.Fatalf("another workspace's description changed: %q", got)
+			}
+		})
+	}
+}
+
 func TestProjectThreadKeepsItsProjectDirectory(t *testing.T) {
 	projectPath := t.TempDir()
 	manager := NewStateManager()

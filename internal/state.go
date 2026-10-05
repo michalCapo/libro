@@ -329,15 +329,21 @@ func (sm *StateManager) RemoveAppByID(sessionID, appID string) *Application {
 	}
 	for i, app := range s.Apps {
 		if app.ID == appID {
+			if isAgentApp(app) {
+				s.clearWorkspaceTitle(s.ActiveProject)
+			}
 			return removeApp(s, i)
 		}
 	}
-	for _, snapshot := range s.snapshots {
+	for workspace, snapshot := range s.snapshots {
 		if snapshot == nil {
 			continue
 		}
 		for i, app := range snapshot.Apps {
 			if app.ID == appID {
+				if isAgentApp(app) {
+					s.clearWorkspaceTitle(workspace)
+				}
 				state := &AppState{Apps: snapshot.Apps, SelectedIndex: snapshot.SelectedIndex}
 				removed := removeApp(state, i)
 				snapshot.Apps, snapshot.SelectedIndex = state.Apps, state.SelectedIndex
@@ -346,6 +352,15 @@ func (sm *StateManager) RemoveAppByID(sessionID, appID string) *Application {
 		}
 	}
 	return nil
+}
+
+// Base checkouts and worktrees have no saved agent session to resume.
+func (s *AppState) clearWorkspaceTitle(workspace string) {
+	if s.thread(workspace) == nil {
+		if _, path := threadProjectContext(s, workspace); path != "" {
+			_ = saveWorktreeTitle(path, "")
+		}
+	}
 }
 
 // removeApp updates selection while the state manager lock is held.
@@ -711,6 +726,7 @@ func (sm *StateManager) CloseProject(sessionID, projectName string) ([]Applicati
 		}
 		thread.Archived = true
 	}
+	s.clearWorkspaceTitle(projectName)
 	if s.closedWorkspaces == nil {
 		s.closedWorkspaces = make(map[string]bool)
 	}
