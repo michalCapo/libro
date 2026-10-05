@@ -1039,6 +1039,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 }
 
 func renderAppContent(app Application, sid string, placeholder bool, clickOverlay *r.Node) *r.Node {
+	placeholder = placeholder || (app.Type == AppTypeTerminal && !app.TerminalReady)
 	content := renderIframe(app, fmt.Sprintf("frame-%s", app.ID), app.URL, sid)
 	if placeholder {
 		content = renderAppPlaceholder(app)
@@ -2791,6 +2792,7 @@ func projectItems(state *AppState) []jsProject {
 		if err != nil {
 			continue
 		}
+		sm.mu.Lock()
 		if state.worktreeOrder == nil {
 			state.worktreeOrder = make(map[string]int)
 		}
@@ -2803,6 +2805,7 @@ func projectItems(state *AppState) []jsProject {
 		slices.SortStableFunc(wts, func(a, b Worktree) int {
 			return state.worktreeOrder[applicationPath(a.Path)] - state.worktreeOrder[applicationPath(b.Path)]
 		})
+		sm.mu.Unlock()
 		var refs []string
 		for _, wt := range wts {
 			if wt.Branch != "" && wt.Branch != "(detached)" {

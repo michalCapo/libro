@@ -6,6 +6,8 @@ Run Codex, Claude, Pi, OpenCode, or any other CLI agent in its own thread. Open 
 
 ![Libro home screen with the agent launcher open](demo/libro-home.png)
 
+Libro reopens your workspaces and resumes agents on start. Applications start when you start them.
+
 ## What It Does
 
 - Runs multiple agents in one project, each in its own thread.

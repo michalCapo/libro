@@ -1,9 +1,11 @@
 package components
 
 import (
+	"bufio"
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -529,7 +531,7 @@ func sameCodexSession(a, b string) bool {
 }
 
 // ResumeAgentCommand preserves configured flags and uses the agent's session selector.
-func ResumeAgentCommand(command, sessionID string) string {
+func ResumeAgentCommand(command, sessionID, model, effort string) string {
 	if sessionID == "" {
 		return command
 	}
@@ -547,12 +549,119 @@ func ResumeAgentCommand(command, sessionID string) string {
 	}
 	switch kind {
 	case "codex":
+		if model != "" && !agentModelFlag.MatchString(command) && !codexModelConfig.MatchString(command) {
+			parts[2] += " -c " + shellQuote("model="+configString(model))
+		}
+		if effort != "" && !codexEffortConfig.MatchString(command) {
+			parts[2] += " -c " + shellQuote("model_reasoning_effort="+configString(effort))
+		}
 		return parts[1] + " resume " + shellQuote(sessionID) + parts[2]
 	case "claude":
+		if model != "" && !agentModelFlag.MatchString(command) {
+			command += " --model " + shellQuote(model)
+		}
+		if effort != "" && !agentEffortFlag.MatchString(command) {
+			command += " --effort " + shellQuote(effort)
+		}
 		return command + " --resume " + shellQuote(sessionID)
 	case "pi", "opencode":
 		return command + " --session " + shellQuote(sessionID)
 	default:
 		return command
 	}
+}
+
+var agentModelFlag = regexp.MustCompile(`(?:^|\s)(?:--model|-m)(?:=|\s|$)`)
+var agentEffortFlag = regexp.MustCompile(`(?:^|\s)--effort(?:=|\s|$)`)
+var codexModelConfig = regexp.MustCompile(`(?:^|\s)(?:-c|--config)(?:=|\s+)['"]?model\s*=`)
+var codexEffortConfig = regexp.MustCompile(`(?:^|\s)(?:-c|--config)(?:=|\s+)['"]?model_reasoning_effort\s*=`)
+
+// JSON string quoting also produces TOML basic strings for Codex config values.
+func configString(value string) string {
+	data, _ := json.Marshal(value)
+	return string(data)
+}
+
+// RecoverAgentSettings reads only model metadata from the exact agent session.
+// Missing files and unsupported agents leave the launch command unchanged.
+func RecoverAgentSettings(command, sessionID, codexHome string) (string, string) {
+	parts := agentCommandPattern.FindStringSubmatch(strings.TrimSpace(command))
+	if parts == nil || !agentSessionPattern.MatchString(sessionID) {
+		return "", ""
+	}
+	var path string
+	kind := filepath.Base(parts[1])
+	switch kind {
+	case "codex":
+		if codexHome == "" {
+			codexHome = os.Getenv("CODEX_HOME")
+		}
+		if codexHome == "" {
+			home, _ := os.UserHomeDir()
+			codexHome = filepath.Join(home, ".codex")
+		}
+		// Prefer Codex's exact index when available, then standard rollout names.
+		if db := openCodexStateDB(codexHome); db != nil {
+			_ = db.QueryRow("SELECT rollout_path FROM threads WHERE id = ?", sessionID).Scan(&path)
+			_ = db.Close()
+		}
+		if path == "" {
+			_ = filepath.WalkDir(filepath.Join(codexHome, "sessions"), func(candidate string, entry fs.DirEntry, err error) error {
+				if err == nil && !entry.IsDir() && strings.HasSuffix(entry.Name(), "-"+sessionID+".jsonl") {
+					path = candidate
+					return fs.SkipAll
+				}
+				return nil
+			})
+		}
+	case "claude":
+		home, _ := os.UserHomeDir()
+		paths, _ := filepath.Glob(filepath.Join(home, ".claude", "projects", "*", sessionID+".jsonl"))
+		if len(paths) == 1 {
+			path = paths[0]
+		}
+	default:
+		return "", ""
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return "", ""
+	}
+	defer func() { _ = file.Close() }()
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 4096), 16<<20)
+	var model, effort string
+	for scanner.Scan() {
+		var entry struct {
+			Type    string `json:"type"`
+			Effort  string `json:"effort"`
+			Payload struct {
+				Model           string `json:"model"`
+				Effort          string `json:"effort"`
+				ReasoningEffort string `json:"reasoning_effort"`
+			} `json:"payload"`
+			Message struct {
+				Model  string `json:"model"`
+				Effort string `json:"effort"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(scanner.Bytes(), &entry) != nil {
+			continue
+		}
+		if kind == "codex" && entry.Type == "turn_context" {
+			model, effort = entry.Payload.Model, entry.Payload.Effort
+			if effort == "" {
+				effort = entry.Payload.ReasoningEffort
+			}
+		} else if kind == "claude" && entry.Type == "assistant" && entry.Message.Model != "" && entry.Message.Model != "<synthetic>" {
+			model, effort = entry.Message.Model, entry.Message.Effort
+			if effort == "" {
+				effort = entry.Effort
+			}
+		}
+	}
+	if scanner.Err() != nil {
+		return "", ""
+	}
+	return model, effort
 }

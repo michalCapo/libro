@@ -319,14 +319,14 @@ func TestResumeAgentCommand(t *testing.T) {
 		{"ollama launch claude --model 'some model' --yes", "ollama launch claude --model 'some model' --yes -- --resume 'session-123'"},
 		{"ollama launch claude -- --verbose", "ollama launch claude -- --verbose --resume 'session-123'"},
 	} {
-		if got := ResumeAgentCommand(test.command, "session-123"); got != test.want {
+		if got := ResumeAgentCommand(test.command, "session-123", "", ""); got != test.want {
 			t.Errorf("resume %q = %q, want %q", test.command, got, test.want)
 		}
-		if got := ResumeAgentCommand(test.command, ""); got != test.command {
+		if got := ResumeAgentCommand(test.command, "", "", ""); got != test.command {
 			t.Errorf("new launch changed: %q", got)
 		}
 	}
-	if got := ResumeAgentCommand("pi", "a'; echo injected"); got != `pi --session 'a'"'"'; echo injected'` {
+	if got := ResumeAgentCommand("pi", "a'; echo injected", "", ""); got != `pi --session 'a'"'"'; echo injected'` {
 		t.Fatalf("session argument not quoted: %s", got)
 	}
 }

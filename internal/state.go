@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 // AppType distinguishes between web URL apps and terminal apps
@@ -35,6 +37,9 @@ type Application struct {
 	IconURL              string // cached icon URL from DB (only for terminal apps)
 	TerminalID           string // native PTY terminal ID (usually same as ID)
 	TerminalReady        bool   // native PTY session is running
+	SessionID            string // agent resume metadata, including project workspaces
+	AgentModel           string
+	AgentEffort          string
 }
 
 // Project represents a named working directory
@@ -78,9 +83,16 @@ type AppState struct {
 
 // StateManager manages per-session app states
 type StateManager struct {
-	mu     sync.RWMutex
-	states map[string]*AppState
-	nextID int
+	mu             sync.RWMutex
+	states         map[string]*AppState
+	nextID         int
+	layoutMu       sync.Mutex
+	layoutTimer    *time.Timer
+	layoutRevision uint64
+	layoutSession  string
+	layoutEnabled  bool
+	layoutRestored bool
+	layoutClosed   atomic.Bool
 }
 
 // NewStateManager creates a new state manager
@@ -163,6 +175,7 @@ func sortAppsByName(s *AppState, selectedAppID string) {
 // InsertApp adds a new URL application at the given index position.
 // If index is out of range, it falls back to append + sort by name.
 func (sm *StateManager) InsertApp(sessionID, url string, width Width, name string, index int) {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -194,6 +207,7 @@ func (sm *StateManager) InsertApp(sessionID, url string, width Width, name strin
 
 // InsertTerminalPlaceholder adds a terminal shell before its PTY has been started.
 func (sm *StateManager) InsertTerminalPlaceholder(sessionID, appID string, width Width, command string, writable bool, name string, iconURL string, index int) {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -321,6 +335,7 @@ func (sm *StateManager) TerminalBelongsToSession(sessionID, terminalID string) b
 
 // RemoveAppByID removes an application by its ID and returns it (for cleanup)
 func (sm *StateManager) RemoveAppByID(sessionID, appID string) *Application {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -415,6 +430,7 @@ func applyAppWidth(app *Application, width Width) {
 
 // SetAppWidthByID sets the width of an app by its ID and returns the app's current index
 func (sm *StateManager) SetAppWidthByID(sessionID, appID string, width Width) int {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -435,6 +451,7 @@ func (sm *StateManager) SetAppWidthByID(sessionID, appID string, width Width) in
 // If not full width, it saves the current width and switches to full.
 // Returns the new width and app ID, or empty strings if no app is selected.
 func (sm *StateManager) ToggleMaxWidth(sessionID string, maxPixels int) (Width, string) {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -460,6 +477,7 @@ func (sm *StateManager) ToggleMaxWidth(sessionID string, maxPixels int) (Width, 
 
 // StepSelectedAppWidth moves the selected app width by one tier and returns the new width and app ID.
 func (sm *StateManager) StepSelectedAppWidth(sessionID string, delta int, maxPixels int) (Width, string) {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -478,6 +496,7 @@ func (sm *StateManager) StepSelectedAppWidth(sessionID string, delta int, maxPix
 
 // SetAppURLByID changes the URL of an app by its ID. Returns the app index or -1.
 func (sm *StateManager) SetAppURLByID(sessionID, appID, newURL string) int {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -514,6 +533,7 @@ func (sm *StateManager) SelectedIndex(sessionID string) int {
 
 // NavigateLeft shifts focus to the previous app
 func (sm *StateManager) NavigateLeft(sessionID string) {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -524,6 +544,7 @@ func (sm *StateManager) NavigateLeft(sessionID string) {
 
 // NavigateRight shifts focus to the next app
 func (sm *StateManager) NavigateRight(sessionID string) {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -534,6 +555,7 @@ func (sm *StateManager) NavigateRight(sessionID string) {
 
 // MoveAppLeft swaps the selected app with the one to its left
 func (sm *StateManager) MoveAppLeft(sessionID string) bool {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -548,6 +570,7 @@ func (sm *StateManager) MoveAppLeft(sessionID string) bool {
 
 // MoveAppRight swaps the selected app with the one to its right
 func (sm *StateManager) MoveAppRight(sessionID string) bool {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -563,6 +586,7 @@ func (sm *StateManager) MoveAppRight(sessionID string) bool {
 // MoveSelectedAppToProject moves the selected app to another project and makes
 // that project active.
 func (sm *StateManager) MoveSelectedAppToProject(sessionID, projectName string) (*Application, bool) {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -615,6 +639,7 @@ func (sm *StateManager) MoveSelectedAppToProject(sessionID, projectName string) 
 
 // SelectApp sets the selected app index
 func (sm *StateManager) SelectApp(sessionID string, index int) {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -626,6 +651,7 @@ func (sm *StateManager) SelectApp(sessionID string, index int) {
 // AddProjectWithOptions adds a project to the session. Transient projects are
 // session-only and are not saved to the database by callers.
 func (sm *StateManager) AddProjectWithOptions(sessionID, name, path string, transient bool) bool {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -647,6 +673,7 @@ func (sm *StateManager) AddProjectWithOptions(sessionID, name, path string, tran
 
 // RemoveProject removes a project from the session. Returns the project's snapshotted apps (for cleanup) and success.
 func (sm *StateManager) RemoveProject(sessionID, projectName string) ([]Application, bool) {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -700,6 +727,7 @@ func (s *AppState) removeProject(projectName string) ([]Application, bool) {
 // CloseProject clears a workspace's panels for cleanup and archives it if it is a thread.
 // An empty projectName selects the active workspace.
 func (sm *StateManager) CloseProject(sessionID, projectName string) ([]Application, error) {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -748,6 +776,7 @@ func (sm *StateManager) CloseProject(sessionID, projectName string) ([]Applicati
 
 // SwitchProject switches the active project, saving and restoring app state
 func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -795,6 +824,7 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 // MoveSharedProjectApps moves project-level panels into another workspace for
 // the same project. Agent, browser, and other tool panels stay with the thread.
 func (sm *StateManager) MoveSharedProjectApps(sessionID, target string) []Application {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -973,6 +1003,7 @@ func detectGitRepos(projects []Project) {
 // AddVirtualProject adds a worktree-derived virtual project to the session.
 // Virtual projects are not persisted to the database.
 func (sm *StateManager) AddVirtualProject(sessionID, name, path, parentProject string) bool {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	s := sm.states[sessionID]
@@ -1002,6 +1033,7 @@ func (sm *StateManager) AddVirtualProject(sessionID, name, path, parentProject s
 
 // insertProjectCommand keeps the user's workspace and selection unchanged.
 func (sm *StateManager) insertProjectCommand(sid, workspace, command string, port int, perThread bool, path string) (Application, int) {
+	defer sm.scheduleLayoutSave(sid)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	state := sm.states[sid]

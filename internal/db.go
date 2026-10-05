@@ -172,7 +172,7 @@ func createTables() {
 		log.Fatalf("db: failed to create tables: %v", err)
 	}
 	// Add resume metadata to existing installations as well as new databases.
-	for _, column := range []string{"session_id", "agent_id", "agent_command", "project", "path"} {
+	for _, column := range []string{"session_id", "agent_id", "agent_command", "agent_model", "agent_effort", "project", "path"} {
 		var count int
 		if err := db.QueryRow("SELECT count(*) FROM pragma_table_info('threads') WHERE name = ?", column).Scan(&count); err != nil {
 			log.Fatalf("db: inspect threads: %v", err)

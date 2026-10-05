@@ -157,3 +157,19 @@ No change expected. Panels render from state as today. Verify that `renderPage` 
 - **Agent with no session yet** (quit before the first prompt): the panel starts the agent fresh.
 - **Shell panels** start a new shell. Running commands and scrollback are not kept.
 - **Crash:** the debounced save means at most ~1 s of layout changes is lost.
+
+## Implementation status
+
+- [x] Layout persistence, debounce, shutdown flush, and first-page restoration.
+- [x] Drop unavailable workspaces and project-command panels; reserve restored panel IDs.
+- [x] Lazy terminal startup through the existing hydrate action.
+- [x] Agent model/effort migration, session parsing, and resume flags.
+- [x] Round-trip, drop-rule, shutdown, multi-window, worktree, and real PTY tests.
+- [x] README startup behavior documented.
+- [ ] Manual desktop restart with live Claude and Codex sessions. The managed application currently reports no URL; its URL/port must be configured before browser validation.
+
+The current project-thread flow creates virtual worktree projects instead of
+thread rows. Layout panels therefore also save `SessionID`, `AgentModel`, and
+`AgentEffort` for project agents. `WorktreeOrder` preserves the sidebar order.
+Normal layout saves only serialize state; shutdown refreshes agent settings
+before the final save. Later empty pages do not replace the saved layout owner.

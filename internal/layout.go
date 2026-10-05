@@ -41,5 +41,6 @@ func renderPage(state *AppState, sid string) *r.Node {
 		worktreeCreatePopupJS(sid),
 	)
 	page.Render(projectScriptNodes(state)...)
+	page.Render(pendingTerminalsNode(state, sid))
 	return page
 }

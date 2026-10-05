@@ -25,10 +25,12 @@ type Thread struct {
 	SessionID    string `json:"-"`
 	AgentID      string `json:"-"`
 	AgentCommand string `json:"-"`
+	AgentModel   string `json:"-"`
+	AgentEffort  string `json:"-"`
 }
 
 func loadThreads() []Thread {
-	rows, err := db.Query("SELECT id, name, archived, project, path, session_id, agent_id, agent_command FROM threads WHERE project = '' ORDER BY rowid")
+	rows, err := db.Query("SELECT id, name, archived, project, path, session_id, agent_id, agent_command, agent_model, agent_effort FROM threads WHERE project = '' ORDER BY rowid")
 	if err != nil {
 		return nil
 	}
@@ -36,7 +38,7 @@ func loadThreads() []Thread {
 	var threads []Thread
 	for rows.Next() {
 		var thread Thread
-		if rows.Scan(&thread.ID, &thread.Name, &thread.Archived, &thread.Project, &thread.Path, &thread.SessionID, &thread.AgentID, &thread.AgentCommand) == nil {
+		if rows.Scan(&thread.ID, &thread.Name, &thread.Archived, &thread.Project, &thread.Path, &thread.SessionID, &thread.AgentID, &thread.AgentCommand, &thread.AgentModel, &thread.AgentEffort) == nil {
 			threads = append(threads, thread)
 		}
 	}
@@ -277,6 +279,7 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) r.Re
 		sm.mu.Lock()
 		state.thread(id).Archived = archived
 		sm.mu.Unlock()
+		sm.scheduleLayoutSave(sid)
 		// Archiving keeps the workspace alive and recoverable without interrupting commands.
 		return r.Merge(projectsJS(state), clientScript("if(window.libroWorkspace)libroWorkspace.threadArchived(props[0]);", archived)), nil
 	})
@@ -334,6 +337,7 @@ func (s *AppState) canStartThreadApp(app Application) bool {
 
 // ReplaceThreadAgent starts a fresh conversation while keeping the thread's tools.
 func (sm *StateManager) ReplaceThreadAgent(sid, agentID, command string) ([]Application, error) {
+	defer sm.scheduleLayoutSave(sid)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	state := sm.states[sid]
@@ -350,11 +354,12 @@ func (sm *StateManager) ReplaceThreadAgent(sid, agentID, command string) ([]Appl
 	if !thread.Managed {
 		name = "New thread"
 	}
-	if _, err := db.Exec("UPDATE threads SET name = ?, session_id = '', agent_id = ?, agent_command = ?, archived = 0 WHERE id = ?", name, agentID, command, thread.ID); err != nil {
+	if _, err := db.Exec("UPDATE threads SET name = ?, session_id = '', agent_id = ?, agent_command = ?, agent_model = '', agent_effort = '', archived = 0 WHERE id = ?", name, agentID, command, thread.ID); err != nil {
 		return nil, err
 	}
 	thread.Name, thread.SessionID, thread.AgentID, thread.AgentCommand = name, "", agentID, command
 	thread.Archived = false
+	thread.AgentModel, thread.AgentEffort = "", ""
 	var removed, kept []Application
 	for _, app := range state.Apps {
 		if isAgentApp(app) {
@@ -371,6 +376,7 @@ func (sm *StateManager) ReplaceThreadAgent(sid, agentID, command string) ([]Appl
 // CloseThreadAgent persists the archive before clearing the active thread.
 // A nil result leaves normal panel closing to the caller.
 func (sm *StateManager) CloseThreadAgent(sid, appID string) ([]Application, error) {
+	defer sm.scheduleLayoutSave(sid)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	state := sm.states[sid]
@@ -406,30 +412,77 @@ func (sm *StateManager) CloseThreadAgent(sid, appID string) ([]Application, erro
 }
 
 // Ignore late session reports from a panel that has been replaced.
-func (sm *StateManager) saveThreadSession(sid, threadID, appID, agentID, command, sessionID string) {
+func (sm *StateManager) saveThreadSession(sid, _ string, appID, agentID, command, sessionID string) {
+	// Empty Codex titles can be temporary; retain the last confirmed session.
+	if sessionID == "" || sm.layoutClosed.Load() {
+		return
+	}
+	if sm.recordAgentSession(sid, appID, agentID, command, sessionID, false) {
+		sm.scheduleLayoutSave(sid)
+	}
+}
+
+func (sm *StateManager) recordAgentSession(sid, appID, agentID, command, sessionID string, shutdown bool) bool {
+	model, effort := components.RecoverAgentSettings(command, sessionID, agentEnvironment()["CODEX_HOME"])
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+	if !shutdown && sm.layoutClosed.Load() {
+		return false
+	}
 	state := sm.states[sid]
 	if state == nil {
-		return
+		return false
 	}
+	workspace := state.ActiveProject
 	apps := state.Apps
-	if state.ActiveProject != threadID {
-		snapshot := state.snapshots[threadID]
-		if snapshot == nil {
-			return
+	contains := func(apps []Application) bool {
+		return slices.ContainsFunc(apps, func(app Application) bool { return app.ID == appID })
+	}
+	if !contains(apps) {
+		apps = nil
+		for name, snapshot := range state.snapshots {
+			if snapshot != nil && contains(snapshot.Apps) {
+				workspace, apps = name, snapshot.Apps
+				break
+			}
 		}
-		apps = snapshot.Apps
 	}
-	if !slices.ContainsFunc(apps, func(app Application) bool { return app.ID == appID }) {
-		return
+	for i := range apps {
+		panel := &apps[i]
+		if panel.ID != appID {
+			continue
+		}
+		thread := state.thread(workspace)
+		if panel.SessionID == sessionID {
+			if model == "" {
+				model = panel.AgentModel
+			}
+			if effort == "" {
+				effort = panel.AgentEffort
+			}
+		}
+		if thread != nil && thread.SessionID == sessionID && thread.AgentID == agentID {
+			if model == "" {
+				model = thread.AgentModel
+			}
+			if effort == "" {
+				effort = thread.AgentEffort
+			}
+		}
+		changed := panel.SessionID != sessionID || panel.AgentModel != model || panel.AgentEffort != effort
+		panel.SessionID, panel.AgentModel, panel.AgentEffort = sessionID, model, effort
+		if thread == nil {
+			return changed
+		}
+		if thread.SessionID == sessionID && thread.AgentID == agentID && thread.AgentCommand == command && thread.AgentModel == model && thread.AgentEffort == effort {
+			return changed
+		}
+		if _, err := db.Exec("UPDATE threads SET session_id = ?, agent_id = ?, agent_command = ?, agent_model = ?, agent_effort = ? WHERE id = ?", sessionID, agentID, command, model, effort, thread.ID); err != nil {
+			return changed
+		}
+		thread.SessionID, thread.AgentID, thread.AgentCommand = sessionID, agentID, command
+		thread.AgentModel, thread.AgentEffort = model, effort
+		return true
 	}
-	thread := state.thread(threadID)
-	if thread == nil || (thread.SessionID == sessionID && thread.AgentID == agentID && thread.AgentCommand == command) {
-		return
-	}
-	if _, err := db.Exec("UPDATE threads SET session_id = ?, agent_id = ?, agent_command = ? WHERE id = ?", sessionID, agentID, command, threadID); err != nil {
-		return
-	}
-	thread.SessionID, thread.AgentID, thread.AgentCommand = sessionID, agentID, command
+	return false
 }

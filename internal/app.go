@@ -41,6 +41,45 @@ func hydrateAppAfterScrollJS(in actionAppHydrateInput) r.Result {
 `, in.ID, in)
 }
 
+// hydrateApp is the single start path for new and restored terminal panels.
+func hydrateApp(sid, appID string, openURL bool) r.Result {
+	if appID == "" {
+		return r.Result{}
+	}
+	if js, handled := hydrateProjectCommand(sid, appID); handled {
+		return js
+	}
+	panel, workspace, pwd, found := sm.workspaceApp(sid, appID)
+	if !found {
+		return r.Result{}
+	}
+	if panel.Type == AppTypeTerminal && !panel.TerminalReady {
+		var environment []string
+		if isAgentApp(panel) {
+			environment = append(agentEnvironmentList(), "LIBRO_APPLICATION_PATH="+pwd)
+		}
+		command, reportSession := agentLaunchInWorkspace(sid, workspace, panel)
+		_, err := tm.StartWithSessionReporter(panel.ID, command, pwd, panel.Writable, environment, reportSession)
+		if err != nil {
+			sm.RemoveAppByID(sid, panel.ID)
+			state := sm.Get(sid)
+			return r.Merge(removeAppJS(panel.ID), navigateJS(state, sid), r.Result{}.Morph(TopBarID, renderTopBar(state, sid)), projectsJS(state), r.Result{}.Run(r.Notify("error", "Failed to start terminal: "+err.Error())))
+		}
+		if !sm.HydrateTerminalAnywhere(sid, panel.ID) {
+			tm.Stop(panel.ID)
+			return r.Result{}.Run(r.Notify("error", "Terminal placeholder disappeared"))
+		}
+		panel, _, _, _ = sm.workspaceApp(sid, appID)
+	}
+	return r.Merge(
+		// Preserve already hydrated content when a duplicate response arrives.
+		clientScript(`var content=document.getElementById(props[0]);if(!content||!content.querySelector('[data-app-placeholder]')){if(content&&!content.hasAttribute('data-gsui-preserve')){content.__libroSkipHydrate=true;content.setAttribute('data-gsui-preserve','');}return;}var popup=document.getElementById(props[1]);var input=document.getElementById('url-popup-input');if(popup&&content.contains(popup)&&!popup.classList.contains('hidden')){popup.__libroHydrateValue=input?input.value:'';}if(window.__libroParkFloatingPopups)window.__libroParkFloatingPopups();`, appContentID(appID), URLPopupID),
+		r.Result{}.Morph(appContentID(appID), renderAppContent(panel, sid, false, nil)),
+		clientScript(`var content=document.getElementById(props[2]);if(content&&content.__libroSkipHydrate){delete content.__libroSkipHydrate;content.removeAttribute('data-gsui-preserve');}var popup=document.getElementById(props[1]);if(popup&&popup.__libroHydrateValue!==undefined){var value=popup.__libroHydrateValue;delete popup.__libroHydrateValue;setTimeout(function(){if(window.__libroOpenURLPopupFor)window.__libroOpenURLPopupFor(props[0],value);},30);}`, appID, URLPopupID, appContentID(appID)),
+		settleHydratedAppContentJS(appID),
+		clientScript(`requestAnimationFrame(function(){requestAnimationFrame(function(){if(props[0]&&window.__libroSelectedApp===props[1]&&window.__libroOpenURLPopupFor)window.__libroOpenURLPopupFor(props[1],'');});});`, openURL, appID))
+}
+
 func settleHydratedAppContentJS(appID string) r.Result {
 	return clientScript(`
 (function(){
@@ -140,6 +179,7 @@ func switchToProjectNameChecked(sid, name string) (r.Result, bool) {
 		Morph(TopBarID, renderTopBar(state, sid)).
 		Add(closeDevtoolsJS).
 		Add(jsSwitch).
+		Add(pendingTerminalsJS(state, sid)).
 		Add(navigateJS(state, sid)).
 		Add(updateHashJS(name)).
 		Add(projectAutolaunchJS(state, sid)).
@@ -225,32 +265,71 @@ func closeOtherPanels(sid, keepID string) r.Result {
 // agentLaunch resumes a thread's saved agent session and keeps reporting new
 // session IDs. Other terminals run their own command.
 func agentLaunch(sid string, term Application) (string, func(string)) {
+	sm.mu.RLock()
+	workspace := ""
+	if state := sm.states[sid]; state != nil {
+		workspace = state.ActiveProject
+	}
+	sm.mu.RUnlock()
+	return agentLaunchInWorkspace(sid, workspace, term)
+}
+
+func agentLaunchInWorkspace(sid, workspace string, term Application) (string, func(string)) {
 	if !isAgentApp(term) {
 		return term.Command, nil
 	}
-	// Session reports write these fields under the same lock.
+	baseCommand := term.Command
+	sessionID, model, effort := term.SessionID, term.AgentModel, term.AgentEffort
 	sm.mu.RLock()
-	state := sm.states[sid]
-	var thread Thread
-	found := false
-	if state != nil {
-		if t := state.thread(state.ActiveProject); t != nil {
-			thread, found = *t, true
+	if state := sm.states[sid]; state != nil {
+		if thread := state.thread(workspace); thread != nil && thread.AgentID == term.PluginID {
+			sessionID = thread.SessionID
+			if thread.AgentCommand != "" {
+				baseCommand = thread.AgentCommand
+			}
+			model, effort = thread.AgentModel, thread.AgentEffort
 		}
 	}
 	sm.mu.RUnlock()
-	if !found {
-		return term.Command, nil
-	}
-	threadID := thread.ID
-	command, baseCommand := term.Command, term.Command
-	if thread.SessionID != "" && thread.AgentID == term.PluginID {
-		baseCommand = thread.AgentCommand
-		command = components.ResumeAgentCommand(baseCommand, thread.SessionID)
-	}
+	command := components.ResumeAgentCommand(baseCommand, sessionID, model, effort)
 	return command, func(id string) {
-		sm.saveThreadSession(sid, threadID, term.ID, term.PluginID, baseCommand, id)
+		sm.saveThreadSession(sid, workspace, term.ID, term.PluginID, baseCommand, id)
 	}
+}
+
+// Look up the owning workspace before starting a placeholder. A hydration
+// request can arrive after the user has switched to another workspace.
+func (sm *StateManager) workspaceApp(sid, appID string) (Application, string, string, bool) {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	state := sm.states[sid]
+	if state == nil {
+		return Application{}, "", "", false
+	}
+	find := func(workspace string, apps []Application) (Application, string, string, bool) {
+		for _, app := range apps {
+			if app.ID != appID {
+				continue
+			}
+			_, path := threadProjectContext(state, workspace)
+			if path == "" {
+				path = defaultHomeDir()
+			}
+			return app, workspace, path, true
+		}
+		return Application{}, "", "", false
+	}
+	if app, workspace, path, ok := find(state.ActiveProject, state.Apps); ok {
+		return app, workspace, path, true
+	}
+	for workspace, snapshot := range state.snapshots {
+		if snapshot != nil {
+			if app, workspace, path, ok := find(workspace, snapshot.Apps); ok {
+				return app, workspace, path, true
+			}
+		}
+	}
+	return Application{}, "", "", false
 }
 
 // Autolaunch starts the thread's agent when a thread has no agent panel.
@@ -493,6 +572,7 @@ var (
 // CleanupRuntime tears down terminal backends and language servers.
 func CleanupRuntime() {
 	shutdownCleanupOnce.Do(func() {
+		sm.flushLayout()
 		tm.StopAll()
 		closeNavigationServers()
 	})
@@ -820,75 +900,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return r.Merge(r.Result{}.Morph(projectMainID(state.ActiveProject), renderMainAreaWithPlaceholder(state, sid, state.Apps[state.SelectedIndex].ID)), topBarJS, projJS, navigateJS(state, sid), hydrateJS), nil
 	})
 	r.RegisterAction(app, "app.hydrate", func(_ *r.Context, in actionAppHydrateInput) (r.Result, error) {
-		sid := inputSID(in.SID)
-		appID := in.ID
-		if appID == "" {
-			return r.Result{}, nil
-		}
-		if js, handled := hydrateProjectCommand(sid, appID); handled {
-			return js, nil
-		}
-		state := sm.Get(sid)
-		idx := -1
-		for i := range state.Apps {
-			if state.Apps[i].ID == appID {
-				idx = i
-				break
-			}
-		}
-		// The app may live in a non-active project's snapshot (its DOM div is
-		// hidden but still in the page). Use the broader lookup so we can
-		// start the pty regardless of which project the user currently has open.
-		if idx < 0 {
-			if sm.HydrateTerminalAnywhere(sid, appID) {
-				// HydrateTerminalAnywhere marks the app TerminalReady; the
-				// subsequent render below needs state.Apps, so re-scan.
-				state = sm.Get(sid)
-				for i := range state.Apps {
-					if state.Apps[i].ID == appID {
-						idx = i
-						break
-					}
-				}
-			}
-		}
-		if idx < 0 {
-			return r.Result{}, nil
-		}
-		if state.Apps[idx].Type == AppTypeTerminal && !state.Apps[idx].TerminalReady {
-			term := state.Apps[idx]
-			pwd := sm.GetActiveProjectPath(sid)
-			var environment []string
-			if isAgentApp(term) {
-				environment = append(agentEnvironmentList(), "LIBRO_APPLICATION_PATH="+pwd)
-			}
-			command, reportSession := agentLaunch(sid, term)
-			session, err := tm.StartWithSessionReporter(term.ID, command, pwd, term.Writable, environment, reportSession)
-			if err != nil {
-				sm.RemoveAppByID(sid, term.ID)
-				state = sm.Get(sid)
-				return r.Merge(removeAppJS(term.ID), navigateJS(state, sid), r.Result{}.Morph(TopBarID, renderTopBar(state, sid)), projectsJS(state), r.Result{}.Run(r.Notify("error", "Failed to start terminal: "+err.Error()))), nil
-			}
-			if !sm.HydrateTerminalByID(sid, term.ID, session.ID) {
-				tm.Stop(term.ID)
-				return r.Result{}.Run(r.Notify("error", "Terminal placeholder disappeared")), nil
-			}
-			state = sm.Get(sid)
-			for i := range state.Apps {
-				if state.Apps[i].ID == appID {
-					idx = i
-					break
-				}
-			}
-		}
-		openURL := in.OpenURL
-		return r.Merge(
-			// Preserve already hydrated content when a duplicate response arrives.
-			clientScript(`var content=document.getElementById(props[0]);if(!content||!content.querySelector('[data-app-placeholder]')){if(content&&!content.hasAttribute('data-gsui-preserve')){content.__libroSkipHydrate=true;content.setAttribute('data-gsui-preserve','');}return;}var popup=document.getElementById(props[1]);var input=document.getElementById('url-popup-input');if(popup&&content.contains(popup)&&!popup.classList.contains('hidden')){popup.__libroHydrateValue=input?input.value:'';}if(window.__libroParkFloatingPopups)window.__libroParkFloatingPopups();`, appContentID(appID), URLPopupID),
-			r.Result{}.Morph(appContentID(appID), renderAppContent(state.Apps[idx], sid, false, nil)),
-			clientScript(`var content=document.getElementById(props[2]);if(content&&content.__libroSkipHydrate){delete content.__libroSkipHydrate;content.removeAttribute('data-gsui-preserve');}var popup=document.getElementById(props[1]);if(popup&&popup.__libroHydrateValue!==undefined){var value=popup.__libroHydrateValue;delete popup.__libroHydrateValue;setTimeout(function(){if(window.__libroOpenURLPopupFor)window.__libroOpenURLPopupFor(props[0],value);},30);}`, appID, URLPopupID, appContentID(appID)),
-			settleHydratedAppContentJS(appID),
-			clientScript(`requestAnimationFrame(function(){requestAnimationFrame(function(){if(props[0]&&window.__libroSelectedApp===props[1]&&window.__libroOpenURLPopupFor)window.__libroOpenURLPopupFor(props[1],'');});});`, openURL, appID)), nil
+		return hydrateApp(inputSID(in.SID), in.ID, in.OpenURL), nil
 	})
 	// Close/remove application
 	actionAppClose = r.RegisterAction(app, "app.close", func(_ *r.Context, in actionAppCloseInput) (r.Result, error) {
@@ -961,10 +973,9 @@ func Run(assets embed.FS, desktop bool) error {
 		if _, err := tm.StartWithSessionReporter(term.ID, command, pwd, term.Writable, environment, reportSession); err != nil {
 			return r.Result{}.Run(r.Notify("error", "Failed to restart terminal: "+err.Error())), nil
 		}
-		// Without a thread record there is no session to resume, so the
-		// restarted agent starts fresh and drops the old description.
+		// Keep a resumed project's description; only fresh agents clear it.
 		var js r.Result
-		if isAgentApp(*term) && state.thread(state.ActiveProject) == nil && saveWorktreeTitle(pwd, "") == nil {
+		if isAgentApp(*term) && term.SessionID == "" && state.thread(state.ActiveProject) == nil && saveWorktreeTitle(pwd, "") == nil {
 			js = projectsJS(state)
 		}
 		return r.Merge(js, clientScript("(function(){if(window.__libroRestartTerminal)window.__libroRestartTerminal(props[0]);})();", term.ID), settleAppFrameJS(term.ID), r.Result{}.Run(r.Notify("success", "Terminal restarted"))), nil
@@ -1057,6 +1068,7 @@ func Run(assets embed.FS, desktop bool) error {
 			Add(projectsJS(state)).
 			Morph(TopBarID, renderTopBar(state, sid)).
 			Add(js).
+			Add(pendingTerminalsJS(state, sid)).
 			Add(updateHashJS(target)).
 			Add(focusSelectedAppJS(state)), nil
 	})
@@ -1403,6 +1415,7 @@ func Run(assets embed.FS, desktop bool) error {
 				content = renderMainArea(state, sid)
 			}
 			resp = resp.Add(switchProjectJS(state.ActiveProject, content)).
+				Add(pendingTerminalsJS(state, sid)).
 				Add(updateHashJS(state.ActiveProject)).
 				Add(focusSelectedAppJS(state))
 		}
@@ -1430,7 +1443,7 @@ func Run(assets embed.FS, desktop bool) error {
 	})
 	// Finish cleanup before allowing the renderer to close the desktop window.
 	actionAppCloseAll = r.RegisterAction(app, "app.close.all", func(_ *r.Context, in sessionInput) (r.Result, error) {
-		tm.StopAll()
+		CleanupRuntime()
 		sm.mu.Lock()
 		sm.states = make(map[string]*AppState)
 		sm.mu.Unlock()
@@ -1466,6 +1479,7 @@ func Run(assets embed.FS, desktop bool) error {
 			Morph(TopBarID, renderTopBar(state, sid)).
 			Add(closeDevtoolsJS).
 			Add(jsSwitch).
+			Add(pendingTerminalsJS(state, sid)).
 			Add(updateHashJS(vtName)).
 			Add(projectAutolaunchJS(state, sid)).
 			Add(focusSelectedAppJS(state))
@@ -1507,6 +1521,7 @@ func Run(assets embed.FS, desktop bool) error {
 			Morph(TopBarID, renderTopBar(state, sid)).
 			Add(closeDevtoolsJS).
 			Add(jsSwitch).
+			Add(pendingTerminalsJS(state, sid)).
 			Add(updateHashJS(vtName)).
 			Add(projectAutolaunchJS(state, sid)).
 			Add(focusSelectedAppJS(state)), nil
@@ -1518,9 +1533,10 @@ func Run(assets embed.FS, desktop bool) error {
 
 	// Live-switch native xterm themes when GNOME's color-scheme flips.
 	var themeMu sync.Mutex
-	// Each page starts with an empty workspace.
+	// The first page restores the saved layout; later pages start empty.
 	app.Page("/", func(_ *r.Context) *r.Node {
 		sid := sm.NewSession()
+		sm.restoreLayout(sid)
 		state := sm.Get(sid)
 
 		return renderPage(state, sid)

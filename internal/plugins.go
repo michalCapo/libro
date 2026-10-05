@@ -208,6 +208,7 @@ func appDock(app Application) string {
 }
 
 func (sm *StateManager) SetAppPlugin(sessionID, appID, pluginID, dock string) {
+	defer sm.scheduleLayoutSave(sessionID)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if state := sm.states[sessionID]; state != nil {
