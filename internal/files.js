@@ -396,6 +396,23 @@
     __ws.call(external ? 'files.open' : 'files.read', {sid:window.__libroWorkspaceSID, id:s.id, path, parents, request:token,version});
     return token;
   }
+  // Reload loaded folders and the open text file; unchanged results are ignored.
+  function refresh(s) {
+    for (const path of ['', ...s.expanded]) if (s.children.has(path)) s.pending.get(request(s,path)).refresh = true;
+    if (s.file && !s.file.mime) s.pending.get(request(s,s.file.path,true,false,s.parents,s.file.version)).refresh = true;
+    s.status.textContent = '';
+  }
+  function clearFile(s) {
+    s.file = null;
+    Object.assign(s.el.querySelector('.ws-file-path'), {textContent:'Open file'}).dataset.dir = '';
+    showText(s, '', 'Select a file from the tree.');
+    s.el.querySelector('.ws-file-text').hidden = false;
+    s.el.querySelector('.ws-file-media').replaceChildren();
+    s.el.querySelector('.ws-file-media').hidden = true;
+    clearImageView(s);
+    s.wrap.disabled = false;
+    if (s.url) { URL.revokeObjectURL(s.url); s.url = null; }
+  }
   function visible(s) {
     if(s.filter.value) return (s.indexed || []).map(item=>({...item,depth:0,score:fuzzy(item.path,s.filter.value)})).filter(item=>item.score>=0).sort((a,b)=>b.score-a.score).slice(0,500);
     const result = [], query = '';
@@ -506,9 +523,10 @@
         render(s); s.tree.querySelector('[aria-selected=true]')?.scrollIntoView({block:'nearest'});
       };
       request(s,'');
+      el.querySelector('.ws-file-refresh').onclick = () => refresh(s);
       s.refreshTimer=setInterval(()=>{
-        if(document.hidden || !el.isConnected || !el.getClientRects().length || !s.file || s.file.mime || s.picker || s.pending.size)return;
-        const token=request(s,s.file.path,true,false,s.parents,s.file.version);s.pending.get(token).refresh=true;s.status.textContent='';
+        if(document.hidden || !el.isConnected || !el.getClientRects().length || s.picker || s.pending.size)return;
+        refresh(s);
       },3000);
     });
   }
@@ -590,6 +608,12 @@
     }
     if (pending.preview && s.previewRequest !== result.request) return;
     if (pending.parents !== s.parents) s.parentRequest = false;
+    if (pending.refresh && result.error) {
+      // A file or folder removed on disk leaves the view instead of showing stale content.
+      if (pending.path === s.file?.path) { clearFile(s); markOpen(s); }
+      else if (s.children.delete(pending.path)) { s.expanded.delete(pending.path); render(s); }
+      return;
+    }
     s.status.textContent = result.error || '';
     if (result.error || pending.external || result.unchanged) return;
     if(pending.refresh && s.file?.path===result.path && s.file.text===result.text && s.file.mime===result.mime)return;
@@ -598,7 +622,7 @@
       s.parents=pending.parents;s.children.clear();s.expanded.clear();s.index=0;request(s,'');
     }
     if (result.directory && pending.parents !== s.parents) {
-      remember(s);s.file = null;clearFilter(s);
+      remember(s);clearFile(s);clearFilter(s);
       s.parents = pending.parents;
       s.parentRequest = false;
       s.pending.clear();
@@ -606,16 +630,12 @@
       s.expanded.clear();
       s.filter.value = '';
       s.index = 0;
-      Object.assign(s.el.querySelector('.ws-file-path'), {textContent:'Open file'}).dataset.dir = '';
-      showText(s, '', 'Select a file from the tree.');
-      s.el.querySelector('.ws-file-text').hidden = false;
-      s.el.querySelector('.ws-file-media').replaceChildren();
-      s.el.querySelector('.ws-file-media').hidden = true;
-      clearImageView(s);
-      s.wrap.disabled = false;
-      if (s.url) { URL.revokeObjectURL(s.url); s.url = null; }
     }
-    if (result.directory) { s.children.set(pending.path,result.entries || []); render(s); }
+    if (result.directory) {
+      const entries = result.entries || [];
+      if (pending.refresh && JSON.stringify(s.children.get(pending.path)) === JSON.stringify(entries)) return;
+      s.children.set(pending.path,entries); render(s);
+    }
     else {
       const restoreFocus=pending.refresh && !!s.editor?.view.hasFocus;
       remember(s);

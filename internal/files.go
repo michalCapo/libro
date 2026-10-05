@@ -267,6 +267,7 @@ func renderFiles(app Application) *r.Node {
 				r.El("label", "ws-file-render").Attr("title", "Preview HTML and Markdown").Render(r.Input("").Attr("type", "checkbox"), r.Span("").Text("Preview")),
 				r.El("label", "ws-file-wrap").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Word wrap")),
 				r.El("label", "ws-file-hidden").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Hidden files")),
+				r.Button("ws-button ws-file-refresh").Attr("type", "button").Attr("title", "Refresh files").Attr("aria-label", "Refresh files").Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("refresh")),
 				r.Button("ws-button ws-file-help").Attr("type", "button").Attr("title", "Keyboard shortcuts").Attr("aria-label", "Keyboard shortcuts").Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("keyboard"))),
 			r.Div("ws-file-context").Attr("aria-label", "Source location"),
 			r.Div("ws-file-text is-wrapped").Attr("tabindex", "0").Text("Select a file from the project tree."),

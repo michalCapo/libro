@@ -341,7 +341,7 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 .ws-file-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;min-height:40px;box-sizing:border-box;padding:4px 6px 4px 12px;border-bottom:1px solid var(--ws-line);background:var(--ws-chrome)}
 .ws-file-path{flex:1;min-width:0;font-size:13px;font-weight:600;overflow-wrap:anywhere}
 .ws-file-path:before{content:attr(data-dir);color:var(--ws-muted);font-weight:400}
-.ws-file-toolbar .ws-file-help{width:28px;height:28px;color:var(--ws-muted)}
+.ws-file-toolbar .ws-file-refresh,.ws-file-toolbar .ws-file-help{width:28px;height:28px;color:var(--ws-muted)}
 .ws-file-toolbar input[type=checkbox]{margin:0;accent-color:var(--ws-accent)}
 .ws-file-image-tools{display:flex;align-items:center;flex-shrink:0}
 .ws-file-image-tools[hidden]{display:none}
