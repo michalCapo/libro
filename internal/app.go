@@ -2,9 +2,11 @@
 package libro
 
 import (
+	"cmp"
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"libro/internal/components"
 	"log"
@@ -46,6 +48,7 @@ func hydrateApp(sid, appID string, openURL bool) r.Result {
 	if appID == "" {
 		return r.Result{}
 	}
+	generation := tm.Generation()
 	if js, handled := hydrateProjectCommand(sid, appID); handled {
 		return js
 	}
@@ -59,14 +62,18 @@ func hydrateApp(sid, appID string, openURL bool) r.Result {
 			environment = append(agentEnvironmentList(), "LIBRO_APPLICATION_PATH="+pwd)
 		}
 		command, reportSession := agentLaunchInWorkspace(sid, workspace, panel)
-		_, err := tm.StartWithSessionReporter(panel.ID, command, pwd, panel.Writable, environment, reportSession)
+		session, err := tm.StartWithSessionReporter(generation, panel.ID, command, pwd, panel.Writable, environment, reportSession)
+		// Libro is quitting; keep the panel so the final layout still has it.
+		if errors.Is(err, components.ErrTerminalsStopped) {
+			return r.Result{}
+		}
 		if err != nil {
 			sm.RemoveAppByID(sid, panel.ID)
 			state := sm.Get(sid)
 			return r.Merge(removeAppJS(panel.ID), navigateJS(state, sid), r.Result{}.Morph(TopBarID, renderTopBar(state, sid)), projectsJS(state), r.Result{}.Run(r.Notify("error", "Failed to start terminal: "+err.Error())))
 		}
 		if !sm.HydrateTerminalAnywhere(sid, panel.ID) {
-			tm.Stop(panel.ID)
+			tm.StopSession(session)
 			return r.Result{}.Run(r.Notify("error", "Terminal placeholder disappeared"))
 		}
 		panel, _, _, _ = sm.workspaceApp(sid, appID)
@@ -291,6 +298,9 @@ func agentLaunchInWorkspace(sid, workspace string, term Application) (string, fu
 		}
 	}
 	sm.mu.RUnlock()
+	// The session file has the model last chosen inside the agent, even after a crash.
+	m, e := components.RecoverAgentSettings(baseCommand, sessionID, agentEnvironment()["CODEX_HOME"])
+	model, effort = cmp.Or(m, model), cmp.Or(e, effort)
 	command := components.ResumeAgentCommand(baseCommand, sessionID, model, effort)
 	return command, func(id string) {
 		sm.saveThreadSession(sid, workspace, term.ID, term.PluginID, baseCommand, id)
@@ -571,11 +581,14 @@ var (
 
 // CleanupRuntime tears down terminal backends and language servers.
 func CleanupRuntime() {
-	shutdownCleanupOnce.Do(func() {
-		sm.flushLayout()
-		tm.StopAll()
-		closeNavigationServers()
-	})
+	shutdownCleanupOnce.Do(stopRuntime)
+}
+
+// Stopping a terminal reads its final agent session, so save the layout after.
+func stopRuntime() {
+	tm.StopAll()
+	sm.flushLayout()
+	closeNavigationServers()
 }
 
 func installShutdownSignalHandler() {
@@ -940,6 +953,7 @@ func Run(assets embed.FS, desktop bool) error {
 		if appID == "" {
 			return r.Result{}.Run(r.Notify("error", "No terminal app selected")), nil
 		}
+		generation := tm.Generation()
 		state := sm.Get(sid)
 		var term *Application
 		for i := range state.Apps {
@@ -970,7 +984,7 @@ func Run(assets embed.FS, desktop bool) error {
 		// Stopping saves the final session ID, which the resume command needs.
 		tm.Stop(term.ID)
 		command, reportSession := agentLaunch(sid, *term)
-		if _, err := tm.StartWithSessionReporter(term.ID, command, pwd, term.Writable, environment, reportSession); err != nil {
+		if _, err := tm.StartWithSessionReporter(generation, term.ID, command, pwd, term.Writable, environment, reportSession); err != nil {
 			return r.Result{}.Run(r.Notify("error", "Failed to restart terminal: "+err.Error())), nil
 		}
 		// Keep a resumed project's description; only fresh agents clear it.
@@ -1442,11 +1456,14 @@ func Run(assets embed.FS, desktop bool) error {
 		return showCloseDialogJS(projectApps, "Quit Libro?", "Quit", "app.close.all", sid), nil
 	})
 	// Finish cleanup before allowing the renderer to close the desktop window.
+	// Without a desktop process the server keeps running, so the next page restores again.
 	actionAppCloseAll = r.RegisterAction(app, "app.close.all", func(_ *r.Context, in sessionInput) (r.Result, error) {
-		CleanupRuntime()
+		stopRuntime()
 		sm.mu.Lock()
 		sm.states = make(map[string]*AppState)
 		sm.mu.Unlock()
+		sm.reopenLayout()
+		tm.Resume()
 		return trustedResponse(`if(window.libroElectron)window.libroElectron.forceClose();else window.close();`), nil
 	})
 	// Switch to a worktree (creates virtual project if needed)
@@ -1533,10 +1550,24 @@ func Run(assets embed.FS, desktop bool) error {
 
 	// Live-switch native xterm themes when GNOME's color-scheme flips.
 	var themeMu sync.Mutex
-	// The first page restores the saved layout; later pages start empty.
-	app.Page("/", func(_ *r.Context) *r.Node {
-		sid := sm.NewSession()
-		sm.restoreLayout(sid)
+	// A reload keeps its session. The first new page restores the saved layout;
+	// later pages start empty. Readiness probes (Electron startup, curl) also
+	// GET "/" without asking for HTML, so only a real page load may claim it.
+	app.Page("/", func(ctx *r.Context) *r.Node {
+		sid := ctx.Request.URL.Query().Get("sid")
+		if sm.ReopenSession(sid) {
+			// One page per session: a copied URL takes the session over, and the
+			// older page starts a new, empty one. Keeping its hash would reopen the
+			// same thread and start its agent twice. A reloading page is already leaving.
+			if err := app.Broadcast(clientScript(`if(window.__libroWorkspaceSID===props[0]&&!window.__libroLeaving)location.replace('/');`, sid)); err != nil {
+				log.Printf("libro: hand over session: %v", err)
+			}
+		} else {
+			sid = sm.NewSession()
+			if strings.Contains(ctx.Request.Header.Get("Accept"), "text/html") {
+				sm.restoreLayout(sid)
+			}
+		}
 		state := sm.Get(sid)
 
 		return renderPage(state, sid)

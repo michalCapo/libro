@@ -74,6 +74,8 @@ func TestResumeAgentSettingsArguments(t *testing.T) {
 		{"claude equals flags", "claude", " --model=configured --effort=high", []string{"--model=configured", "--effort=high", "--resume", "session-123"}},
 		{"codex saved settings", "codex", "", []string{"resume", "session-123", "-c", `model="saved model"`, "-c", `model_reasoning_effort="medium"`}},
 		{"codex model flag", "codex", " -m configured", []string{"resume", "session-123", "-m", "configured", "-c", `model_reasoning_effort="medium"`}},
+		{"claude prompt mentions flags", "claude", " --append-system-prompt 'Avoid --model and --effort'", []string{"--append-system-prompt", "Avoid --model and --effort", "--model", "saved model", "--effort", "medium", "--resume", "session-123"}},
+		{"codex other config", "codex", ` -c 'profile="model=x"'`, []string{"resume", "session-123", "-c", `profile="model=x"`, "-c", `model="saved model"`, "-c", `model_reasoning_effort="medium"`}},
 		{"codex config flags", "codex", ` -c 'model="configured"' --config='model_reasoning_effort="high"'`, []string{"resume", "session-123", "-c", `model="configured"`, `--config=model_reasoning_effort="high"`}},
 	} {
 		t.Run(test.name, func(t *testing.T) {

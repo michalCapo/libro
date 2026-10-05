@@ -50,7 +50,7 @@ func BashEnvironment() ([]string, error) {
 
 // StartManaged uses existing agent integrations but exits with the agent rather
 // than opening another interactive shell. Binding overrides are applied last.
-func (tm *TerminalManager) StartManaged(id, command, cwd, logPath string, environment []string, sensitive ...string) (*TerminalSession, error) {
+func (tm *TerminalManager) StartManaged(generation uint64, id, command, cwd, logPath string, environment []string, sensitive ...string) (*TerminalSession, error) {
 	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, err
@@ -68,7 +68,7 @@ func (tm *TerminalManager) StartManaged(id, command, cwd, logPath string, enviro
 			m.redactor.secrets = append(m.redactor.secrets, []byte(value))
 		}
 	}
-	session, err := tm.startTerminal(id, command, cwd, true, environment, nil, m)
+	session, err := tm.startTerminal(generation, id, command, cwd, true, environment, nil, m)
 	if err != nil {
 		_ = file.Close()
 		return nil, err

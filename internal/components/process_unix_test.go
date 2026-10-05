@@ -4,6 +4,7 @@ package components
 
 import (
 	"bufio"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -123,6 +124,41 @@ func TestStopAllStopsEveryTerminal(t *testing.T) {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
+	}
+}
+
+func TestLaunchAskedBeforeStopAllFailsAfterResume(t *testing.T) {
+	tm := NewTerminalManager()
+	t.Cleanup(tm.StopAll)
+	old := tm.Generation()
+	tm.StopAll()
+	tm.Resume()
+	if _, err := tm.StartWithSessionReporter(old, "late", "sleep 60", t.TempDir(), true, nil, nil); !errors.Is(err, ErrTerminalsStopped) {
+		t.Fatalf("late launch: %v", err)
+	}
+	if tm.IsRunning("late") {
+		t.Fatal("late launch started a terminal")
+	}
+	if _, err := tm.StartWithSessionReporter(tm.Generation(), "new", "sleep 60", t.TempDir(), true, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStopSessionKeepsNewerTerminal(t *testing.T) {
+	tm := NewTerminalManager()
+	t.Cleanup(tm.StopAll)
+	old, err := tm.StartWithEnvironment("panel", "sleep 60", t.TempDir(), true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tm.StopAll()
+	tm.Resume()
+	if _, err = tm.StartWithEnvironment("panel", "sleep 60", t.TempDir(), true, nil); err != nil {
+		t.Fatal(err)
+	}
+	tm.StopSession(old)
+	if !tm.IsRunning("panel") {
+		t.Fatal("late cleanup stopped the newer terminal")
 	}
 }
 

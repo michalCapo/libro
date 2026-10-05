@@ -1,6 +1,7 @@
 package libro
 
 import (
+	"crypto/rand"
 	"fmt"
 	"log"
 	"os"
@@ -93,6 +94,7 @@ type StateManager struct {
 	layoutEnabled  bool
 	layoutRestored bool
 	layoutClosed   atomic.Bool
+	restoreMu      sync.Mutex
 }
 
 // NewStateManager creates a new state manager
@@ -111,14 +113,28 @@ func defaultHomeDir() string {
 }
 
 // NewSession creates a new session and returns its ID.
-// Projects are loaded from the database.
+// Projects are loaded from the database. The random part keeps a page from an
+// earlier server run from reopening another window's session.
 func (sm *StateManager) NewSession() string {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.nextID++
-	sid := fmt.Sprintf("session-%d", sm.nextID)
+	sid := fmt.Sprintf("session-%d-%s", sm.nextID, rand.Text())
 	sm.states[sid] = newAppStateFromDB()
 	return sid
+}
+
+// ReopenSession reports whether a reloaded page can keep its session. The new
+// page has no workspace DOM yet, so only the active workspace counts as rendered.
+func (sm *StateManager) ReopenSession(sid string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	state := sm.states[sid]
+	if sid == "" || state == nil {
+		return false
+	}
+	state.renderedProjects = map[string]bool{state.ActiveProject: true}
+	return true
 }
 
 func newAppStateFromDB() *AppState {
@@ -203,6 +219,7 @@ func (sm *StateManager) InsertApp(sessionID, url string, width Width, name strin
 		s.SelectedIndex = index
 	}
 	s.LastAppCreatedProject = s.ActiveProject
+	delete(s.closedWorkspaces, s.ActiveProject)
 }
 
 // InsertTerminalPlaceholder adds a terminal shell before its PTY has been started.
@@ -237,6 +254,7 @@ func (sm *StateManager) InsertTerminalPlaceholder(sessionID, appID string, width
 		s.SelectedIndex = index
 	}
 	s.LastAppCreatedProject = s.ActiveProject
+	delete(s.closedWorkspaces, s.ActiveProject)
 }
 
 // HydrateTerminalByID attaches native PTY runtime details to an existing
@@ -631,6 +649,7 @@ func (sm *StateManager) MoveSelectedAppToProject(sessionID, projectName string) 
 		delete(s.snapshots, projectName)
 	}
 	targetApps = append(targetApps, moved)
+	delete(s.closedWorkspaces, projectName)
 	s.Apps = targetApps
 	s.SelectedIndex = len(targetApps) - 1
 	s.ActiveProject = projectName

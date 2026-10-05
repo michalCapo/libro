@@ -331,6 +331,7 @@ func createChild(sid, owner, workspace string, args childCommand) (r.Result, any
 }
 
 func launchChild(sid string, child *childRecord) (r.Result, error) {
+	generation := tm.Generation()
 	if child.Phase != "ready" {
 		return r.Result{}, errors.New("child is not ready; finish cleanup or create another child")
 	}
@@ -367,7 +368,7 @@ func launchChild(sid string, child *childRecord) (r.Result, error) {
 		return r.Result{}, err
 	}
 	logPath := filepath.Join(child.Results, fmt.Sprintf("attempt-%d.log", child.Attempt))
-	if _, err = tm.StartManaged(child.Agent, command, child.Path, logPath, environment, sensitive...); err != nil {
+	if _, err = tm.StartManaged(generation, child.Agent, command, child.Path, logPath, environment, sensitive...); err != nil {
 		child.State.Status = "failed"
 		return r.Result{}, err
 	}

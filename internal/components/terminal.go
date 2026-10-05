@@ -2,6 +2,7 @@ package components
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -74,12 +75,18 @@ func CommandWithFile(command, path string) string {
 	return command + " " + shellQuote(path)
 }
 
+// ErrTerminalsStopped is returned for launches between StopAll and Resume,
+// and for launches asked for before the last StopAll.
+var ErrTerminalsStopped = errors.New("terminals are stopped")
+
 // TerminalManager manages native PTY-backed terminal sessions.
 type TerminalManager struct {
 	mu       sync.Mutex
 	sessions map[string]*TerminalSession
 	logs     map[string]*terminalLog
 	launchMu sync.Mutex // serializes launches with StopAll
+	stopped  bool       // set by StopAll, guarded by launchMu
+	stops    uint64     // StopAll count, guarded by launchMu
 }
 
 // TerminalSession is one PTY process plus its connected browser clients.
@@ -159,17 +166,28 @@ func NewTerminalManager() *TerminalManager {
 // StartWithEnvironment launches a PTY session with additional environment
 // variables. Entries override variables inherited from Libro.
 func (tm *TerminalManager) StartWithEnvironment(appID, command, cwd string, writable bool, environment []string) (*TerminalSession, error) {
-	return tm.StartWithSessionReporter(appID, command, cwd, writable, environment, nil)
+	return tm.startTerminal(tm.Generation(), appID, command, cwd, writable, environment, nil, nil)
 }
 
 // StartWithSessionReporter reports agent session IDs before the terminal closes.
-func (tm *TerminalManager) StartWithSessionReporter(appID, command, cwd string, writable bool, environment []string, reportSession func(string)) (*TerminalSession, error) {
-	return tm.startTerminal(appID, command, cwd, writable, environment, reportSession, nil)
+// It fails when StopAll ran after Generation returned generation.
+func (tm *TerminalManager) StartWithSessionReporter(generation uint64, appID, command, cwd string, writable bool, environment []string, reportSession func(string)) (*TerminalSession, error) {
+	return tm.startTerminal(generation, appID, command, cwd, writable, environment, reportSession, nil)
 }
 
-func (tm *TerminalManager) startTerminal(appID, command, cwd string, writable bool, environment []string, reportSession func(string), managed *managedTerminal) (*TerminalSession, error) {
+// Generation changes on every StopAll. Capture it before slow launch work.
+func (tm *TerminalManager) Generation() uint64 {
 	tm.launchMu.Lock()
 	defer tm.launchMu.Unlock()
+	return tm.stops
+}
+
+func (tm *TerminalManager) startTerminal(generation uint64, appID, command, cwd string, writable bool, environment []string, reportSession func(string), managed *managedTerminal) (*TerminalSession, error) {
+	tm.launchMu.Lock()
+	defer tm.launchMu.Unlock()
+	if tm.stopped || generation != tm.stops {
+		return nil, ErrTerminalsStopped
+	}
 	if appID == "" {
 		return nil, fmt.Errorf("empty terminal id")
 	}
@@ -465,10 +483,29 @@ func (tm *TerminalManager) Stop(appID string) {
 	}
 }
 
-// StopAll terminates all sessions managed by this TerminalManager.
+// StopSession stops s only while it is still the terminal for its ID, so a
+// late cleanup cannot stop a newer terminal with the same ID.
+func (tm *TerminalManager) StopSession(s *TerminalSession) {
+	tm.mu.Lock()
+	current := tm.sessions[s.ID] == s
+	if current {
+		delete(tm.sessions, s.ID)
+		delete(tm.logs, s.ID)
+	}
+	tm.mu.Unlock()
+	if current {
+		s.close(true)
+		log.Printf("terminal stopped for app %s", s.ID)
+	}
+}
+
+// StopAll terminates all sessions managed by this TerminalManager. Launches
+// fail until Resume, so a launch waiting on StopAll cannot start afterwards.
 func (tm *TerminalManager) StopAll() {
 	tm.launchMu.Lock()
 	defer tm.launchMu.Unlock()
+	tm.stopped = true
+	tm.stops++
 	tm.mu.Lock()
 	ids := make([]string, 0, len(tm.logs))
 	for id := range tm.logs {
@@ -478,6 +515,13 @@ func (tm *TerminalManager) StopAll() {
 	for _, id := range ids {
 		tm.Stop(id)
 	}
+}
+
+// Resume allows launches again after StopAll.
+func (tm *TerminalManager) Resume() {
+	tm.launchMu.Lock()
+	defer tm.launchMu.Unlock()
+	tm.stopped = false
 }
 
 // IsRunning reports whether a terminal still has a live process session.

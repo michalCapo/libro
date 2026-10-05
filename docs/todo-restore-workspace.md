@@ -166,10 +166,46 @@ No change expected. Panels render from state as today. Verify that `renderPage` 
 - [x] Agent model/effort migration, session parsing, and resume flags.
 - [x] Round-trip, drop-rule, shutdown, multi-window, worktree, and real PTY tests.
 - [x] README startup behavior documented.
-- [ ] Manual desktop restart with live Claude and Codex sessions. The managed application currently reports no URL; its URL/port must be configured before browser validation.
+- [x] Manual restart on the dev instance (port 8101) with live Claude and Codex sessions:
+  layout, browser URL, and panels restored; Claude resumed with `--model`/`--effort`,
+  Codex with `-c model=… -c model_reasoning_effort=…`; the conversation continued.
+- [x] Fix: readiness probes (Electron `isServerRunning`, curl) also `GET /` and took the
+  one-time restore. Only requests that accept `text/html` restore now.
+
+- [x] Fixes after review:
+  - Only the page that restored the layout saves it. A second window cannot overwrite it.
+  - A reload keeps its session (`?sid=` in the URL): same panels, same running terminals
+    (old output is not replayed). Session IDs carry a random part, so a page from an earlier
+    server run cannot take another window's session.
+  - A closed workspace that gets a new panel is open again and saved.
+  - Shutdown stops terminals first (their final session report lands), then saves.
+  - Quit without a desktop process (the server keeps running) lets the next page restore again.
+  - Concurrent first pages wait until restored panel IDs are reserved.
+  - Managed child agent panels (no command) are not restored as shells.
+  - Resume reads the model/effort from the agent session file at launch, so a model changed
+    inside the agent survives a crash. The shutdown refresh is gone.
+- [x] Fixes after the second review:
+  - Terminal launches fail after shutdown starts, so no agent outlives quit. A panel whose
+    start fails this way stays in the final layout.
+  - Workspaces save their path. A thread whose worktree path changed is dropped on restore.
+  - Existing `--model`/`--effort`/`-c` flags are found by splitting the command into shell
+    words, so a prompt that mentions `--model` does not hide the saved model.
+  - One page per session: opening a copied `?sid=` URL moves the older page to a new, empty
+    session (no hash, so it does not start the same thread agent again).
+- [x] Fixes after the third review:
+  - Agent launches capture the terminal generation before slow work. A launch asked for
+    before quit fails even if quit lets launches run again.
+  - Not fixed: two tabs opening the same `?sid=` URL at the same moment both keep the session.
+- [x] Fixes after the fourth review:
+  - Child agent launches capture the generation too.
+  - A hydrate that lost its panel stops only the terminal it started, not a newer one
+    with the same panel ID.
+
+Notes from the manual test:
+- An archived thread that is still open is dropped on restore (spec rule).
+- Flags already in the agent command win over the saved model/effort (spec rule).
 
 The current project-thread flow creates virtual worktree projects instead of
 thread rows. Layout panels therefore also save `SessionID`, `AgentModel`, and
 `AgentEffort` for project agents. `WorktreeOrder` preserves the sidebar order.
-Normal layout saves only serialize state; shutdown refreshes agent settings
-before the final save. Later empty pages do not replace the saved layout owner.
+Layout saves only serialize state. Later pages do not replace the saved layout owner.

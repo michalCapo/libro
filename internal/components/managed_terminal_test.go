@@ -18,11 +18,11 @@ func TestManagedOwnershipAndRedaction(t *testing.T) {
 	t.Cleanup(tm.StopAll)
 	dir := t.TempDir()
 	const secret = "fake-test-key-12345"
-	first, err := tm.StartManaged("first", `printf '%s' "$TEST_API_KEY"; sleep 30`, dir, filepath.Join(dir, "first.log"), []string{"TEST_API_KEY=" + secret})
+	first, err := tm.StartManaged(tm.Generation(), "first", `printf '%s' "$TEST_API_KEY"; sleep 30`, dir, filepath.Join(dir, "first.log"), []string{"TEST_API_KEY=" + secret})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := tm.StartManaged("second", `sleep 30`, dir, filepath.Join(dir, "second.log"), nil)
+	second, err := tm.StartManaged(tm.Generation(), "second", `sleep 30`, dir, filepath.Join(dir, "second.log"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestManagedAgentExitAndRecoveryMetadata(t *testing.T) {
 	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf result\nexit 7\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	session, err := tm.StartManaged("attempt", script+" -p", dir, filepath.Join(dir, "attempt.log"), nil)
+	session, err := tm.StartManaged(tm.Generation(), "attempt", script+" -p", dir, filepath.Join(dir, "attempt.log"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

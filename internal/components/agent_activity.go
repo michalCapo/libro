@@ -547,20 +547,21 @@ func ResumeAgentCommand(command, sessionID, model, effort string) string {
 		}
 		return parts[1] + launch[1] + " --" + launch[2] + " --resume " + shellQuote(sessionID)
 	}
+	hasModel, hasEffort := configuredSettings(command, kind)
 	switch kind {
 	case "codex":
-		if model != "" && !agentModelFlag.MatchString(command) && !codexModelConfig.MatchString(command) {
+		if model != "" && !hasModel {
 			parts[2] += " -c " + shellQuote("model="+configString(model))
 		}
-		if effort != "" && !codexEffortConfig.MatchString(command) {
+		if effort != "" && !hasEffort {
 			parts[2] += " -c " + shellQuote("model_reasoning_effort="+configString(effort))
 		}
 		return parts[1] + " resume " + shellQuote(sessionID) + parts[2]
 	case "claude":
-		if model != "" && !agentModelFlag.MatchString(command) {
+		if model != "" && !hasModel {
 			command += " --model " + shellQuote(model)
 		}
-		if effort != "" && !agentEffortFlag.MatchString(command) {
+		if effort != "" && !hasEffort {
 			command += " --effort " + shellQuote(effort)
 		}
 		return command + " --resume " + shellQuote(sessionID)
@@ -571,10 +572,73 @@ func ResumeAgentCommand(command, sessionID, model, effort string) string {
 	}
 }
 
-var agentModelFlag = regexp.MustCompile(`(?:^|\s)(?:--model|-m)(?:=|\s|$)`)
-var agentEffortFlag = regexp.MustCompile(`(?:^|\s)--effort(?:=|\s|$)`)
-var codexModelConfig = regexp.MustCompile(`(?:^|\s)(?:-c|--config)(?:=|\s+)['"]?model\s*=`)
-var codexEffortConfig = regexp.MustCompile(`(?:^|\s)(?:-c|--config)(?:=|\s+)['"]?model_reasoning_effort\s*=`)
+// configuredSettings reports whether the command's own arguments set the model
+// or effort. Quoted text such as a prompt that mentions --model does not count.
+func configuredSettings(command, kind string) (model, effort bool) {
+	args := shellWords(command)
+	for i, arg := range args {
+		name, value, hasValue := strings.Cut(arg, "=")
+		switch {
+		case name == "--model" || name == "-m":
+			model = true
+		case name == "--effort" && kind == "claude":
+			effort = true
+		case (name == "-c" || name == "--config") && kind == "codex":
+			if !hasValue && i+1 < len(args) {
+				value = args[i+1]
+			}
+			key, _, _ := strings.Cut(value, "=")
+			model = model || strings.TrimSpace(key) == "model"
+			effort = effort || strings.TrimSpace(key) == "model_reasoning_effort"
+		}
+	}
+	return model, effort
+}
+
+// shellWords splits a command into arguments like a POSIX shell, without expansion.
+func shellWords(command string) []string {
+	var words []string
+	var word strings.Builder
+	inWord := false
+	var quote rune
+	escaped := false
+	for _, c := range command {
+		switch {
+		case escaped:
+			word.WriteRune(c)
+			escaped, inWord = false, true
+		case quote == '\'':
+			if c == '\'' {
+				quote = 0
+			} else {
+				word.WriteRune(c)
+			}
+		case c == '\\' && quote != '\'':
+			escaped = true
+		case quote == '"':
+			if c == '"' {
+				quote = 0
+			} else {
+				word.WriteRune(c)
+			}
+		case c == '\'' || c == '"':
+			quote, inWord = c, true
+		case c == ' ' || c == '\t' || c == '\n':
+			if inWord {
+				words = append(words, word.String())
+				word.Reset()
+				inWord = false
+			}
+		default:
+			word.WriteRune(c)
+			inWord = true
+		}
+	}
+	if inWord {
+		words = append(words, word.String())
+	}
+	return words
+}
 
 // JSON string quoting also produces TOML basic strings for Codex config values.
 func configString(value string) string {

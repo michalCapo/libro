@@ -25,6 +25,7 @@ type savedLayout struct {
 
 type savedWorkspace struct {
 	Name          string
+	Path          string
 	SelectedIndex int
 	Apps          []savedApp
 }
@@ -84,7 +85,8 @@ func (sm *StateManager) saveLayout(sid string) {
 			}
 			apps, selected = snapshot.Apps, snapshot.SelectedIndex
 		}
-		workspace := savedWorkspace{Name: name, SelectedIndex: selected}
+		_, path := threadProjectContext(state, name)
+		workspace := savedWorkspace{Name: name, Path: path, SelectedIndex: selected}
 		for _, app := range apps {
 			saved := saveApp(app)
 			if thread := state.thread(name); thread != nil && thread.AgentID == app.PluginID && isAgentApp(app) {
@@ -124,15 +126,15 @@ func (sm *StateManager) saveLayout(sid string) {
 	}
 }
 
-// Call after releasing sm.mu. One timer per instance means the last changed
-// page wins, and serializing saves prevents an older timer overwriting shutdown.
+// Call after releasing sm.mu. Only the page that restored the layout saves it,
+// so a second window cannot replace it with its own empty workspace.
+// Serializing saves prevents an older timer overwriting shutdown.
 func (sm *StateManager) scheduleLayoutSave(sid string) {
 	sm.layoutMu.Lock()
 	defer sm.layoutMu.Unlock()
-	if !sm.layoutEnabled || sm.layoutClosed.Load() {
+	if !sm.layoutEnabled || sm.layoutClosed.Load() || sid != sm.layoutSession {
 		return
 	}
-	sm.layoutSession = sid
 	sm.layoutRevision++
 	revision := sm.layoutRevision
 	if sm.layoutTimer != nil {
@@ -154,8 +156,16 @@ func (sm *StateManager) flushLayout() {
 	if sm.layoutTimer != nil {
 		sm.layoutTimer.Stop()
 	}
-	sm.refreshAgentSettings(sm.layoutSession)
 	sm.saveLayout(sm.layoutSession)
+}
+
+// reopenLayout lets the next page restore again after a quit that leaves the
+// server running (a browser or an attached desktop window).
+func (sm *StateManager) reopenLayout() {
+	sm.layoutMu.Lock()
+	defer sm.layoutMu.Unlock()
+	sm.layoutClosed.Store(false)
+	sm.layoutRestored, sm.layoutEnabled, sm.layoutSession = false, false, ""
 }
 
 func layoutPathExists(path string) bool {
@@ -165,7 +175,10 @@ func layoutPathExists(path string) bool {
 
 // Only the first page after backend start owns restored panel IDs. Later pages
 // get empty workspaces, keeping native terminals isolated between windows.
+// restoreMu makes them wait until the restored IDs are reserved.
 func (sm *StateManager) restoreLayout(sid string) {
+	sm.restoreMu.Lock()
+	defer sm.restoreMu.Unlock()
 	sm.layoutMu.Lock()
 	if sm.layoutRestored {
 		sm.layoutMu.Unlock()
@@ -215,7 +228,9 @@ func (sm *StateManager) restoreLayout(sid string) {
 		return slices.ContainsFunc(state.Projects, func(p Project) bool { return p.Name == name && layoutPathExists(p.Path) })
 	}
 	for _, workspace := range layout.Open {
-		if !valid(workspace.Name) {
+		// A recreated worktree may have the same name at another path; its
+		// agents belong to the old checkout.
+		if _, path := threadProjectContext(state, workspace.Name); !valid(workspace.Name) || workspace.Path != "" && path != workspace.Path {
 			continue
 		}
 		snapshot := &projectSnapshot{}
@@ -223,7 +238,8 @@ func (sm *StateManager) restoreLayout(sid string) {
 			if n, err := strconv.Atoi(strings.TrimPrefix(saved.ID, "app-")); strings.HasPrefix(saved.ID, "app-") && err == nil && n > sm.nextID {
 				sm.nextID = n
 			}
-			if saved.PluginID == "project-command" {
+			// Managed child agents have no command to start again.
+			if saved.PluginID == "project-command" || saved.Type == AppTypeTerminal && saved.Command == "" {
 				continue
 			}
 			if i <= workspace.SelectedIndex {
@@ -249,43 +265,6 @@ func (sm *StateManager) restoreLayout(sid string) {
 		delete(state.snapshots, state.ActiveProject)
 	}
 	state.renderedProjects = map[string]bool{state.ActiveProject: true}
-}
-
-// Refresh once before the final snapshot, outside PTY callbacks. Ordinary
-// layout saves only serialize memory and never scan agent history.
-func (sm *StateManager) refreshAgentSettings(sid string) {
-	sm.mu.RLock()
-	state := sm.states[sid]
-	if state == nil {
-		sm.mu.RUnlock()
-		return
-	}
-	workspaces := []ProjectApps{{Name: state.ActiveProject, Apps: slices.Clone(state.Apps)}}
-	for name, snapshot := range state.snapshots {
-		if snapshot != nil {
-			workspaces = append(workspaces, ProjectApps{Name: name, Apps: slices.Clone(snapshot.Apps)})
-		}
-	}
-	threads := slices.Clone(state.Threads)
-	sm.mu.RUnlock()
-	for _, workspace := range workspaces {
-		for _, app := range workspace.Apps {
-			if !isAgentApp(app) {
-				continue
-			}
-			for _, thread := range threads {
-				if thread.ID == workspace.Name && thread.AgentID == app.PluginID {
-					app.SessionID = thread.SessionID
-					if thread.AgentCommand != "" {
-						app.Command = thread.AgentCommand
-					}
-				}
-			}
-			if app.SessionID != "" {
-				sm.recordAgentSession(sid, app.ID, app.PluginID, app.Command, app.SessionID, true)
-			}
-		}
-	}
 }
 
 // Use the existing app.hydrate action when a restored workspace is shown.

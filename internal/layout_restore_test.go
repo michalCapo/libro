@@ -86,6 +86,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 	if other.ActiveProject != "" || len(other.Apps) != 0 || len(other.snapshots) != 0 {
 		t.Fatal("layout restored twice")
 	}
+	restored.InsertApp(otherSID, "https://other.example", WidthMD, "Other", 0)
 	restored.flushLayout()
 	var raw string
 	if err := db.QueryRow("SELECT value FROM settings WHERE key = 'layout'").Scan(&raw); err != nil {
@@ -256,36 +257,39 @@ func TestLayoutRestoresWorktreeWorkspace(t *testing.T) {
 	}
 }
 
-func TestShutdownRefreshesAgentSettingsAndIgnoresLateReports(t *testing.T) {
+func TestResumeReadsChangedModelAndIgnoresLateReports(t *testing.T) {
 	layoutTestDB(t)
 	home := t.TempDir()
 	t.Setenv("CODEX_HOME", home)
 	if _, err := db.Exec("INSERT INTO threads (id,name) VALUES ('thread:test','Test')"); err != nil {
 		t.Fatal(err)
 	}
-	manager := NewStateManager()
-	sid := manager.NewSession()
-	manager.restoreLayout(sid)
-	t.Cleanup(manager.flushLayout)
-	manager.SwitchProject(sid, "thread:test")
-	manager.InsertTerminalPlaceholder(sid, "app-2", WidthFull, "codex", true, "Codex", "", 0)
-	manager.SetAppPlugin(sid, "app-2", "codex", "center")
-	manager.saveThreadSession(sid, "thread:test", "app-2", "codex", "codex", "saved-session")
+	previous := sm
+	sm = NewStateManager()
+	t.Cleanup(func() { sm = previous })
+	sid := sm.NewSession()
+	sm.restoreLayout(sid)
+	t.Cleanup(sm.flushLayout)
+	sm.SwitchProject(sid, "thread:test")
+	sm.InsertTerminalPlaceholder(sid, "app-2", WidthFull, "codex", true, "Codex", "", 0)
+	sm.SetAppPlugin(sid, "app-2", "codex", "center")
+	sm.saveThreadSession(sid, "thread:test", "app-2", "codex", "codex", "saved-session")
+	// The model changes inside the agent after its session was reported.
 	if err := os.MkdirAll(filepath.Join(home, "sessions"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(home, "sessions", "rollout-date-saved-session.jsonl"), []byte(`{"type":"turn_context","payload":{"model":"changed-model","effort":"high"}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	manager.flushLayout()
-	manager.saveThreadSession(sid, "thread:test", "app-2", "codex", "codex", "late-session")
-	thread := loadThreads()[0]
-	if thread.SessionID != "saved-session" || thread.AgentModel != "changed-model" || thread.AgentEffort != "high" {
-		t.Fatalf("thread settings: %+v", thread)
+	// A crash skips shutdown, so the resume reads the session file itself.
+	command, _ := agentLaunch(sid, sm.Get(sid).Apps[0])
+	if command != components.ResumeAgentCommand("codex", "saved-session", "changed-model", "high") {
+		t.Fatalf("resume command: %s", command)
 	}
-	panel := manager.Get(sid).Apps[0]
-	if panel.AgentModel != thread.AgentModel || panel.AgentEffort != thread.AgentEffort || panel.SessionID != thread.SessionID {
-		t.Fatal("panel settings disagree with saved thread")
+	sm.flushLayout()
+	sm.saveThreadSession(sid, "thread:test", "app-2", "codex", "codex", "late-session")
+	if thread := loadThreads()[0]; thread.SessionID != "saved-session" {
+		t.Fatalf("late report saved: %+v", thread)
 	}
 }
 
