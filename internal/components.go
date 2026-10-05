@@ -2763,7 +2763,7 @@ func projectItems(state *AppState) []jsProject {
 			Name:        p.Name,
 			DisplayName: displayProjectName(p.Name, p.Path),
 			Path:        p.Path,
-			Title:       worktreeTitle(p.Path),
+			Title:       state.workspaceTitle(p.Name, p.Path),
 			IsGit:       p.IsGitRepo,
 			IsActive:    isActive,
 			BaseOpened:  !state.closedWorkspaces[p.Name] && (state.ActiveProject == p.Name || state.snapshots[p.Name] != nil),
@@ -2846,7 +2846,7 @@ func projectItems(state *AppState) []jsProject {
 				Name:            p.Name,
 				Path:            wt.Path,
 				Branch:          wt.Branch,
-				Title:           worktreeTitle(wt.Path),
+				Title:           state.workspaceTitle(vtName, wt.Path),
 				IsGit:           true,
 				IsActive:        wtActive,
 				Closed:          state.closedWorkspaces[vtName],
@@ -3350,8 +3350,8 @@ func terminalFrameSetupJS() string {
                         const grid = frame.closest('[data-workspace-project]');
                         const threadId = grid && grid.dataset.workspaceProject;
                         if (!threadId || !window.__ws) return;
-                        if (threadId.indexOf('thread:') === 0) __ws.call('thread.rename', {sid:sid, id:threadId, name:task, fallback:fallback});
-                        else __ws.call('worktree.title', {sid:sid, project:threadId, name:task, fallback:fallback});
+                        if (threadId.indexOf('thread:') === 0) __ws.call('thread.rename', {sid:sid, appId:appID, id:threadId, name:task, fallback:fallback});
+                        else __ws.call('worktree.title', {sid:sid, appId:appID, project:threadId, name:task, fallback:fallback});
                     }
 
 					term.onData(function(data) {

@@ -250,6 +250,7 @@ type actionThreadCreateInput struct {
 }
 
 type actionThreadRenameInput struct {
+	AppID    string `json:"appId"`
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	SID      string `json:"sid"`
@@ -257,6 +258,7 @@ type actionThreadRenameInput struct {
 }
 
 type actionWorktreeTitleInput struct {
+	AppID    string `json:"appId"`
 	Name     string `json:"name"`
 	Project  string `json:"project"`
 	SID      string `json:"sid"`

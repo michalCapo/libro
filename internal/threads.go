@@ -60,6 +60,28 @@ func (s *AppState) thread(id string) *Thread {
 	return nil
 }
 
+// workspaceAgent ignores panels removed or replaced before their title arrived.
+func (s *AppState) workspaceAgent(workspace, appID string) bool {
+	apps := s.Apps
+	if workspace != s.ActiveProject {
+		apps = nil
+		if snapshot := s.snapshots[workspace]; snapshot != nil {
+			apps = snapshot.Apps
+		}
+	}
+	return slices.ContainsFunc(apps, func(app Application) bool {
+		return isAgentApp(app) && (appID == "" || app.ID == appID)
+	})
+}
+
+// Empty checkouts must not display a description left by an earlier agent.
+func (s *AppState) workspaceTitle(workspace, path string) string {
+	if !s.workspaceAgent(workspace, "") {
+		return ""
+	}
+	return worktreeTitle(path)
+}
+
 func threadProjectContext(state *AppState, id string) (string, string) {
 	if state == nil || id == "" {
 		return "", ""
@@ -196,7 +218,7 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) r.Re
 		thread := state.thread(id)
 		// Child threads keep the name their parent chose. A first prompt only
 		// names a new thread, so a resumed session keeps its saved description.
-		if thread == nil || thread.Managed || in.Fallback && thread.Name != "New thread" {
+		if in.AppID == "" || !state.workspaceAgent(id, in.AppID) || thread == nil || thread.Managed || in.Fallback && thread.Name != "New thread" {
 			return r.Result{}, nil
 		}
 		// A new agent session has no description yet.
@@ -222,6 +244,9 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) r.Re
 			name = string(runes[:200])
 		}
 		state := sm.Get(sid)
+		if in.AppID == "" || !state.workspaceAgent(in.Project, in.AppID) {
+			return r.Result{}, nil
+		}
 		// The project's base checkout is saved by path, the same as a worktree.
 		for _, p := range state.Projects {
 			if p.Name != in.Project {

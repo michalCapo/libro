@@ -608,3 +608,47 @@ func TestReplaceThreadAgentStartsFreshAndKeepsTools(t *testing.T) {
 		t.Fatal("new panel session was not saved")
 	}
 }
+
+func TestWorkspaceDescriptionRequiresCurrentAgent(t *testing.T) {
+	oldDB := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "libro.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = oldDB })
+	createTables()
+	path := t.TempDir()
+	if err := saveWorktreeTitle(path, "Old conversation"); err != nil {
+		t.Fatal(err)
+	}
+	for _, background := range []bool{false, true} {
+		state := &AppState{
+			ActiveProject: "project",
+			Projects:      []Project{{Name: "project", Path: path}},
+			Apps:          []Application{{ID: "new-agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"}},
+			snapshots:     make(map[string]*projectSnapshot),
+		}
+		if background {
+			state.snapshots["project"] = &projectSnapshot{Apps: state.Apps}
+			state.ActiveProject, state.Apps = "other", nil
+		}
+		if state.workspaceAgent("project", "old-agent") {
+			t.Fatal("closed agent can restore its old title")
+		}
+		if !state.workspaceAgent("project", "new-agent") {
+			t.Fatal("current agent cannot update its title")
+		}
+		if got := projectItems(state)[0].Title; got != "Old conversation" {
+			t.Fatalf("running agent title = %q", got)
+		}
+		state.Apps = nil
+		state.snapshots = nil
+		if state.workspaceAgent("project", "new-agent") {
+			t.Fatal("removed agent can still update its title")
+		}
+		if got := projectItems(state)[0].Title; got != "" {
+			t.Fatalf("empty checkout kept stale title: %q", got)
+		}
+	}
+}
