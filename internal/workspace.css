@@ -53,11 +53,13 @@ html.dark .ws-project-remove:hover{color:#ff8a80}
 html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-row:has(.ws-project-terminal)>span{flex:0 1 auto}
 .ws-project-row:has(.ws-project-terminal) .ws-project-terminal{margin-right:auto}
-/* A project owns its original branch first, then its worktrees. */
-.ws-project-group>.ws-project-threads{display:flex;flex-direction:column;gap:4px;position:relative;margin:2px 0 8px 12px}
-/* A line ties each thread list to its project; it turns accent when the active thread is inside. */
-.ws-project-group>.ws-project-threads::before{content:"";position:absolute;left:-7px;top:0;bottom:0;width:2px;border-radius:1px;background:var(--ws-control-line)}
-.ws-project-group>.ws-project-threads:has(.ws-thread-row[aria-current=true])::before{background:var(--ws-accent)}
+/* A project with open threads is an accordion: a gray header, then its original branch and worktrees as the body.
+   A project without open threads stays a plain row. */
+.ws-project-group:has(>.ws-project-threads .ws-project-item){margin:4px 0 6px;border:1px solid var(--ws-line);border-radius:10px;overflow:hidden;background:var(--ws-bg)}
+.ws-project-group:has(.ws-thread-row[aria-current=true]){border-color:var(--ws-control-line)}
+.ws-project-group:has(>.ws-project-threads .ws-project-item)>.ws-project-item{border-radius:0;border-bottom:1px solid var(--ws-line);background:var(--ws-hover)}
+.ws-project-group:has(>.ws-project-threads .ws-project-item)>.ws-project-item:hover{background:color-mix(in srgb,var(--ws-hover),var(--ws-fg) 5%)}
+.ws-project-group>.ws-project-threads{display:flex;flex-direction:column;gap:4px;padding:6px}
 .ws-project-threads .ws-project-threads{display:contents}
 .ws-project-threads:empty,.ws-project-group>.ws-project-threads:not(:has(.ws-project-item)){display:none}
 .ws-thread-row{min-height:30px}
@@ -76,7 +78,7 @@ html.dark .ws-thread-row[data-kind=worktree] .ws-row-branch{color:#c4b5fd}
 .ws-thread-row .material-icons-round{font-size:16px}
 .ws-project-item:has(>.ws-row-two-line){background:var(--ws-bg);box-shadow:inset 0 0 0 1px var(--ws-line)}
 .ws-project-item:has(>.ws-row-two-line):hover{background:var(--ws-hover)}
-.ws-project-item:has(>.ws-thread-row[aria-current=true]){background:var(--ws-raised);box-shadow:inset 3px 0 0 var(--ws-accent),0 0 0 1px var(--ws-control-line),0 1px 3px #00000014}
+.ws-project-item:has(>.ws-thread-row[aria-current=true]){background:color-mix(in srgb,var(--ws-accent) 10%,var(--ws-bg));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ws-accent) 35%,transparent)}
 .ws-project-item[data-archived=true]{opacity:.52}
 .ws-project-item[data-archived=true]:is(:hover,:focus-within),.ws-project-item[data-archived=true]:has(.ws-project-row[aria-current=true]){opacity:1}
 .ws-thread-status{flex-shrink:0;font-size:10px;color:var(--ws-muted)}
@@ -228,6 +230,9 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 #libro-workspace[data-projects=false] .ws-project-item{padding:0;justify-content:center}
 #libro-workspace[data-projects=false] :is(.ws-project-list,.ws-project-group>.ws-project-threads){gap:8px}
 #libro-workspace[data-projects=false] .ws-project-group>.ws-project-threads{margin:8px 0;padding:0;border:0}
+#libro-workspace[data-projects=false] .ws-project-group:has(>.ws-project-threads .ws-project-item){margin:0;border:0;border-radius:0;overflow:visible;background:transparent}
+#libro-workspace[data-projects=false] .ws-project-group:has(>.ws-project-threads .ws-project-item)>.ws-project-item{border-radius:8px;border-bottom:0}
+#libro-workspace[data-projects=false] .ws-project-group:has(>.ws-project-threads .ws-project-item)>.ws-project-item:not(:hover){background:transparent}
 #libro-workspace[data-projects=false] .ws-project-shortcut{margin:0}
 #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-terminal) .ws-project-shortcut{border-color:#15803d}
 html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-terminal) .ws-project-shortcut{border-color:#4ade80}
