@@ -446,7 +446,7 @@
     row.append(node('span', '', label));
     if (!described) return;
     row.classList.add('ws-row-two-line'); row.dataset.branch = branch;
-    row.append(node('small', 'ws-row-meta', branch));
+    const meta = node('small', 'ws-row-meta'); meta.append(node('span', 'ws-row-branch', branch)); row.append(meta);
   }
   function threadMenu(project, trigger, point) {
     document.getElementById('thread-actions-menu')?.remove();
@@ -749,7 +749,7 @@
     });
     document.querySelectorAll('.ws-project-row').forEach(row => {
       const meta = row.querySelector('.ws-row-meta');
-      if (meta) meta.textContent = [row.dataset.branch, agentNames.get(row.dataset.projectKey)].filter(Boolean).join(' · ');
+      if (meta) meta.replaceChildren(node('span', 'ws-row-branch', row.dataset.branch), ...[agentNames.get(row.dataset.projectKey)].filter(Boolean).map(names => ' · ' + names));
       const state = projects.get(row.dataset.projectKey) || '';
       if (row.dataset.agentStatus === state) return;
       row.dataset.agentStatus = state;

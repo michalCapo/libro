@@ -54,7 +54,10 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-row:has(.ws-project-terminal)>span{flex:0 1 auto}
 .ws-project-row:has(.ws-project-terminal) .ws-project-terminal{margin-right:auto}
 /* A project owns its original branch first, then its worktrees. */
-.ws-project-group>.ws-project-threads{display:flex;flex-direction:column;gap:4px;margin:2px 0 8px}
+.ws-project-group>.ws-project-threads{display:flex;flex-direction:column;gap:4px;position:relative;margin:2px 0 8px 12px}
+/* A line ties each thread list to its project; it turns accent when the active thread is inside. */
+.ws-project-group>.ws-project-threads::before{content:"";position:absolute;left:-7px;top:0;bottom:0;width:2px;border-radius:1px;background:var(--ws-control-line)}
+.ws-project-group>.ws-project-threads:has(.ws-thread-row[aria-current=true])::before{background:var(--ws-accent)}
 .ws-project-threads .ws-project-threads{display:contents}
 .ws-project-threads:empty,.ws-project-group>.ws-project-threads:not(:has(.ws-project-item)){display:none}
 .ws-thread-row{min-height:30px}
@@ -65,10 +68,15 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-row-two-line>.ws-project-terminal{grid-area:end}
 .ws-row-two-line>.ws-project-shortcut{grid-area:badge}
 .ws-row-meta{grid-area:meta;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;line-height:16px;color:var(--ws-muted)}
+/* Branch names show where a thread lives: the project's own checkout or a separate worktree. */
+.ws-thread-row[data-kind=base] .ws-row-branch{color:#b45309}
+.ws-thread-row[data-kind=worktree] .ws-row-branch{color:#7c3aed}
+html.dark .ws-thread-row[data-kind=base] .ws-row-branch{color:#fbbf24}
+html.dark .ws-thread-row[data-kind=worktree] .ws-row-branch{color:#c4b5fd}
 .ws-thread-row .material-icons-round{font-size:16px}
 .ws-project-item:has(>.ws-row-two-line){background:var(--ws-bg);box-shadow:inset 0 0 0 1px var(--ws-line)}
 .ws-project-item:has(>.ws-row-two-line):hover{background:var(--ws-hover)}
-.ws-project-item:has(>.ws-thread-row[aria-current=true]){background:var(--ws-raised);box-shadow:0 0 0 1px var(--ws-line),0 1px 2px #0000000a}
+.ws-project-item:has(>.ws-thread-row[aria-current=true]){background:var(--ws-raised);box-shadow:inset 3px 0 0 var(--ws-accent),0 0 0 1px var(--ws-control-line),0 1px 3px #00000014}
 .ws-project-item[data-archived=true]{opacity:.52}
 .ws-project-item[data-archived=true]:is(:hover,:focus-within),.ws-project-item[data-archived=true]:has(.ws-project-row[aria-current=true]){opacity:1}
 .ws-thread-status{flex-shrink:0;font-size:10px;color:var(--ws-muted)}
