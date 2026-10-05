@@ -558,7 +558,8 @@
       const frame = document.createElement('iframe');
       frame.title = 'Preview of ' + result.path;
       frame.setAttribute('sandbox', 'allow-scripts');
-      frame.srcdoc = result.html || '';
+      const html = result.html || '';
+      frame.srcdoc = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, head => head + previewKeys) : previewKeys + html;
       media.append(frame);
       return;
     }
@@ -649,5 +650,14 @@
       else if(restoreFocus)focusPreview(s);
     }
   }
+  // The sandboxed preview cannot reach the workspace, so it posts shortcut keys
+  // and they are replayed on the iframe element for the workspace handlers.
+  const previewKeys = '<script>addEventListener("keydown",e=>{if(e.ctrlKey||e.metaKey||e.altKey)parent.postMessage({libroFilesKey:{key:e.key,code:e.code,ctrlKey:e.ctrlKey,metaKey:e.metaKey,altKey:e.altKey,shiftKey:e.shiftKey,repeat:e.repeat}},"*");},true);<\/script>';
+  window.addEventListener('message', event => {
+    const key = event.data?.libroFilesKey;
+    if (!key) return;
+    const frame = [...document.querySelectorAll('[data-files] .ws-file-media iframe')].find(item => item.contentWindow === event.source);
+    frame?.dispatchEvent(new KeyboardEvent('keydown', {...key, bubbles:true, cancelable:true}));
+  });
   window.libroFiles = {init,receive,dispose};
 })();
