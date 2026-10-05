@@ -65,8 +65,8 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-thread-row{min-height:30px}
 /* Described rows use the first line for the description and the second for details. */
 .ws-row-two-line{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"icon title title title" ". meta end badge";gap:2px 8px;align-items:center}
-.ws-row-two-line>.material-icons-round{grid-area:icon}
-.ws-row-two-line>span{grid-area:title}
+.ws-row-two-line>.material-icons-round{grid-area:icon;align-self:start;margin-top:2px}
+.ws-row-two-line>span{grid-area:title;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
 .ws-row-two-line>.ws-project-terminal{grid-area:end}
 .ws-row-two-line>.ws-project-shortcut{grid-area:badge}
 .ws-row-meta{grid-area:meta;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;line-height:16px;color:var(--ws-muted)}
