@@ -54,7 +54,7 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-row:has(.ws-project-terminal)>span{flex:0 1 auto}
 .ws-project-row:has(.ws-project-terminal) .ws-project-terminal{margin-right:auto}
 /* A project owns its original branch first, then its worktrees. */
-.ws-project-group>.ws-project-threads{display:flex;flex-direction:column;gap:4px;position:relative;margin:2px 0 8px}
+.ws-project-group>.ws-project-threads{display:flex;flex-direction:column;gap:4px;position:relative;margin:2px 0 8px 10px}
 /* A line ties each thread list to its project; it turns accent beside the active thread. */
 .ws-project-group>.ws-project-threads::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;z-index:1;background:var(--ws-control-line)}
 .ws-project-group>.ws-project-threads .ws-project-item:has(>.ws-thread-row[aria-current=true])::before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;z-index:1;background:var(--ws-accent)}
