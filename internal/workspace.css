@@ -47,7 +47,7 @@ html.dark .ws-grid [data-terminal],html.dark .ws-grid .xterm,html.dark .ws-grid 
 .ws-project-new-thread:disabled{cursor:not-allowed}
 .ws-project-remove:hover{background:color-mix(in srgb,#c9362b 12%,transparent);color:#b42318}
 html.dark .ws-project-remove:hover{color:#ff8a80}
-.ws-project-shortcut{flex:none;min-width:18px;height:18px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;margin-left:auto;border:1px solid var(--ws-line);border-radius:4px;background:transparent;color:var(--ws-muted);font:10px/1 ui-monospace,monospace}
+.ws-project-shortcut{flex:none;min-width:18px;height:18px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;margin-left:auto;border:1px solid var(--ws-line);border-radius:4px;background:var(--ws-raised);color:var(--ws-muted);font:10px/1 ui-monospace,monospace}
 .ws-project-row[aria-current=true] .ws-project-shortcut{border-color:var(--ws-accent);background:var(--ws-accent);color:var(--ws-on-accent)}
 .ws-project-terminal{width:16px;height:16px;flex-shrink:0;fill:none;stroke:#15803d;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 html.dark .ws-project-terminal{stroke:#4ade80}
