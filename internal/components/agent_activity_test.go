@@ -15,10 +15,10 @@ import (
 func TestCodexActivityAcrossPTYChunks(t *testing.T) {
 	a := &agentActivity{kind: "codex"}
 	var got []string
-	for _, chunk := range []string{"Ready in ordinary output", "\x1b", "]0;Work", "ing\x07", "\x1b]2;Thinking\x1b", "\\", "\x1b]0;Ready\x07", "\x1b]2;Working | Fix sidebar\x07", "\x1b]2;Ready | Fix sidebar\x07", "\x1b]777;libro;exited\x07"} {
+	for _, chunk := range []string{"Ready in ordinary output", "\x1b", "]0;Work", "ing\x07", "\x1b]2;Thinking\x1b", "\\", "\x1b]0;Ready\x07", "\x1b]2;Working | Fix sidebar\x07", "\x1b]0;[ ! ] Action Req", "uired | Fix sidebar\x07", "\x1b]2;Ready | Fix sidebar\x07", "\x1b]777;libro;exited\x07"} {
 		a.output([]byte(chunk), func(status string) { got = append(got, status) })
 	}
-	if want := []string{"working", "working", "done", "working", "title:Fix sidebar", "done", "title:Fix sidebar", "exited"}; !reflect.DeepEqual(got, want) {
+	if want := []string{"working", "working", "done", "working", "title:Fix sidebar", "input", "title:Fix sidebar", "done", "title:Fix sidebar", "exited"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("statuses = %v, want %v", got, want)
 	}
 }
@@ -52,8 +52,8 @@ func TestAgentLaunchIntegration(t *testing.T) {
 			if kind != "opencode" && !strings.Contains(command, map[string]string{"codex": "mcp_servers.libro", "claude": "--mcp-config", "pi": "--append-system-prompt"}[kind]) {
 				t.Fatal("Libro discovery missing")
 			}
-			if kind == "codex" && !strings.Contains(command, `tui.terminal_title=["run-state","session-id","thread-name"]`) {
-				t.Fatal("Codex titles must include the session ID for resume")
+			if kind == "codex" && !strings.Contains(command, `tui.terminal_title=["run-state","session-id","thread-name","activity"]`) {
+				t.Fatal("Codex titles must include the session ID for resume and activity for questions")
 			}
 			if kind != "opencode" && !strings.Contains(command, "Do not launch a separate application server") {
 				t.Fatal("application ownership instructions missing at startup")
@@ -107,7 +107,22 @@ func TestClaudeActivityHooks(t *testing.T) {
 		t.Fatalf("Libro permissions = %v", config.Permissions.Allow)
 	}
 	for _, step := range []struct{ event, input, want string }{
-		{"UserPromptSubmit", "", "working"}, {"Stop", `{"background_tasks":[{"id":"b1"}]}`, "working"},
+		{"UserPromptSubmit", "", "working"},
+		{"PreToolUse", `{"tool_name":"Bash"}`, "working"},
+		{"PreToolUse", `{"tool_name":"AskUserQuestion"}`, "done"},
+		{"PreToolUse", `{"agent_id":"background","tool_name":"Bash"}`, "done"},
+		{"PostToolUse", `{"agent_id":"background","tool_name":"Bash"}`, "done"},
+		{"PostToolUseFailure", `{"agent_id":"background","tool_name":"Bash"}`, "done"},
+		{"PostToolUse", `{"tool_name":"AskUserQuestion"}`, "working"},
+		{"PreToolUse", "{\n  \"tool_name\": \"AskUserQuestion\"\n}", "done"},
+		{"PostToolUseFailure", `{"tool_name":"AskUserQuestion"}`, "working"},
+		{"PreToolUse", `{"tool_name":"Bash","tool_input":{"command":"echo \"tool_name\":\"AskUserQuestion\""}}`, "working"},
+		{"PreToolUse", `{"tool_name":"ExitPlanMode"}`, "done"},
+		{"PostToolUse", `{"tool_name":"ExitPlanMode"}`, "working"},
+		{"PermissionRequest", `{"agent_id":"background","tool_name":"Bash"}`, "working"},
+		{"PermissionRequest", `{"tool_name":"Bash"}`, "done"},
+		{"PostToolUse", `{"tool_name":"Bash"}`, "working"},
+		{"Stop", `{"background_tasks":[{"id":"b1"}]}`, "working"},
 		{"Stop", `{"background_tasks":[]}`, "done"}, {"Stop", "{}", "done"},
 		{"StopFailure", "", "error"}, {"SessionEnd", "", "idle"}, {"SessionStart", "", "idle"},
 	} {
@@ -157,6 +172,18 @@ INSERT INTO thread_spawn_edges VALUES ('parent', 'child', 'open');`, child); err
 			t.Fatalf("after %s: got %s, want %s", step.input, s.agentStatus, step.want)
 		}
 	}
+	// Input must remain visible while child agents run, including blink frames.
+	for _, title := range []string{"[ ! ] Action Required", "[ . ] Action Required"} {
+		s.activity.output([]byte("\x1b]0;"+title+"\x07"), s.setAgentStatus)
+		if s.agentStatus != "done" {
+			t.Fatalf("question status = %s while spawned agent runs", s.agentStatus)
+		}
+	}
+	s.setAgentStatus("working") // The answer resumes the parent turn.
+	if s.agentStatus != "working" {
+		t.Fatalf("answer status = %s", s.agentStatus)
+	}
+	s.setAgentStatus("done")
 	write("task_started", "task_complete")
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(50 * time.Millisecond) {
 		s.mu.Lock()
@@ -285,10 +312,15 @@ func TestCodexActivityNewSession(t *testing.T) {
 	for _, step := range []struct{ title, want string }{
 		{"Ready", "idle"},
 		{"Ready | " + old, "idle"},
+		{"Action Required | " + old, "done"}, // A startup question also needs attention.
 		{"Working | " + old, "working"},
 		{"Working | " + old + " ⠼ | ⠼", "working"},
 		{"Working | " + old, "working"}, // The thread name blinks while working.
 		{"Working | " + old + " | Say hi", "working"},
+		{"Waiting | " + old + " | Say hi", "working"}, // Background commands are still work.
+		{"[ ! ] Action Required | " + old + " | Say hi", "done"},
+		{"[ . ] Action Required | " + old + " | Say hi", "done"},
+		{"Thinking | " + old + " | Say hi", "working"},
 		{"Ready | " + old + " | Say hi", "done"},
 		{"Ready", "idle"},
 		{"Ready | " + next, "idle"},

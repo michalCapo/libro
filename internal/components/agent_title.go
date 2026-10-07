@@ -10,7 +10,7 @@ import (
 	"unicode"
 )
 
-var codexTitleState = regexp.MustCompile(`^(Working|Thinking|Waiting|Ready|Starting)(?:\s*[·|—-]\s*|$)`)
+var codexTitleState = regexp.MustCompile(`^(Working|Thinking|Waiting|Ready|Starting|(?:\[ [!.] \] )?Action Required)(?:\s*[·|—-]\s*|$)`)
 
 // Codex also uses an abbreviated UUID (ending in "...") as its unnamed topic.
 var sessionUUID = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f.-]+(?:…)?(?:\s|$)`)

@@ -10,7 +10,7 @@ test('interaction acknowledges only its project and a new completion restores th
   const rows = ['project', 'project/branch'].map(key => ({
     dataset: { projectKey: key, kind: key.includes('/') ? 'worktree' : 'project' },
     icon: {}, label: '',
-    querySelector(selector) { return selector === 'i' ? this.icon : { textContent: key } },
+    querySelector(selector) { return selector === 'i' ? this.icon : selector === 'span' ? { textContent: key } : null },
     setAttribute(name, value) { this.label = value },
   }))
   const grids = rows.map((row, i) => ({ dataset: { workspaceProject: row.dataset.projectKey }, frames: [{ dataset: { appId: String(i), dock: 'center' } }] }))

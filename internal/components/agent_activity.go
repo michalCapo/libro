@@ -79,7 +79,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 	libroMCP := map[string]any{"command": executable, "args": []string{"mcp"}}
 	a := &agentActivity{kind: kind}
 	if kind == "codex" {
-		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","session-id","thread-name"]'` + " -c " + shellQuote("mcp_servers.libro.command="+string(executableJSON)) + " -c " + shellQuote(`mcp_servers.libro.args=["mcp"]`) + " -c " + shellQuote(`mcp_servers.libro.env_vars=["LIBRO_INSTANCE","LIBRO_PORT","LIBRO_APPLICATION_PATH"]`) + " -c " + shellQuote("developer_instructions="+string(instructionsJSON)) + parts[2]), a, nil
+		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","session-id","thread-name","activity"]'` + " -c " + shellQuote("mcp_servers.libro.command="+string(executableJSON)) + " -c " + shellQuote(`mcp_servers.libro.args=["mcp"]`) + " -c " + shellQuote(`mcp_servers.libro.env_vars=["LIBRO_INSTANCE","LIBRO_PORT","LIBRO_APPLICATION_PATH"]`) + " -c " + shellQuote("developer_instructions="+string(instructionsJSON)) + parts[2]), a, nil
 	}
 	dir, err := os.MkdirTemp("", "libro-agent-")
 	if err != nil {
@@ -92,10 +92,18 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 	switch kind {
 	case "claude":
 		hooks := map[string]any{}
-		for event, state := range map[string]string{"UserPromptSubmit": "working", "PreToolUse": "working", "Stop": "done", "StopFailure": "error", "SessionEnd": "idle", "SessionStart": "idle"} {
+		for event, state := range map[string]string{"UserPromptSubmit": "working", "PreToolUse": "working", "PostToolUse": "working", "PostToolUseFailure": "working", "PermissionRequest": "done", "Stop": "done", "StopFailure": "error", "SessionEnd": "idle", "SessionStart": "idle"} {
 			hookCommand := "printf '%s' " + shellQuote(state) + " > " + shellQuote(a.path)
 			if event == "SessionStart" || event == "UserPromptSubmit" {
 				hookCommand = "cat > " + shellQuote(filepath.Join(dir, "session")) + "; " + hookCommand
+			}
+			if event == "PreToolUse" {
+				// Matching hooks run in parallel. Use one writer for both states.
+				hookCommand = `if printf '%s' "$hook_input" | grep -Eq '"tool_name"[[:space:]]*:[[:space:]]*"(AskUserQuestion|ExitPlanMode)"'; then s=done; else s=working; fi; printf '%s' "$s" > ` + shellQuote(a.path)
+			}
+			if event == "PreToolUse" || event == "PostToolUse" || event == "PostToolUseFailure" || event == "PermissionRequest" {
+				// Subagent tools must not clear a question in the main conversation.
+				hookCommand = `hook_input=$(cat); if printf '%s' "$hook_input" | grep -Eq '"agent_id"[[:space:]]*:'; then exit 0; fi; ` + hookCommand
 			}
 			if event == "Stop" {
 				// Background shells and agents wake Claude again when they finish.
@@ -300,7 +308,7 @@ func (s *TerminalSession) setAgentStatus(status string) {
 		return
 	}
 	switch status {
-	case "idle", "working", "done", "error", "exited":
+	case "idle", "working", "done", "input", "error", "exited":
 	default:
 		return
 	}
@@ -346,6 +354,10 @@ func (s *TerminalSession) updateAgentStatus(status string) {
 	// A freshly opened prompt is idle, not a completed task.
 	if status == "done" && s.activity != nil && s.activity.kind == "codex" && !s.agentWorked {
 		status = "idle"
+	}
+	// A question needs attention even while spawned agents still work.
+	if status == "input" {
+		status = "done"
 	}
 	if waiting && status == "done" {
 		status = "working"
@@ -458,7 +470,7 @@ func openCodexStateDB(home string) *sql.DB {
 	return db
 }
 
-var codexStates = map[string]bool{"Working": true, "Thinking": true, "Waiting": true, "Ready": true, "Starting": true, "": true}
+var codexStates = map[string]bool{"Working": true, "Thinking": true, "Waiting": true, "Ready": true, "Starting": true, "Action Required": true, "[ ! ] Action Required": true, "[ . ] Action Required": true, "": true}
 
 // Parse only OSC title reports, including sequences split across PTY reads.
 // Arbitrary terminal text and periods without output are never completion signals.
@@ -497,6 +509,8 @@ func (a *agentActivity) output(data []byte, report func(string)) {
 						report("working")
 					case "Ready":
 						report("done")
+					case "Action Required", "[ ! ] Action Required", "[ . ] Action Required":
+						report("input")
 					case "Starting", "":
 						report("idle")
 					}
