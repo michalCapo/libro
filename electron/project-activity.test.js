@@ -8,7 +8,7 @@ const source = workspace.slice(workspace.indexOf('  const acknowledgedAgents =')
 test('interaction acknowledges only its project and a new completion restores the icon', () => {
   const listeners = {}
   const rows = ['project', 'project/branch'].map(key => ({
-    dataset: { projectKey: key, kind: key.includes('/') ? 'worktree' : 'project' },
+    dataset: { projectKey: key, kind: key.includes('/') ? 'worktree' : 'base' },
     icon: {}, label: '',
     querySelector(selector) { return selector === 'i' ? this.icon : selector === 'span' ? { textContent: key } : null },
     setAttribute(name, value) { this.label = value },
@@ -16,7 +16,7 @@ test('interaction acknowledges only its project and a new completion restores th
   const grids = rows.map((row, i) => ({ dataset: { workspaceProject: row.dataset.projectKey }, frames: [{ dataset: { appId: String(i), dock: 'center' } }] }))
   const context = vm.createContext({
     window: { __libroAgentStatuses: { 0: 'done', 1: 'done' }, addEventListener(type, fn) { listeners[type] = fn } },
-    document: { querySelectorAll(selector) { return selector === '.ws-project-agent' ? [] : selector === '.ws-project-row' ? rows : grids }, addEventListener(type, fn) { listeners[type] = fn } },
+    document: { querySelectorAll(selector) { return selector === '.ws-project-agent' ? [] : selector === '.ws-project-row:not([data-kind=project])' ? rows : grids }, addEventListener(type, fn) { listeners[type] = fn } },
     frames: grid => grid.frames,
   })
   vm.runInContext(source, context)
@@ -30,7 +30,7 @@ test('interaction acknowledges only its project and a new completion restores th
     assert.equal(rows[0].icon.textContent, 'check_circle_outline')
     listeners[type]({ type, target: { closest(selector) { return selector === '.ws-project' ? { querySelector() { return grids[0] } } : null } } })
     render() // Repeated status snapshots must not bring back the checkmark.
-    assert.equal(rows[0].icon.textContent, 'folder_open')
+    assert.equal(rows[0].icon.textContent, 'chat_bubble_outline')
     assert.equal(rows[0].label, 'project')
     assert.equal(rows[1].icon.textContent, 'check_circle_outline')
   }

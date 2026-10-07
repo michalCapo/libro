@@ -62,6 +62,8 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-threads .ws-project-threads{display:contents}
 .ws-project-group>.ws-project-threads :is(.ws-project-item,.ws-project-row){border-radius:0}
 .ws-project-threads:empty,.ws-project-group>.ws-project-threads:not(:has(.ws-project-item)){display:none}
+/* Projects without open threads fade until hovered or focused. */
+.ws-project-group:not(:has(.ws-project-threads .ws-project-item))>.ws-project-item:not(:is(:hover,:focus-within,:has(.ws-project-row[aria-current=true]))){opacity:.52}
 .ws-thread-row{min-height:30px}
 /* Described rows use the first line for the description and the second for details. */
 .ws-row-two-line{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"icon title title title" ". meta end badge";gap:2px 8px;align-items:center}

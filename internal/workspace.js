@@ -747,13 +747,14 @@
       projects.set(grid.dataset.workspaceProject, states.includes('working') ? 'working' :
         states.includes('done') && states.every(state => state === 'done' || state === 'idle') ? 'done' : '');
     });
-    document.querySelectorAll('.ws-project-row').forEach(row => {
+    // Project rows keep their folder icon; their threads show agent activity.
+    document.querySelectorAll('.ws-project-row:not([data-kind=project])').forEach(row => {
       const meta = row.querySelector('.ws-row-meta');
       if (meta) meta.replaceChildren(node('span', 'ws-row-branch', row.dataset.branch), ...[agentNames.get(row.dataset.projectKey)].filter(Boolean).map(names => ' · ' + names));
       const state = projects.get(row.dataset.projectKey) || '';
       if (row.dataset.agentStatus === state) return;
       row.dataset.agentStatus = state;
-      row.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle_outline' : row.dataset.kind === 'worktree' ? 'account_tree' : ['thread', 'base'].includes(row.dataset.kind) ? 'chat_bubble_outline' : 'folder_open';
+      row.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle_outline' : row.dataset.kind === 'worktree' ? 'account_tree' : 'chat_bubble_outline';
       const label = row.querySelector('span').textContent;
       row.setAttribute('aria-label', label + (state === 'working' ? ': agents working' : state === 'done' ? ': all agents done' : ''));
     });
