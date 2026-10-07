@@ -679,7 +679,23 @@ func (s *TerminalSession) handleInputBytes(data []byte) {
 	if closed || !writable || ptyFile == nil {
 		return
 	}
+	if s.activity != nil && s.activity.kind == "claude" {
+		data = claudeEffortKeys(data)
+	}
 	_, _ = ptyFile.Write(data)
+}
+
+// claudeEffortKeys maps Alt+, and Alt+. to a session-only effort step, like Codex.
+// Claude has no direct binding, so it opens the model picker (Alt+P),
+// moves effort left or right, and applies it to this session only (s).
+func claudeEffortKeys(data []byte) []byte {
+	switch string(data) {
+	case "\x1b,":
+		return []byte("\x1bp\x1b[Ds")
+	case "\x1b.":
+		return []byte("\x1bp\x1b[Cs")
+	}
+	return data
 }
 
 func (s *TerminalSession) handleMessage(msg terminalWSMessage) {

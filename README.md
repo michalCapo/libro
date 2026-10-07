@@ -189,6 +189,7 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 | `Ctrl + P` | Pick a project |
 | `Ctrl + 1` – `Ctrl + 9` | Go to a project |
 | `Ctrl + Shift + P` | Show or hide the project sidebar |
+| `Alt + ,` / `Alt + .` | Lower / raise Claude effort for this session (Codex has this built in) |
 
 ### Panels and tools
 
