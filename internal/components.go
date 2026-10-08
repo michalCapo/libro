@@ -3159,6 +3159,19 @@ func terminalFrameSetupJS() string {
 				}
 			}
 
+			function hasDraggedFiles(ev) {
+				var types = ev.dataTransfer && ev.dataTransfer.types;
+				return !!types && Array.prototype.indexOf.call(types, 'Files') !== -1;
+			}
+
+			// Paste each path on its own so Claude and Codex attach dropped
+			// images. POSIX paths use backslash escapes like macOS terminals,
+			// which stay valid shell input; Windows paths use double quotes.
+			function dropPathText(path) {
+				if (/^([A-Za-z]:)?\\/.test(path)) return /\s/.test(path) ? '"' + path + '"' : path;
+				return path.replace(/[\s'"\\$\x60!&|;<>()[\]{}*?#^]/g, '\\$&');
+			}
+
 			function stripTerminalFocusReports(data) {
 				// TUI apps such as nvim and pi agent often redraw on xterm's
 				// DEC focus in/out reports. Libro already tracks selected panels,
@@ -3277,6 +3290,25 @@ func terminalFrameSetupJS() string {
 						});
 					}
 					el.addEventListener('copy', function(ev) { copyTerminalSelection(term, ev); });
+					el.addEventListener('dragover', function(ev) {
+						if (!hasDraggedFiles(ev)) return;
+						ev.preventDefault();
+						ev.dataTransfer.dropEffect = 'copy';
+					});
+					el.addEventListener('drop', function(ev) {
+						if (!hasDraggedFiles(ev)) return;
+						ev.preventDefault();
+						var pathForFile = window.libroElectron && window.libroElectron.pathForFile;
+						var files = Array.from(ev.dataTransfer.files || []);
+						// Control characters could end the bracketed paste early.
+						var paths = pathForFile ? files.map(function(file) { return pathForFile(file) || ''; }).filter(function(path) { return path && !/[\x00-\x1f\x7f]/.test(path); }) : [];
+						var connected = controller.ws && controller.ws.readyState === WebSocket.OPEN;
+						var error = !pathForFile ? 'Drop files in the Libro desktop app' : !connected ? 'Terminal is not connected' :
+							paths.length < files.length ? 'Skipped files without a usable local path' : '';
+						if (connected) paths.forEach(function(path) { term.paste(dropPathText(path) + ' '); });
+						if (error && window.__libroShowToast) window.__libroShowToast(error, '', 'error');
+						if (window.libroWorkspace) window.libroWorkspace.select(appID);
+					});
 					var controller = { initialDark: initialDark, term: term, fit: fit, webgl: webgl, ws: null, closed: false, reconnectTimer: null, attempts: 0, lastCols: 0, lastRows: 0, lastFitWidth: 0, lastFitHeight: 0, fitTimer: null, fitFrame: null, pendingFitForce: false, lastFocusAt: 0 };
 					terminals.set(el, controller);
 					applyTerminalTheme(controller);
