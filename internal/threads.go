@@ -131,6 +131,20 @@ func enabledAgentPlugin(id string) bool {
 	return false
 }
 
+// defaultAgentID returns the default thread agent while it is still enabled.
+func defaultAgentID() string {
+	if id := defaultThreadAgent(); enabledAgentPlugin(id) {
+		return id
+	}
+	return ""
+}
+
+// startAgentJS opens an agent in a new workspace. The start is skipped if the
+// user has switched away or an agent is already open there.
+func startAgentJS(sid, workspace, agentID string) r.Result {
+	return r.Result{}.Run(actionAppStart.Call(actionAppStartInput{SID: sid, Plugin: agentID, Type: "terminal", Dock: "center", Writable: new(true), AutolaunchProject: new(workspace)}))
+}
+
 // createProjectWorktree always branches from the original project, even when
 // the request comes from one of its existing worktrees.
 func (sm *StateManager) createProjectWorktree(sid, projectID, branch string) (string, error) {
@@ -192,8 +206,11 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) r.Re
 				return r.Result{}.Run(r.Notify("error", "Could not create project thread: "+err.Error())), nil
 			}
 			response := switchWorkspace(sid, workspace)
+			if agentID == "" {
+				agentID = defaultAgentID()
+			}
 			if agentID != "" {
-				response = r.Merge(response, r.Result{}.Run(actionAppStart.Call(actionAppStartInput{SID: sid, Plugin: agentID, Type: "terminal", Dock: "center", Writable: new(true)})))
+				response = r.Merge(response, startAgentJS(sid, workspace, agentID))
 			}
 			return response, nil
 		}

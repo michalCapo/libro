@@ -714,7 +714,7 @@ func Run(assets embed.FS, desktop bool) error {
 		sid := inputSID(in.SID)
 		if project, ok := inputField(in.AutolaunchProject); ok {
 			state := sm.Get(sid)
-			if state.ActiveProject != project || projectAutolaunchPlugin(state) == nil {
+			if state.ActiveProject != project || slices.ContainsFunc(state.Apps, isAgentApp) || state.thread(project) != nil && projectAutolaunchPlugin(state) == nil {
 				return r.Result{}, nil
 			}
 		}
@@ -1538,7 +1538,7 @@ func Run(assets embed.FS, desktop bool) error {
 		} else {
 			jsSwitch = switchProjectJS(vtName, renderMainArea(state, sid))
 		}
-		return r.Result{}.
+		resp := r.Result{}.
 			Add(projectsJS(state)).
 			Morph(TopBarID, renderTopBar(state, sid)).
 			Add(closeDevtoolsJS).
@@ -1546,7 +1546,11 @@ func Run(assets embed.FS, desktop bool) error {
 			Add(pendingTerminalsJS(state, sid)).
 			Add(updateHashJS(vtName)).
 			Add(projectAutolaunchJS(state, sid)).
-			Add(focusSelectedAppJS(state)), nil
+			Add(focusSelectedAppJS(state))
+		if agentID := defaultAgentID(); agentID != "" {
+			resp = r.Merge(resp, startAgentJS(sid, vtName, agentID))
+		}
+		return resp, nil
 	})
 
 	components.RegisterTerminalRoutes(app, tm, func(sid, terminalID string) bool {
