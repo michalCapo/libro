@@ -284,16 +284,28 @@ func TestDefaultThreadAgent(t *testing.T) {
 	if got := projectAutolaunchPlugin(state); got == nil || got.ID != "codex" {
 		t.Fatalf("thread preference not persisted: %+v", got)
 	}
-	state.ActiveProject = "project"
-	if got := projectAutolaunchPlugin(state); got != nil {
-		t.Fatalf("base workspace must start empty: %+v", got)
-	}
-	state.ActiveProject = "thread:test"
-	state.Apps = []Application{{Type: AppTypeTerminal, PluginID: "pi", Dock: "center"}}
-	if projectAutolaunchPlugin(state) != nil {
-		t.Fatal("duplicate agent launched")
+	for _, workspace := range []string{"project", "project/branch", "thread:test"} {
+		state.ActiveProject = workspace
+		state.Apps = []Application{{Type: AppTypeURL, PluginID: "files", Dock: "right"}}
+		if got := projectAutolaunchPlugin(state); got == nil || got.ID != "codex" {
+			t.Fatalf("default agent not applied to %s: %+v", workspace, got)
+		}
+		state.Apps = append(state.Apps, Application{Type: AppTypeTerminal, PluginID: "pi", Dock: "center"})
+		if projectAutolaunchPlugin(state) != nil {
+			t.Fatalf("duplicate agent launched in %s", workspace)
+		}
 	}
 	state.Apps = nil
+	state.ActiveProject = ""
+	if projectAutolaunchPlugin(state) != nil {
+		t.Fatal("launched an agent without a workspace")
+	}
+	state.ActiveProject = "thread:test"
+	state.Threads[0].Managed = true
+	if projectAutolaunchPlugin(state) != nil {
+		t.Fatal("launched an agent in a managed child thread")
+	}
+	state.Threads[0].Managed = false
 	if err := saveAgentSettings(map[string]string{"codex": "codex"}, map[string]bool{"codex": true}, nil, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -308,6 +320,12 @@ func TestDefaultThreadAgent(t *testing.T) {
 	}
 	if defaultThreadAgent() != "" {
 		t.Fatal("manual selection not saved")
+	}
+	for _, workspace := range []string{"project", "project/branch", "thread:test"} {
+		state.ActiveProject = workspace
+		if projectAutolaunchPlugin(state) != nil {
+			t.Fatalf("launched an agent with manual selection in %s", workspace)
+		}
 	}
 }
 

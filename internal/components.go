@@ -2904,10 +2904,10 @@ addEventListener('beforeunload',function(){window.__libroLeaving=true;});
 (function _initHash(){
 	if(typeof __ws==='undefined'||!__ws.connected||!__ws.connected()){setTimeout(_initHash,50);return;}
 	var hash=location.hash.replace('#','');
-	if(hash){
-		setTimeout(function(){__ws.call('project.switch',{sid:'%[1]s',name:hash});},100);
-	}
 	var proj=hash||window.__libroActiveProject||'';
+	if(proj){
+		setTimeout(function(){__ws.call('project.switch',{sid:'%[1]s',name:proj});},100);
+	}
 	if(proj&&!hash){history.replaceState(null,'','#'+proj);}
 	document.title=proj?proj+' \u2014 Libro':'Libro';
 })();

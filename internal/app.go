@@ -143,11 +143,11 @@ func stateWithoutApps(state *AppState, removed []Application) *AppState {
 }
 
 func switchToProjectName(sid, name string) r.Result {
-	result, _ := switchToProjectNameChecked(sid, name)
+	result, _ := switchToProjectWithAgent(sid, name, "")
 	return result
 }
 
-func switchToProjectNameChecked(sid, name string) (r.Result, bool) {
+func switchToProjectWithAgent(sid, name, agentID string) (r.Result, bool) {
 	if name == "" {
 		return r.Result{}, false
 	}
@@ -180,6 +180,10 @@ func switchToProjectNameChecked(sid, name string) (r.Result, bool) {
 		jsSwitch = r.Merge(switchProjectJS(name, renderMainArea(contentState, sid)), reparentProjectAppsJS(movedProjectApps, name))
 	}
 	sm.IsProjectRendered(sid, name)
+	autolaunch := projectAutolaunchJS(state, sid)
+	if agentID != "" {
+		autolaunch = startAgentJS(sid, name, agentID)
+	}
 
 	resp := r.Result{}.
 		Add(projectsJS(state)).
@@ -189,7 +193,7 @@ func switchToProjectNameChecked(sid, name string) (r.Result, bool) {
 		Add(pendingTerminalsJS(state, sid)).
 		Add(navigateJS(state, sid)).
 		Add(updateHashJS(name)).
-		Add(projectAutolaunchJS(state, sid)).
+		Add(autolaunch).
 		Add(focusSelectedAppJS(state))
 	return resp, true
 }
@@ -342,7 +346,7 @@ func (sm *StateManager) workspaceApp(sid, appID string) (Application, string, st
 	return Application{}, "", "", false
 }
 
-// Autolaunch starts the thread's agent when a thread has no agent panel.
+// Autolaunch starts the workspace's agent when it has no agent panel.
 func projectAutolaunchJS(state *AppState, sid string) r.Result {
 	plugin := projectAutolaunchPlugin(state)
 	if plugin == nil {
@@ -352,11 +356,16 @@ func projectAutolaunchJS(state *AppState, sid string) r.Result {
 }
 
 func projectAutolaunchPlugin(state *AppState) *Plugin {
-	thread := state.thread(state.ActiveProject)
-	if thread == nil || thread.Managed || slices.ContainsFunc(state.Apps, isAgentApp) {
+	if state.ActiveProject == "" || slices.ContainsFunc(state.Apps, isAgentApp) {
 		return nil
 	}
-	agent := thread.AgentID
+	agent := ""
+	if thread := state.thread(state.ActiveProject); thread != nil {
+		if thread.Managed {
+			return nil
+		}
+		agent = thread.AgentID
+	}
 	if agent == "" {
 		agent = defaultThreadAgent()
 	}
@@ -1366,13 +1375,13 @@ func Run(assets embed.FS, desktop bool) error {
 		return response, nil
 	})
 
-	registerThreadActions(app, switchToProjectName)
+	registerThreadActions(app, switchToProjectWithAgent)
 	registerFinishThreadActions(app)
 	// Switch active project
 	r.RegisterAction(app, "project.switch", func(_ *r.Context, in actionProjectSwitchInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		name := in.Name
-		resp, ok := switchToProjectNameChecked(sid, name)
+		resp, ok := switchToProjectWithAgent(sid, name, "")
 		if !ok {
 			return r.Result{}.Run(r.Notify("error", "Project not found")), nil
 		}
@@ -1547,9 +1556,6 @@ func Run(assets embed.FS, desktop bool) error {
 			Add(updateHashJS(vtName)).
 			Add(projectAutolaunchJS(state, sid)).
 			Add(focusSelectedAppJS(state))
-		if agentID := defaultAgentID(); agentID != "" {
-			resp = r.Merge(resp, startAgentJS(sid, vtName, agentID))
-		}
 		return resp, nil
 	})
 

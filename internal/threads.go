@@ -131,14 +131,6 @@ func enabledAgentPlugin(id string) bool {
 	return false
 }
 
-// defaultAgentID returns the default thread agent while it is still enabled.
-func defaultAgentID() string {
-	if id := defaultThreadAgent(); enabledAgentPlugin(id) {
-		return id
-	}
-	return ""
-}
-
 // startAgentJS opens an agent in a new workspace. The start is skipped if the
 // user has switched away or an agent is already open there.
 func startAgentJS(sid, workspace, agentID string) r.Result {
@@ -174,7 +166,7 @@ func (sm *StateManager) createProjectWorktree(sid, projectID, branch string) (st
 	return "", fmt.Errorf("project not found")
 }
 
-func registerThreadActions(app *r.App, switchWorkspace func(string, string) r.Result) {
+func registerThreadActions(app *r.App, switchWorkspace func(string, string, string) (r.Result, bool)) {
 	actionThreadCreate = r.RegisterAction(app, "thread.create", func(_ *r.Context, in actionThreadCreateInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		name := in.Name
@@ -205,13 +197,7 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) r.Re
 			if err != nil {
 				return r.Result{}.Run(r.Notify("error", "Could not create project thread: "+err.Error())), nil
 			}
-			response := switchWorkspace(sid, workspace)
-			if agentID == "" {
-				agentID = defaultAgentID()
-			}
-			if agentID != "" {
-				response = r.Merge(response, startAgentJS(sid, workspace, agentID))
-			}
+			response, _ := switchWorkspace(sid, workspace, agentID)
 			return response, nil
 		}
 		thread := Thread{ID: "thread:" + hex.EncodeToString(random[:]), Name: name, Project: project, Path: path, AgentID: agentID}
@@ -224,7 +210,8 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string) r.Re
 		sm.mu.Lock()
 		sm.states[sid].Threads = append(sm.states[sid].Threads, thread)
 		sm.mu.Unlock()
-		return switchWorkspace(sid, thread.ID), nil
+		response, _ := switchWorkspace(sid, thread.ID, agentID)
+		return response, nil
 	})
 	r.RegisterAction(app, "thread.rename", func(_ *r.Context, in actionThreadRenameInput) (r.Result, error) {
 		sid := inputSID(in.SID)
