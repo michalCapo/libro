@@ -817,7 +817,10 @@ func Run(assets embed.FS, desktop bool) error {
 				return r.Result{}, nil
 			}
 		}
-		width := defaultAppWidth(Application{Type: AppType(appType), Command: command, PluginID: pluginID})
+		width := DBDefaultPanelWidth()
+		if w, ok := sm.ToolWidth(sid); ok && appDock(candidate) == "right" {
+			width = w
+		}
 		if val, ok := inputField(in.Width); ok && val != "" {
 			width = Width(val)
 		}
@@ -1105,8 +1108,7 @@ func Run(assets embed.FS, desktop bool) error {
 		if sm.SetAppWidthByID(sid, appID, width) < 0 {
 			return r.Result{}, nil
 		}
-		state := sm.Get(sid)
-		return resizeJS(state, width, appID), nil
+		return resizeJS(sm.Get(sid), width, appID, sm.SyncToolWidth(sid, appID)...), nil
 	})
 	// Toggle full width while keeping the other panels visible.
 	r.RegisterAction(app, "app.resize.max.toggle", func(_ *r.Context, in actionAppResizeMaxToggleInput) (r.Result, error) {
@@ -1119,7 +1121,7 @@ func Run(assets embed.FS, desktop bool) error {
 		if appID == "" {
 			return r.Result{}, nil
 		}
-		return resizeJS(sm.Get(sid), width, appID), nil
+		return resizeJS(sm.Get(sid), width, appID, sm.SyncToolWidth(sid, appID)...), nil
 	})
 	// Toggle maximize — switch selected app between full width and previous width
 	r.RegisterAction(app, "app.maximize.toggle", func(_ *r.Context, in sessionInput) (r.Result, error) {
@@ -1148,8 +1150,7 @@ func Run(assets embed.FS, desktop bool) error {
 		if appID == "" {
 			return r.Result{}, nil
 		}
-		state := sm.Get(sid)
-		return resizeJS(state, newWidth, appID), nil
+		return resizeJS(sm.Get(sid), newWidth, appID, sm.SyncToolWidth(sid, appID)...), nil
 	})
 	// Select specific app - JS-only update to preserve iframes
 	actionAppSelect = r.RegisterAction(app, "app.select", func(_ *r.Context, in actionAppSelectInput) (r.Result, error) {
@@ -1180,7 +1181,11 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 		stateBefore := sm.Get(sid)
 		hadApps := len(stateBefore.Apps)
-		sm.InsertApp(sid, "", DBDefaultToolPanelWidth(), "New Tab", insertIdx)
+		width := DBDefaultPanelWidth()
+		if w, ok := sm.ToolWidth(sid); ok {
+			width = w
+		}
+		sm.InsertApp(sid, "", width, "New Tab", insertIdx)
 		state := sm.Get(sid)
 		topBarJS := r.Result{}.Morph(TopBarID, renderTopBar(state, sid))
 		projJS := projectsJS(state)

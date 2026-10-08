@@ -5,6 +5,8 @@
   let maximized = '';
   let keepBottomHidden = false;
   const dockStates = new Map();
+  // Agents fill the space left by tools but never shrink below this width.
+  const agentMinWidth = 600;
   function dockState(grid) {
     const key = grid.dataset.workspaceProject;
     if (!dockStates.has(key)) dockStates.set(key, {right:'', hidden:new Set(), bottom:false});
@@ -1200,7 +1202,10 @@
         prefs.sidebarWidth = Math.round(Math.max(180, Math.min(value, Math.min(480, innerWidth - 48))));
         root.style.setProperty('--ws-projects', prefs.sidebarWidth + 'px');
       } else if (tools) {
-        const width = Math.round(Math.max(320, Math.min(value, host.parentElement.clientWidth, window.__libroAppWidthMaxPixel() || 2560)));
+        // Side by side, the shared edge resizes the agent too, so keep its minimum width.
+        const grid = host.parentElement;
+        const agents = host.dataset.toolOverlay === 'true' ? 0 : grid.querySelectorAll(':scope > [data-dock=center][data-dock-visible=true]').length;
+        const width = Math.round(Math.max(320, Math.min(value, grid.clientWidth - agents * agentMinWidth, window.__libroAppWidthMaxPixel() || 2560)));
         host.style.width = width + 'px';
         host.style.flex = '0 0 ' + width + 'px';
       } else {
@@ -1277,10 +1282,11 @@
     const terminal = terminals.find(frame => frame.dataset.appId === state.bottomID) || terminals[0];
     const bottomVisible = terminal && state.bottom && !full;
     if (grid === activeGrid()) document.querySelectorAll('#workspace-tool-buttons [data-tool-id]').forEach(entry => entry.setAttribute('aria-pressed', String(!full && entry.dataset.toolId === right[0]?.dataset.plugin)));
-    const overlay = !full && right.length > 0 && (center.length ? center.reduce((sum, frame) => sum + width(frame), 0) : 320) + width(right[0]) > grid.clientWidth;
+    // Tools overlay agents when both cannot fit.
+    const agentMin = Math.min(agentMinWidth, grid.clientWidth);
+    const overlay = !full && right.length > 0 && (center.length ? center.length * agentMin : 320) + width(right[0]) > grid.clientWidth;
     const visible = full ? [full] : [...center, ...right];
-    const columns = (overlay ? center : visible).map(frame => full ? grid.clientWidth + 'px' : width(frame) + 'px');
-    if (center.length && !full) columns[center.length - 1] = 'minmax(' + width(center.at(-1)) + 'px, 1fr)';
+    const columns = (overlay ? center : visible).map(frame => full ? grid.clientWidth + 'px' : frame.dataset.dock === 'center' ? 'minmax(' + agentMin + 'px, 1fr)' : width(frame) + 'px');
     if (!center.length && !full) columns.unshift('minmax(0, 1fr)');
     grid.style.gridTemplateColumns = columns.join(' ') || 'minmax(0, 1fr)';
     const terminalHeight = Number.isFinite(prefs.terminalHeight) ? Math.max(80, Math.min(prefs.terminalHeight, grid.clientHeight - 120)) + 'px' : 'minmax(80px, 25.2875%)';
@@ -1295,9 +1301,7 @@
       const isOverlay = overlay && frame === right[0];
       frame.dataset.toolOverlay = String(isOverlay);
       frame.style.left = isOverlay ? Math.max(0, grid.clientWidth - width(frame)) + grid.scrollLeft + 'px' : '';
-      // Keep agent panels anchored to the left while the flexible column
-      // absorbs spare space before right-docked tools.
-      frame.style.justifySelf = 'start';
+      frame.style.justifySelf = frame.dataset.dock === 'center' ? 'stretch' : 'start';
       frame.style.gridRow = frame === terminal && !full ? '2' : '1';
       frame.style.gridColumn = frame === terminal && !full ? '1 / -1' : String(index + 1 + (!center.length && !full ? 1 : 0));
       if (isOverlay) frame.style.gridColumn = '1 / -1';
@@ -1311,10 +1315,14 @@
     else if (!placeholder) grid.append(empty('center', grid));
     let tabs = grid.parentElement.querySelector('.ws-tool-tabs');
     if (!tabs) { tabs = node('div', 'ws-tool-tabs'); tabs.setAttribute('aria-label', 'Agents and tools'); grid.before(tabs); }
-    const signature = [...center, ...all.filter(frame => frame.dataset.dock === 'right'), ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, frame.dataset.dock === 'center' ? (grid.dataset.projectLabel || frame.dataset.appName) : frame.dataset.appName, frame.dataset.selected, frame.querySelector('[data-size-trigger]')?.textContent || 'MD', frame.dataset.dock]);
-    if (tabs.dataset.signature !== JSON.stringify(signature)) {
-      tabs.dataset.signature = JSON.stringify(signature); tabs.replaceChildren();
-      signature.forEach(([id, name, shown, size, dock]) => {
+    // Tool panels share one width, so one size button serves them all.
+    const toolFrames = all.filter(frame => frame.dataset.dock === 'right');
+    const sizeFrame = right[0] || toolFrames[0];
+    const size = sizeFrame?.querySelector('[data-size-trigger]')?.textContent || '';
+    const signature = [...center, ...toolFrames, ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, frame.dataset.dock === 'center' ? (grid.dataset.projectLabel || frame.dataset.appName) : frame.dataset.appName, frame.dataset.selected, frame.dataset.dock]);
+    if (tabs.dataset.signature !== JSON.stringify([signature, sizeFrame?.dataset.appId, size])) {
+      tabs.dataset.signature = JSON.stringify([signature, sizeFrame?.dataset.appId, size]); tabs.replaceChildren();
+      signature.forEach(([id, name, shown, dock]) => {
         const group = node('div', 'ws-agent-tab ws-tool-tab-group'); group.dataset.selected = shown; group.dataset.tabDock = dock;
         const tab = node('button', 'ws-tool-tab', name); tab.type = 'button'; tab.title = name; tab.setAttribute('aria-pressed', shown);
         tab.onclick = () => {
@@ -1327,19 +1335,24 @@
           }
           else select(id);
         };
+        group.append(tab); tabs.append(group);
+        if (dock === 'center') window.libroVoice?.mount(group, id);
+      });
+      if (sizeFrame) {
+        const id = sizeFrame.dataset.appId;
+        const group = node('div', 'ws-agent-tab ws-tool-tab-group ws-tool-size-group'); group.dataset.tabDock = 'right';
         const sizes = node('div', 'ws-tool-sizes'); sizes.dataset.sizeBadges = '';
         const trigger = node('button', 'ws-size-trigger', size); trigger.type = 'button'; trigger.dataset.sizeTrigger = '';
-        trigger.setAttribute('aria-label', name + ' panel size: ' + size); trigger.setAttribute('aria-expanded', 'false'); trigger.setAttribute('aria-controls', 'tool-sizes-' + id);
-        const picker = node('div', 'ws-size-picker'); picker.id = 'tool-sizes-' + id; picker.setAttribute('popover', 'auto'); picker.setAttribute('role', 'group'); picker.setAttribute('aria-label', name + ' panel size');
-        document.getElementById('frame-' + id).querySelectorAll('[data-resize-width]').forEach(original => {
+        trigger.setAttribute('aria-label', 'Tool panel size: ' + size); trigger.setAttribute('aria-expanded', 'false'); trigger.setAttribute('aria-controls', 'tool-sizes-' + grid.id);
+        const picker = node('div', 'ws-size-picker'); picker.id = 'tool-sizes-' + grid.id; picker.setAttribute('popover', 'auto'); picker.setAttribute('role', 'group'); picker.setAttribute('aria-label', 'Tool panel size');
+        sizeFrame.querySelectorAll('[data-resize-width]').forEach(original => {
           const option = node('button', '', original.textContent); option.type = 'button';
           option.dataset.resizeWidth = original.dataset.resizeWidth; option.setAttribute('aria-label', original.getAttribute('aria-label')); option.setAttribute('aria-pressed', original.getAttribute('aria-pressed'));
           option.onclick = () => { picker.hidePopover(); window.__libroResizeApp(id, option.dataset.resizeWidth, sid); };
           picker.append(option);
         });
-        sizes.append(trigger, picker); group.append(tab); if (dock !== 'bottom') group.append(sizes); tabs.append(group);
-        if (dock === 'center') window.libroVoice?.mount(group, id);
-      });
+        sizes.append(trigger, picker); group.append(sizes); tabs.append(group);
+      }
     }
     tabs.hidden = signature.length === 0;
     window.libroVoice?.refresh();
@@ -1360,7 +1373,7 @@
     const next = apps[Math.max(0, Math.min(apps.length - 1, index + delta))];
     if (next) select(next.dataset.appId);
   }
-  let savedWidth = 'md', savedToolWidth = 'lg';
+  let savedWidth = 'md';
   let settingsFocus;
   function settings() {
     if (!document.getElementById('workspace-settings').hidden) { closeSettings(); return; }
@@ -1490,7 +1503,7 @@
     const key = document.getElementById('openrouter-key');
     key.value = ''; key.dataset.clear = '1'; key.placeholder = 'Key will be removed on Save';
   }
-  function showSettings(width, commands = {}, bindings = toolKeys, toolWidth = 'lg', threadAgent = '', pageToolsAutoExecute = false, environment = [], editor = 'nvim', voice = {savedKey:false}) {
+  function showSettings(width, commands = {}, bindings = toolKeys, threadAgent = '', pageToolsAutoExecute = false, environment = [], editor = 'nvim', voice = {savedKey:false}) {
     window.__libroPageToolsAutoExecute = !!pageToolsAutoExecute;
     savedThreadAgent = threadAgent;
     fillThreadAgents();
@@ -1517,9 +1530,7 @@
     window.__libroPlugins.filter(p => !p.removed && p.dock === 'center' && p.type === 'terminal').forEach(p => addAgentRow(p, commands[p.id] || p.command));
     document.querySelector('#agent-commands-form [role=status]').textContent = '';
     savedWidth = width;
-    savedToolWidth = toolWidth;
     document.getElementById('default-panel-width').value = width;
-    document.getElementById('default-tool-panel-width').value = toolWidth;
     document.getElementById('workspace-settings-status').textContent = '';
     document.getElementById('settings-save-status').textContent = '';
     document.getElementById('workspace-settings').hidden = false;
@@ -1532,10 +1543,10 @@
     document.querySelectorAll('.ws-project').forEach(project => project.inert = false);
     if (settingsFocus?.isConnected) settingsFocus.focus();
   }
-  function saveSettings(width, tool = false) {
-    document.getElementById(tool ? 'default-tool-panel-width' : 'default-panel-width').disabled = true;
+  function saveSettings(width) {
+    document.getElementById('default-panel-width').disabled = true;
     document.getElementById('workspace-settings-status').textContent = 'Saving…';
-    call('settings.width', {width, tool});
+    call('settings.width', {width});
   }
   let settingsSaveSteps = null;
   function saveAllSettings() {
@@ -1543,7 +1554,7 @@
     const page = document.getElementById('workspace-settings');
     for (const form of page.querySelectorAll('form')) if (!form.reportValidity()) return;
     const value = id => document.getElementById(id).value;
-    const agent = value('default-thread-agent'), width = value('default-panel-width'), toolWidth = value('default-tool-panel-width');
+    const agent = value('default-thread-agent'), width = value('default-panel-width');
     const theme = value('workspace-theme'), sound = value('notification-sound'), pageTools = value('page-tools-autoexecute') === 'on';
     settingsSaveSteps = [
       () => saveAgentCommand(document.getElementById('agent-commands-form')),
@@ -1554,7 +1565,6 @@
       () => saveThreadAgent(agent),
       () => savePageTools(pageTools),
       () => saveSettings(width),
-      () => saveSettings(toolWidth, true),
       () => {
         const ok = saveTheme(theme) && saveNotificationSound(sound);
         settingsSaveFinished(ok, 'Could not save appearance or sound. Please try again.');
@@ -1738,15 +1748,14 @@
     }
     settingsSaveFinished(ok, message);
   }
-  function settingsSaved(ok, tool = false) {
-    const select = document.getElementById(tool ? 'default-tool-panel-width' : 'default-panel-width');
+  function settingsSaved(ok) {
+    const select = document.getElementById('default-panel-width');
     if (ok) {
-      if (tool) savedToolWidth = select.value;
-      else savedWidth = select.value;
+      savedWidth = select.value;
       refresh();
-    } else select.value = tool ? savedToolWidth : savedWidth;
+    } else select.value = savedWidth;
     select.disabled = false;
-    document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New ' + (tool ? 'tool' : 'agent') + ' panels will use this width.' : 'Could not save. Please try again.';
+    document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New tool panels will use this width.' : 'Could not save. Please try again.';
     settingsSaveFinished(ok);
   }
   window.libroWorkspace = {voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};

@@ -1943,8 +1943,9 @@ func closeDialogJS(sid string) string {
 `, sid, CloseDialogID)
 }
 
-// resizeJS returns JS that updates an app frame's width without replacing the DOM
-func resizeJS(_ *AppState, width Width, appID string) r.Result {
+// resizeJS returns JS that updates app frame widths without replacing the DOM.
+// toolIDs are other tool panels that share the new width.
+func resizeJS(_ *AppState, width Width, appID string, toolIDs ...string) r.Result {
 	widthsMap := map[string]string{}
 	pixelsMap := map[string]string{}
 	widths := AllWidths()
@@ -1956,7 +1957,9 @@ func resizeJS(_ *AppState, width Width, appID string) r.Result {
 		pixelsMap[string(w)] = w.PixelWidth()
 	}
 
-	return clientScript(`
+	res := r.Result{}
+	for _, id := range append([]string{appID}, toolIDs...) {
+		res = res.Append(ActionEffectsID, clientScriptNode(`
 (function(){
 	var el = document.getElementById('frame-'+props[0]);
 	if (!el) return;
@@ -2004,6 +2007,7 @@ func resizeJS(_ *AppState, width Width, appID string) r.Result {
 		});
 	}
 	if(window.__libroRefreshWidthAvailability)window.__libroRefreshWidthAvailability(el);
+	if(!props[8])return;
 
 	requestAnimationFrame(function(){
 		if(window.__libroScrollToApp)window.__libroScrollToApp(el);
@@ -2020,7 +2024,9 @@ func resizeJS(_ *AppState, width Width, appID string) r.Result {
 		setTimeout(function(){window.__libroFocusAppByID(props[7]);},120);
 	}
 })();
-`, appID, widthsMap, pixelsMap, string(width), appID, appID, appID, appID)
+`, id, widthsMap, pixelsMap, string(width), id, id, id, id, id == appID))
+	}
+	return res
 }
 
 // renderTopBar renders the workspace title and panel controls.

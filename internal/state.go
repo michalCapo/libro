@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -462,6 +463,44 @@ func (sm *StateManager) SetAppWidthByID(sessionID, appID string, width Width) in
 		}
 	}
 	return -1
+}
+
+// ToolWidth returns the width shared by the session's tool panels.
+func (sm *StateManager) ToolWidth(sessionID string) (Width, bool) {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	if s := sm.states[sessionID]; s != nil {
+		for _, app := range s.Apps {
+			if appDock(app) == "right" {
+				return app.Width, true
+			}
+		}
+	}
+	return "", false
+}
+
+// SyncToolWidth gives every other tool panel the width of appID and returns their IDs.
+// Agent and terminal panels keep their own width.
+func (sm *StateManager) SyncToolWidth(sessionID, appID string) []string {
+	defer sm.scheduleLayoutSave(sessionID)
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return nil
+	}
+	index := slices.IndexFunc(s.Apps, func(app Application) bool { return app.ID == appID })
+	if index < 0 || appDock(s.Apps[index]) != "right" {
+		return nil
+	}
+	ids := []string{}
+	for i, app := range s.Apps {
+		if i != index && appDock(app) == "right" {
+			s.Apps[i].Width, s.Apps[i].PreviousWidth = s.Apps[index].Width, s.Apps[index].PreviousWidth
+			ids = append(ids, app.ID)
+		}
+	}
+	return ids
 }
 
 // ToggleMaxWidth toggles the selected app between full width and its previous width.

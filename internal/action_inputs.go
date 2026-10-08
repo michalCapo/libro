@@ -236,7 +236,6 @@ type actionSettingsAgentCommandInput struct {
 
 type actionSettingsWidthInput struct {
 	SID   string `json:"sid"`
-	Tool  bool   `json:"tool"`
 	Width string `json:"width"`
 }
 

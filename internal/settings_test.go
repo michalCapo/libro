@@ -25,15 +25,6 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	if got := DBDefaultPanelWidth(); got != WidthMD {
 		t.Fatalf("initial width = %s", got)
 	}
-	if got := DBDefaultToolPanelWidth(); got != WidthLG {
-		t.Fatalf("initial tool width = %s", got)
-	}
-	if err := DBSetDefaultToolPanelWidth(WidthXL); err != nil {
-		t.Fatal(err)
-	}
-	if err := DBSetDefaultToolPanelWidth(Width("invalid")); err == nil {
-		t.Fatal("accepted invalid tool width")
-	}
 	if err := DBSetDefaultPanelWidth(WidthSM); err != nil {
 		t.Fatal(err)
 	}
@@ -98,25 +89,6 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	}
 	if got := DBDefaultPanelWidth(); got != WidthFull {
 		t.Fatalf("saved width after reopening = %s", got)
-	}
-	if got := DBDefaultToolPanelWidth(); got != WidthXL {
-		t.Fatalf("saved tool width after reopening = %s", got)
-	}
-	for _, app := range []Application{
-		{Type: AppTypeTerminal, PluginID: "codex"},
-		{Type: AppTypeTerminal, PluginID: "custom-test"},
-		{Type: AppTypeURL, PluginID: "files"},
-		{Type: AppTypeURL, PluginID: "browser"},
-		{Type: AppTypeTerminal, PluginID: "nvim"},
-		{Type: AppTypeTerminal, PluginID: "terminal"},
-	} {
-		want := WidthXL
-		if app.PluginID == "codex" || app.PluginID == "custom-test" {
-			want = WidthFull
-		}
-		if got := defaultAppWidth(app); got != want {
-			t.Errorf("%s width = %s, want %s", app.PluginID, got, want)
-		}
 	}
 	if err := saveAgentSettings(nil, map[string]bool{"codex": false}, nil, nil, map[string]bool{"codex": true}, nil); err == nil {
 		t.Fatal("removed enabled agent")
