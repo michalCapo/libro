@@ -2,11 +2,11 @@
 
 Libro is an agent workspace with strong keyboard support, built around terminal and web applications. One project holds multiple agents and fixed-width tool panels. Comparable to T3 Code or the OpenAI and Anthropic desktop apps, but built with a different approach.
 
-Run Codex, Claude, Pi, OpenCode, or any other CLI agent in its own thread. Open terminal commands and web applications as tools beside it. Each thread keeps its tool state, and panels use selectable fixed widths.
+Run Codex, Claude, Pi, OpenCode, or any other CLI agent in its own thread. Open terminal commands and web applications as tools beside it. Each thread keeps its tool state. The agent fills the free space, and tool panels share one fixed width.
 
 ![Libro home screen with the agent launcher open](demo/libro-home.png)
 
-Libro reopens your workspaces and resumes agents on start. Applications start when you start them.
+Libro reopens your workspaces and resumes agents on start. Applications start when you start them. See [Restore on start](#restore-on-start).
 
 ## What It Does
 
@@ -14,7 +14,7 @@ Libro reopens your workspaces and resumes agents on start. Applications start wh
 - Puts terminal and web applications in fixed-width tool panels beside the agent.
 - Includes Browser, Notes, Files, Terminal, and other tools, with support for your own commands and web addresses.
 - Keeps all your projects in one place. Switch between them with one click.
-- Shows when an assistant is busy (its icon spins) or finished (green check).
+- Shows when an assistant is busy (its icon spins), or finished or waiting for your answer (green check).
 - Shows agent session names or the first prompt in thread labels. Codex, Pi, and
   Claude descriptions survive reloads; older Codex UUID labels are recovered
   from local session history when the ID matches one session.
@@ -58,7 +58,7 @@ both CLI and extension updates on the next launch.
 Press **Caps Lock**, or click the microphone beside the agent tab, to start listening.
 Press or click again to stop and insert the transcript into the selected terminal (or the agent when a browser is selected). Review it and press Enter to send.
 Escape, switching threads, or leaving the window cancels dictation. Recordings
-are limited to 60 seconds. Change the shortcut in Settings → Shortcuts.
+are limited to 60 seconds. Change the shortcut in Settings.
 
 Voice typing uses OpenRouter GPT-4o Transcribe. Add an API key in Settings →
 OpenRouter, or set `OPENROUTER_API_KEY` in Libro's environment. Without a key,
@@ -103,8 +103,21 @@ bundle matches its source. Run the editor integration tests with
 - Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
-- Choose a fixed width for each panel, from small to large, or use the full workspace width. Press `Ctrl + M` to make a panel full width and back.
+- The agent panel fills the space the tools leave, at least 600px. When both do not fit, the tool covers the agent.
+- All tool panels in a thread share one width. Pick it with the size button in the tab row, from XS (320px) to 2XL (1920px), or MAX. Press `Ctrl + M` to make a panel full width and back.
 - Hidden panels keep running. Switch away and come back without losing anything.
+
+### Restore on start
+
+Quitting Libro stops all terminals, agents, and applications. On the next start, Libro restores:
+
+- open projects and threads, and the active one,
+- panels in each thread: order, dock, width, name, and selection,
+- agents, resumed with their session, model, and effort.
+
+Type "continue" in an agent to go on. Applications stay stopped until you start them. Shell panels start a new shell; old output is not kept. Threads whose project, worktree, or folder is gone are skipped.
+
+One layout is saved per Libro instance. Only the first window restores it. Reloading a window keeps its session.
 
 ### Tools
 
@@ -118,7 +131,8 @@ bundle matches its source. Run the editor integration tests with
 ### Projects
 
 - A project is a folder on your computer. Add as many as you like.
-- Switch projects with `Ctrl + P`, or with `Ctrl + 1` to `Ctrl + 9`.
+- Open the project list with `Ctrl + Shift + P`. Jump to a numbered thread with `Ctrl + 1` to `Ctrl + 9`. Base and worktree threads both get numbers.
+- Projects without open threads are dimmed in the sidebar.
 - Project-backed threads keep the project folder as their working directory.
 - Each thread remembers its own browser, files, terminal, and other thread-local tools. Threads in the same project share Notes. Project settings choose a shared application or one application per thread.
 
@@ -169,12 +183,12 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 
 - Light, dark, or follow your system theme.
 - Play a sound when an assistant finishes.
-- Set the default panel size for new panels.
+- Set the default width for new tool panels. Agent panels fill the rest.
 - Choose one agent to start on its own when you open a project that has no agents open.
 - Choose if browser prompts run right away, or are only pasted in.
 - Change how assistants and tools start, rename them, add your own.
 - Select an enabled CLI tool as the file editor under Editor. Nvim is the default; Off clears the selection. Use `e` in Files to open a file in it.
-- Change workspace keyboard shortcuts and restore the defaults anytime.
+- Change keyboard shortcuts and restore the defaults anytime.
 
 ![Settings page: theme and notification options](demo/settings.png)
 
@@ -184,12 +198,16 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl + N` | New assistant |
-| `Ctrl + A` | Jump to the current assistant |
-| `Ctrl + P` | Pick a project |
-| `Ctrl + 1` – `Ctrl + 9` | Go to a project |
-| `Ctrl + Shift + P` | Show or hide the project sidebar |
+| `Ctrl + Shift + A` | New thread with agent |
+| `Ctrl + A` | Jump to the current agent (press twice to hide tools) |
+| `Ctrl + Shift + P` | Switch project |
+| `Ctrl + 1` – `Ctrl + 9` | Go to a numbered thread |
+| `Ctrl + ;` | Thread actions |
+| `Meta + ;` | Command palette |
+| `Caps Lock` | Voice typing |
 | `Alt + ,` / `Alt + .` | Lower / raise Claude effort for this session (Codex has this built in) |
+
+New agent, New thread, Replace agent, Finish current thread, and Close project have no default shortcut. Find them in the command palette or set one in Settings. Use the sidebar button to show or hide projects.
 
 ### Panels and tools
 
@@ -198,27 +216,28 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 | `Ctrl + T` | Terminal |
 | `Ctrl + B` | Browser |
 | `Ctrl + Shift + B` | New browser panel |
+| `Ctrl + [` / `Ctrl + ]` | Previous / next browser panel |
 | `Ctrl + F` | Files |
 | `Ctrl + I` | Notes |
 | `Ctrl + E` | Nvim |
 | `Ctrl + G` | Git |
-| `Ctrl + D` | Database |
+| `Ctrl + D` | Database (in a terminal, `Ctrl + D` goes to the terminal) |
 | `Ctrl + Q` | Close the selected panel |
-| `Ctrl + ,` / `Ctrl + Shift + .` | Bigger / smaller panel |
+| `Ctrl + ,` / `Ctrl + .` | Bigger / smaller panel |
 | `Ctrl + M` | Full width on or off |
 | `Ctrl + H` / `Ctrl + L` | Previous / next panel |
 | `` Ctrl + ` `` | Bottom terminal |
-| `Ctrl + ;` | Search all commands |
-| `Ctrl + .` | Settings |
+| `Ctrl + Shift + R` / `Ctrl + Shift + T` | Start or restart / stop the application |
+| `Ctrl + Shift + S` | Settings |
 | `Ctrl + =` / `Ctrl + -` / `Ctrl + 0` | Zoom in / out / reset |
 
-Every shortcut can be changed in **Settings → Keyboard shortcuts**.
+Change shortcuts in **Settings**. **Restore defaults** resets them.
 
 ### Agent tools
 
 New Codex, Claude (including Ollama-launched Claude), and OpenCode sessions
-register the `libro` MCP server automatically. It provides `application` and
-`notes` tools. Pi receives instructions for the equivalent CLI commands.
+register the `libro` MCP server automatically. It provides `application`,
+`notes`, and `children` tools. Pi receives instructions for the equivalent CLI commands.
 Custom agents can register `libro mcp` as a stdio MCP server.
 Agents also receive instructions to use the separately installed `agent-browser`
 CLI for browser testing, with a unique session per agent/thread. Libro does not
@@ -355,12 +374,6 @@ libro notes '{"action":"read","id":"NOTE_ID"}'
 libro notes '{"action":"set_status","id":"NOTE_ID","status":"archived"}'
 libro notes '{"action":"delete","id":"NOTE_ID"}'
 ```
-
-New thread is available in the command palette and has no default shortcut.
-Ctrl+Shift+P opens the project list. Meta+; opens the command palette.
-Ctrl+Shift+A opens the agent picker and starts the chosen agent in a new thread. Ctrl+A focuses or opens an agent within the selected thread. These shortcuts can be
-changed in Settings. Ctrl+N and Ctrl+P are unbound by default.
-Use the sidebar button to toggle projects.
 
 ### Isolated QA child agents
 

@@ -1,4 +1,6 @@
-# Todo: Restore Workspace on Start
+# Restore Workspace on Start
+
+Status: implemented. This was the design; see "Implementation status" at the end for what changed during review.
 
 ## Overview
 

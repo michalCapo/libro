@@ -10,7 +10,7 @@ Design: TLS pairing. Everything is inside Libro. No Vemari, no relay, no frp, no
 
 - `libro` starts one local HTTP/WebSocket server on port `8100` and opens the Electron shell.
 - `libro --no-desktop` starts the server only. `libro --version` prints the version.
-- Named instances use port `8101` (`electron/main.js:42`).
+- `--dev` and named instances default to port `8101` (`electron/main.js`); `--port` picks another.
 - Terminals no longer use `ttyd`. Libro serves `xterm.js` panels over `/terminal/ws/<id>`, backed by Go PTYs.
 
 | Area | Current state |
@@ -22,12 +22,12 @@ Design: TLS pairing. Everything is inside Libro. No Vemari, no relay, no frp, no
 
 Known gaps that matter for remote:
 
-- Main HTTP listener binds `":"+Port()` (`internal/app.go:487`), not `127.0.0.1`.
-- Data dir is created with `0755` (`internal/db.go:50`).
-- Session IDs are predictable (`session-N`, `internal/state.go:103`) and are not a security identity.
-- The terminal endpoint lets a client attach to a live PTY without an ownership check (`internal/components/terminal.go:687`).
-- Closing the window (`app.close.all`, `internal/app.go:1404`) stops all terminals.
-- After an outage longer than ~15 s, g-sui reloads the page and `GET /` (`internal/app.go:1493`) creates a new session.
+- Main HTTP listener binds `":"+Port()` (`internal/app.go`), not `127.0.0.1`.
+- Data dir is created with `0755` (`internal/db.go`).
+- Session IDs are `session-N-<random>` (`internal/state.go`). They are hard to guess but are not a security identity.
+- The terminal endpoint lets a client attach to a live PTY without an ownership check (`internal/components/terminal.go`).
+- Closing the window (`app.close.all`, `internal/app.go`) stops all terminals. The layout is saved and restored on the next start, but processes are not kept.
+- After an outage longer than ~15 s, g-sui reloads the page. The reload keeps its session through `?sid=` in the URL (`internal/app.go`).
 - One global Electron window, one `serverURL`, global IPC. Closing the window quits the app.
 - Webview partition comes from the project name (`internal/browser_profile.go`).
 
@@ -70,7 +70,7 @@ Request order on the server:
 ## Server (Backend)
 
 - Start: `libro --no-desktop --listen <address:port>`. Port is optional.
-- Main HTTP listener changes to `127.0.0.1` (`internal/app.go:487`). Fix this even without remote mode.
+- Main HTTP listener changes to `127.0.0.1` (`internal/app.go`). Fix this even without remote mode.
 - First start generates an ECDSA key and a self-signed certificate.
 - Keys live in a private `0700` dir, files `0600`. On Windows, restrict ACL to the user.
 - Limits: handshake timeout, max `/pair` body size, max concurrent connections, connections per IP.
@@ -148,10 +148,10 @@ http://app-3000.localhost:82xx  →  pipe  →  backend  →  http://127.0.0.1:3
 
 **Allowed targets:**
 
-- only the registry of apps Libro started that are still running. An assigned port is not enough; the command may ignore it (`internal/application_control.go:277`);
+- only the registry of apps Libro started that are still running. An assigned port is not enough; the command may ignore it (`internal/application_control.go`);
 - target is always `127.0.0.1`, never another address;
 - Libro ports and local control ports are forbidden;
-- in remote mode, port takeover is off (`internal/application_settings.go:118`). Busy port = error.
+- in remote mode, port takeover is off (`internal/application_settings.go`). Busy port = error.
 
 **Headers:**
 
@@ -168,7 +168,7 @@ http://app-3000.localhost:82xx  →  pipe  →  backend  →  http://127.0.0.1:3
 
 - the server does not know the laptop's local port, and different laptops use different ports;
 - the backend returns only the app ID and port. The frontend builds the URL from its own `location`;
-- public URLs are not stored in the server DB (`internal/application_settings.go:86`).
+- public URLs are not stored in the server DB (`internal/application_settings.go`).
 
 Does not work for apps with hardcoded `localhost:N` in HTML/JS, CORS, or OAuth callbacks.
 
