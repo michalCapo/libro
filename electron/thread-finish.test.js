@@ -12,7 +12,7 @@ function harness(discard = false, method = 'merge') {
   const all = []
   const flatten = el => [el, ...el.children.flatMap(flatten)]
   function node(tag, cls = '', text = '') {
-    const el = { tag, className:cls, textContent:text, value:'', children:[], events:{}, disabled:false,
+    const el = { tag, className:cls, classList:{toggle() {}}, textContent:text, value:'', children:[], events:{}, disabled:false,
       setAttribute() {}, focus() {}, remove() {}, showModal() {}, click() { this.onclick?.() },
       addEventListener(name, fn) { this.events[name] = fn },
       close() { this.events.close?.() },
@@ -148,10 +148,11 @@ test('thread menu and palette share actions bound to the chosen worktree', () =>
   const actions = source.slice(source.indexOf('  function threadActions('), source.indexOf('  function threadActionPalette('))
   const calls = []
   vm.runInNewContext(actions + ";threadActions({name:'repo',branch:'feature'}).forEach(action => action.run())", {
+    call:(action, data) => calls.push([action, data.name]),
     finishThread:(name, discard = false, method = 'merge') => calls.push([discard ? 'discard' : method, name]),
     projectSettings:name => calls.push(['settings', name]),
   })
-  assert.deepEqual(calls, [['merge','repo/feature'], ['squash','repo/feature'], ['pr','repo/feature'], ['settings','repo/feature'], ['discard','repo/feature']])
+  assert.deepEqual(calls, [['project.close','repo/feature'], ['merge','repo/feature'], ['squash','repo/feature'], ['pr','repo/feature'], ['settings','repo/feature'], ['discard','repo/feature']])
 })
 
 
@@ -206,12 +207,13 @@ test('thread palette closes base and worktree workspaces without a Git deletion 
       button:label => node('button', '', label),
       window:{__libroActiveProject:kind === 'worktree' ? 'repo/feature' : 'repo',
         __libroProjects:[{kind,name:'repo',branch:'feature'}]},
-      call:action => calls.push(action),
+      call:(action, data) => calls.push([action, data?.name]),
     })
-    const entry = all.find(el => el.dataset.label === 'close thread')
-    assert.ok(entry)
+    const entries = all.filter(el => el.dataset.label === 'close thread')
+    assert.equal(entries.length, 1)
+    const entry = entries[0]
     entry.onclick()
-    assert.deepEqual(calls, ['project.close'])
+    assert.deepEqual(calls, [['project.close', kind === 'worktree' ? 'repo/feature' : undefined]])
   }
 })
 

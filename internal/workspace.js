@@ -394,6 +394,7 @@
   function threadActions(project) {
     const name = project.name + '/' + project.branch;
     return [
+      {label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep files, branch and worktree', run:() => call('project.close', {name})},
       {label:'Merge thread…', icon:'merge', run:() => finishThread(name)},
       {label:'Squash thread…', icon:'compress', run:() => finishThread(name, false, 'squash')},
       {label:'Create draft PR…', icon:'open_in_new', run:() => finishThread(name, false, 'pr')},
@@ -406,7 +407,7 @@
     if (!project) { window.__libroShowToast?.('Select a project thread first', '', 'error'); return; }
     const actions = project.kind === 'worktree' ? threadActions(project) : [{label:'Thread settings', icon:'settings', run:() => projectSettings(project.name)}];
     actions.unshift({label:'New thread', icon:'add', description:'Create a new thread in ' + project.name, run:() => newThread(project.name)});
-    actions.push({label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep files, branch and worktree', run:() => call('project.close')});
+    if (project.kind !== 'worktree') actions.push({label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep files, branch and worktree', run:() => call('project.close')});
     actions.push({label:'Close other panels', icon:'close_fullscreen', description:'Close every panel except the selected one', run:() => closeOtherPanels()});
     document.getElementById('thread-action-dialog')?.remove();
     const dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'thread-action-dialog'; dialog.setAttribute('aria-label', 'Thread actions');
