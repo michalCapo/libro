@@ -19,6 +19,8 @@ async function harness(options = {}) {
     __libroSelectedApp:options.selected,
     addEventListener(name, callback) { (events[name] ||= []).push(callback) },
     MediaRecorder:true,
+    libroVoiceInput:options.input,
+    __libroCaptureBrowserVoiceInput:options.browserInput,
     __libroSendPageToolPrompt(...args) { calls.pastes.push(args); return true },
   }
   class Recorder {
@@ -80,6 +82,7 @@ test('pressing again before microphone permission resolves does not start record
   let grant
   const h = await harness({getUserMedia:() => new Promise(resolve => { grant = resolve })})
   const pending = h.voice.toggle('agent')
+  await tick()
   await h.voice.toggle('agent')
   grant(h.stream)
   await pending
@@ -192,4 +195,69 @@ test('a selected browser keeps dictation targeted at the agent', async () => {
   await h.voice.toggle('agent')
   await tick()
   assert.deepEqual(h.calls.pastes, [['Hello Libro', false, 'agent']])
+})
+
+test('global dictation inserts into a captured input without an agent', async () => {
+  const inserted = []
+  const h = await harness({input:{capture:() => 1, available:() => true, insert:(token,text) => { inserted.push([token,text]); return true }}})
+  await h.voice.toggle()
+  await h.voice.toggle()
+  await tick()
+  assert.deepEqual(inserted, [[1,'Hello Libro']])
+  assert.equal(h.calls.pastes.length, 0)
+})
+
+test('dictation uses the captured browser input instead of the agent', async () => {
+  const inserted = []
+  const h = await harness({selected:'browser',browserInput:async id => {
+    assert.equal(id,'browser')
+    return {available:() => true, insert:text => { inserted.push(text); return true }}
+  }})
+  h.frames.browser = {isConnected:true, closest:() => null, getClientRects:() => [1], querySelector:() => ({})}
+  await h.voice.toggle('agent')
+  await h.voice.toggle()
+  await tick()
+  assert.deepEqual(inserted, ['Hello Libro'])
+  assert.equal(h.calls.pastes.length, 0)
+})
+
+test('closing a captured input aborts transcription and ignores the result', async () => {
+  let available = true, finish, signal, inserted = false
+  const h = await harness({input:{capture:() => 1, available:() => available, insert:() => { inserted=true; return true }},transcribe:init => {
+    signal = init.signal
+    return new Promise(resolve => { finish = resolve })
+  }})
+  await h.voice.toggle()
+  await h.voice.toggle()
+  await tick()
+  available = false; h.mutate()
+  assert.equal(signal.aborted, true)
+  finish({ok:true,json:async () => ({text:'Stale result'})})
+  await tick()
+  assert.equal(inserted, false)
+  assert.equal(h.calls.pastes.length, 0)
+})
+
+test('canceling while the browser input is being captured does not request a microphone', async () => {
+  let finish
+  const h = await harness({selected:'browser',browserInput:() => new Promise(resolve => { finish=resolve })})
+  h.frames.browser = {isConnected:true, closest:() => null, getClientRects:() => [1], querySelector:() => ({})}
+  const pending = h.voice.toggle()
+  await tick()
+  await h.voice.toggle()
+  finish({available:() => true,insert:() => true})
+  await pending
+  assert.equal(h.calls.recordings, 0)
+  assert.equal(h.calls.pastes.length, 0)
+})
+
+test('refocusing a browser input during insertion does not cancel the completed transcript', async () => {
+  const status={}
+  const button={dataset:{voiceButton:'global'},setAttribute(){},querySelector:() => ({}),parentElement:{querySelector:() => status}}
+  const h=await harness({buttons:[button],selected:'browser',browserInput:async () => ({available:() => true,insert:() => { h.event('blur'); return true }})})
+  h.frames.browser={isConnected:true,closest:() => null,getClientRects:() => [1],querySelector:() => ({})}
+  await h.voice.toggle()
+  await h.voice.toggle()
+  await tick()
+  assert.equal(status.textContent,'Text inserted · Review before sending')
 })

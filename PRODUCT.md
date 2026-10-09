@@ -42,7 +42,7 @@ Worktree threads have a right-click / overflow menu with Merge thread, Squash th
 
 ## Voice typing
 
-Press Caps Lock or click the microphone beside the agent tab to dictate. Press again to insert the transcript into the selected terminal (or the agent when a browser is selected) without submitting it. Escape, window blur, or switching threads cancels dictation. Libro transcribes with OpenRouter GPT-4o Transcribe, using the API key from Settings → OpenRouter (or `OPENROUTER_API_KEY`) and automatic language detection; audio is sent to OpenRouter. Without a key, pressing the microphone shows how to add one.
+Focus a text field, then press Caps Lock or click the shared microphone in the right tool rail to dictate. Press again to insert the transcript at the captured caret or selection without submitting it. Libro forms, editors, browser inputs, and page-description prompts use the same control. With no text field focused, dictation uses the selected terminal, or the agent when a browser is selected. Escape, window blur, or switching threads cancels dictation. Removed inputs do not receive late transcripts. Libro transcribes with OpenRouter GPT-4o Transcribe, using the API key from Settings → OpenRouter (or `OPENROUTER_API_KEY`) and automatic language detection; audio is sent to OpenRouter. Without a key, pressing the microphone shows how to add one.
 
 ## Files and editor
 

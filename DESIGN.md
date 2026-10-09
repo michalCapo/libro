@@ -44,6 +44,26 @@ colors:
   dark-code-property: "#7ee787"
   dark-code-meta: "#ffa657"
   dark-code-deletion: "#ffa198"
+  remove-hover-dark: "#ff8a80"
+  base-branch: "#b45309"
+  worktree-branch: "#7c3aed"
+  dark-base-branch: "#fbbf24"
+  dark-worktree-branch: "#c4b5fd"
+  file-directory: "#008000"
+  dark-file-directory: "#98c379"
+  file-reference-hit: "#ffb347"
+  reference-keyword: "#a626a4"
+  reference-string: "#398146"
+  reference-number: "#986801"
+  reference-function: "#4078f2"
+  dark-reference-keyword: "#c678dd"
+  dark-reference-number: "#d19a66"
+  dark-reference-type: "#e5c07b"
+  dark-reference-function: "#61afef"
+  symbol-kind: "#1686a3"
+  symbol-name: "#142b91"
+  dark-symbol-kind: "#56b6c2"
+  dark-symbol-name: "#abbfff"
 typography:
   body:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
@@ -66,6 +86,8 @@ typography:
     fontSize: "11px"
     lineHeight: "18px"
 rounded:
+  text-highlight: "2px"
+  compact-tab: "5px"
   keycap: "4px"
   badge: "6px"
   input: "7px"
@@ -146,6 +168,8 @@ The muted text token was checked against the sidebar surface at 4.57:1. This doe
 
 The `code-*` tokens give file previews a restrained syntax palette. Their `dark-code-*` counterparts preserve token roles instead of mechanically inverting the light colors.
 
+Branch metadata keeps the existing amber Base and violet worktree colors. File-reference results and symbol dialogs use their established syntax colors; these are separate from the shell palette.
+
 ## Typography
 
 Use the system sans-serif stack in `body`; there is no separate display font. Body text is compact and regular. Project headings and palette labels use the title scale; toolbar titles use 13px, sidebar labels and result descriptions 12px. Brand text is 16px at weight 550. Empty-state headings use `empty-heading`; supporting copy has a 46ch maximum width and 1.65 line height. Status and size controls use 10px text. Keycaps use the monospace role. Material Icons Round supplies mostly 18–19px muted icons.
@@ -177,7 +201,7 @@ Use the frontmatter radii by role: small keycaps and size badges, gently rounded
 ## Components
 
 - **Navigation:** the sidebar starts with one compact utility row: search grows to fill the space, followed by icon buttons for switching projects, adding a project, and starting a new agent session. Section labels (Projects, Threads) are 12px semibold muted text. Project rows are 32px high with 13px text; the active project uses primary text at weight 600. Threads and worktrees use the full sidebar width beneath their project, without indentation or a tree guide line. Two-line rows keep the title and metadata close together on one subtly bordered surface, including when unselected. The selected thread uses the raised surface, a fine ring, and primary text. Row actions (new thread, settings, remove, overflow) appear only on hover or keyboard focus. Running agents appear below their project as direct session links. Project rows keep their folder icon; thread rows show agent working and done states. Projects without open threads fade to 52% opacity until hovered, focused, or current. A terminal glyph on the project row marks a running bottom command shared by its threads. Standalone threads show their own terminal activity. Shortcut numbers trail all row indicators and actions. Actions remain visible on touch devices.
-- **Tools:** the right tool rail is 48px wide with 32px quiet icon buttons. Thin rules split the projects toggle, the tool list, and the add and bottom-terminal actions. The visible right tool uses the raised surface, a fine ring, and primary text. The tab row above the docks is 40px high and matches sidebar rows: tabs are quiet 13px muted text with a hover surface. The selected tab uses the raised surface, a fine ring, and primary text at weight 600. The agent tab starts with the voice button and has no size control. After the tabs, one size group shows the shared tool width as a small monospace keycap.
+- **Tools:** the right tool rail is 48px wide with 32px quiet icon buttons. Thin rules split the projects toggle, the tool list, and the add and bottom-terminal actions. The shared microphone sits between More tools and the bottom terminal; it serves focused text fields and terminals across the workspace. Its progress appears beside the rail in a raised status popover. The visible right tool uses the raised surface, a fine ring, and primary text. The tab row above the docks is 40px high and matches sidebar rows: tabs are quiet 13px muted text with a hover surface. The selected tab uses the raised surface, a fine ring, and primary text at weight 600. Agent tabs have no size control. After the tabs, one size group shows the shared tool width as a small monospace keycap.
 - **Actions:** launch and new-session buttons are compact bordered raised controls, at least 36px high. Icon buttons are quiet, square controls. Hover uses the neutral hover surface; focus uses the blue outline.
 - **Fields:** ordinary popup fields use raised fill, a fine border, and an accent caret. Search fields sit inside a rounded light search surface with an icon and dismiss action. Their inner border and outline are removed; the shared search wrapper shows focus-within feedback.
 - **Size controls:** only the selected size appears in the panel toolbar, with raised fill and a fine ring. Hover or click opens a floating size picker with every preset, including the current size. Keyboard users open it with Enter, Space, or Arrow Down; Escape dismisses it. The command resize picker uses rounded rows and radio indicators.

@@ -1,11 +1,14 @@
 package components
 
+import "encoding/json"
+
 // BrowserJS returns the JavaScript that manages Electron webview elements.
 // It initializes webview tags, handles navigation events, and provides
 // back/forward/reload/navigate functions via the webview DOM API.
 // It also injects browser-mode scrolling, page tools, address, reload, and viewport shortcuts.
 func BrowserJS() string {
-	return browserScript
+	input, _ := json.Marshal(voiceInputScript)
+	return "window.__libroVoiceInputScript=" + string(input) + ";" + browserScript
 }
 
 const browserScript = `
@@ -535,6 +538,31 @@ function pageToolButtonState(appID, mode) {
 function pageToolWebview(appID) {
 	return window.__libroWebviews[appID] || document.querySelector('iframe[data-browser-iframe-app="' + appID + '"]');
 }
+
+window.__libroCaptureBrowserVoiceInput = async function(appID) {
+	var guest = pageToolWebview(appID);
+	if (!guest) return null;
+	if (guest.executeJavaScript) {
+		var token = await guest.executeJavaScript(window.__libroVoiceInputScript + ';window.libroVoiceInput.capture();');
+		if (!token) return null;
+		return {available:function(){return guest.isConnected;}, insert:function(text){
+			return Promise.resolve(guest.executeJavaScript('window.libroVoiceInput && window.libroVoiceInput.insert(' + JSON.stringify(token) + ',' + JSON.stringify(text) + ');')).then(function(inserted){
+				if (inserted && guest.focus) guest.focus();
+				return inserted;
+			});
+		}};
+	}
+	try {
+		var page = guest.contentWindow;
+		page.eval(window.__libroVoiceInputScript);
+		var token = page.libroVoiceInput.capture();
+		return token ? {available:function(){return guest.isConnected && page.libroVoiceInput.available(token);}, insert:function(text){
+			var inserted = page.libroVoiceInput.insert(token,text);
+			if (inserted && guest.focus) guest.focus();
+			return inserted;
+		}} : null;
+	} catch (_) { return null; }
+};
 
 function executePageToolMode(appID, mode) {
 	var wv = pageToolWebview(appID);

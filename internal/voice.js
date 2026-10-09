@@ -1,5 +1,5 @@
-// Voice typing extends the existing agent tab: one microphone, inline progress,
-// and editable text in the original terminal. It never submits the prompt.
+// Shared voice typing inserts into the input or terminal captured at recording
+// start. Dictation never submits a form or terminal command.
 (function () {
   if (window.libroVoice) return;
   let setup = {state: 'ready'};
@@ -12,10 +12,36 @@
     return frame?.isConnected && !frame.closest('[aria-hidden="true"]') && frame.getClientRects().length > 0;
   };
 
+  async function destination(id) {
+    const token = window.libroVoiceInput?.capture();
+    if (token) return {
+      available:() => window.libroVoiceInput.available(token),
+      insert:text => window.libroVoiceInput.insert(token, text),
+    };
+    const selected = window.__libroSelectedApp;
+    const frame = target(selected);
+    if (available(selected)) {
+      if (frame.querySelector('[data-webview-app], [data-browser-iframe-app]')) {
+        const input = await window.__libroCaptureBrowserVoiceInput?.(selected);
+        if (input) return {id:selected, ...input};
+      }
+      if (frame.querySelector('[data-terminal-app]')) id = selected;
+      else id ||= frame.closest('[data-workspace-project]')?.querySelector('[data-dock="center"]')?.dataset.appId;
+    }
+    if (!available(id)) return null;
+    return {id, available:() => available(id), insert:text => {
+      const inserted = window.__libroSendPageToolPrompt?.(text, false, id);
+      if (inserted) window.__libroFocusAppByID?.(id);
+      return inserted;
+    }};
+  }
+
+  const valid = attempt => attempt.project === window.__libroActiveProject && attempt.target?.available();
+
   function render() {
     const shortcut = window.libroWorkspace?.shortcutFor('voice') || '';
     document.querySelectorAll('[data-voice-button]').forEach(button => {
-      const active = current?.indicatorID === button.dataset.voiceButton;
+      const active = !!current;
       const state = active ? current.state : 'ready';
       const label = active ? (state === 'recording' ? 'Listening… Press again to transcribe' : state === 'permission' ? 'Waiting for microphone…' : 'Transcribing…') : message;
       button.dataset.state = state;
@@ -26,6 +52,13 @@
       const status = button.parentElement.querySelector('.ws-voice-status');
       if (status.textContent !== label) status.textContent = label;
       status.hidden = !label;
+      if (label) {
+        if (button.getBoundingClientRect) {
+          const bounds = button.getBoundingClientRect();
+          status.style.top = Math.max(32, Math.min(window.innerHeight - 32, bounds.top + bounds.height / 2)) + 'px';
+        }
+        if (!status.matches?.(':popover-open')) status.showPopover?.();
+      } else status.hidePopover?.();
     });
   }
 
@@ -67,22 +100,20 @@
 
   async function toggle(id) {
     if (current) { end(); return; }
-    const indicatorID = id;
-    const selected = window.__libroSelectedApp;
-    if (available(selected) && target(selected).querySelector('[data-terminal-app]') &&
-        target(selected).closest('[data-workspace-project]') === target(id)?.closest('[data-workspace-project]')) id = selected;
-    if (!available(id)) return;
     if (setup.state !== 'ready') await poll();
     if (setup.state !== 'ready') { message = setup.message; render(); return; }
     message = '';
-    const attempt = {id, indicatorID, state:'permission', abort:new AbortController(), chunks:[]};
+    const attempt = {project:window.__libroActiveProject, state:'permission', abort:new AbortController(), chunks:[]};
     current = attempt; render();
     try {
+      attempt.target = await destination(id);
+      if (current !== attempt) return;
+      if (!attempt.target) throw new Error('Focus an input field or terminal before starting voice typing.');
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('Microphone recording requires the desktop app or localhost.');
       const stream = await navigator.mediaDevices.getUserMedia({audio:{channelCount:1, echoCancellation:true, noiseSuppression:true}, video:false});
       attempt.stream = stream;
       // Recording may have been canceled while the OS permission prompt was open.
-      if (current !== attempt || !available(id)) { releaseResources(attempt); if (current === attempt) cancel(); return; }
+      if (current !== attempt || !valid(attempt)) { releaseResources(attempt); if (current === attempt) cancel(); return; }
       const recorder = new MediaRecorder(stream);
       attempt.recorder = recorder;
       recorder.ondataavailable = event => { if (event.data.size) attempt.chunks.push(event.data); };
@@ -138,33 +169,29 @@
       if (!response.ok) throw new Error(await response.text());
       const result = await response.json();
       if (current !== attempt) return;
-      if (!available(attempt.id)) { cancel(); return; }
+      if (!valid(attempt)) { cancel(); return; }
       if (!result.text?.trim()) throw new Error('No speech recognized. Please try again.');
-      if (!window.__libroSendPageToolPrompt?.(result.text, false, attempt.id)) throw new Error('Terminal disconnected. Please reconnect and try again.');
-      current = null; message = 'Text inserted · Review and press Enter';
-      window.__libroFocusAppByID?.(attempt.id);
+      attempt.state = 'inserting';
+      if (!await attempt.target.insert(result.text)) throw new Error('The input is no longer available. Focus it and try again.');
+      if (current !== attempt) return;
+      current = null; message = 'Text inserted · Review before sending';
       render();
     } catch (error) { fail(attempt, error); }
   }
 
-  function mount(group, id) {
-    const button = document.createElement('button');
-    button.type = 'button'; button.className = 'ws-button ws-voice-button'; button.dataset.voiceButton = id;
-    const icon = document.createElement('i'); icon.className = 'material-icons-round'; icon.setAttribute('aria-hidden', 'true'); button.append(icon);
-    const status = document.createElement('span'); status.className = 'ws-voice-status'; status.setAttribute('role', 'status');
-    button.onclick = () => { void toggle(id); };
-    button.onkeydown = event => {
-      if (event.repeat && [' ', 'Enter'].includes(event.key)) event.preventDefault();
-    };
-    group.prepend(button); group.append(status); render();
-  }
+  // Clicking the microphone must preserve the focused field and its selection.
+  document.addEventListener('pointerdown', event => {
+    if (event.target.closest?.('[data-voice-button]')) event.preventDefault();
+  }, true);
 
   window.addEventListener('keydown', event => {
     if (event.key === 'Escape' && current) { event.preventDefault(); event.stopImmediatePropagation(); cancel(); }
+    if (event.repeat && [' ', 'Enter'].includes(event.key) && event.target.closest?.('[data-voice-button]')) event.preventDefault();
   }, true);
-  window.addEventListener('blur', cancel);
+  // Refocusing a browser input after insertion can blur the host renderer.
+  window.addEventListener('blur', () => { if (current?.state !== 'inserting') cancel(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) cancel(); });
-  new MutationObserver(() => { if (current && !available(current.id)) cancel(); }).observe(document.getElementById('libro-workspace'), {subtree:true, childList:true, attributes:true, attributeFilter:['aria-hidden']});
-  window.libroVoice = {toggle, cancel, mount, poll, refresh:render};
+  new MutationObserver(() => { if (current?.target && !valid(current)) cancel(); }).observe(document.getElementById('libro-workspace'), {subtree:true, childList:true, attributes:true, attributeFilter:['aria-hidden']});
+  window.libroVoice = {toggle, cancel, poll, refresh:render};
   void poll();
 })();

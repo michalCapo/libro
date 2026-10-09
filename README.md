@@ -55,8 +55,8 @@ both CLI and extension updates on the next launch.
 
 ### Voice typing
 
-Press **Caps Lock**, or click the microphone beside the agent tab, to start listening.
-Press or click again to stop and insert the transcript into the selected terminal (or the agent when a browser is selected). Review it and press Enter to send.
+Focus a text field, then press **Caps Lock** or click the microphone in the right tool rail to start listening.
+Press or click again to stop and insert the transcript at the captured caret or selection. This works in Libro forms, editors, browser inputs, and page-description prompts. If no text field is focused, dictation uses the selected terminal, or the agent when a browser is selected. Review the text before sending; dictation never submits it.
 Escape, switching threads, or leaving the window cancels dictation. Recordings
 are limited to 60 seconds. Change the shortcut in Settings.
 

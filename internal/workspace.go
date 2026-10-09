@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	r "github.com/michalCapo/g-sui/ui"
+	"libro/internal/components"
 	"path/filepath"
 	"strings"
 )
@@ -15,6 +16,7 @@ func workspaceJS() string {
 	var code strings.Builder
 	code.WriteString(`window.__libroToolKeys=props.keys;window.__libroDefaultToolKeys=props.defaults;window.__libroPageToolsAutoExecute=props.autoexecute;window.__libroWorkspaceSID=props.sid;window.__libroPlugins=props.plugins;`)
 	code.WriteString(`var wsStyle=document.createElement('style');wsStyle.textContent=props.css;document.head.appendChild(wsStyle);`)
+	code.WriteString(components.VoiceInputJS())
 	for _, name := range []string{"file-editor.bundle.js", "files.js", "note-editor.bundle.js", "notes.js", "voice.js", "workspace.js"} {
 		data, _ := workspaceAssets.ReadFile(name)
 		code.Write(data)
@@ -116,6 +118,10 @@ func renderWorkspaceTools() *r.Node {
 		workspaceButton("Toggle projects", "view_sidebar", r.UnsafeJS("libroWorkspace.toggle('projects')")),
 		r.Div("ws-tool-buttons").ID("workspace-tool-buttons"),
 		workspaceButton("More tools", "add", r.UnsafeJS("libroWorkspace.launcher('right')")),
+		r.Div("ws-voice-control").Attr("data-voice-control", "").Render(
+			workspaceButton("Voice typing", "mic", r.UnsafeJS("void window.libroVoice?.toggle()")).Attr("data-voice-button", "global").Attr("aria-pressed", "false"),
+			r.Span("ws-voice-status").Attr("role", "status").Attr("popover", "manual").Attr("hidden", "hidden"),
+		),
 		workspaceButton("Toggle bottom terminal (Ctrl+`)", "vertical_align_bottom", r.UnsafeJS("libroWorkspace.bottom()")),
 	)
 }

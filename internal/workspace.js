@@ -990,14 +990,12 @@
       if (!event.repeat && (!document.getElementById('workspace-settings').hidden || !document.querySelector('dialog[open], #libro-confirm-popover'))) settings();
       return;
     }
-    if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open], #libro-confirm-popover')) return;
     if (binding && binding === toolKeys.voice) {
       event.preventDefault(); event.stopImmediatePropagation();
-      const grid = activeGrid();
-      const agent = grid && frames(grid).find(frame => frame.dataset.dock === 'center');
-      if (!event.repeat && agent) void window.libroVoice?.toggle(agent.dataset.appId);
+      if (!event.repeat) void window.libroVoice?.toggle();
       return;
     }
+    if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open], #libro-confirm-popover')) return;
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
       if (event.repeat) return;
       const now = performance.now();
@@ -1336,7 +1334,6 @@
           else select(id);
         };
         group.append(tab); tabs.append(group);
-        if (dock === 'center') window.libroVoice?.mount(group, id);
       });
       if (sizeFrame) {
         const id = sizeFrame.dataset.appId;
