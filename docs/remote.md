@@ -2,7 +2,10 @@
 
 Goal: the Libro backend runs on a server and is controlled from Libro on a laptop. Same UI as today. One frontend can work with many backends.
 
-Status: proposal. None of the remote features below exist yet.
+Status: proposal. Remote pairing and multi-backend access are not implemented.
+The desktop application now keeps core workspace and tool control, CLI updates,
+terminal reconnect replay, and page-attachment storage in the Go backend.
+Electron remains the frontend and captures native page pixels.
 
 Design: TLS pairing. Everything is inside Libro. No Vemari, no relay, no frp, no SSH install.
 
@@ -241,9 +244,6 @@ This is part of the first version, not a later add-on.
 
 ## Not Covered
 
-- Terminal output during a disconnect is not replayed after reconnect (only a 64 KiB log).
-- Page-tool attachments are saved on the laptop; a remote agent cannot see them. Needs upload to the server.
-- Agent CLIs and their auto-update (today in Electron, `electron/agent-updates.js`) must run on the server.
 - Multiple users on one backend.
 - The server must be reachable from the laptop (public IP/DNS, LAN, VPN, or `ssh -L` tunnel). NAT on both sides without a VPN is not solved.
 - SSH install and auto-start of the backend. The backend is started manually.

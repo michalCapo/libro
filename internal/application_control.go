@@ -30,7 +30,7 @@ Set the start command in project settings first. Commands cannot be supplied or 
 A starting response means launch was requested; use status to check the process. Running does not guarantee server readiness.
 `
 
-// ApplicationCommand sends a project lifecycle command through the desktop bridge.
+// ApplicationCommand sends a project lifecycle command directly to the backend.
 func ApplicationCommand(command json.RawMessage) (json.RawMessage, error) {
 	var args struct {
 		Action  string `json:"action"`
@@ -63,7 +63,7 @@ func ApplicationCommand(command json.RawMessage) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return desktopCommand(payload)
+	return agentControlCommand(payload)
 }
 
 // scopedApplicationCommand deliberately excludes target selection from the MCP API.
@@ -112,16 +112,16 @@ func RunApplicationCLI(args []string, out io.Writer) error {
 }
 
 func registerApplicationControl(app *r.App) {
-	r.RegisterAction(app, "app.urls", func(_ *r.Context, in actionAppURLsInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.urls", func(_ *r.Context, in actionAppURLsInput) (r.Result, error) {
 		state := sm.Get(inputSID(in.SID))
 		return clientScript("if(window.__libroSetApplicationURLs)window.__libroSetApplicationURLs(props[0],props[1],props[2]);", state.ActiveProject, in.ID, applicationBrowserURLs(state)), nil
 	})
-	r.RegisterAction(app, "project.command.agent", func(_ *r.Context, in actionProjectCommandAgentInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.command.agent", func(_ *r.Context, in actionProjectCommandAgentInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		id := in.Request
 		operation := in.Operation
 		project := in.Project
-		js, result, err := controlApplication(sid, project, operation)
+		js, result, err := dispatchBackendCommand(sid, backendCommand{Action: "application", Project: project, Operation: operation})
 		reply := map[string]any{"result": result}
 		if err != nil {
 			reply["error"] = err.Error()
@@ -219,7 +219,11 @@ func controlApplication(sid, project, operation string) (r.Result, map[string]an
 			logs.WriteString(output)
 			truncated = truncated || dropped
 		}
-		return r.Result{}, map[string]any{"project": path, "configured": command != "", "status": status, "mode": settings.Mode, "port": port, "url": applicationURL(port), "logs": logs.String(), "truncated": truncated}, nil
+		output := logs.String()
+		if len(output) > 64<<10 {
+			output, truncated = output[len(output)-(64<<10):], true
+		}
+		return r.Result{}, map[string]any{"project": path, "configured": command != "", "status": status, "mode": settings.Mode, "port": port, "url": applicationURL(port), "logs": output, "truncated": truncated}, nil
 	}
 	if operation == "status" || operation == "start" && status != "stopped" {
 		return r.Result{}, map[string]any{"project": path, "configured": command != "", "status": status, "mode": settings.Mode, "port": port, "url": applicationURL(port)}, nil

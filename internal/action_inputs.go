@@ -229,6 +229,11 @@ type actionSettingsVoiceInput struct {
 	SID      string `json:"sid"`
 }
 
+type actionSettingsAgentUpdatesInput struct {
+	Enabled    bool `json:"enabled"`
+	Initialize bool `json:"initialize"`
+}
+
 type actionSettingsAgentCommandInput struct {
 	Commands map[string]string `json:"commands"`
 	Custom   []Plugin          `json:"custom"`

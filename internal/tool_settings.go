@@ -106,7 +106,7 @@ func saveToolsWithEditor(list []Plugin, editor string, saveEditor bool, shortcut
 }
 
 func registerToolSettings(app *r.App) {
-	r.RegisterAction(app, "settings.tools", func(_ *r.Context, in actionSettingsToolsInput) (r.Result, error) {
+	registerWorkspaceAction(app, "settings.tools", func(_ *r.Context, in actionSettingsToolsInput) (r.Result, error) {
 		editor, saveEditor := inputField(in.Editor)
 		err := saveToolsWithEditor(in.Tools, editor, saveEditor, in.Bindings)
 		if err != nil {

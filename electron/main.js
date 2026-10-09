@@ -42,7 +42,6 @@ if (process.platform === 'windows') {
 const port = process.env.LIBRO_PORT || (instance ? '8101' : '8100')
 const serverURL = `http://localhost:${port}`
 
-let stopAgentControl = null
 let goProcess = null
 let mainWindow = null
 let isQuitting = false
@@ -671,11 +670,6 @@ function createWindow() {
   if (!instance) mainWindow.maximize()
   mainWindow.show()
 
-  mainWindow.webContents.once('did-finish-load', () => {
-    const { startAgentUpdates } = require('./agent-updates')
-    startAgentUpdates(mainWindow).catch(() => console.error('Agent update check unavailable'))
-  })
-
   mainWindow.loadURL(serverURL).catch((err) => {
     if (err && err.code === 'ERR_ABORTED') return
     console.error(`Failed to load Libro UI at ${serverURL}:`, err && err.message ? err.message : err)
@@ -774,14 +768,14 @@ function createWindow() {
     if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error('Invalid sender')
     const target = withWebContents(targetId)
     if (!target || target.hostWebContents !== event.sender) throw new Error('Invalid browser')
-    return require('./page-area').capturePageArea(target, area, app.getPath('temp'))
+    return require('./page-area').capturePageArea(target, area)
   })
 
   ipcMain.handle('libro-save-page-tool-images', async (event, targetId, images) => {
     if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error('Invalid sender')
     const target = withWebContents(targetId)
     if (!target || target.hostWebContents !== event.sender) throw new Error('Invalid browser')
-    return require('./page-area').savePageToolImages(images, app.getPath('temp'))
+    return require('./page-area').pageToolImages(images)
   })
 
   ipcMain.on('libro-copy-clipboard', (event, text) => {
@@ -1250,10 +1244,6 @@ app.on('ready', async () => {
     }
   }
   createWindow()
-  try {
-    const { startControlServer, createController } = require('./agent-control')
-    stopAgentControl = await startControlServer(app.getPath('userData'), port, createController(() => mainWindow))
-  } catch (error) { console.error('Libro control unavailable:', error.message) }
   powerMonitor.on('resume', refreshTerminalFramesAfterResume)
 })
 
@@ -1266,6 +1256,5 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
-  if (stopAgentControl) stopAgentControl()
   stopGoServer()
 })

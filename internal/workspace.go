@@ -9,15 +9,15 @@ import (
 	"strings"
 )
 
-//go:embed workspace.css workspace.js voice.js files.js file-editor.bundle.js notes.js note-editor.bundle.js
+//go:embed workspace.css workspace.js voice.js files.js file-editor.bundle.js notes.js note-editor.bundle.js page_attachments.js
 var workspaceAssets embed.FS
 
 func workspaceJS() string {
 	var code strings.Builder
-	code.WriteString(`window.__libroToolKeys=props.keys;window.__libroDefaultToolKeys=props.defaults;window.__libroPageToolsAutoExecute=props.autoexecute;window.__libroWorkspaceSID=props.sid;window.__libroPlugins=props.plugins;`)
+	code.WriteString(`window.__libroToolKeys=props.keys;window.__libroDefaultToolKeys=props.defaults;window.__libroPageToolsAutoExecute=props.autoexecute;window.__libroWorkspaceSID=props.sid;window.__libroPlugins=props.plugins;window.__libroAgentAutoUpdate=props.agentUpdates;`)
 	code.WriteString(`var wsStyle=document.createElement('style');wsStyle.textContent=props.css;document.head.appendChild(wsStyle);`)
 	code.WriteString(components.VoiceInputJS())
-	for _, name := range []string{"file-editor.bundle.js", "files.js", "note-editor.bundle.js", "notes.js", "voice.js", "workspace.js"} {
+	for _, name := range []string{"file-editor.bundle.js", "files.js", "note-editor.bundle.js", "notes.js", "voice.js", "page_attachments.js", "workspace.js"} {
 		data, _ := workspaceAssets.ReadFile(name)
 		code.Write(data)
 	}

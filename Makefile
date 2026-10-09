@@ -244,8 +244,6 @@ install: ## Build and install Libro locally
 	if copy_if_changed "$$SCRIPT_DIR/package-lock.json" "$$LIBRO_DIR/package-lock.json"; then APP_FILES_CHANGED=true; fi
 	if copy_if_changed "$$SCRIPT_DIR/electron/main.js" "$$LIBRO_DIR/electron/main.js"; then APP_FILES_CHANGED=true; fi
 	if copy_if_changed "$$SCRIPT_DIR/electron/linux-theme.js" "$$LIBRO_DIR/electron/linux-theme.js"; then APP_FILES_CHANGED=true; fi
-	if copy_if_changed "$$SCRIPT_DIR/electron/agent-control.js" "$$LIBRO_DIR/electron/agent-control.js"; then APP_FILES_CHANGED=true; fi
-	if copy_if_changed "$$SCRIPT_DIR/electron/agent-updates.js" "$$LIBRO_DIR/electron/agent-updates.js"; then APP_FILES_CHANGED=true; fi
 	if copy_if_changed "$$SCRIPT_DIR/electron/page-area.js" "$$LIBRO_DIR/electron/page-area.js"; then APP_FILES_CHANGED=true; fi
 	if copy_if_changed "$$SCRIPT_DIR/electron/preload.js" "$$LIBRO_DIR/electron/preload.js"; then APP_FILES_CHANGED=true; fi
 	if copy_if_changed "$$SCRIPT_DIR/electron/webview-preload.js" "$$LIBRO_DIR/electron/webview-preload.js"; then APP_FILES_CHANGED=true; fi
@@ -399,8 +397,6 @@ release: ## Bump, build, tag, push, and publish a release
 	    cp "$$SCRIPT_DIR/package-lock.json" "$$BUNDLE_APP_DIR/package-lock.json"
 	    cp "$$SCRIPT_DIR/electron/main.js" "$$BUNDLE_APP_DIR/electron/main.js"
 	    cp "$$SCRIPT_DIR/electron/linux-theme.js" "$$BUNDLE_APP_DIR/electron/linux-theme.js"
-	    cp "$$SCRIPT_DIR/electron/agent-control.js" "$$BUNDLE_APP_DIR/electron/agent-control.js"
-	    cp "$$SCRIPT_DIR/electron/agent-updates.js" "$$BUNDLE_APP_DIR/electron/agent-updates.js"
 	    cp "$$SCRIPT_DIR/electron/page-area.js" "$$BUNDLE_APP_DIR/electron/page-area.js"
 	    cp "$$SCRIPT_DIR/electron/preload.js" "$$BUNDLE_APP_DIR/electron/preload.js"
 	    cp "$$SCRIPT_DIR/electron/webview-preload.js" "$$BUNDLE_APP_DIR/electron/webview-preload.js"

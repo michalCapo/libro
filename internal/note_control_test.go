@@ -144,8 +144,8 @@ func TestNotesSharedAcrossWorktrees(t *testing.T) {
 		t.Fatal(err)
 	}
 	state.ActiveProject = "one/feature"
-	if _, err := controlNotes("test", noteCommand{Project: state.Projects[1].Path, Action: "list"}); err == nil {
-		t.Fatal("worktree could access another project")
+	if _, err := controlNotes("test", noteCommand{Project: state.Projects[1].Path, Action: "list"}); err != nil {
+		t.Fatal("registered notes depended on the active worktree")
 	}
 }
 
@@ -208,8 +208,8 @@ func TestNoteControlListAndValidation(t *testing.T) {
 		}
 	}
 	sm.states["test"].ActiveProject = ""
-	if _, err := controlNotes("test", noteCommand{Project: path, Action: "list"}); err == nil {
-		t.Fatal("accepted no active project")
+	if _, err := controlNotes("test", noteCommand{Project: path, Action: "list"}); err != nil {
+		t.Fatal("registered notes depended on the active project")
 	}
 }
 

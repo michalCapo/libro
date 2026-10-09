@@ -2,7 +2,7 @@ package components
 
 import "sync"
 
-const terminalLogLimit = 64 * 1024
+const terminalLogLimit = 4 * 1024 * 1024
 
 type terminalLog struct {
 	managed   *managedTerminal

@@ -638,7 +638,8 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 		try {
 			if (!guest || !window.libroElectron || !window.libroElectron.capturePageArea) throw new Error('Open Libro desktop to capture page areas.');
 			var rect = payload.kind === 'page' ? {fullPage:true} : payload.kind === 'element' ? payload.element && payload.element.viewportRect : payload.area;
-			payload.screenshot = await window.libroElectron.capturePageArea(guest.getWebContentsId(), rect);
+			var screenshot = await window.libroElectron.capturePageArea(guest.getWebContentsId(), rect);
+			payload.screenshot = (await window.__libroSavePageToolImages(appID, [screenshot]))[0];
 			await guest.executeJavaScript('window.__libroPageToolPromptOpen(' + JSON.stringify(payload) + ', ' + JSON.stringify(payload.url) + ')');
 		} catch (err) {
 			if (window.__libroShowToast) window.__libroShowToast('Screenshot failed', err.message || 'Try the annotation again in Libro desktop.', 'error');
@@ -652,7 +653,8 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 		if ((payload.kind === 'area' || payload.kind === 'element' || payload.kind === 'page') && !payload.screenshot) return;
 		if (payload.images && payload.images.length) {
 			try {
-				payload.attachments = await window.libroElectron.savePageToolImages(pageToolWebview(appID).getWebContentsId(), payload.images);
+				var images = await window.libroElectron.savePageToolImages(pageToolWebview(appID).getWebContentsId(), payload.images);
+				payload.attachments = await window.__libroSavePageToolImages(appID, images);
 			} catch (err) {
 				var guest = pageToolWebview(appID);
 				if (guest && guest.executeJavaScript) await guest.executeJavaScript('window.__libroPageToolResult(false, "Could not attach images. Try again.")');

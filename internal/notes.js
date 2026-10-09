@@ -296,5 +296,8 @@
     }
     return reply.result;
   }
-  window.libroNotes = {init, receive, control, dispose};
+  function refresh() {
+    for (const s of states.values()) if (s.el.isConnected) request(s, 'list');
+  }
+  window.libroNotes = {init, receive, control, dispose, refresh};
 })();

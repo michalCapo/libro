@@ -5,7 +5,7 @@ const vm = require('node:vm')
 const { test } = require('node:test')
 
 const source = fs.readFileSync(path.join(__dirname, '../internal/components.go'), 'utf8')
-const themeCode = source.slice(source.indexOf('function applyTerminalTheme('), source.indexOf('\n\t\t\tfunction scan(root)', source.indexOf('function applyTerminalTheme(')))
+const themeCode = source.slice(source.indexOf('function applyTerminalTheme('), source.indexOf('            window.__libroMountTerminal', source.indexOf('function applyTerminalTheme(')))
 
 for (const initialDark of [false, true]) {
   test(`theme switches preserve cached CLI colors and restore the original surface (${initialDark ? 'dark' : 'light'} start)`, () => {

@@ -87,6 +87,8 @@ type AppState struct {
 type StateManager struct {
 	mu             sync.RWMutex
 	states         map[string]*AppState
+	backendMu      sync.Mutex
+	backendSID     string
 	nextID         int
 	layoutMu       sync.Mutex
 	layoutTimer    *time.Timer

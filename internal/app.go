@@ -27,6 +27,10 @@ import (
 )
 
 func hydrateAppAfterScrollJS(in actionAppHydrateInput) r.Result {
+	// Start terminal processes in the backend; the frontend only mounts them.
+	if panel, _, _, found := sm.workspaceApp(in.SID, in.ID); found && panel.Type == AppTypeTerminal && panel.PluginID != "project-command" {
+		return r.Merge(clientScript(`requestAnimationFrame(function(){var frame=document.querySelector('[data-app-id="'+CSS.escape(props[0])+'"]');if(frame&&window.__libroScrollToApp)window.__libroScrollToApp(frame);});`, in.ID), hydrateApp(in.SID, in.ID, in.OpenURL))
+	}
 	return clientScript(`
 (function(){
 	var appID=props[0];
@@ -590,7 +594,10 @@ var (
 
 // CleanupRuntime tears down terminal backends and language servers.
 func CleanupRuntime() {
-	shutdownCleanupOnce.Do(stopRuntime)
+	shutdownCleanupOnce.Do(func() {
+		stopBackend()
+		stopRuntime()
+	})
 }
 
 // Stopping a terminal reads its final agent session, so save the layout after.
@@ -627,6 +634,8 @@ func Run(assets embed.FS, desktop bool) error {
 	InitDB()
 	defer CloseDB()
 	defer CleanupRuntime()
+	tm.SetReplayOutput(true)
+	backendSessionID()
 	app := r.NewApp()
 	app.Title = "Libro"
 	if name := os.Getenv("LIBRO_INSTANCE"); name != "" {
@@ -641,20 +650,21 @@ func Run(assets embed.FS, desktop bool) error {
 	registerFilesActions(app)
 	registerNotesActions(app)
 	registerVoiceRoutes(app)
-	r.RegisterAction(app, "app.notify", func(_ *r.Context, in actionAppNotifyInput) (r.Result, error) {
+	registerBackendAttachments(app)
+	registerWorkspaceAction(app, "app.notify", func(_ *r.Context, in actionAppNotifyInput) (r.Result, error) {
 		title := in.Title
 		subtitle := in.Subtitle
 		variant := in.Variant
 		return showToastJS(title, subtitle, variant), nil
 	})
 	// Open add dialog
-	r.RegisterAction(app, "app.dialog.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.dialog.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		return trustedResponse(`if(window.libroWorkspace)libroWorkspace.launcher();`), nil
 	})
 	// Quick browse - open URL or Google search
 
 	// Open Neovim if available, otherwise fall back to Vim; notify if neither exists.
-	r.RegisterAction(app, "app.nvim.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.nvim.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		cmd := ""
 		name := ""
@@ -671,14 +681,14 @@ func Run(assets embed.FS, desktop bool) error {
 		return r.Result{}.Run(actionAppStart.Call(actionAppStartInput{SID: sid, Type: "terminal", Command: cmd, Writable: new(true), Name: name, Side: "right"})), nil
 	})
 	// Open the Pi coding agent if available.
-	r.RegisterAction(app, "app.pi.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.pi.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		if _, err := exec.LookPath("pi"); err != nil {
 			return showToastJS("Pi agent not installed", "Install pi to use ⌘/Win+Y", "error"), nil
 		}
 		return r.Result{}.Run(actionAppStart.Call(actionAppStartInput{SID: sid, Type: "terminal", Command: "pi", Writable: new(true), Name: "pi", Side: "right"})), nil
 	})
-	r.RegisterAction(app, "plugin.open", func(_ *r.Context, in actionPluginOpenInput) (r.Result, error) {
+	registerWorkspaceAction(app, "plugin.open", func(_ *r.Context, in actionPluginOpenInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		id := in.Plugin
 		dock := in.Dock
@@ -699,7 +709,7 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 		return r.Result{}.Run(r.Notify("error", "Plugin not found")), nil
 	})
-	r.RegisterAction(app, "app.dock", func(_ *r.Context, in actionAppDockInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.dock", func(_ *r.Context, in actionAppDockInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		id := in.ID
 		dock := in.Dock
@@ -719,7 +729,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return r.Result{}, nil
 	})
 	// Start an application instance.
-	actionAppStart = r.RegisterAction(app, "app.start", func(_ *r.Context, in actionAppStartInput) (r.Result, error) {
+	actionAppStart = registerWorkspaceAction(app, "app.start", func(_ *r.Context, in actionAppStartInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		if project, ok := inputField(in.AutolaunchProject); ok {
 			state := sm.Get(sid)
@@ -924,11 +934,11 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 		return r.Merge(r.Result{}.Morph(projectMainID(state.ActiveProject), renderMainAreaWithPlaceholder(state, sid, state.Apps[state.SelectedIndex].ID)), topBarJS, projJS, navigateJS(state, sid), hydrateJS), nil
 	})
-	r.RegisterAction(app, "app.hydrate", func(_ *r.Context, in actionAppHydrateInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.hydrate", func(_ *r.Context, in actionAppHydrateInput) (r.Result, error) {
 		return hydrateApp(inputSID(in.SID), in.ID, in.OpenURL), nil
 	})
 	// Close/remove application
-	actionAppClose = r.RegisterAction(app, "app.close", func(_ *r.Context, in actionAppCloseInput) (r.Result, error) {
+	actionAppClose = registerWorkspaceAction(app, "app.close", func(_ *r.Context, in actionAppCloseInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		appID := in.ID
 		if appID == "" {
@@ -937,19 +947,19 @@ func Run(assets embed.FS, desktop bool) error {
 		return closeWorkspaceApp(sid, appID), nil
 	})
 	// Close every panel except the selected one (thread agents and shared panels stay).
-	r.RegisterAction(app, "app.close.others", func(_ *r.Context, in actionAppCloseOthersInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.close.others", func(_ *r.Context, in actionAppCloseOthersInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		keepID := in.ID
 		return closeOtherPanels(sid, keepID), nil
 	})
-	r.RegisterAction(app, "project.close.check", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.close.check", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		state := sm.Get(sid)
 		return showCloseDialogJS([]ProjectApps{{Name: workspaceProjectLabel(state), Apps: state.Apps}},
 			"Close project?", "Close project", "project.close", sid), nil
 	})
 	// Close current (selected) app — no app ID needed from client
-	r.RegisterAction(app, "app.close.current", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.close.current", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		state := sm.Get(sid)
 		if len(state.Apps) == 0 {
@@ -959,7 +969,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return closeWorkspaceApp(sid, appID), nil
 	})
 	// Emergency restart for a terminal app's native PTY session.
-	r.RegisterAction(app, "app.terminal.restart", func(_ *r.Context, in actionAppTerminalRestartInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.terminal.restart", func(_ *r.Context, in actionAppTerminalRestartInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		appID := in.ID
 		if appID == "" {
@@ -1007,21 +1017,21 @@ func Run(assets embed.FS, desktop bool) error {
 		return r.Merge(js, clientScript("(function(){if(window.__libroRestartTerminal)window.__libroRestartTerminal(props[0]);})();", term.ID), settleAppFrameJS(term.ID), r.Result{}.Run(r.Notify("success", "Terminal restarted"))), nil
 	})
 	// Navigate left - JS-only update to preserve iframes
-	r.RegisterAction(app, "app.navigate.left", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.navigate.left", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		sm.NavigateLeft(sid)
 		state := sm.Get(sid)
 		return r.Merge(navigateJS(state, sid), updateAppPreviewJS(state)), nil
 	})
 	// Navigate right - JS-only update to preserve iframes
-	r.RegisterAction(app, "app.navigate.right", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.navigate.right", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		sm.NavigateRight(sid)
 		state := sm.Get(sid)
 		return r.Merge(navigateJS(state, sid), updateAppPreviewJS(state)), nil
 	})
 	// Move app left — swap with neighbor, JS-only DOM swap to preserve iframes
-	r.RegisterAction(app, "app.move.left", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.move.left", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		if !sm.MoveAppLeft(sid) {
 			return r.Result{}, nil
@@ -1030,7 +1040,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return r.Merge(moveAppJS(state, sid, "left"), r.Result{}.Morph(TopBarID, renderTopBar(state, sid))), nil
 	})
 	// Move app right — swap with neighbor, JS-only DOM swap to preserve iframes
-	r.RegisterAction(app, "app.move.right", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.move.right", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		if !sm.MoveAppRight(sid) {
 			return r.Result{}, nil
@@ -1039,7 +1049,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return r.Merge(moveAppJS(state, sid, "right"), r.Result{}.Morph(TopBarID, renderTopBar(state, sid))), nil
 	})
 	// Move selected app to another project, then activate that project.
-	r.RegisterAction(app, "app.move.to.project", func(_ *r.Context, in actionAppMoveToProjectInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.move.to.project", func(_ *r.Context, in actionAppMoveToProjectInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		target := in.Target
 		kind := in.Kind
@@ -1099,7 +1109,7 @@ func Run(assets embed.FS, desktop bool) error {
 			Add(focusSelectedAppJS(state)), nil
 	})
 	// Resize app to specific width — JS-only update to preserve iframes
-	r.RegisterAction(app, "app.resize", func(_ *r.Context, in actionAppResizeInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.resize", func(_ *r.Context, in actionAppResizeInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		appID := in.ID
 		if appID == "" {
@@ -1120,7 +1130,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return resizeJS(sm.Get(sid), width, appID, sm.SyncToolWidth(sid, appID)...), nil
 	})
 	// Toggle full width while keeping the other panels visible.
-	r.RegisterAction(app, "app.resize.max.toggle", func(_ *r.Context, in actionAppResizeMaxToggleInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.resize.max.toggle", func(_ *r.Context, in actionAppResizeMaxToggleInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		maxPixels := 0
 		if v, ok := inputField(in.MaxPixel); ok {
@@ -1133,7 +1143,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return resizeJS(sm.Get(sid), width, appID, sm.SyncToolWidth(sid, appID)...), nil
 	})
 	// Toggle maximize — switch selected app between full width and previous width
-	r.RegisterAction(app, "app.maximize.toggle", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.maximize.toggle", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		state := sm.Get(sid)
 		if len(state.Apps) == 0 {
@@ -1142,7 +1152,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return clientScript("if(window.libroWorkspace)libroWorkspace.maximize(props[0]);", selectedAppID(state)), nil
 	})
 	// Step selected app width by one tier up/down.
-	r.RegisterAction(app, "app.resize.step", func(_ *r.Context, in actionAppResizeStepInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.resize.step", func(_ *r.Context, in actionAppResizeStepInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		delta := 0
 		if v, ok := inputField(in.Delta); ok {
@@ -1162,7 +1172,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return resizeJS(sm.Get(sid), newWidth, appID, sm.SyncToolWidth(sid, appID)...), nil
 	})
 	// Select specific app - JS-only update to preserve iframes
-	actionAppSelect = r.RegisterAction(app, "app.select", func(_ *r.Context, in actionAppSelectInput) (r.Result, error) {
+	actionAppSelect = registerWorkspaceAction(app, "app.select", func(_ *r.Context, in actionAppSelectInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		idx := 0
 		if v, ok := inputField(in.Index); ok {
@@ -1176,7 +1186,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return r.Merge(navigateJS(state, sid), updateAppPreviewJS(state)), nil
 	})
 	// Open an empty browser panel
-	r.RegisterAction(app, "app.browse.open", func(_ *r.Context, in actionAppBrowseOpenInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.browse.open", func(_ *r.Context, in actionAppBrowseOpenInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		side := in.Side
 
@@ -1212,13 +1222,13 @@ func Run(assets embed.FS, desktop bool) error {
 			Add(hydrateJS), nil
 	})
 	// Quick open - show the app search dialog
-	r.RegisterAction(app, "plugin.launcher.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "plugin.launcher.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		return trustedResponse(`if(window.libroWorkspace)libroWorkspace.launcher();`), nil
 	})
 	// Execute a terminal command directly (called from search dialog)
 
 	// Set URL for a running app — navigates the iframe and updates session state only.
-	r.RegisterAction(app, "app.url.set", func(_ *r.Context, in actionAppUrlSetInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.url.set", func(_ *r.Context, in actionAppUrlSetInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		appID := in.ID
 		newURL := in.Url
@@ -1256,17 +1266,17 @@ func Run(assets embed.FS, desktop bool) error {
 		_ = json.NewEncoder(w).Encode(matches)
 	})
 	// Open the unified project dialog in folder-browse mode.
-	r.RegisterAction(app, "project.dialog.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.dialog.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		return trustedResponse(`if(window.__libroOpenProjectDialog)window.__libroOpenProjectDialog();`), nil
 	})
 	// Close project dialog
-	r.RegisterAction(app, "project.dialog.close", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.dialog.close", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		sm.CloseProjectDialog(sid)
 		return r.Result{}.Run(r.Hide(ProjectDialogID)), nil
 	})
 	// Create a new project
-	r.RegisterAction(app, "project.create", func(_ *r.Context, in actionProjectCreateInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.create", func(_ *r.Context, in actionProjectCreateInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		path := in.ProjectPath
 		path = strings.TrimSpace(path)
@@ -1293,7 +1303,7 @@ func Run(assets embed.FS, desktop bool) error {
 	})
 	// Open a folder as a session-only project. This sets the active working
 	// directory for newly opened apps without persisting it to the project list.
-	r.RegisterAction(app, "project.open.folder", func(_ *r.Context, in actionProjectOpenFolderInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.open.folder", func(_ *r.Context, in actionProjectOpenFolderInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		path := in.ProjectPath
 		path = strings.TrimSpace(path)
@@ -1315,7 +1325,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return finalizeProjectCreate(sid, path, name, true), nil
 	})
 	// Confirm creating a missing project folder, then create the project.
-	r.RegisterAction(app, "project.create.confirm", func(_ *r.Context, in actionProjectCreateConfirmInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.create.confirm", func(_ *r.Context, in actionProjectCreateConfirmInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		path := in.Path
 		path = strings.TrimSpace(path)
@@ -1336,7 +1346,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return finalizeProjectCreate(sid, path, name, false), nil
 	})
 	// Close every panel and terminal in the requested workspace (active by default).
-	actionProjectClose = r.RegisterAction(app, "project.close", func(_ *r.Context, in actionProjectCloseInput) (r.Result, error) {
+	actionProjectClose = registerWorkspaceAction(app, "project.close", func(_ *r.Context, in actionProjectCloseInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		state := sm.Get(sid)
 		name := in.Name
@@ -1378,7 +1388,7 @@ func Run(assets embed.FS, desktop bool) error {
 	registerThreadActions(app, switchToProjectWithAgent)
 	registerFinishThreadActions(app)
 	// Switch active project
-	r.RegisterAction(app, "project.switch", func(_ *r.Context, in actionProjectSwitchInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.switch", func(_ *r.Context, in actionProjectSwitchInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		name := in.Name
 		resp, ok := switchToProjectWithAgent(sid, name, "")
@@ -1407,7 +1417,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return resp, nil
 	})
 	// Remove a project
-	r.RegisterAction(app, "project.remove", func(_ *r.Context, in actionProjectRemoveInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.remove", func(_ *r.Context, in actionProjectRemoveInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		name := in.Name
 		if name == "" {
@@ -1450,7 +1460,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return resp, nil
 	})
 	// Check if there are running apps before closing — returns JS to show dialog or force close
-	r.RegisterAction(app, "app.close.check", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.close.check", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		sm.mu.RLock()
 		sessionIDs := make([]string, 0, len(sm.states))
@@ -1471,8 +1481,11 @@ func Run(assets embed.FS, desktop bool) error {
 	})
 	// Finish cleanup before allowing the renderer to close the desktop window.
 	// Without a desktop process the server keeps running, so the next page restores again.
-	actionAppCloseAll = r.RegisterAction(app, "app.close.all", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	actionAppCloseAll = registerWorkspaceAction(app, "app.close.all", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		stopRuntime()
+		sm.backendMu.Lock()
+		sm.backendSID = ""
+		sm.backendMu.Unlock()
 		sm.mu.Lock()
 		sm.states = make(map[string]*AppState)
 		sm.mu.Unlock()
@@ -1481,7 +1494,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return trustedResponse(`if(window.libroElectron)window.libroElectron.forceClose();else window.close();`), nil
 	})
 	// Switch to a worktree (creates virtual project if needed)
-	r.RegisterAction(app, "worktree.switch", func(_ *r.Context, in actionWorktreeSwitchInput) (r.Result, error) {
+	registerWorkspaceAction(app, "worktree.switch", func(_ *r.Context, in actionWorktreeSwitchInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		parentProject := in.Project
 		wtPath := in.Path
@@ -1517,7 +1530,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return resp, nil
 	})
 	// Create a new worktree from the active project's current branch and switch to it.
-	r.RegisterAction(app, "worktree.create", func(_ *r.Context, in actionWorktreeCreateInput) (r.Result, error) {
+	registerWorkspaceAction(app, "worktree.create", func(_ *r.Context, in actionWorktreeCreateInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		branch := in.Branch
 		branch = strings.TrimSpace(branch)
@@ -1565,24 +1578,13 @@ func Run(assets embed.FS, desktop bool) error {
 
 	// Live-switch native xterm themes when GNOME's color-scheme flips.
 	var themeMu sync.Mutex
-	// A reload keeps its session. The first new page restores the saved layout;
-	// later pages start empty. Readiness probes (Electron startup, curl) also
-	// GET "/" without asking for HTML, so only a real page load may claim it.
-	app.Page("/", func(ctx *r.Context) *r.Node {
-		sid := ctx.Request.URL.Query().Get("sid")
-		if sm.ReopenSession(sid) {
-			// One page per session: a copied URL takes the session over, and the
-			// older page starts a new, empty one. Keeping its hash would reopen the
-			// same thread and start its agent twice. A reloading page is already leaving.
-			if err := app.Broadcast(clientScript(`if(window.__libroWorkspaceSID===props[0]&&!window.__libroLeaving)location.replace('/');`, sid)); err != nil {
-				log.Printf("libro: hand over session: %v", err)
-			}
-		} else {
-			sid = sm.NewSession()
-			if strings.Contains(ctx.Request.Header.Get("Accept"), "text/html") {
-				sm.restoreLayout(sid)
-			}
-		}
+	// Frontend loads and readiness probes attach to the workspace already
+	// restored by the backend. They never create another set of processes.
+	app.Page("/", func(_ *r.Context) *r.Node {
+		backendActionMu.Lock()
+		defer backendActionMu.Unlock()
+		sid := backendSessionID()
+		sm.ReopenSession(sid)
 		state := sm.Get(sid)
 
 		return renderPage(state, sid)
@@ -1596,6 +1598,19 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 	})
 
+	cleanup, err := startBackendControl(app)
+	if err != nil {
+		return fmt.Errorf("start backend controls: %w", err)
+	}
+	defer cleanup()
+	stopUpdates := startAgentUpdates(app)
+	backendCleanupMu.Lock()
+	backendCleanup = func() { cleanup(); stopUpdates() }
+	backendCleanupMu.Unlock()
+	defer stopBackend()
+	backendActionMu.Lock()
+	resumeBackendTerminals(backendSessionID())
+	backendActionMu.Unlock()
 	if desktop {
 		go func() {
 			<-OpenDesktop("http://localhost:" + Port())
@@ -1622,6 +1637,12 @@ func ensureScheme(u string) string {
 }
 
 func inputSID(sid string) string {
+	sm.backendMu.Lock()
+	backendSID := sm.backendSID
+	sm.backendMu.Unlock()
+	if backendSID != "" {
+		return backendSID
+	}
 	if sid != "" {
 		return sid
 	}

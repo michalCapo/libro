@@ -1407,16 +1407,20 @@
   function saveAgentAutoUpdate(value) {
     const status = document.getElementById('agent-auto-update-status');
     try {
-      const updated = {...prefs, agentAutoUpdate:value === 'on'};
-      localStorage.setItem('libro.workspace', JSON.stringify(updated));
-      prefs = updated;
-      status.textContent = '';
-      return true;
+      status.textContent = 'Saving…';
+      call('settings.agent-updates', {enabled:value === 'on'});
+      return null;
     } catch (_) {
-      document.getElementById('agent-auto-update').value = prefs.agentAutoUpdate === false ? 'off' : 'on';
+      document.getElementById('agent-auto-update').value = window.__libroAgentAutoUpdate === false ? 'off' : 'on';
       status.textContent = 'Could not save. Please try again.';
       return false;
     }
+  }
+  function agentUpdatesSaved(ok, enabled, initialize = false) {
+    if (enabled !== null) window.__libroAgentAutoUpdate = enabled;
+    document.getElementById('agent-auto-update').value = window.__libroAgentAutoUpdate === false ? 'off' : 'on';
+    document.getElementById('agent-auto-update-status').textContent = ok ? '' : 'Could not save. Please try again.';
+    if (!initialize) settingsSaveFinished(ok, 'Could not save automatic updates. Please try again.');
   }
   let savedThreadAgent = '';
   function fillThreadAgents() {
@@ -1506,7 +1510,8 @@
     const key = document.getElementById('openrouter-key');
     key.value = ''; key.dataset.clear = '1'; key.placeholder = 'Key will be removed on Save';
   }
-  function showSettings(width, commands = {}, bindings = toolKeys, threadAgent = '', pageToolsAutoExecute = false, environment = [], editor = 'nvim', voice = {savedKey:false}) {
+  function showSettings(width, commands = {}, bindings = toolKeys, threadAgent = '', pageToolsAutoExecute = false, environment = [], editor = 'nvim', voice = {savedKey:false}, agentUpdates = window.__libroAgentAutoUpdate) {
+    window.__libroAgentAutoUpdate = agentUpdates;
     window.__libroPageToolsAutoExecute = !!pageToolsAutoExecute;
     savedThreadAgent = threadAgent;
     fillThreadAgents();
@@ -1515,7 +1520,7 @@
     document.getElementById('notification-sound-status').textContent = '';
     fillVoice(voice);
     document.getElementById('voice-status').textContent = '';
-    document.getElementById('agent-auto-update').value = prefs.agentAutoUpdate === false ? 'off' : 'on';
+    document.getElementById('agent-auto-update').value = agentUpdates === false ? 'off' : 'on';
     document.getElementById('agent-auto-update-status').textContent = '';
     document.getElementById('page-tools-autoexecute').value = pageToolsAutoExecute ? 'on' : 'off';
     document.getElementById('page-tools-autoexecute-status').textContent = '';
@@ -1580,6 +1585,7 @@
     settingsSaveFinished(true);
   }
   function settingsSaveFinished(ok, message = 'Could not save all settings. Please try again.') {
+    if (ok === null) return;
     if (!settingsSaveSteps) return;
     if (ok && settingsSaveSteps.length) { settingsSaveSteps.shift()(); return; }
     settingsSaveSteps = null;
@@ -1761,7 +1767,14 @@
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New tool panels will use this width.' : 'Could not save. Please try again.';
     settingsSaveFinished(ok);
   }
-  window.libroWorkspace = {voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
+  if (window.__libroAgentAutoUpdate == null) {
+    const migrateUpdates = () => {
+      if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }
+      call('settings.agent-updates', {enabled:prefs.agentAutoUpdate !== false, initialize:true});
+    };
+    migrateUpdates();
+  }
   // Scroll the existing strip; never reparent running terminals or webviews.
   window.__libroScrollToApp = frame => {
     if (!frame?.dataset.appId) return;

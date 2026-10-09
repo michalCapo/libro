@@ -141,7 +141,7 @@ func setToolKeybindings(bindings map[string]string) error {
 }
 
 func registerKeybindingActions(app *r.App) {
-	r.RegisterAction(app, "settings.tool-keys", func(_ *r.Context, in actionSettingsToolKeysInput) (r.Result, error) {
+	registerWorkspaceAction(app, "settings.tool-keys", func(_ *r.Context, in actionSettingsToolKeysInput) (r.Result, error) {
 		err := setToolKeybindings(in.Bindings)
 		if err != nil {
 			return clientScript("libroWorkspace.toolKeysSaved(null,props[0]);", err.Error()), nil

@@ -35,7 +35,7 @@ func setProjectCommand(path, command string) error {
 func registerProjectCommandActions(app *r.App) {
 	registerApplicationControl(app)
 	registerChildControl(app)
-	r.RegisterAction(app, "project.command.save", func(_ *r.Context, in actionProjectCommandSaveInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.command.save", func(_ *r.Context, in actionProjectCommandSaveInput) (r.Result, error) {
 		applicationControlMu.Lock()
 		defer applicationControlMu.Unlock()
 		sid := inputSID(in.SID)
@@ -101,7 +101,7 @@ func registerProjectCommandActions(app *r.App) {
 		}
 		return r.Merge(projectsJS(state), r.Result{}.Run(r.CloseDialog("project-command-dialog"))), nil
 	})
-	r.RegisterAction(app, "project.command.run", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.command.run", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		state := sm.Get(sid)
 		if state.ActiveProject == "" {
@@ -117,7 +117,7 @@ func registerProjectCommandActions(app *r.App) {
 				hadCommand = true
 			}
 		}
-		js, _, err := controlApplication(sid, sm.GetActiveProjectPath(sid), "restart")
+		js, _, err := dispatchBackendCommand(sid, backendCommand{Action: "application", Project: sm.GetActiveProjectPath(sid), Operation: "restart"})
 		if err != nil {
 			return r.Merge(js, r.Result{}.Run(r.Notify("error", err.Error()))), nil
 		}
@@ -132,7 +132,7 @@ func registerProjectCommandActions(app *r.App) {
 		}
 		return js, nil
 	})
-	r.RegisterAction(app, "project.command.stop", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.command.stop", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		js, _, err := controlApplication(sid, sm.GetActiveProjectPath(sid), "stop")
 		if err != nil {

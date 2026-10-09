@@ -190,7 +190,7 @@ func filesRoot(projectPath string, parents int) string {
 
 func registerFilesActions(app *r.App) {
 	for _, action := range []string{"files.read", "files.open", "files.index", "files.search", "files.navigate"} {
-		r.RegisterAction(app, action, func(_ *r.Context, in actionFilesInput) (r.Result, error) {
+		registerWorkspaceAction(app, action, func(_ *r.Context, in actionFilesInput) (r.Result, error) {
 			sid := inputSID(in.SID)
 			id := in.ID
 			path := in.Path

@@ -167,7 +167,7 @@ func (sm *StateManager) createProjectWorktree(sid, projectID, branch string) (st
 }
 
 func registerThreadActions(app *r.App, switchWorkspace func(string, string, string) (r.Result, bool)) {
-	actionThreadCreate = r.RegisterAction(app, "thread.create", func(_ *r.Context, in actionThreadCreateInput) (r.Result, error) {
+	actionThreadCreate = registerWorkspaceAction(app, "thread.create", func(_ *r.Context, in actionThreadCreateInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		name := in.Name
 		name = strings.TrimSpace(name)
@@ -213,7 +213,7 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string, stri
 		response, _ := switchWorkspace(sid, thread.ID, agentID)
 		return response, nil
 	})
-	r.RegisterAction(app, "thread.rename", func(_ *r.Context, in actionThreadRenameInput) (r.Result, error) {
+	registerWorkspaceAction(app, "thread.rename", func(_ *r.Context, in actionThreadRenameInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		id := in.ID
 		name := strings.TrimSpace(in.Name)
@@ -243,7 +243,7 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string, stri
 		sm.mu.Unlock()
 		return projectsJS(state), nil
 	})
-	r.RegisterAction(app, "worktree.title", func(_ *r.Context, in actionWorktreeTitleInput) (r.Result, error) {
+	registerWorkspaceAction(app, "worktree.title", func(_ *r.Context, in actionWorktreeTitleInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		name := strings.TrimSpace(in.Name)
 		if runes := []rune(name); len(runes) > 200 {
@@ -269,7 +269,7 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string, stri
 		}
 		return r.Result{}, nil
 	})
-	r.RegisterAction(app, "thread.archive", func(_ *r.Context, in actionThreadArchiveInput) (r.Result, error) {
+	registerWorkspaceAction(app, "thread.archive", func(_ *r.Context, in actionThreadArchiveInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		id := in.ID
 		archived := in.Archived

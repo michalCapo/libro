@@ -73,6 +73,7 @@ function settingsHarness(valid = true) {
     if (!elements.has(id)) elements.set(id, { value: id, disabled: false, textContent: '', hidden: false, dataset: {} })
     return elements.get(id)
   }
+  get('agent-auto-update').value = 'off'
   get('workspace-settings').querySelectorAll = () => [{ reportValidity: () => valid }]
   get('workspace-settings').querySelector = () => content
   const calls = []
@@ -87,7 +88,7 @@ function settingsHarness(valid = true) {
     saveAgentCommand: () => calls.push('agents'),
     saveTools: () => calls.push('tools'),
     saveAgentEnvironment: () => calls.push('environment'),
-    call: (action, data) => { assert.equal(action, 'settings.voice'); calls.push({...data}) },
+    call: (action, data) => { assert.ok(['settings.voice', 'settings.agent-updates'].includes(action)); calls.push({...data}) },
     saveThreadAgent: value => calls.push(value),
     savePageTools: () => calls.push('page-tools'),
     saveSettings: (value, tool) => calls.push(tool ? 'tool-width' : 'width'),
@@ -106,7 +107,7 @@ test('one Save waits for every section before showing a toast and keeps settings
   assert.equal(h.content.inert, true)
   assert.deepEqual(h.toasts, [])
   for (let i = 0; i < 8; i++) h.run('settingsSaveFinished(true)')
-  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', {language:'voice-language', key:'openrouter-key', clearKey:false}, 'default-thread-agent', 'page-tools', 'width', 'tool-width', 'theme', 'sound'])
+  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', {key:'openrouter-key', clearKey:false}, {enabled:false}, 'default-thread-agent', 'page-tools', 'width', 'theme', 'sound'])
   assert.equal(h.get('workspace-settings').hidden, false)
   assert.deepEqual(h.toasts, [['Settings saved', '', 'success']])
   assert.equal(h.get('settings-save').disabled, false)
@@ -138,27 +139,28 @@ test('OpenRouter key is sent once, never shown, and can be removed', () => {
   const h = settingsHarness()
   h.get('openrouter-key').value = 'sk-or-new'
   h.run("saveVoice('sk')")
-  assert.deepEqual(h.calls, [{language:'sk', key:'sk-or-new', clearKey:false}])
+  assert.deepEqual(h.calls, [{key:'sk-or-new', clearKey:false}])
   h.run("voiceSaved(false, null)")
   assert.equal(h.get('openrouter-key').value, 'sk-or-new')
   assert.match(h.get('voice-status').textContent, /Could not save/)
   h.run("voiceSaved(true, {language:'sk', savedKey:true})")
   assert.equal(h.get('openrouter-key').value, '')
   assert.equal(h.get('openrouter-key').placeholder, 'Saved key')
-  assert.equal(h.get('voice-language').value, 'sk')
   h.run("clearOpenRouterKey(); saveVoice('')")
-  assert.deepEqual(h.calls[1], {language:'', key:'', clearKey:true})
+  assert.deepEqual(h.calls[1], {key:'', clearKey:true})
 })
 
-test('automatic update preference persists without replacing other settings', () => {
+test('automatic update preference waits for the backend and leaves local settings alone', () => {
   const h = settingsHarness()
-  assert.equal(h.run("saveAgentAutoUpdate('off')"), true)
-  assert.deepEqual(h.stored(), { notificationSound: false, agentAutoUpdate: false })
-  assert.equal(h.run("saveAgentAutoUpdate('on')"), true)
-  assert.equal(h.stored().agentAutoUpdate, true)
-  h.context.localStorage.setItem = () => { throw Error('storage unavailable') }
-  assert.equal(h.run("saveAgentAutoUpdate('off')"), false)
-  assert.equal(h.get('agent-auto-update').value, 'on')
+  assert.equal(h.run("saveAgentAutoUpdate('off')"), null)
+  assert.deepEqual(h.calls, [{enabled:false}])
+  assert.equal(h.stored(), undefined)
+  h.run('agentUpdatesSaved(true, false)')
+  assert.equal(h.context.window.__libroAgentAutoUpdate, false)
+  assert.equal(h.get('agent-auto-update').value, 'off')
+  h.context.call = () => { throw Error('disconnected') }
+  assert.equal(h.run("saveAgentAutoUpdate('on')"), false)
+  assert.equal(h.get('agent-auto-update').value, 'off')
   assert.match(h.get('agent-auto-update-status').textContent, /Could not save/)
 })
 

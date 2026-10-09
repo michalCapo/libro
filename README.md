@@ -8,6 +8,17 @@ Run Codex, Claude, Pi, OpenCode, or any other CLI agent in its own thread. Open 
 
 Libro reopens your workspaces and resumes agents on start. Applications start when you start them. See [Restore on start](#restore-on-start).
 
+Electron remains the default frontend. The Go backend owns workspace state,
+terminals, application and child-agent tools, notes tools, and automatic updates.
+A frontend reload reattaches to the same workspace and replays the latest 4 MiB
+of terminal output. Application log tools still return at most 64 KiB.
+Quitting Electron stops Libro and its processes as before.
+
+Browser navigation and native DevTools stay in Electron. Electron captures the
+current page, element, or area and normalizes pasted images; the backend saves
+these attachments in private instance storage for agents to read.
+
+
 ## What It Does
 
 - Runs multiple agents in one project, each in its own thread.
@@ -38,7 +49,7 @@ Note: Libro starts the assistants for you, but the assistants themselves (Codex,
 
 ### Agent updates
 
-On desktop startup, Libro checks installed Codex, Claude, Pi, and OpenCode versions
+On backend startup, Libro checks installed Codex, Claude, Pi, and OpenCode versions
 in the background and automatically updates supported installations in parallel. Toasts show
 which agent is updating and whether it succeeded. Existing sessions stay open;
 start a new session to use an updated CLI.
@@ -51,7 +62,9 @@ Pi's personal packages (including extensions) also update at startup, even when
 Pi itself is current. Extension updates wait for Pi’s own update to finish, but
 not for other agents. Project-local packages are not changed.
 Turn off **Settings → Agent updates → Automatic updates** and save to disable
-both CLI and extension updates on the next launch.
+both CLI and extension updates on the next launch. The preference is saved in
+Libro's database. The first frontend connection migrates the existing desktop
+preference; later update checks do not need an open Electron window.
 
 ### Voice typing
 
@@ -359,9 +372,10 @@ Statuses are `new` (Open) and `archived`. Create defaults to `new`.
 Use full note IDs from `list` or `create`. Read/create results use `state`
 for the saved status, matching Libro's note storage.
 
-The project defaults to the agent's working directory, or accepts an explicit
-`project` path for any workspace of the active project in Libro. No Notes or browser
-panel needs to be open. This uses the same desktop bridge and enable/pause
+The project defaults to the agent's workspace. Agent calls stay bound to that
+workspace even when another project is selected. Outside an agent session, an
+explicit `project` path may select a registered project or worktree. No Notes or
+browser panel needs to be open. This uses the same backend bridge and enable/pause
 controls as application control. Restart existing agent sessions to discover
 the new tool. Open note lists refresh after agent changes; unsaved editor
 text is preserved.

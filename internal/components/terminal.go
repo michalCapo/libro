@@ -81,12 +81,13 @@ var ErrTerminalsStopped = errors.New("terminals are stopped")
 
 // TerminalManager manages native PTY-backed terminal sessions.
 type TerminalManager struct {
-	mu       sync.Mutex
-	sessions map[string]*TerminalSession
-	logs     map[string]*terminalLog
-	launchMu sync.Mutex // serializes launches with StopAll
-	stopped  bool       // set by StopAll, guarded by launchMu
-	stops    uint64     // StopAll count, guarded by launchMu
+	mu           sync.Mutex
+	sessions     map[string]*TerminalSession
+	logs         map[string]*terminalLog
+	replayOutput bool       // replay recent output when a browser reconnects
+	launchMu     sync.Mutex // serializes launches with StopAll
+	stopped      bool       // set by StopAll, guarded by launchMu
+	stops        uint64     // StopAll count, guarded by launchMu
 }
 
 // TerminalSession is one PTY process plus its connected browser clients.
@@ -107,6 +108,7 @@ type TerminalSession struct {
 	closed             bool
 	log                *terminalLog
 	pendingOutput      []byte // startup output retained until the first client connects
+	replayOutput       bool
 	connected          bool
 	cols               uint16
 	rows               uint16
@@ -161,6 +163,18 @@ const (
 // NewTerminalManager creates a PTY terminal manager.
 func NewTerminalManager() *TerminalManager {
 	return &TerminalManager{sessions: make(map[string]*TerminalSession), logs: make(map[string]*terminalLog)}
+}
+
+// SetReplayOutput enables bounded recent output replay for frontend reconnects.
+func (tm *TerminalManager) SetReplayOutput(enabled bool) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	tm.replayOutput = enabled
+	for _, session := range tm.sessions {
+		session.mu.Lock()
+		session.replayOutput = enabled
+		session.mu.Unlock()
+	}
 }
 
 // StartWithEnvironment launches a PTY session with additional environment
@@ -257,6 +271,7 @@ func (tm *TerminalManager) startTerminal(generation uint64, appID, command, cwd 
 	}
 
 	tm.mu.Lock()
+	s.replayOutput = tm.replayOutput
 	s.log = &terminalLog{managed: managed}
 	tm.logs[appID] = s.log
 	tm.sessions[appID] = s
@@ -576,11 +591,17 @@ func (s *TerminalSession) close(killProcess bool) {
 
 func (s *TerminalSession) addClient(c *terminalClient) {
 	s.mu.Lock()
-	if len(s.pendingOutput) > 0 {
-		payload := append([]byte{terminalBinaryDataFrame}, s.pendingOutput...)
-		_ = c.sendBinary(payload)
-		s.pendingOutput = nil
+	output := s.pendingOutput
+	if s.replayOutput && s.log != nil {
+		s.log.mu.Lock()
+		output = append([]byte(nil), s.log.data...)
+		s.log.mu.Unlock()
 	}
+	if len(output) > 0 {
+		payload := append([]byte{terminalBinaryDataFrame}, output...)
+		_ = c.sendBinary(payload)
+	}
+	s.pendingOutput = nil
 	s.connected = true
 	s.clients[c] = true
 	cols, rows := s.cols, s.rows
@@ -622,14 +643,15 @@ func (s *TerminalSession) broadcast(msg terminalWSMessage) {
 }
 
 func (s *TerminalSession) broadcastOutput(data []byte) {
-	if s.log != nil {
-		s.log.append(data)
-	}
 	if len(data) == 0 {
 		return
 	}
 	s.mu.Lock()
-	if !s.connected {
+	// Reconnect snapshots and live client selection must observe the same chunk.
+	if s.log != nil {
+		s.log.append(data)
+	}
+	if !s.connected && !s.replayOutput {
 		s.pendingOutput = append(s.pendingOutput, data...)
 		if len(s.pendingOutput) > terminalOutputMaxBatch {
 			s.pendingOutput = s.pendingOutput[len(s.pendingOutput)-terminalOutputMaxBatch:]

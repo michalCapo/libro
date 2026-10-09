@@ -1,7 +1,4 @@
-const fs = require('node:fs/promises')
-const path = require('node:path')
-
-async function capturePageArea(target, area, tempDir) {
+async function capturePageArea(target, area) {
   let png
   if (area?.fullPage === true) {
     const ownsDebugger = !target.debugger.isAttached()
@@ -31,33 +28,17 @@ async function capturePageArea(target, area, tempDir) {
     if (right <= x || bottom <= y || image.isEmpty()) throw new Error('Selected area is outside the page')
     png = image.crop({ x, y, width: right - x, height: bottom - y }).toPNG()
   }
-  const dir = await fs.mkdtemp(path.join(tempDir, 'libro-page-area-'))
-  const filename = path.join(dir, 'selection.png')
-  await fs.writeFile(filename, png, { mode: 0o600 })
-  return filename
+  return 'data:image/png;base64,' + png.toString('base64')
 }
 
-async function savePageToolImages(images, tempDir) {
+function pageToolImages(images) {
   if (!Array.isArray(images) || images.length > 8) throw new Error('Invalid image attachments')
-  const buffers = images.map(data => {
+  return images.map(data => {
     if (typeof data !== 'string' || data.length > 14 * 1024 * 1024 || !/^data:image\/(png|jpeg|gif|webp);base64,/.test(data)) throw new Error('Invalid image attachment')
     const image = require('electron').nativeImage.createFromDataURL(data)
     if (image.isEmpty()) throw new Error('Invalid image attachment')
-    return image.toPNG()
+    return 'data:image/png;base64,' + image.toPNG().toString('base64')
   })
-  const dir = await fs.mkdtemp(path.join(tempDir, 'libro-prompt-images-'))
-  try {
-    const filenames = []
-    for (const [index, png] of buffers.entries()) {
-      const filename = path.join(dir, `image-${index + 1}.png`)
-      await fs.writeFile(filename, png, { mode: 0o600 })
-      filenames.push(filename)
-    }
-    return filenames
-  } catch (error) {
-    await fs.rm(dir, { recursive: true, force: true })
-    throw error
-  }
 }
 
-module.exports = { capturePageArea, savePageToolImages }
+module.exports = { capturePageArea, pageToolImages }

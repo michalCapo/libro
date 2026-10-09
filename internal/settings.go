@@ -335,11 +335,15 @@ func renderAgentCommands() *r.Node {
 }
 
 func registerSettingsActions(app *r.App) {
-	r.RegisterAction(app, "settings.voice", func(_ *r.Context, in actionSettingsVoiceInput) (r.Result, error) {
+	registerWorkspaceAction(app, "settings.agent-updates", func(_ *r.Context, in actionSettingsAgentUpdatesInput) (r.Result, error) {
+		err := setAgentAutoUpdate(in.Enabled, in.Initialize)
+		return clientScript("libroWorkspace.agentUpdatesSaved(props[0],props[1],props[2]);", err == nil, agentAutoUpdate(), in.Initialize), nil
+	})
+	registerWorkspaceAction(app, "settings.voice", func(_ *r.Context, in actionSettingsVoiceInput) (r.Result, error) {
 		saved := setVoiceSettings(in.Key, in.ClearKey) == nil
 		return clientScript("libroWorkspace.voiceSaved(props[0],props[1]);", saved, voiceSettingsState()), nil
 	})
-	r.RegisterAction(app, "settings.agent-environment", func(_ *r.Context, in actionSettingsAgentEnvironmentInput) (r.Result, error) {
+	registerWorkspaceAction(app, "settings.agent-environment", func(_ *r.Context, in actionSettingsAgentEnvironmentInput) (r.Result, error) {
 		err := setAgentEnvironment(in.Entries)
 		message := "Saved. Applies to new agent sessions."
 		if err != nil {
@@ -347,12 +351,12 @@ func registerSettingsActions(app *r.App) {
 		}
 		return clientScript("libroWorkspace.agentEnvironmentSaved(props[0],props[1],props[2]);", err == nil, message, agentEnvironmentNames()), nil
 	})
-	r.RegisterAction(app, "settings.thread-agent", func(_ *r.Context, in actionSettingsThreadAgentInput) (r.Result, error) {
+	registerWorkspaceAction(app, "settings.thread-agent", func(_ *r.Context, in actionSettingsThreadAgentInput) (r.Result, error) {
 		id, ok := inputField(in.Agent)
 		saved := ok && setDefaultThreadAgent(id) == nil
 		return clientScript("libroWorkspace.threadAgentSaved(props[0],props[1]);", saved, defaultThreadAgent()), nil
 	})
-	r.RegisterAction(app, "settings.page-tools", func(_ *r.Context, in actionSettingsPageToolsInput) (r.Result, error) {
+	registerWorkspaceAction(app, "settings.page-tools", func(_ *r.Context, in actionSettingsPageToolsInput) (r.Result, error) {
 		enabled, ok := inputField(in.Autoexecute)
 		saved := ok && setBrowserPageToolsAutoExecute(enabled) == nil
 		return clientScript("libroWorkspace.pageToolsSaved(props[0],props[1]);", saved, browserPageToolsAutoExecute()), nil
@@ -360,7 +364,7 @@ func registerSettingsActions(app *r.App) {
 	registerKeybindingActions(app)
 	registerProjectCommandActions(app)
 	registerToolSettings(app)
-	r.RegisterAction(app, "settings.agent-command", func(_ *r.Context, in actionSettingsAgentCommandInput) (r.Result, error) {
+	registerWorkspaceAction(app, "settings.agent-command", func(_ *r.Context, in actionSettingsAgentCommandInput) (r.Result, error) {
 		err := saveAgentSettings(in.Commands, in.Disabled, in.Custom, in.Names, in.Removed, in.Order)
 		message := "Saved. Applies to new sessions."
 		if err != nil {
@@ -368,16 +372,16 @@ func registerSettingsActions(app *r.App) {
 		}
 		return clientScript("libroWorkspace.agentCommandSaved(props[0],props[1],props[2]);", message, plugins(), err == nil), nil
 	})
-	r.RegisterAction(app, "settings.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "settings.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		commands := map[string]string{}
 		for _, plugin := range plugins() {
 			if plugin.Dock == "center" && plugin.Type == AppTypeTerminal {
 				commands[plugin.ID] = agentCommand(plugin)
 			}
 		}
-		return clientScript("window.__libroPlugins=props[0];libroWorkspace.showSettings(props[1],props[2],props[3],props[4],props[5],props[6],props[7],props[8]);", plugins(), string(DBDefaultPanelWidth()), commands, toolKeybindings(), defaultThreadAgent(), browserPageToolsAutoExecute(), agentEnvironmentNames(), editorToolID(), voiceSettingsState()), nil
+		return clientScript("window.__libroPlugins=props[0];libroWorkspace.showSettings(props[1],props[2],props[3],props[4],props[5],props[6],props[7],props[8],props[9]);", plugins(), string(DBDefaultPanelWidth()), commands, toolKeybindings(), defaultThreadAgent(), browserPageToolsAutoExecute(), agentEnvironmentNames(), editorToolID(), voiceSettingsState(), agentAutoUpdate()), nil
 	})
-	r.RegisterAction(app, "settings.width", func(_ *r.Context, in actionSettingsWidthInput) (r.Result, error) {
+	registerWorkspaceAction(app, "settings.width", func(_ *r.Context, in actionSettingsWidthInput) (r.Result, error) {
 		if err := DBSetDefaultPanelWidth(Width(in.Width)); err != nil {
 			return clientScript("libroWorkspace.settingsSaved(false);"), nil
 		}

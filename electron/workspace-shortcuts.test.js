@@ -77,7 +77,7 @@ test('project switches preserve bottom terminal visibility when restoring select
       style: {}, querySelector: () => ({}),
     }
     const window = { __libroSelectedApp: 'shell' }
-    const context = { grid, shell, window, prefs: {}, resizeHandle() {}, dockState: () => state, keepBottomHidden: false }
+    const context = { grid, shell, window, prefs: {}, resizeHandle() {}, dockState: () => state, keepBottomHidden: false, activeGrid: () => null, agentMinWidth: 600 }
     // The inactive project's layout clears lastSelected before switching back.
     vm.runInNewContext(layout + ';layoutDocks(grid, [shell]);', context)
     window.__libroSelectedApp = 'other-project-agent'
@@ -335,7 +335,7 @@ test('panel navigation includes the side-by-side tool in visual order and stops 
   assert.equal(navigate(twoAgents, 'agent-2', 'Ctrl+L').selected, 'tool')
   assert.equal(navigate(twoAgents, 'tool', 'Ctrl+H').selected, 'agent-2')
   const overlay = [agent, panel('agent-2', 'center'), panel('tool', 'right', true, true)]
-  const result = navigate(overlay, 'tool', 'Ctrl+L')
+  const result = navigate(overlay, 'tool', 'Ctrl+H')
   assert.equal(result.selected, 'agent-2')
   assert.equal(result.state.hidden.has('tool'), true)
   assert.equal(navigate([agent], 'agent', 'Ctrl+L').selected, undefined)

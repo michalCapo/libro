@@ -13,15 +13,23 @@ import (
 	"time"
 )
 
-// desktopCommand sends application and note commands through the local bridge.
-func desktopCommand(command json.RawMessage) (json.RawMessage, error) {
+func controlConnectionPath() (string, error) {
 	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(instanceDir(filepath.Join(dir, "libro")), "backend-control-"+Port()+".json"), nil
+}
+
+// agentControlCommand sends tools directly to the backend.
+func agentControlCommand(command json.RawMessage) (json.RawMessage, error) {
+	path, err := controlConnectionPath()
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(filepath.Join(instanceDir(filepath.Join(dir, "libro")), "desktop-control-"+Port()+".json"))
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, errors.New("desktop control unavailable; open Libro desktop first")
+		return nil, errors.New("backend control unavailable; start Libro first")
 	}
 	var connection struct {
 		Port  int    `json:"port"`
@@ -43,7 +51,7 @@ func desktopCommand(command json.RawMessage) (json.RawMessage, error) {
 	defer client.CloseIdleConnections()
 	response, err := client.Do(req)
 	if err != nil {
-		return nil, errors.New("desktop control disconnected; reopen Libro desktop")
+		return nil, errors.New("backend control disconnected; restart Libro")
 	}
 	defer func() { _ = response.Body.Close() }()
 	var reply struct {
@@ -57,7 +65,7 @@ func desktopCommand(command json.RawMessage) (json.RawMessage, error) {
 		return nil, errors.New(reply.Error)
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("desktop returned HTTP %d", response.StatusCode)
+		return nil, fmt.Errorf("backend returned HTTP %d", response.StatusCode)
 	}
 	return reply.Result, nil
 }

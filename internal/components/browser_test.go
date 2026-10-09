@@ -218,7 +218,7 @@ process.stdin.on('end', async () => {
   const guest = { getWebContentsId: () => 7, executeJavaScript: async js => { opened = js; } };
   const context = {
     window: {
-      libroElectron: { capturePageArea: async (id, area) => { assert.equal(id, 7); assert.equal(area.width, 80); return '/tmp/selection.png'; } },
+      libroElectron: { capturePageArea: async (id, area) => { assert.equal(id, 7); assert.equal(area.width, 80); return 'data:image/png;base64,c2VsZWN0aW9u'; } },
       __libroSendPageToolPrompt: prompt => { sent = prompt; return true; },
       __libroShowToast: title => { toast = title; },
     },
@@ -226,6 +226,10 @@ process.stdin.on('end', async () => {
   };
   vm.runInNewContext(script.slice(script.indexOf('function pageToolURL('), script.indexOf('function currentAppWidth(')), context);
   const payload = { kind: 'area', url: 'http://localhost:3000/payments', area: { x: 10, y: 20, width: 80, height: 40 } };
+  context.window.__libroSavePageToolImages = async (id, images) => {
+    assert.equal(id, 'app');
+    return images.map(data => '/tmp/' + Buffer.from(data.split(',')[1], 'base64').toString() + '.png');
+  };
   await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(payload));
   assert.ok(opened.includes('/tmp/selection.png'));
   assert.equal(sent, undefined);
@@ -256,7 +260,7 @@ process.stdin.on('end', async () => {
   await context.receivePageToolMessage('app', 'selection', JSON.stringify(pagePayload));
   assert.equal(sent, undefined, 'whole page annotation requires its screenshot');
   context.window.libroElectron.capturePageArea = async (id, area) => {
-    assert.equal(id, 7); assert.equal(area.fullPage, true); return '/tmp/page.png';
+    assert.equal(id, 7); assert.equal(area.fullPage, true); return 'data:image/png;base64,cGFnZQ==';
   };
   await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(pagePayload));
   assert.ok(opened.includes('/tmp/page.png'));
@@ -266,7 +270,7 @@ process.stdin.on('end', async () => {
   assert.ok(!sent.includes('Target element path:'));
   pagePayload.images = ['data:image/png;base64,example'];
   context.window.libroElectron.savePageToolImages = async (id, images) => {
-    assert.equal(id, 7); assert.equal(images.length, 1); return ['/tmp/pasted.png'];
+    assert.equal(id, 7); assert.equal(images.length, 1); return ['data:image/png;base64,cGFzdGVk'];
   };
   await context.receivePageToolMessage('app', 'selection', JSON.stringify(pagePayload));
   assert.ok(sent.includes('Additional image: "/tmp/pasted.png"'));

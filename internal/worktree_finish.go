@@ -301,7 +301,7 @@ func finishPRRepository(remote string) (string, error) {
 }
 
 func registerFinishThreadActions(app *r.App) {
-	r.RegisterAction(app, "thread.finish.preview", func(_ *r.Context, in actionThreadFinishPreviewInput) (r.Result, error) {
+	registerWorkspaceAction(app, "thread.finish.preview", func(_ *r.Context, in actionThreadFinishPreviewInput) (r.Result, error) {
 		name := in.Name
 		base := in.Base
 		request := in.Request
@@ -312,7 +312,7 @@ func registerFinishThreadActions(app *r.App) {
 		}
 		return clientScript("libroWorkspace.finishThreadPreview(props[0],props[1]);", request, reply), nil
 	})
-	r.RegisterAction(app, "thread.finish", func(_ *r.Context, in actionThreadFinishInput) (r.Result, error) {
+	registerWorkspaceAction(app, "thread.finish", func(_ *r.Context, in actionThreadFinishInput) (r.Result, error) {
 		worktreeFinishMu.Lock()
 		defer worktreeFinishMu.Unlock()
 		sid := inputSID(in.SID)

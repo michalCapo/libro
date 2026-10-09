@@ -111,7 +111,7 @@ func scopedChildrenCommand(command json.RawMessage, scope string) (json.RawMessa
 	if err != nil {
 		return nil, err
 	}
-	return desktopCommand(payload)
+	return agentControlCommand(payload)
 }
 func RunChildrenCLI(args []string, out io.Writer) error {
 	if len(args) == 0 || args[0] == "--help" {
@@ -397,7 +397,7 @@ func launchChild(sid string, child *childRecord) (r.Result, error) {
 }
 
 func registerChildControl(app *r.App) {
-	r.RegisterAction(app, "children.control", func(_ *r.Context, in actionChildrenControlInput) (r.Result, error) {
+	registerWorkspaceAction(app, "children.control", func(_ *r.Context, in actionChildrenControlInput) (r.Result, error) {
 		request := in.Request
 		scope := in.Project
 		js, result, err := controlChildren(inputSID(in.SID), scope, in.Command)
