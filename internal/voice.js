@@ -5,6 +5,10 @@
   let setup = {state: 'ready'};
   let current = null;
   let message = '';
+  // Status notices hide after a few seconds; the button keeps showing the state.
+  let shown = '';
+  let expired = '';
+  let hideTimer;
   const headers = () => ({'X-Libro-Session': window.__libroWorkspaceSID});
   const target = id => document.getElementById('frame-' + id);
   const available = id => {
@@ -30,7 +34,7 @@
     }
     if (!available(id)) return null;
     return {id, available:() => available(id), insert:text => {
-      const inserted = window.__libroSendPageToolPrompt?.(text, false, id);
+      const inserted = window.__libroSendPageToolPrompt?.(' ' + text, false, id);
       if (inserted) window.__libroFocusAppByID?.(id);
       return inserted;
     }};
@@ -40,10 +44,16 @@
 
   function render() {
     const shortcut = window.libroWorkspace?.shortcutFor('voice') || '';
+    const active = !!current;
+    const state = active ? current.state : 'ready';
+    let label = active ? (state === 'recording' ? 'Listening… Press again to transcribe' : state === 'permission' ? 'Waiting for microphone…' : 'Transcribing…') : message;
+    if (label !== shown) {
+      shown = label; expired = '';
+      clearTimeout(hideTimer);
+      if (label) hideTimer = setTimeout(() => { expired = label; render(); }, 4000);
+    }
+    if (label === expired) label = '';
     document.querySelectorAll('[data-voice-button]').forEach(button => {
-      const active = !!current;
-      const state = active ? current.state : 'ready';
-      const label = active ? (state === 'recording' ? 'Listening… Press again to transcribe' : state === 'permission' ? 'Waiting for microphone…' : 'Transcribing…') : message;
       button.dataset.state = state;
       button.setAttribute('aria-pressed', String(active && state === 'recording'));
       button.title = 'Press to start or stop voice typing' + (shortcut ? ' (' + shortcut + ')' : '') + '. Escape cancels.';
@@ -100,6 +110,7 @@
 
   async function toggle(id) {
     if (current) { end(); return; }
+    shown = '';
     if (setup.state !== 'ready') await poll();
     if (setup.state !== 'ready') { message = setup.message; render(); return; }
     message = '';

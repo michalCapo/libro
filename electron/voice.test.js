@@ -68,7 +68,7 @@ test('second press transcribes mono PCM and pastes into the captured agent witho
   assert.equal(h.calls.stops, 0, 'releasing Caps Lock keeps recording')
   await h.voice.toggle('agent')
   await tick()
-  assert.deepEqual(h.calls.pastes, [['Hello Libro', false, 'agent']])
+  assert.deepEqual(h.calls.pastes, [[' Hello Libro', false, 'agent']])
   const request = h.calls.requests.find(r => r.url === '/voice/transcribe')
   assert.equal(request.headers['X-Libro-Session'], 'session-test')
   const wav = new DataView(request.body)
@@ -185,7 +185,7 @@ test('dictation inserts into the terminal selected at recording start', async ()
   h.window.__libroSelectedApp = 'agent'
   await h.voice.toggle('agent')
   await tick()
-  assert.deepEqual(h.calls.pastes, [['Hello Libro', false, 'git']])
+  assert.deepEqual(h.calls.pastes, [[' Hello Libro', false, 'git']])
 })
 
 test('a selected browser keeps dictation targeted at the agent', async () => {
@@ -194,7 +194,7 @@ test('a selected browser keeps dictation targeted at the agent', async () => {
   await h.voice.toggle('agent')
   await h.voice.toggle('agent')
   await tick()
-  assert.deepEqual(h.calls.pastes, [['Hello Libro', false, 'agent']])
+  assert.deepEqual(h.calls.pastes, [[' Hello Libro', false, 'agent']])
 })
 
 test('global dictation inserts into a captured input without an agent', async () => {
