@@ -304,7 +304,7 @@ process.stdin.on('data', data => source += data);
 process.stdin.on('end', () => {
   const element = () => ({style: {}, getAttribute: () => 'original', setAttribute(name, value) { this.restored = value; }});
   const frame = element(), content = element(), guest = element();
-  const host = guest.parentElement = {clientWidth: 320, clientHeight: 400};
+  const host = guest.parentElement = {clientWidth: 320, clientHeight: 400, setAttribute() {}, removeAttribute() {}};
   let resized, disconnected = false, level = 0;
   guest.getZoomLevel = () => level; guest.setZoomLevel = value => level = value;
   const context = {

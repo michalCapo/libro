@@ -710,6 +710,7 @@ function applyMobileView(appID, mode, orientation) {
 	if (mode === 'normal') {
 		mobileViewportOrientation[appID] = state.orientation || mobileViewportOrientation[appID] || 'portrait';
 		if (state.observer) state.observer.disconnect();
+		if (guest.parentElement) guest.parentElement.removeAttribute('data-browser-viewport');
 		guest.setAttribute('style', state.previousGuestStyle);
 		frame.setAttribute('style', state.previousFrameStyle || '');
 		content.setAttribute('style', state.previousContentStyle || '');
@@ -731,6 +732,8 @@ function applyMobileView(appID, mode, orientation) {
 	frame.style.maxHeight = '100%';
 	frame.style.alignSelf = 'center';
 	content.style.overflow = 'hidden';
+	// Gray backdrop marks where the previewed page ends.
+	guest.parentElement.setAttribute('data-browser-viewport', mode);
 	// Scale the guest, not its viewport: responsive layouts keep the selected
 	// dimensions while the complete preview fits above any docked DevTools.
 	state.fit = function() {
