@@ -78,8 +78,10 @@
     sizePicker = picker;
     picker.showPopover();
     const rect = trigger.getBoundingClientRect();
-    picker.style.left = Math.max(8, Math.min(rect.right - picker.offsetWidth, innerWidth - picker.offsetWidth - 8)) + 'px';
-    picker.style.top = Math.min(rect.bottom, innerHeight - picker.offsetHeight - 8) + 'px';
+    // The rail sits at the window edge, so its picker opens to the left.
+    const rail = trigger.closest('.ws-tool-rail');
+    picker.style.left = Math.max(8, Math.min((rail ? rect.left - 12 : rect.right) - picker.offsetWidth, innerWidth - picker.offsetWidth - 8)) + 'px';
+    picker.style.top = Math.min(rail ? rect.top : rect.bottom, innerHeight - picker.offsetHeight - 8) + 'px';
     trigger.setAttribute('aria-expanded', 'true');
     picker.ontoggle = () => trigger.setAttribute('aria-expanded', String(picker.matches(':popover-open')));
   }
@@ -1314,13 +1316,11 @@
     else if (!placeholder) grid.append(empty('center', grid));
     let tabs = grid.parentElement.querySelector('.ws-tool-tabs');
     if (!tabs) { tabs = node('div', 'ws-tool-tabs'); tabs.setAttribute('aria-label', 'Agents and tools'); grid.before(tabs); }
-    // Tool panels share one width, so one size button serves them all.
+    // Tool panels share one width, so one size button in the rail serves them all.
     const toolFrames = all.filter(frame => frame.dataset.dock === 'right');
-    const sizeFrame = right[0] || toolFrames[0];
-    const size = sizeFrame?.querySelector('[data-size-trigger]')?.textContent || '';
     const signature = [...center, ...toolFrames, ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, frame.dataset.dock === 'center' ? (grid.dataset.projectLabel || frame.dataset.appName) : frame.dataset.appName, frame.dataset.selected, frame.dataset.dock]);
-    if (tabs.dataset.signature !== JSON.stringify([signature, sizeFrame?.dataset.appId, size])) {
-      tabs.dataset.signature = JSON.stringify([signature, sizeFrame?.dataset.appId, size]); tabs.replaceChildren();
+    if (tabs.dataset.signature !== JSON.stringify(signature)) {
+      tabs.dataset.signature = JSON.stringify(signature); tabs.replaceChildren();
       signature.forEach(([id, name, shown, dock]) => {
         const group = node('div', 'ws-agent-tab ws-tool-tab-group'); group.dataset.selected = shown; group.dataset.tabDock = dock;
         const tab = node('button', 'ws-tool-tab', name); tab.type = 'button'; tab.title = name; tab.setAttribute('aria-pressed', shown);
@@ -1336,24 +1336,29 @@
         };
         group.append(tab); tabs.append(group);
       });
-      if (sizeFrame) {
-        const id = sizeFrame.dataset.appId;
-        const group = node('div', 'ws-agent-tab ws-tool-tab-group ws-tool-size-group'); group.dataset.tabDock = 'right';
-        const sizes = node('div', 'ws-tool-sizes'); sizes.dataset.sizeBadges = '';
-        const trigger = node('button', 'ws-size-trigger', size); trigger.type = 'button'; trigger.dataset.sizeTrigger = '';
-        trigger.setAttribute('aria-label', 'Tool panel size: ' + size); trigger.setAttribute('aria-expanded', 'false'); trigger.setAttribute('aria-controls', 'tool-sizes-' + grid.id);
-        const picker = node('div', 'ws-size-picker'); picker.id = 'tool-sizes-' + grid.id; picker.setAttribute('popover', 'auto'); picker.setAttribute('role', 'group'); picker.setAttribute('aria-label', 'Tool panel size');
-        sizeFrame.querySelectorAll('[data-resize-width]').forEach(original => {
-          const option = node('button', '', original.textContent); option.type = 'button';
-          option.dataset.resizeWidth = original.dataset.resizeWidth; option.setAttribute('aria-label', original.getAttribute('aria-label')); option.setAttribute('aria-pressed', original.getAttribute('aria-pressed'));
-          option.onclick = () => { picker.hidePopover(); window.__libroResizeApp(id, option.dataset.resizeWidth, sid); };
-          picker.append(option);
-        });
-        sizes.append(trigger, picker); group.append(sizes); tabs.append(group);
-      }
     }
     tabs.hidden = signature.length === 0;
+    if (grid === activeGrid()) renderToolSize(grid, right[0] || toolFrames[0]);
     window.libroVoice?.refresh();
+  }
+  function renderToolSize(grid, sizeFrame) {
+    const sizes = document.getElementById('workspace-tool-size'); if (!sizes) return;
+    const size = sizeFrame?.querySelector('[data-size-trigger]')?.textContent || '';
+    const options = [...(sizeFrame?.querySelectorAll('[data-resize-width]') || [])].map(option => [option.dataset.resizeWidth, option.textContent, option.getAttribute('aria-label'), option.getAttribute('aria-pressed')]);
+    const signature = JSON.stringify([grid.id, sizeFrame?.dataset.appId, size, options]);
+    if (sizes.dataset.signature === signature) return;
+    sizes.dataset.signature = signature; sizes.replaceChildren();
+    if (!sizeFrame) return;
+    const trigger = node('button', 'ws-size-trigger', size); trigger.type = 'button'; trigger.dataset.sizeTrigger = ''; trigger.title = 'Tool panel size';
+    trigger.setAttribute('aria-label', 'Tool panel size: ' + size); trigger.setAttribute('aria-expanded', 'false'); trigger.setAttribute('aria-controls', 'tool-sizes-' + grid.id);
+    const picker = node('div', 'ws-size-picker'); picker.id = 'tool-sizes-' + grid.id; picker.setAttribute('popover', 'auto'); picker.setAttribute('role', 'group'); picker.setAttribute('aria-label', 'Tool panel size');
+    options.forEach(([width, text, label, pressed]) => {
+      const option = node('button', '', text); option.type = 'button';
+      option.dataset.resizeWidth = width; option.setAttribute('aria-label', label); option.setAttribute('aria-pressed', pressed);
+      option.onclick = () => { picker.hidePopover(); window.__libroResizeApp(sizeFrame.dataset.appId, width, sid); };
+      picker.append(option);
+    });
+    sizes.append(trigger, picker);
   }
   function toggle(zone) {
     if (zone !== 'projects') return;

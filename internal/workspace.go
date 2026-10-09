@@ -118,6 +118,7 @@ func renderWorkspaceTools() *r.Node {
 		workspaceButton("Toggle projects", "view_sidebar", r.UnsafeJS("libroWorkspace.toggle('projects')")),
 		r.Div("ws-tool-buttons").ID("workspace-tool-buttons"),
 		workspaceButton("More tools", "add", r.UnsafeJS("libroWorkspace.launcher('right')")),
+		r.Div("ws-tool-sizes").ID("workspace-tool-size").Attr("data-size-badges", ""),
 		r.Div("ws-voice-control").Attr("data-voice-control", "").Render(
 			workspaceButton("Voice typing", "mic", r.UnsafeJS("void window.libroVoice?.toggle()")).Attr("data-voice-button", "global").Attr("aria-pressed", "false"),
 			r.Span("ws-voice-status").Attr("role", "status").Attr("popover", "manual").Attr("hidden", "hidden"),
