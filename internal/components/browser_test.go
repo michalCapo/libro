@@ -283,10 +283,11 @@ process.stdin.on('end', async () => {
   opened = undefined;
   context.window.libroElectron.capturePageArea = async () => { throw new Error('failed'); };
   await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(payload));
-  assert.equal(opened, undefined);
+  assert.ok(opened.includes('__libroPageToolPromptClose'), 'failed capture unfreezes the page');
   assert.equal(toast, 'Screenshot failed');
+  opened = undefined;
   await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(elementPayload));
-  assert.equal(opened, undefined);
+  assert.ok(opened.includes('__libroPageToolPromptClose'), 'failed capture unfreezes the page');
   assert.equal(toast, 'Screenshot failed');
 }).on('error', error => { throw error; });`
 	cmd := exec.Command(node, "-e", harness)
@@ -370,7 +371,7 @@ process.stdin.on('end', async () => {
     let fail = false;
     const listeners = {};
     function navigate() {
-      guest = vm.createContext({window: {addEventListener() {}}, document: {
+      guest = vm.createContext({window: {addEventListener(name, fn) { listeners[name] = fn; }}, document: {
         documentElement: {style: {}}, activeElement: null,
         addEventListener(name, fn) { listeners[name] = fn; },
       }, console: {log() {}}});

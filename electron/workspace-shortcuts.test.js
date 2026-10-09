@@ -360,7 +360,7 @@ test('close project asks for confirmation, uses saved binding and ignores repeat
 
 test('base and worktree rows are numbered without requiring agents', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const render = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  let notificationAudio;'))
+  const render = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  // Each sound gets a fresh context.'))
   const rows = Array.from({ length: 11 }, (_, i) => ({
     dataset: { agentId: String(i) }, attributes: {}, badge: null,
     querySelector() { return this.badge },
@@ -673,7 +673,7 @@ test('backend title updates rename their own thread, worktree, or base project, 
 
 test('standalone thread numbers continue after project agent threads and skip archived threads', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const render = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  let notificationAudio;'))
+  const render = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  // Each sound gets a fresh context.'))
   const rows = ['base', 'worktree', ...Array(10).fill('thread')].map((kind, i) => ({
     dataset: { kind, projectKey: String(i) }, parentElement: { dataset: { archived: String(i === 3) } }, attributes: {}, badge: null,
     querySelector() { return this.badge },
@@ -887,7 +887,7 @@ test('workspace dividers resize, clamp, persist, and clean up cancelled drags', 
 test('project groups contain the original branch first and number every worktree', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const render = rowLabel + source.slice(source.indexOf('  function renderProjects()'), source.indexOf('  function toolOverlapsFrame('))
-  const shortcuts = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  let notificationAudio;'))
+  const shortcuts = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  // Each sound gets a fresh context.'))
   function node(tag, classes = '', text = '') {
     const el = {
       tag, classes, textContent: text, dataset: {}, attributes: {}, children: [],

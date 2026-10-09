@@ -5,13 +5,55 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
-  const win = new BrowserWindow({width:540,height:540,show:true,webPreferences:{backgroundThrottling:false}});
+  const win = new BrowserWindow({width:540,height:540,show:true,webPreferences:{backgroundThrottling:false,preload:path.join(__dirname,'webview-preload.js')}});
   try {
     const source = fs.readFileSync(path.join(__dirname, '../internal/components/browser.go'),'utf8');
     const start = source.indexOf('var browserShortcutsScript =');
     const end = source.indexOf('window.__libroOpenConsole =', start);
-    await win.loadURL('data:text/html,<dialog style="width:95vw;height:90vh;background:green"><button>Page popup</button></dialog>');
+    // The page listens on window before Libro injects its script.
+    await win.loadURL('data:text/html,' + encodeURIComponent('<dialog style="width:95vw;height:90vh;background:green"><button>Page popup</button></dialog><iframe></iframe><div id=host></div>' +
+      '<script>host.attachShadow({mode:"open"}).innerHTML="<iframe></iframe>";window.pageSeen=[];for(const t of ["pointerdown","mousedown","click","keydown","keyup","focusin"])addEventListener(t,e=>pageSeen.push(t),true)</script>'));
     await win.webContents.executeJavaScript(source.slice(start,end) + ';eval(browserShortcutsScript)');
+    const frozen = await win.webContents.executeJavaScript(`(() => {
+      const send = () => { const panel = document.querySelector('[popover]'); panel.shadowRoot.querySelector('textarea').value = 'x'; panel.shadowRoot.querySelector('.primary').click(); };
+      window.__libroSetPageToolMode('area');
+      const frame = getComputedStyle(document.querySelector('iframe')).pointerEvents + getComputedStyle(host.shadowRoot.querySelector('iframe')).pointerEvents;
+      document.body.dispatchEvent(new KeyboardEvent('keydown', {key:'x',bubbles:true,cancelable:true}));
+      window.__libroSetPageToolMode('');
+      window.__libroPageToolPromptOpen({kind:'page',screenshot:'/tmp/a.png'},'http://example.test');
+      const panel = document.querySelector('[popover]');
+      const input = panel.shadowRoot.querySelector('textarea');
+      let sent;
+      const originalLog = console.log;
+      console.log = message => { if (String(message).startsWith('__libro:page-tool:selection:')) sent = true; };
+      input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',bubbles:true,cancelable:true,composed:true}));
+      input.value = 'Do it';
+      input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter',bubbles:true,cancelable:true,composed:true}));
+      console.log = originalLog;
+      input.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',code:'Escape',bubbles:true,cancelable:true,composed:true}));
+      document.body.dispatchEvent(new KeyboardEvent('keyup', {key:'Escape',code:'Escape',bubbles:true}));
+      window.__libroPageToolPromptOpen({kind:'page',screenshot:'/tmp/a.png'},'http://example.test');
+      document.querySelector('[popover]').remove();
+      document.body.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true}));
+      return {frame, sent, seen: pageSeen.splice(0), detachedReleased: getComputedStyle(document.querySelector('iframe')).pointerEvents === 'auto'};
+    })()`);
+    assert.equal(frozen.frame, 'nonenone', 'frames ignore the pointer while frozen');
+    assert.equal(frozen.sent, true, 'prompt handles its own keys');
+    assert.deepEqual(frozen.seen, ['pointerdown'], 'page sees no frozen input, only input after a detached prompt');
+    assert.equal(frozen.detachedReleased, true, 'a removed prompt releases the page');
+    const stale = await win.webContents.executeJavaScript(`new Promise(resolve => {
+      const originalLog = console.log;
+      console.log = function(message) {
+        if (typeof message !== 'string' || !message.startsWith('__libro:page-tool:capture-area:')) return originalLog.apply(console, arguments);
+        console.log = originalLog;
+        const payload = JSON.parse(message.slice('__libro:page-tool:capture-area:'.length));
+        window.__libroPageToolPromptClose();
+        window.__libroPageToolPromptOpen(payload, 'http://example.test');
+        resolve(!document.querySelector('[popover]'));
+      };
+      window.__libroSetPageToolMode('page');
+    })`);
+    assert.equal(stale, true, 'a cancelled capture does not reopen its prompt');
     for (const modal of [false,true]) {
       const result = await win.webContents.executeJavaScript(`(() => {
         if (${modal}) document.querySelector('dialog').showModal();
@@ -42,15 +84,29 @@ app.whenReady().then(async () => {
       console.log = function(message) {
         if (typeof message === 'string' && message.startsWith('__libro:page-tool:capture-area:')) {
           console.log = originalLog;
+          const unload = new Event('beforeunload', {cancelable:true});
+          window.dispatchEvent(unload);
           resolve({payload:JSON.parse(message.slice('__libro:page-tool:capture-area:'.length)),
-            clean:!document.querySelector('[popover]')});
+            clean:!document.querySelector('[popover]'), pageEvents, unloadBlocked:unload.defaultPrevented});
         } else originalLog.apply(console, arguments);
       };
       const button = document.querySelector('button');
+      const pageEvents = [];
+      for (const type of ['pointerdown','mousedown','pointerup','mouseup','click']) button.addEventListener(type, () => pageEvents.push(type));
       window.__libroSetPageToolMode('annotate');
       button.dispatchEvent(new PointerEvent('pointerover', {bubbles:true}));
+      for (const type of ['pointerdown','mousedown','pointerup','mouseup']) button.dispatchEvent(new (type.startsWith('pointer') ? PointerEvent : MouseEvent)(type, {bubbles:true,cancelable:true}));
       button.click();
     })`);
+    assert.deepEqual(selection.pageEvents, [], 'page handlers must not see the selecting pointer');
+    assert.equal(selection.unloadBlocked, true, 'reload is blocked until the prompt closes');
+    const released = await win.webContents.executeJavaScript(`(() => {
+      window.__libroPageToolPromptClose();
+      const unload = new Event('beforeunload', {cancelable:true});
+      window.dispatchEvent(unload);
+      return !unload.defaultPrevented;
+    })()`);
+    assert.equal(released, true, 'cancel releases the page');
     assert.equal(selection.clean, true, 'capture must happen after outline and prompt removal');
     assert.equal(selection.payload.kind, 'element');
     assert.ok(selection.payload.element.selector.endsWith('button'));
@@ -69,9 +125,9 @@ app.whenReady().then(async () => {
     })`);
     assert.equal(pageSelection.payload.kind, 'page');
     assert.equal(pageSelection.clean, true);
-    const filename = await require('./page-area').capturePageArea(win.webContents, {fullPage:true}, app.getPath('temp'));
-    try {
-      const image = require('electron').nativeImage.createFromPath(filename);
+    const filename = await require('./page-area').capturePageArea(win.webContents, {fullPage:true});
+    {
+      const image = require('electron').nativeImage.createFromDataURL(filename);
       assert.ok(image.getSize().height >= 1800, 'captures content below the viewport');
       const result = await win.webContents.executeJavaScript(`(() => {
         window.__libroPageToolPromptOpen({kind:'page',screenshot:${JSON.stringify(filename)}},'http://example.test');
@@ -91,7 +147,7 @@ app.whenReady().then(async () => {
         const clipboard = new DataTransfer();
         clipboard.items.add(new File([blob], 'first.png', {type:'image/png'}));
         clipboard.items.add(new File([blob], 'second.png', {type:'image/png'}));
-        input.dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}));
+        input.dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true,composed:true}));
         await new Promise((resolve,reject) => {
           let attempts = 0;
           const timer = setInterval(() => {
@@ -123,14 +179,13 @@ app.whenReady().then(async () => {
       assert.equal(prompt.selection.request, 'First line\nSecond line');
       assert.equal(prompt.selection.kind, 'page');
       assert.equal(prompt.selection.images.length, 1);
-      const saved = await require('./page-area').savePageToolImages(prompt.selection.images, app.getPath('temp'));
-      try { assert.equal(require('electron').nativeImage.createFromPath(saved[0]).getSize().width, 20); }
-      finally { fs.rmSync(path.dirname(saved[0]), {recursive:true,force:true}); }
-      await assert.rejects(require('./page-area').savePageToolImages(['data:image/png;base64,invalid'], app.getPath('temp')));
+      const saved = require('./page-area').pageToolImages(prompt.selection.images);
+      assert.equal(require('electron').nativeImage.createFromDataURL(saved[0]).getSize().width, 20);
+      assert.throws(() => require('./page-area').pageToolImages(['data:image/png;base64,invalid']));
       assert.equal(prompt.closed, true, 'Escape cancels the prompt');
       assert.equal(prompt.wraps, true);
       assert.equal(prompt.multiline, true);
-    } finally { fs.rmSync(path.dirname(filename), {recursive:true,force:true}); }
+    }
     console.log('PASS: drag outline, prompt layers, clean element capture, and whole-page annotation');
   } finally { win.destroy(); app.quit(); }
 }).catch(error => {console.error(error);app.exit(1)});

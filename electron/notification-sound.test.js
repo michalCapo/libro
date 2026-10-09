@@ -5,7 +5,7 @@ const vm = require('node:vm')
 const { test } = require('node:test')
 
 const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-const source = workspace.slice(workspace.indexOf('  let notificationAudio;'), workspace.indexOf('  const acknowledgedAgents ='))
+const source = workspace.slice(workspace.indexOf('  // Each sound gets a fresh context.'), workspace.indexOf('  const acknowledgedAgents ='))
 function setup(prefs = {}) {
   const elements = { 'notification-sound': {}, 'notification-sound-status': {} }
   const listeners = {}
@@ -17,12 +17,12 @@ function setup(prefs = {}) {
     localStorage: { setItem(key, value) { stored = JSON.parse(value) } },
     AudioContext: class {
       state = 'running'; currentTime = 0; destination = {}
+      close() { return Promise.resolve() }
       createOscillator() { return { frequency: {}, connect() {}, disconnect() {}, start(at) { tones.push(at) }, stop() {} } }
       createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, disconnect() {} } }
     },
   })
-  vm.runInContext(source, context)
-  listeners.pointerdown()
+  vm.runInContext(source, context) // No interaction: completions must sound right away.
   return { context, tones, elements, stored: () => stored, update(statuses) {
     context.window.__libroAgentStatuses = statuses
     listeners['libro-agent-status']()

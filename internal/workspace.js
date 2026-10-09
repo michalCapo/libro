@@ -634,30 +634,26 @@
       row.setAttribute('aria-keyshortcuts', 'Control+' + number);
     });
   }
-  let notificationAudio;
-  function enableNotificationAudio() {
+  // Each sound gets a fresh context. A long-lived one can be missing after a
+  // reload or silently dead after sleep or an audio device change.
+  async function playDoneSound() {
     if (prefs.notificationSound === false) return;
-    try {
-      notificationAudio ||= new AudioContext();
-      if (notificationAudio.state === 'suspended') notificationAudio.resume().catch(() => {});
-    } catch (_) {}
-  }
-  // Unlock audio during interaction so background completions can play immediately.
-  document.addEventListener('pointerdown', enableNotificationAudio, true);
-  document.addEventListener('keydown', enableNotificationAudio, true);
-  function playDoneSound() {
-    if (prefs.notificationSound === false || notificationAudio?.state !== 'running') return;
-    const start = notificationAudio.currentTime;
+    let audio;
+    try { audio = new AudioContext(); } catch (_) { return; }
+    // Some browsers start asynchronously or wait for a user gesture.
+    if (audio.state !== 'running') await Promise.race([audio.resume(), new Promise(resolve => setTimeout(resolve, 1000))]).catch(() => {});
+    if (audio.state !== 'running' || prefs.notificationSound === false) { audio.close().catch(() => {}); return; }
+    const start = audio.currentTime;
     [660, 880].forEach((frequency, index) => {
-      const tone = notificationAudio.createOscillator();
-      const volume = notificationAudio.createGain();
+      const tone = audio.createOscillator();
+      const volume = audio.createGain();
       const at = start + index * 0.14;
       tone.frequency.value = frequency;
       volume.gain.setValueAtTime(0, at);
       volume.gain.linearRampToValueAtTime(0.12, at + 0.015);
       volume.gain.exponentialRampToValueAtTime(0.001, at + 0.3);
-      tone.connect(volume); volume.connect(notificationAudio.destination);
-      tone.onended = () => { tone.disconnect(); volume.disconnect(); };
+      tone.connect(volume); volume.connect(audio.destination);
+      if (index === 1) tone.onended = () => { audio.close().catch(() => {}); };
       tone.start(at); tone.stop(at + 0.32);
     });
   }
@@ -677,7 +673,6 @@
       const updated = {...prefs, notificationSound:enabled};
       localStorage.setItem('libro.workspace', JSON.stringify(updated));
       prefs = updated;
-      enableNotificationAudio();
       status.textContent = enabled ? 'Notification sound on.' : 'Notification sound off.';
       return true;
     } catch (_) {

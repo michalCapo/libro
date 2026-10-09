@@ -26,7 +26,11 @@ var browserShortcutsScript = '(' + function(){
 	var pageToolOverlay = null;
 	var pageToolStart = null;
 	var pageToolPrompt = null;
-	var pageToolListenersBound = false;
+	var pageToolPending = false;
+	var pageToolSession = 0;
+	var pageToolFrameSheet = null;
+	var pageToolFrameRoots = [];
+	var pageToolKeys = {};
 
 	function pageToolMessage(kind, payload) {
 		try { console.log('__libro:page-tool:' + kind + ':' + JSON.stringify(payload)); } catch (err) {}
@@ -88,9 +92,55 @@ var browserShortcutsScript = '(' + function(){
 			width: Math.round(rect.width), height: Math.round(rect.height)
 		};
 	}
-	function pageToolPromptClose() {
+	// A session argument closes only that capture, so a late result cannot
+	// close a newer prompt.
+	function pageToolPromptClose(session) {
+		if (session && session !== pageToolSession) return;
+		pageToolSession++;
 		if (pageToolPrompt && pageToolPrompt.parentNode) pageToolPrompt.parentNode.removeChild(pageToolPrompt);
 		pageToolPrompt = null;
+		pageToolPending = false;
+		pageToolSync();
+	}
+	// Libro captures the screenshot and then opens the prompt; the page stays
+	// frozen in between.
+	function pageToolCapture(payload) {
+		pageToolPending = true;
+		payload.session = ++pageToolSession;
+		pageToolSync();
+		requestAnimationFrame(function() { requestAnimationFrame(function() {
+			pageToolMessage('capture-area', payload);
+		}); });
+	}
+	function pageToolFrozen() {
+		// A page update can remove the prompt; do not stay frozen without it.
+		if (pageToolPrompt && !pageToolPrompt.isConnected) pageToolPromptClose();
+		return !!(pageToolMode || pageToolPending || pageToolPrompt);
+	}
+	window.__libroPageToolFrozen = pageToolFrozen;
+	function pageToolRoots(root, roots) {
+		roots.push(root);
+		root.querySelectorAll('*').forEach(function(el) { if (el.shadowRoot) pageToolRoots(el.shadowRoot, roots); });
+		return roots;
+	}
+	// Frames get their own events, so make them transparent to the pointer
+	// and move focus out of them while frozen, including inside shadow roots.
+	function pageToolSync() {
+		var frozen = pageToolFrozen();
+		try {
+			if (!pageToolFrameSheet) {
+				pageToolFrameSheet = new CSSStyleSheet();
+				pageToolFrameSheet.replaceSync('iframe,frame,embed,object{pointer-events:none!important}');
+			}
+			pageToolFrameRoots.forEach(function(root) {
+				root.adoptedStyleSheets = Array.from(root.adoptedStyleSheets).filter(function(sheet) { return sheet !== pageToolFrameSheet; });
+			});
+			pageToolFrameRoots = frozen ? pageToolRoots(document, []) : [];
+			pageToolFrameRoots.forEach(function(root) { root.adoptedStyleSheets = Array.from(root.adoptedStyleSheets).concat(pageToolFrameSheet); });
+		} catch (err) {}
+		var active = document.activeElement;
+		while (active && active.shadowRoot && active.shadowRoot.activeElement) active = active.shadowRoot.activeElement;
+		if (frozen && active && /^(IFRAME|FRAME|EMBED|OBJECT)$/.test(active.tagName)) active.blur();
 	}
 	window.__libroPageToolPromptClose = pageToolPromptClose;
 	function pageToolPromptAnchor(payload) {
@@ -103,6 +153,7 @@ var browserShortcutsScript = '(' + function(){
 		return {left:left, top:top, right:left + width, bottom:top + height};
 	}
 	function pageToolPromptOpen(payload, appURL) {
+		if (payload && payload.session && (payload.session !== pageToolSession || !pageToolPending)) return;
 		pageToolPromptClose();
 		var panel = document.createElement('div');
 		panel.setAttribute('popover', 'manual');
@@ -122,7 +173,7 @@ var browserShortcutsScript = '(' + function(){
 		panel.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 		panel.style.fontSize = '13px';
 		panel.style.lineHeight = '1.4';
-		var root = panel.attachShadow ? panel.attachShadow({mode:'open'}) : panel;
+		var root = panel.attachShadow({mode:'open'});
 		var style = document.createElement('style');
 		style.textContent = '.card{box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#1f2937;box-shadow:0 8px 28px rgba(15,23,42,.24)}' +
 			'.header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;font-weight:600}' +
@@ -161,6 +212,7 @@ var browserShortcutsScript = '(' + function(){
 		(modals[modals.length - 1] || document.documentElement).appendChild(panel);
 		panel.showPopover();
 		pageToolPrompt = panel;
+		pageToolSync();
 		var anchor = pageToolPromptAnchor(payload);
 		function position() {
 			if (!panel.parentNode) return;
@@ -197,10 +249,7 @@ var browserShortcutsScript = '(' + function(){
 				reader.readAsDataURL(file);
 			});
 		});
-		function stopEvent(event) { event.stopPropagation(); }
-		panel.addEventListener('pointerdown', stopEvent);
-		panel.addEventListener('click', stopEvent);
-		panel.addEventListener('keydown', function(event) { event.stopPropagation(); if (event.key === 'Escape') { event.preventDefault(); pageToolPromptClose(); } });
+		root.addEventListener('keydown', function(event) { if (event.key === 'Escape') { event.preventDefault(); pageToolPromptClose(); } });
 		close.onclick = function() { pageToolPromptClose(); };
 		cancel.onclick = function() { pageToolPromptClose(); };
 		send.onclick = function(event) {
@@ -238,14 +287,13 @@ var browserShortcutsScript = '(' + function(){
 		pageToolOverlay = null;
 		document.documentElement.style.cursor = '';
 		pageToolMessage('mode', {mode: '', previous: mode || ''});
+		pageToolSync();
 	}
 	function pageToolSetMode(mode) {
 		if (mode === 'page') {
 			pageToolStop(pageToolMode);
 			pageToolPromptClose();
-			requestAnimationFrame(function() { requestAnimationFrame(function() {
-				pageToolMessage('capture-area', {kind: 'page', url: window.location.href});
-			}); });
+			pageToolCapture({kind: 'page', url: window.location.href});
 			return;
 		}
 		if (mode !== 'annotate' && mode !== 'area') mode = '';
@@ -256,6 +304,7 @@ var browserShortcutsScript = '(' + function(){
 			document.documentElement.style.cursor = 'crosshair';
 			pageToolMessage('mode', {mode: mode});
 		}
+		pageToolSync();
 	}
 	window.__libroSetPageToolMode = pageToolSetMode;
 	window.__libroGetPageToolMode = function() { return pageToolMode; };
@@ -274,18 +323,14 @@ var browserShortcutsScript = '(' + function(){
 		if (pageToolMode !== 'annotate') return;
 		var el = event.target && event.target.nodeType === 1 ? event.target : event.target && event.target.parentElement;
 		if (!el || el === pageToolHighlight || (pageToolOverlay && pageToolOverlay.contains(el))) return;
-		event.preventDefault(); event.stopPropagation();
 		var data = pageToolElementData(el);
 		pageToolStop('annotate');
 		pageToolPromptClose();
-		requestAnimationFrame(function() { requestAnimationFrame(function() {
-			pageToolMessage('capture-area', {kind: 'element', url: window.location.href, element: data});
-		}); });
+		pageToolCapture({kind: 'element', url: window.location.href, element: data});
 	}
 	function pageToolPointerDown(event) {
 		if (pageToolMode !== 'area' || event.button !== 0) return;
 		if (pageToolOverlay && pageToolOverlay.contains(event.target)) return;
-		event.preventDefault(); event.stopPropagation();
 		pageToolStart = {x: event.clientX, y: event.clientY};
 		try { if (event.target.setPointerCapture) event.target.setPointerCapture(event.pointerId); } catch (err) {}
 		if (!pageToolOverlay) {
@@ -303,14 +348,12 @@ var browserShortcutsScript = '(' + function(){
 	}
 	function pageToolPointerMove(event) {
 		if (pageToolMode !== 'area' || !pageToolStart) return;
-		event.preventDefault();
 		var left = Math.min(pageToolStart.x, event.clientX), top = Math.min(pageToolStart.y, event.clientY);
 		var right = Math.max(pageToolStart.x, event.clientX), bottom = Math.max(pageToolStart.y, event.clientY);
 		pageToolRect({left:left, top:top, right:right, bottom:bottom, width:right-left, height:bottom-top}, 'libro-page-tool-area');
 	}
 	function pageToolPointerUp(event) {
 		if (pageToolMode !== 'area' || !pageToolStart) return;
-		event.preventDefault(); event.stopPropagation();
 		var left = Math.min(pageToolStart.x, event.clientX), top = Math.min(pageToolStart.y, event.clientY);
 		var right = Math.max(pageToolStart.x, event.clientX), bottom = Math.max(pageToolStart.y, event.clientY);
 		var rect = {left:left, top:top, right:right, bottom:bottom, width:right-left, height:bottom-top};
@@ -319,20 +362,58 @@ var browserShortcutsScript = '(' + function(){
 		try { if (event.target.releasePointerCapture) event.target.releasePointerCapture(event.pointerId); } catch (err) {}
 		pageToolStop('area');
 		pageToolPromptClose();
-		requestAnimationFrame(function() { requestAnimationFrame(function() {
-			pageToolMessage('capture-area', {kind: 'area', url: window.location.href, area: data});
-		}); });
+		pageToolCapture({kind: 'area', url: window.location.href, area: data});
 	}
-	if (!pageToolListenersBound) {
-		pageToolListenersBound = true;
-		document.addEventListener('pointerover', pageToolPointerOver, true);
-		document.addEventListener('pointerout', pageToolPointerOut, true);
-		document.addEventListener('click', pageToolClick, true);
-		document.addEventListener('pointerdown', pageToolPointerDown, true);
-		document.addEventListener('pointermove', pageToolPointerMove, true);
-		document.addEventListener('pointerup', pageToolPointerUp, true);
-		document.addEventListener('pointercancel', pageToolPointerUp, true);
+	// While a page tool or its prompt is active, the page is frozen: its own
+	// handlers never see input (no link, menu, key, or route changes) and
+	// reloads are blocked until the prompt is sent or cancelled.
+	var pageToolHandlers = {pointerover: pageToolPointerOver, pointerout: pageToolPointerOut, click: pageToolClick, pointerdown: pageToolPointerDown, pointermove: pageToolPointerMove, pointerup: pageToolPointerUp, pointercancel: pageToolPointerUp, keydown: pageToolKeydown};
+	function pageToolKeydown(event) {
+		if (event.key !== 'Escape') browserKeydown(event);
+		else if (pageToolMode) pageToolStop(pageToolMode);
+		else pageToolPromptClose();
 	}
+	function pageToolEvent(event) {
+		if (!pageToolFrozen()) {
+			// A key pressed while frozen, such as Escape, keeps its release.
+			if (event.type === 'keyup' && pageToolKeys[event.code]) { delete pageToolKeys[event.code]; event.stopImmediatePropagation(); }
+			return;
+		}
+		if (event.type === 'keydown') pageToolKeys[event.code] = true;
+		if (event.type === 'keyup') delete pageToolKeys[event.code];
+		if (event.type === 'focusin' || event.type === 'focusout') setTimeout(syncInputFocus, 0);
+		event.stopImmediatePropagation();
+		if (pageToolPrompt && event.composedPath().indexOf(pageToolPrompt) >= 0) {
+			// Replay prompt events inside its shadow root only, so the page does
+			// not see them. Browser defaults such as typing still apply.
+			if (['keydown', 'click', 'paste'].indexOf(event.type) < 0) return;
+			var init = {};
+			for (var key in event) init[key] = event[key];
+			init.composed = false;
+			var copy = new event.constructor(event.type, init);
+			event.composedPath()[0].dispatchEvent(copy);
+			if (copy.defaultPrevented) event.preventDefault();
+			return;
+		}
+		if (pageToolHandlers[event.type]) pageToolHandlers[event.type](event);
+		// Wheel and touch listeners are passive; scrolling stays available.
+		if (event.cancelable && !/^(wheel|touch)/.test(event.type)) event.preventDefault();
+	}
+	// The webview preload listens before page scripts run; otherwise listen now.
+	if (!window.__libroPageToolEarly) {
+		window.__libroPageToolEarly = true;
+		['pointerover', 'pointerout', 'pointerenter', 'pointerleave', 'pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'gotpointercapture', 'lostpointercapture',
+			'mouseover', 'mouseout', 'mouseenter', 'mouseleave', 'mousedown', 'mousemove', 'mouseup',
+			'click', 'dblclick', 'auxclick', 'contextmenu', 'dragstart', 'wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel',
+			'keydown', 'keypress', 'keyup', 'beforeinput', 'input', 'paste', 'copy', 'cut',
+			'compositionstart', 'compositionupdate', 'compositionend', 'focus', 'blur', 'focusin', 'focusout'].forEach(function(type) {
+			window.addEventListener(type, function(event) { if (window.__libroPageToolGuard) window.__libroPageToolGuard(event); }, true);
+		});
+	}
+	window.__libroPageToolGuard = pageToolEvent;
+	window.addEventListener('beforeunload', function(event) {
+		if (pageToolFrozen()) { event.preventDefault(); event.returnValue = ''; }
+	}, true);
 	function elementRole(el) {
 		if (!el || !el.getAttribute) return '';
 		return (el.getAttribute('role') || '').toLowerCase();
@@ -385,7 +466,7 @@ var browserShortcutsScript = '(' + function(){
 	document.addEventListener('selectionchange', syncInputFocus, true);
 	window.addEventListener('pageshow', syncInputFocus, true);
 	window.addEventListener('load', syncInputFocus, true);
-	document.addEventListener('keydown', function(e) {
+	function browserKeydown(e) {
 		if(e.metaKey || e.ctrlKey || e.altKey) return;
 		// Insert mode is enforced in the main process (electron/main.js).
 		// When in insert mode, all the cases below are skipped because the
@@ -418,7 +499,8 @@ var browserShortcutsScript = '(' + function(){
 			default: handled = false;
 		}
 		if(handled) { e.preventDefault(); e.stopPropagation(); }
-	}, true);
+	}
+	document.addEventListener('keydown', browserKeydown, true);
 	syncInputFocus();
 } + ')()';
 
@@ -573,7 +655,8 @@ function executePageToolMode(appID, mode) {
 	if (wv.executeJavaScript) {
 		return new Promise(function(resolve, reject) {
 			whenReady(appID, function() {
-				try { Promise.resolve(wv.executeJavaScript(js)).then(resolve, reject); }
+				// A user gesture lets the page's unload guard block reloads.
+				try { Promise.resolve(wv.executeJavaScript(js, true)).then(resolve, reject); }
 				catch (err) { reject(err); }
 			});
 		});
@@ -642,6 +725,7 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 			payload.screenshot = (await window.__libroSavePageToolImages(appID, [screenshot]))[0];
 			await guest.executeJavaScript('window.__libroPageToolPromptOpen(' + JSON.stringify(payload) + ', ' + JSON.stringify(payload.url) + ')');
 		} catch (err) {
+			if (guest && guest.executeJavaScript) guest.executeJavaScript('window.__libroPageToolPromptClose && window.__libroPageToolPromptClose(' + JSON.stringify(payload.session || 0) + ')').catch(function() {});
 			if (window.__libroShowToast) window.__libroShowToast('Screenshot failed', err.message || 'Try the annotation again in Libro desktop.', 'error');
 		}
 		return;
@@ -1253,11 +1337,27 @@ function getBrowserFallbackFrame(appID) {
 	return document.querySelector('iframe[data-browser-iframe-app="' + appID + '"]');
 }
 
+// Libro navigation waits until an open page tool is sent or cancelled, so the
+// annotation is not lost. A hung page still navigates after a short wait.
+function whenPageToolIdle(wv, navigate) {
+	var done = false;
+	function go(frozen) {
+		if (done) return;
+		done = true;
+		if (frozen !== true) navigate();
+		else if (window.__libroShowToast) window.__libroShowToast('Annotation in progress', 'Send or cancel it first.', 'info');
+	}
+	setTimeout(go, 1000);
+	try {
+		Promise.resolve(wv.executeJavaScript('!!(window.__libroPageToolFrozen && window.__libroPageToolFrozen())')).then(go, go);
+	} catch (err) { go(); }
+}
+
 // Global helpers — safe to call before dom-ready (calls are queued)
 window.__libroWvBack = function(appID) {
 	var wv = window.__libroWebviews[appID];
 	if (wv) {
-		whenReady(appID, function() { if (wv.canGoBack()) wv.goBack(); });
+		whenReady(appID, function() { whenPageToolIdle(wv, function() { if (wv.canGoBack()) wv.goBack(); }); });
 		return;
 	}
 	var frame = getBrowserFallbackFrame(appID);
@@ -1267,7 +1367,7 @@ window.__libroWvBack = function(appID) {
 window.__libroWvForward = function(appID) {
 	var wv = window.__libroWebviews[appID];
 	if (wv) {
-		whenReady(appID, function() { if (wv.canGoForward()) wv.goForward(); });
+		whenReady(appID, function() { whenPageToolIdle(wv, function() { if (wv.canGoForward()) wv.goForward(); }); });
 		return;
 	}
 	var frame = getBrowserFallbackFrame(appID);
@@ -1277,7 +1377,7 @@ window.__libroWvForward = function(appID) {
 window.__libroWvReload = function(appID) {
 	var wv = window.__libroWebviews[appID];
 	if (wv) {
-		whenReady(appID, function() { wv.reload(); });
+		whenReady(appID, function() { whenPageToolIdle(wv, function() { wv.reload(); }); });
 		return;
 	}
 	var frame = getBrowserFallbackFrame(appID);
@@ -1309,7 +1409,7 @@ window.__libroWvNavigate = function(appID, url) {
 	var wv = window.__libroWebviews[appID];
 	if (wv) {
 		if (ready[appID]) {
-			safeWebviewLoadURL(wv, url);
+			whenPageToolIdle(wv, function() { safeWebviewLoadURL(wv, url); });
 		} else {
 			// Not ready yet — set src attribute to trigger initial load
 			wv.setAttribute('src', url);

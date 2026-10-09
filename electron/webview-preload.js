@@ -12,6 +12,18 @@ try {
         hostname === 'discordapp.com' ||
         hostname.endsWith('.discordapp.com')
 
+      // Page tools freeze the page. Listen before page scripts run, so their
+      // window listeners cannot see input first. Keep in sync with browser.go.
+      const pageToolEvents = ['pointerover', 'pointerout', 'pointerenter', 'pointerleave', 'pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'gotpointercapture', 'lostpointercapture',
+        'mouseover', 'mouseout', 'mouseenter', 'mouseleave', 'mousedown', 'mousemove', 'mouseup',
+        'click', 'dblclick', 'auxclick', 'contextmenu', 'dragstart', 'wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel',
+        'keydown', 'keypress', 'keyup', 'beforeinput', 'input', 'paste', 'copy', 'cut',
+        'compositionstart', 'compositionupdate', 'compositionend', 'focus', 'blur', 'focusin', 'focusout']
+      pageToolEvents.forEach((type) => {
+        window.addEventListener(type, (event) => { if (window.__libroPageToolGuard) window.__libroPageToolGuard(event) }, true)
+      })
+      window.__libroPageToolEarly = true
+
       if (!isDiscord) return
 
       // Discord's auth/session logic has historically treated differences
