@@ -1285,7 +1285,9 @@
     if (grid === activeGrid()) document.querySelectorAll('#workspace-tool-buttons [data-tool-id]').forEach(entry => entry.setAttribute('aria-pressed', String(!full && entry.dataset.toolId === right[0]?.dataset.plugin)));
     // Tools overlay agents when both cannot fit.
     const agentMin = Math.min(agentMinWidth, grid.clientWidth);
-    const overlay = !full && right.length > 0 && (center.length ? center.length * agentMin : 320) + width(right[0]) > grid.clientWidth;
+    // Cards sit apart by the grid gap; one gap per agent column plus the tool column.
+    const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
+    const overlay = !full && right.length > 0 && (center.length ? center.length * agentMin : 320) + width(right[0]) + gap * Math.max(1, center.length) > grid.clientWidth;
     const visible = full ? [full] : [...center, ...right];
     const columns = (overlay ? center : visible).map(frame => full ? grid.clientWidth + 'px' : frame.dataset.dock === 'center' ? 'minmax(' + agentMin + 'px, 1fr)' : width(frame) + 'px');
     if (!center.length && !full) columns.unshift('minmax(0, 1fr)');

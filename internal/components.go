@@ -3042,9 +3042,9 @@ func terminalFrameSetupJS() string {
 
 			function termTheme(dark) {
 				return dark ? {
-					background: '#1e1e1e', foreground: '#d4d4d4', cursor: '#d4d4d4', selectionBackground: '#264f78'
+					background: '#1b1b1f', foreground: '#d4d4d4', cursor: '#d4d4d4', selectionBackground: '#264f78'
 				} : {
-					background: '#fdfdfd', foreground: '#1f2328', cursor: '#1f2328', selectionBackground: '#b5d5ff'
+					background: '#ffffff', foreground: '#1f2328', cursor: '#1f2328', selectionBackground: '#b5d5ff'
 				};
 			}
 

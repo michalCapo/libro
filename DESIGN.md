@@ -2,19 +2,23 @@
 name: Libro
 description: Agent workspace with strong keyboard support, terminal and web applications, and fixed-width tool panels.
 colors:
-  bg: "#fcfcfd"
-  chrome: "#f7f7f8"
+  bg: "#fff"
+  chrome: "#f0f0f3"
   raised: "#fff"
-  line: "#e9e9ec"
+  sunken: "#f5f5f8"
+  sel: "#ececf1"
+  field: "#ececf1"
+  kbd: "#e4e4ea"
+  line: "#e6e6eb"
   control-line: "#d4d4db"
-  fg: "#29292e"
-  muted: "#70707b"
-  hover: "#efeff2"
+  fg: "#1b1b20"
+  muted: "#676773"
+  hover: "#e8e8ed"
   accent: "#2452df"
   success: "#15803d"
-  popup: "#f7f7f8"
-  popup-row: "#fff"
-  popup-muted: "#70707b"
+  popup: "#fff"
+  popup-row: "#ececf1"
+  popup-muted: "#676773"
   code-comment: "#6c7580"
   code-keyword: "#cf222e"
   code-string: "#0a3069"
@@ -23,19 +27,23 @@ colors:
   code-property: "#116329"
   code-meta: "#953800"
   code-deletion: "#82071e"
-  dark-bg: "#1c1c1f"
-  dark-chrome: "#222225"
-  dark-raised: "#2b2b30"
-  dark-line: "#333339"
-  dark-control-line: "#484850"
-  dark-fg: "#e6e6eb"
-  dark-muted: "#aaaab5"
-  dark-hover: "#303036"
+  dark-bg: "#1b1b1f"
+  dark-chrome: "#121214"
+  dark-raised: "#27272d"
+  dark-sunken: "#17171a"
+  dark-sel: "#27272e"
+  dark-field: "#27272e"
+  dark-kbd: "#2b2b32"
+  dark-line: "#2a2a30"
+  dark-control-line: "#3a3a42"
+  dark-fg: "#ececf1"
+  dark-muted: "#9a9aa6"
+  dark-hover: "#2a2a30"
   dark-accent: "#8aa7ff"
   dark-success: "#4ade80"
-  dark-popup: "#252529"
-  dark-popup-row: "#34343b"
-  dark-popup-muted: "#aaaab5"
+  dark-popup: "#222227"
+  dark-popup-row: "#303037"
+  dark-popup-muted: "#9a9aa6"
   dark-code-comment: "#8b949e"
   dark-code-keyword: "#ff7b72"
   dark-code-string: "#a5d6ff"
@@ -82,8 +90,8 @@ typography:
     fontSize: "12px"
     lineHeight: "17px"
   keycap:
-    fontFamily: "ui-monospace, monospace"
-    fontSize: "11px"
+    fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace'
+    fontSize: "10.5px"
     lineHeight: "18px"
 rounded:
   text-highlight: "2px"
@@ -94,17 +102,19 @@ rounded:
   control: "8px"
   action: "9px"
   row: "10px"
+  card: "10px"
   popup: "12px"
   shortcut-group: "14px"
 spacing:
   compact: "6px"
+  card-gap: "6px"
   small: "8px"
   inline: "10px"
   regular: "12px"
   large: "24px"
 components:
   launch-button:
-    backgroundColor: "{colors.raised}"
+    backgroundColor: "{colors.field}"
     textColor: "{colors.fg}"
     rounded: "{rounded.action}"
     padding: "7px 14px"
@@ -114,7 +124,7 @@ components:
     width: "30px"
     height: "30px"
   field:
-    backgroundColor: "{colors.raised}"
+    backgroundColor: "{colors.field}"
     textColor: "{colors.fg}"
     rounded: "{rounded.input}"
     padding: "10px 12px"
@@ -144,13 +154,13 @@ components:
 
 Libro brings multiple agents into one project with strong keyboard support and fixed-width tool panels. It is comparable to T3 Code or the OpenAI and Anthropic desktop apps, but built with a different approach centered on terminal and web applications.
 
-The desktop shell uses near-white content, a softly gray sidebar, subtle dividers, rounded white selected rows, muted icons, compact bordered controls, and restrained blue accents. The dark equivalent keeps the same hierarchy and geometry. The agent workspace is the main content.
+The desktop shell uses white content cards on a soft gray chrome frame, lifted white selected rows, muted icons, filled borderless controls, and restrained blue accents. Surfaces are separated by tone, spacing, and soft shadow rather than drawn lines. The dark equivalent keeps the same hierarchy and geometry. The agent workspace is the main content.
 
 **Key Characteristics:**
 - Quiet system typography and compact desktop controls.
 - Strong keyboard support for navigating projects, agents, and tools.
-- Fixed-width app panels separated by fine rules.
-- Rounded selection surfaces and softly lifted popups.
+- Fixed-width app panels as rounded cards with a 6px gap.
+- Lifted selection surfaces, filled fields and keycaps, and softly lifted popups.
 
 Scope: the built workspace shell and its dialogs. Source of truth is `internal/workspace.css`, supported by `workspace.go`, `workspace.js`, `components.go`, and the popup components. Embedded terminals and browser pages retain their own content styling. `PRODUCT.md` fixes the brand and docked workspace structure. This is a record of the implementation, not a new visual direction.
 
@@ -158,29 +168,29 @@ Scope: the built workspace shell and its dialogs. Source of truth is `internal/w
 
 ### Primary
 
-`accent` supplies blue focus outlines, selected panel underlines, and browser loading indicators. It is a functional accent, not a large decorative surface.
+`accent` supplies blue focus outlines, the current shortcut keycap, primary actions, and browser loading indicators. It is a functional accent, not a large decorative surface.
 
 ### Neutral
 
-`bg` is the near-white main surface; `chrome` is the soft gray navigation surface; `raised` is the white selected row and control surface. `fg` carries primary text, `muted` secondary text and icons. `line` separates surfaces; `control-line` outlines compact controls; `hover` gives restrained pointer feedback. `popup`, `popup-row`, and `popup-muted` apply the same hierarchy to overlays. Each `dark-` counterpart is applied under `html.dark`.
+`bg` is the white card surface; `chrome` is the soft gray frame behind the cards, sidebar, tabs, rail, and statusbar; `raised` is the lifted selection surface on chrome. `sunken` tints footers, file trees, and grouped rows inside cards; `sel` marks selected rows inside cards; `field` fills inputs and buttons; `kbd` fills keycaps. `fg` carries primary text, `muted` secondary text and icons. `line` and `control-line` remain for the rare rule that is still needed; `hover` gives restrained pointer feedback. `popup`, `popup-row`, and `popup-muted` apply the same hierarchy to overlays. Each `dark-` counterpart is applied under `html.dark`.
 
-The muted text token was checked against the sidebar surface at 4.57:1. This does not claim a complete accessibility audit of embedded content. Terminal backgrounds and colors follow the shell theme, including live changes. Settings provides Auto (the default), Light, and Dark. Auto follows the OS color scheme; explicit choices override it and persist through the UI library’s theme storage.
+The muted text token stays above 4.5:1 on the chrome surface. This does not claim a complete accessibility audit of embedded content. Terminal backgrounds and colors follow the shell theme, including live changes. Settings provides Auto (the default), Light, and Dark. Auto follows the OS color scheme; explicit choices override it and persist through the UI library’s theme storage.
 
 The `code-*` tokens give file previews a restrained syntax palette. Their `dark-code-*` counterparts preserve token roles instead of mechanically inverting the light colors.
 
-Branch metadata keeps the existing amber Base and violet worktree colors. File-reference results and symbol dialogs use their established syntax colors; these are separate from the shell palette.
+Branch metadata keeps the existing amber Base and violet worktree colors and uses the monospace role. File-reference results and symbol dialogs use their established syntax colors; these are separate from the shell palette.
 
 ## Typography
 
-Use the system sans-serif stack in `body`; there is no separate display font. Body text is compact and regular. Project headings and palette labels use the title scale; toolbar titles use 13px, sidebar labels and result descriptions 12px. Brand text is 16px at weight 550. Empty-state headings use `empty-heading`; supporting copy has a 46ch maximum width and 1.65 line height. Status and size controls use 10px text. Keycaps use the monospace role. Material Icons Round supplies mostly 18–19px muted icons.
+Use the system sans-serif stack in `body`; there is no separate display font. Body text is compact and regular. Project headings and palette labels use the title scale; toolbar titles use 13px, result descriptions 12px. Sidebar section labels are 11px semibold uppercase with 0.06em tracking. Brand text is 16px at weight 550. Empty-state headings use `empty-heading`; supporting copy has a 46ch maximum width and 1.65 line height. The statusbar uses 11px text; size controls use 10px. Keycaps use the monospace role. Material Icons Round supplies mostly 18–19px muted icons.
 
 ## Layout
 
 Project threads contain one center agent panel each. New thread creates a thread directly without opening the agent picker; its configurable shortcut is empty by default. Ctrl+Shift+A opens the agent picker and starts the chosen agent in a new thread. Replace agent starts a fresh session in the current thread and keeps its tools open. Notes and bottom terminal processes are shared across the project; browser and other tools belong to each thread. Project settings choose a shared application or one application per thread, with automatic ports and optional per-thread overrides. Standalone threads keep their existing behavior.
 
-The shell has a 56px titlebar, a 26px statusbar, and left project navigation. The sidebar is 216px wide. At 760px or less it overlays the content between the titlebar and statusbar, with width `min(216px, calc(100vw - 48px))`. It defaults closed on small screens when no preference exists; selecting a project closes it. The brand and trailing status text hide, and empty-state headings become 24px.
+The shell has a 56px titlebar, a 28px statusbar, and left project navigation. The sidebar is 216px wide. At 760px or less it overlays the content between the titlebar and statusbar, with width `min(216px, calc(100vw - 48px))`. It defaults closed on small screens when no preference exists; selecting a project closes it. The brand and trailing status text hide, and empty-state headings become 24px.
 
-The main area uses center, right, and bottom docks with no outer card padding. Each thread has at most one center agent panel. Project-backed threads reuse the same Notes panel and bottom terminals; those panels move with the selected thread without restarting. Shared applications also move with the selected thread; per-thread application panels stay in their own workspaces. The right dock keeps multiple tools alive but shows one selected tool at a time. The agent panel has no size of its own: it fills the space the tools leave, with a 600px minimum. If the selected right tool and a 600px agent do not fit together, the tool overlays the right side. A panel size wider than the visible area shrinks to fit it, so the main row never scrolls sideways. The bottom dock can show the assigned application command below the main row. A shared tab row selects the running agent and tools. All tool panels in a thread share one width, so the row ends with one size picker for them.
+The main area is chrome. Its center, right, and bottom docks are cards with a 6px gap and a 6px bottom margin; the tool overlay check counts the gaps. Each thread has at most one center agent panel. Project-backed threads reuse the same Notes panel and bottom terminals; those panels move with the selected thread without restarting. Shared applications also move with the selected thread; per-thread application panels stay in their own workspaces. The right dock keeps multiple tools alive but shows one selected tool at a time. The agent panel has no size of its own: it fills the space the tools leave, with a 600px minimum. If the selected right tool and a 600px agent do not fit together, the tool overlays the right side. A panel size wider than the visible area shrinks to fit it, so the main row never scrolls sideways. The bottom dock can show the assigned application command below the main row. A shared tab row selects the running agent and tools. All tool panels in a thread share one width, so the row ends with one size picker for them.
 
 Tool width presets are XS 320px, SM 480px, MD 640px, LG 960px, XL 1280px, and 2XL 1920px. These are panel widths, not viewport breakpoints. Legacy 3XL 2560px and MAX (full strip width, formerly called FULL) remain available as steps beyond 2XL; the existing screen-width policy disables 3XL on Full HD or smaller screens. MAX uses available workspace width. Maximizing temporarily fills the workspace and hides other panels.
 
@@ -190,24 +200,24 @@ Notes uses a single scrolling column with 16px padding at every panel width. Its
 
 ## Elevation & Depth
 
-The workspace uses tonal differences and 1px dividers. Panels are flat and square. Popups alone use the shared shadow `0 12px 36px rgb(0 0 0 / 14%)` with a 10% black backdrop and no blur. The mobile sidebar uses a lateral shadow. Bordered launch controls have only a faint shadow where implemented. Exact shadow values and component samples are in `.impeccable/design.json`.
+The workspace avoids borders. App panels are white cards on the chrome frame with the faint `--ws-card` shadow (none in dark mode). Selected rows, tabs, and rail buttons on chrome use the raised fill with the small `--ws-shadow` lift. Inside cards, selection uses the `sel` fill with no ring, and footers use the `sunken` tone instead of a top rule. Popups use the shared shadow `0 12px 36px rgb(0 0 0 / 14%)` with a 10% black backdrop and no blur. The mobile sidebar uses a lateral shadow. Exact shadow values and component samples are in `.impeccable/design.json`.
 
 Animations on app panels are disabled. Reduced-motion preferences remove shell animation, transitions, and smooth scrolling.
 
 ## Shapes
 
-Use the frontmatter radii by role: small keycaps and size badges, gently rounded controls, rounded selected rows, and larger popup and shortcut-group corners. Preserve square app panels. Borders are single-pixel neutral rules; selection does not require a thick outline.
+Use the frontmatter radii by role: small keycaps and size badges, gently rounded controls, rounded selected rows, and larger popup and shortcut-group corners. App panels are 10px cards. Prefer tone, spacing, and shadow over borders; fields, buttons, and keycaps are filled and borderless. Terminal output, such as TUI box lines, keeps its own lines.
 
 ## Components
 
-- **Navigation:** the sidebar starts with one compact utility row: search grows to fill the space, followed by icon buttons for switching projects, adding a project, and starting a new agent session. Section labels (Projects, Threads) are 12px semibold muted text. Project rows are 32px high with 13px text; the active project uses primary text at weight 600. Threads and worktrees use the full sidebar width beneath their project, without indentation or a tree guide line. Two-line rows keep the title and metadata close together on one subtly bordered surface, including when unselected. The selected thread uses the raised surface, a fine ring, and primary text. Row actions (new thread, settings, remove, overflow) appear only on hover or keyboard focus. Running agents appear below their project as direct session links. Project rows keep their folder icon; thread rows show agent working and done states. Projects without open threads fade to 52% opacity until hovered, focused, or current. A terminal glyph on the project row marks a running bottom command shared by its threads. Standalone threads show their own terminal activity. Shortcut numbers trail all row indicators and actions. Actions remain visible on touch devices.
-- **Tools:** the right tool rail is 48px wide with 32px quiet icon buttons. Thin rules split the projects toggle, the tool list, and the add and bottom-terminal actions. Below More tools, a small monospace keycap shows the shared tool width and opens the size picker to the left. The shared microphone sits below it, above the bottom terminal; it serves focused text fields and terminals across the workspace. Its progress appears beside the rail in a raised status popover. The visible right tool uses the raised surface, a fine ring, and primary text. The tab row above the docks is 40px high and matches sidebar rows: tabs are quiet 13px muted text with a hover surface. The selected tab uses the raised surface, a fine ring, and primary text at weight 600. Tabs have no size control.
-- **Actions:** launch and new-session buttons are compact bordered raised controls, at least 36px high. Icon buttons are quiet, square controls. Hover uses the neutral hover surface; focus uses the blue outline.
-- **Fields:** ordinary popup fields use raised fill, a fine border, and an accent caret. Search fields sit inside a rounded light search surface with an icon and dismiss action. Their inner border and outline are removed; the shared search wrapper shows focus-within feedback.
-- **Size controls:** only the selected size appears in the panel toolbar, with raised fill and a fine ring. Hover or click opens a floating size picker with every preset, including the current size. Keyboard users open it with Enter, Space, or Arrow Down; Escape dismisses it. The command resize picker uses rounded rows and radio indicators.
-- **Palettes:** commands, apps, and project results use compact rounded rows with muted icons and a 14px primary label. Command and app rows are one line, at least 36px high; the description or scope trails the label in smaller muted text and truncates. Hover uses the hover surface; the selected row uses the popup-row surface with a fine ring. Keyboard hints stay muted; searchable lists show a no-results state.
+- **Navigation:** the sidebar starts with one compact utility row: search grows to fill the space, followed by icon buttons for switching projects, adding a project, and starting a new agent session. Section labels (Projects, Threads) are 11px semibold uppercase muted text. Project rows are 32px high with 13px text; the active project uses primary text at weight 600. Threads and worktrees use the full sidebar width beneath their project, without indentation or a tree guide line. Two-line rows keep the title and metadata close together; the branch name is monospace. The selected thread lifts with the raised fill, a soft shadow, and 600-weight primary text. Shortcut keycaps are filled; the current row's keycap uses the accent fill. Row actions (new thread, settings, remove, overflow) appear only on hover or keyboard focus. Running agents appear below their project as direct session links. Project rows keep their folder icon; thread rows show agent working and done states. Projects without open threads fade to 52% opacity until hovered, focused, or current. A terminal glyph on the project row marks a running bottom command shared by its threads. Standalone threads show their own terminal activity. Shortcut numbers trail all row indicators and actions. Actions remain visible on touch devices.
+- **Tools:** the right tool rail is 48px wide with 32px quiet icon buttons. Spacing, not rules, splits the projects toggle, the tool list, and the add and bottom-terminal actions. Below More tools, a small filled monospace keycap shows the shared tool width and opens the size picker to the left. The shared microphone sits below it, above the bottom terminal; it serves focused text fields and terminals across the workspace. Its progress appears beside the rail in a raised status popover. The visible right tool uses the raised fill, a soft shadow, and primary text. The tab row above the docks is 44px high on chrome and matches sidebar rows: tabs are quiet 13px muted text with a hover surface and no borders. The selected tab lifts with the raised fill, a soft shadow, and primary text at weight 600. Tabs have no size control.
+- **Actions:** launch and new-session buttons are compact filled controls without borders, at least 36px high. Icon buttons are quiet, square controls. Hover uses the neutral hover surface; focus uses the blue outline.
+- **Fields:** ordinary popup fields use the field fill, no border, and an accent caret. Search fields sit inside a rounded light search surface with an icon and dismiss action. Their inner border and outline are removed; the shared search wrapper shows focus-within feedback.
+- **Size controls:** only the selected size appears in the panel toolbar, with the field fill. Hover or click opens a floating size picker with every preset, including the current size. Keyboard users open it with Enter, Space, or Arrow Down; Escape dismisses it. The command resize picker uses rounded rows and radio indicators.
+- **Palettes:** commands, apps, and project results use compact rounded rows with muted icons and a 14px primary label. Command and app rows are one line, at least 36px high; the description or scope trails the label in smaller muted text and truncates. Hover uses the hover surface; the selected row uses the popup-row fill without a ring. Keyboard hints stay muted in a borderless footer; searchable lists show a no-results state.
 - **Dialogs:** form labels are 12px semibold muted text that sit close to their field. The submit action uses the accent fill; a destructive submit, such as discarding a thread, uses red.
-- **Shortcuts:** search above grouped rows; 50px minimum row height, fine separators, right-aligned outlined keycaps. Long labels wrap; keycaps stay on one line.
+- **Shortcuts:** search above grouped rows; 50px minimum row height on a sunken group split by thin gaps, right-aligned filled keycaps. Long labels wrap; keycaps stay on one line.
 
 ### Notes
 
@@ -215,11 +225,11 @@ Notes extends the quiet desktop controls inside a project tool panel. Open it to
 
 The note list header includes the project name. Lists stay bound to their project and refresh when switching projects.
 
-Selecting a row expands its inline editor in an accordion, with one note open at a time. The open card uses the raised fill with a fine ring and hides its row title, so the title is not shown twice. Search and filters stay visible. Notes have no title field: the first text line of the body is the title, styled at 17px semibold in the editor. Older notes with a separate title get it as the first heading when opened. The Markdown editor is borderless, with a quiet icon toolbar, and keeps pasted images inline with the text.
+Selecting a row expands its inline editor in an accordion, with one note open at a time. The open card uses the sunken fill and hides its row title, so the title is not shown twice. Search and filters stay visible. Notes have no title field: the first text line of the body is the title, styled at 17px semibold in the editor. Older notes with a separate title get it as the first heading when opened. The Markdown editor is borderless, with a quiet icon toolbar, and keeps pasted images inline with the text.
 
-One action row sits below a fine divider: Send to agent (primary, icon and label), the destination project select, an icon Move button, the status line, and a quiet icon Delete that turns red on hover. Moving requires a saved note with no unsaved changes and a selected destination. The row wraps at narrow widths.
+One action row sits below the editor: Send to agent (primary, icon and label), the destination project select, an icon Move button, the status line, and a quiet icon Delete that turns red on hover. Moving requires a saved note with no unsaved changes and a selected destination. The row wraps at narrow widths.
 
-Save note keeps the editor open and shows Saved. Cancel discards draft changes and returns to the list. Send to agent sends the saved note to the active agent in the same project; it is disabled until the note is saved and has no unsaved changes. Keep loading, unsaved, saving, sending, success, and error messages in the status area. Controls reuse raised fills, neutral borders, and blue keyboard-focus outlines. Notes opens with Ctrl+I by default; the shortcut is configurable in Settings.
+Save note keeps the editor open and shows Saved. Cancel discards draft changes and returns to the list. Send to agent sends the saved note to the active agent in the same project; it is disabled until the note is saved and has no unsaved changes. Keep loading, unsaved, saving, sending, success, and error messages in the status area. Controls reuse filled, borderless fields and blue keyboard-focus outlines. Notes opens with Ctrl+I by default; the shortcut is configurable in Settings.
 
 ## Do's and Don'ts
 
@@ -232,11 +242,11 @@ Save note keeps the editor open and shows Saved. Cancel discards draft changes a
 
 ## Settings and panel controls
 
-Settings is a workspace page reached from the sidebar. The Panels group sets one default tool panel width (XS–2XL or MAX), initially MD (640px). Agent panels have no default width; they fill the remaining space. Changes save to SQLite and apply only to newly opened tool panels; a thread that already has tools gives new tools their shared width. The page also holds theme (Auto, Light, Dark), an agent-done notification sound, agent command management (edit, rename, disable, remove, custom agents), tool command management (edit, disable, remove, and add custom CLI tools), and remappable keyboard shortcuts. Section labels are 12px semibold muted text above rounded groups; empty status lines collapse so sections keep an even gap.
+Settings is a workspace page reached from the sidebar. The Panels group sets one default tool panel width (XS–2XL or MAX), initially MD (640px). Agent panels have no default width; they fill the remaining space. Changes save to SQLite and apply only to newly opened tool panels; a thread that already has tools gives new tools their shared width. The page also holds theme (Auto, Light, Dark), an agent-done notification sound, agent command management (edit, rename, disable, remove, custom agents), tool command management (edit, disable, remove, and add custom CLI tools), and remappable keyboard shortcuts. Settings is a card. Section labels are 12px semibold muted text above rounded chrome-tone groups; empty status lines collapse so sections keep an even gap.
 
 The Editor section follows Tools and uses the existing grouped-row layout: a File editor label and help text beside a select control. It lists enabled CLI tools by name, including custom tools, with Off to clear the selection. Websites and disabled or removed tools are excluded. Nvim is selected by default. Tool name and enabled-state changes update the choices before saving; disabling or removing the selected tool clears the selection. Save persists the editor choice with tool settings across projects.
 
-Files uses a 40px chrome toolbar. The path shows the folder muted and the file name in 13px semibold. Tree rows match the project sidebar: 28px, 6px radius, muted files, foreground folders. The open file is bold; the keyboard cursor row uses the raised fill with a fine ring. Workspace shortcuts win over Files' Ctrl+O and Ctrl+I history moves, so panel and tool shortcuts work while a file is open.
+Files uses a 40px toolbar on the card surface. The path shows the folder muted and the file name in 13px semibold. The tree sits on the sunken tone without a divider. Rows are 28px with a 6px radius, muted files, and foreground folders. The open file is bold; the keyboard cursor row uses the sel fill. Workspace shortcuts win over Files' Ctrl+O and Ctrl+I history moves, so panel and tool shortcuts work while a file is open.
 
 In Files, `e` opens the previewed file or selected tree file in that tool in the right dock. It replaces the source viewer’s Vim end-of-word motion, while navigation results retain `e` to open a result. Shortcut help lists Open in editor; text fields retain normal typing.
 
