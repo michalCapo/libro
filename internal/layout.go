@@ -12,7 +12,6 @@ func renderPage(state *AppState, sid string) *r.Node {
 	page := r.Widget("workspace", map[string]any{"sid": sid, "agentUpdates": agentAutoUpdate(), "plugins": plugins(), "keys": toolKeybindings(), "defaults": defaultToolKeybindings(), "autoexecute": browserPageToolsAutoExecute(), "css": string(css)}, "h-screen w-screen flex flex-col overflow-hidden").ID("libro-workspace").Render(
 		renderTopBar(state, sid),
 		renderMainAreaWrapper(state, sid),
-		r.Div("ws-statusbar").Render(r.Span("").Text("Local workspace"), r.Span("").Text("Agents, tools, and terminals • Libro")),
 
 		renderProjectDialog(state.ProjectDialogOpen, sid),
 		renderCloseDialog(sid),

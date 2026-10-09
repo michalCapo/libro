@@ -71,11 +71,6 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 			r.Div("ws-sidebar-heading").Render(r.Span("").Text("Threads"), workspaceButton("New thread", "add", r.UnsafeJS("libroWorkspace.newThread('')"))),
 			r.Div("").ID("workspace-thread-list"),
 		),
-		r.Div("ws-sidebar-footer").Render(
-			r.Button("ws-sidebar-action").OnClick(r.UnsafeJS("libroWorkspace.settings()")).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("settings"), r.Span("").Text("Settings")),
-			r.Button("ws-sidebar-action ws-project-feature").OnClick(r.UnsafeJS("libroWorkspace.launcher()")).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("apps"), r.Span("").Text("Apps & plugins")),
-			r.Button("ws-sidebar-action ws-project-feature").OnClick(r.UnsafeJS("if(window.__libroOpenCommandPalette)__libroOpenCommandPalette()")).Render(r.I("material-icons-round").Attr("aria-hidden", "true").Text("tune"), r.Span("").Text("Commands")),
-		),
 	)
 }
 
@@ -124,5 +119,9 @@ func renderWorkspaceTools() *r.Node {
 			r.Span("ws-voice-status").Attr("role", "status").Attr("popover", "manual").Attr("hidden", "hidden"),
 		),
 		workspaceButton("Toggle bottom terminal (Ctrl+`)", "vertical_align_bottom", r.UnsafeJS("libroWorkspace.bottom()")),
+		r.Div("ws-tool-spacer"),
+		workspaceButton("Commands", "tune", r.UnsafeJS("if(window.__libroOpenCommandPalette)__libroOpenCommandPalette()")),
+		workspaceButton("Apps & plugins", "apps", r.UnsafeJS("libroWorkspace.launcher()")),
+		workspaceButton("Settings", "settings", r.UnsafeJS("libroWorkspace.settings()")),
 	)
 }

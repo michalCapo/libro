@@ -498,7 +498,7 @@
       const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button'; row.title = thread.name; row.dataset.projectKey = thread.id; row.dataset.kind = 'thread';
       row.setAttribute('aria-current', String(thread.id === window.__libroActiveProject));
       const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
-      row.append(icon); rowLabel(row, thread.name, thread.name !== 'New thread', '');
+      row.append(icon, node('span', '', thread.name));
       row.onclick = () => {
         closeSettings();
         if (innerWidth <= 760) { prefs.projects = false; save(); }
@@ -524,7 +524,7 @@
     if (!threads.length && !list.dataset.projectThreads) {
       list.append(node('div', 'ws-no-threads', 'No threads to show'));
     }
-    threads.filter(thread => thread.archived).slice(0, 10).forEach(appendThread);
+    threads.filter(thread => thread.archived).slice(0, 5).forEach(appendThread);
   }
   function renderProjects() {
     const list = document.getElementById('workspace-project-list'); if (!list) return;
@@ -801,10 +801,6 @@
     if (Number.isFinite(prefs.sidebarWidth)) root.style.setProperty('--ws-projects', Math.max(180, Math.min(prefs.sidebarWidth, 480, innerWidth - 48)) + 'px');
     root.dataset.projects = String(prefs.projects);
     root.dataset.thread = String(isThread());
-    document.querySelectorAll('.ws-sidebar-action, .ws-sidebar-search').forEach(button => {
-      const label = button.getAttribute('aria-label') || button.textContent.trim().replace(/^(settings|apps|tune)\s*/, '');
-      button.setAttribute('aria-label', label); button.title = label;
-    });
     renderToolRail();
     renderProjects();
     renderThreads();
@@ -1320,11 +1316,11 @@
     if (!tabs) { tabs = node('div', 'ws-tool-tabs'); tabs.setAttribute('aria-label', 'Agents and tools'); grid.before(tabs); }
     // Tool panels share one width, so one size button in the rail serves them all.
     const toolFrames = all.filter(frame => frame.dataset.dock === 'right');
-    const signature = [...center, ...toolFrames, ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, frame.dataset.dock === 'center' ? (grid.dataset.projectLabel || frame.dataset.appName) : frame.dataset.appName, frame.dataset.selected, frame.dataset.dock]);
+    const signature = [...center, ...toolFrames, ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, frame.dataset.dock === 'center' ? (grid.dataset.projectLabel || frame.dataset.appName) : frame.dataset.appName, frame.dataset.selected, frame.dataset.dock, frame.dataset.dockVisible]);
     if (tabs.dataset.signature !== JSON.stringify(signature)) {
       tabs.dataset.signature = JSON.stringify(signature); tabs.replaceChildren();
-      signature.forEach(([id, name, shown, dock]) => {
-        const group = node('div', 'ws-agent-tab ws-tool-tab-group'); group.dataset.selected = shown; group.dataset.tabDock = dock;
+      signature.forEach(([id, name, shown, dock, visible]) => {
+        const group = node('div', 'ws-agent-tab ws-tool-tab-group'); group.dataset.selected = shown; group.dataset.visible = visible; group.dataset.tabDock = dock;
         const tab = node('button', 'ws-tool-tab', name); tab.type = 'button'; tab.title = name; tab.setAttribute('aria-pressed', shown);
         tab.onclick = () => {
           if (dock === 'center' && grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
