@@ -9,11 +9,13 @@ type terminalLog struct {
 	mu        sync.Mutex
 	data      []byte
 	truncated bool
+	urls      terminalURLs
 }
 
 func (l *terminalLog) append(data []byte) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.urls.append(data)
 	if len(data) >= terminalLogLimit {
 		l.truncated = l.truncated || len(l.data)+len(data) > terminalLogLimit
 		l.data = append(l.data[:0], data[len(data)-terminalLogLimit:]...)

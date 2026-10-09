@@ -272,7 +272,7 @@ func TestPerThreadApplicationIsolation(t *testing.T) {
 	root, branch := t.TempDir(), t.TempDir()
 	state := &AppState{ActiveProject: "project", Projects: []Project{{Name: "project", Path: root}, {Name: "project/branch", Path: branch, Virtual: true, ParentProject: "project"}}, Apps: []Application{{ID: "agent", PluginID: "codex"}}}
 	sm.states["test"] = state
-	if err := setProjectCommand(root, `printf '%s' "$PORT" > assigned-port; printf thread-output; sleep 60`); err != nil {
+	if err := setProjectCommand(root, `printf '%s' "$PORT" > assigned-port; printf 'LINK: http://localhost:%s/link/\nADMIN: http://localhost:43657/\nFLOW: http://localhost:43656/\nthread-output' "${PORT:-43655}"; sleep 60`); err != nil {
 		t.Fatal(err)
 	}
 	if err := saveApplicationSettings(root, applicationSettings{Mode: "thread"}); err != nil {
@@ -297,6 +297,9 @@ func TestPerThreadApplicationIsolation(t *testing.T) {
 	if state.ActiveProject != "project" {
 		t.Fatal("background launch changed selection")
 	}
+	if got := applicationBrowserURLs(state); !reflect.DeepEqual(got, []string{first["url"].(string)}) {
+		t.Fatalf("pending application URLs = %v", got)
+	}
 	js, again, err := controlApplication("test", branch, "start")
 	if err != nil || !reflect.ValueOf(js).IsZero() || again["port"] != second["port"] {
 		t.Fatal("start must be idempotent")
@@ -314,6 +317,10 @@ func TestPerThreadApplicationIsolation(t *testing.T) {
 			data, readErr := os.ReadFile(filepath.Join(branch, "assigned-port"))
 			js, logs, logErr := controlApplication("test", branch, "logs")
 			if readErr == nil && string(data) == strconv.Itoa(secondPanel.ApplicationPort) && logErr == nil && strings.Contains(logs["logs"].(string), "thread-output") {
+				want := []string{applicationURL(secondPanel.ApplicationPort) + "/link/", "http://localhost:43657/", "http://localhost:43656/"}
+				if got := applicationBrowserURLs(state); !reflect.DeepEqual(got, want) {
+					t.Fatalf("browser URLs = %v, want %v", got, want)
+				}
 				if !reflect.ValueOf(js).IsZero() || state.ActiveProject != "project/branch" {
 					t.Fatal("logs changed the visible workspace")
 				}
@@ -328,6 +335,11 @@ func TestPerThreadApplicationIsolation(t *testing.T) {
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
+		switchToProjectName("test", "project")
+		if got := applicationBrowserURLs(state); !reflect.DeepEqual(got, []string{first["url"].(string)}) {
+			t.Fatalf("URLs leaked from the other thread: %v", got)
+		}
+		switchToProjectName("test", "project/branch")
 	}
 	_, restarted, err := controlApplication("test", branch, "restart")
 	if err != nil || restarted["port"] != second["port"] || state.Apps[0].ID == secondPanel.ID {
@@ -373,9 +385,25 @@ func TestPerThreadApplicationIsolation(t *testing.T) {
 	if shared.ApplicationPath != root || shared.ApplicationPerThread {
 		t.Fatal("shared app must run from project root")
 	}
+	if runtime.GOOS != "windows" {
+		if _, handled := hydrateProjectCommand("test", shared.ID); !handled {
+			t.Fatal("shared application not hydrated")
+		}
+		deadline := time.Now().Add(3 * time.Second)
+		for len(tm.LocalURLs(shared.ID)) != 3 {
+			if time.Now().After(deadline) {
+				t.Fatal("shared application URLs not detected")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	sharedURLs := applicationBrowserURLs(state)
 	switchToProjectName("test", "project")
 	if len(state.Apps) != 2 || state.Apps[1].ID != shared.ID {
 		t.Fatal("shared application did not follow the selected worktree")
+	}
+	if got := applicationBrowserURLs(state); !reflect.DeepEqual(got, sharedURLs) {
+		t.Fatalf("shared URLs changed across threads: %v, want %v", got, sharedURLs)
 	}
 	if js, _, err := controlApplication("test", branch, "start"); err != nil || !reflect.ValueOf(js).IsZero() {
 		t.Fatal("shared start duplicated application across worktrees")

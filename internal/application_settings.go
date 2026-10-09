@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
+	"slices"
 	"strconv"
 	"syscall"
 	"time"
@@ -161,6 +163,48 @@ func applicationLiveURL(state *AppState, path string) string {
 		}
 	}
 	return ""
+}
+
+func applicationBrowserURLs(state *AppState) []string {
+	path, _, settings := applicationConfiguration(state, state.ActiveProject)
+	urls := []string{}
+	assigned := applicationURL(settings.Port)
+	collect := func(workspace string, apps []Application) {
+		for _, panel := range apps {
+			if panel.PluginID == "project-command" {
+				if panel.ApplicationPath != path || panel.TerminalReady && !tm.IsRunning(panel.ID) {
+					continue
+				}
+				assigned = applicationURL(panel.ApplicationPort)
+			} else {
+				if panel.Type != AppTypeTerminal || !tm.IsRunning(panel.ID) {
+					continue
+				}
+				if workspace != state.ActiveProject && (!isSharedProjectApp(panel) || state.projectScope(workspace) != state.projectScope(state.ActiveProject)) {
+					continue
+				}
+			}
+			for _, address := range tm.LocalURLs(panel.ID) {
+				if !slices.Contains(urls, address) {
+					urls = append(urls, address)
+				}
+			}
+		}
+	}
+	collect(state.ActiveProject, state.Apps)
+	for workspace, snapshot := range state.snapshots {
+		if snapshot != nil {
+			collect(workspace, snapshot.Apps)
+		}
+	}
+	// Prefer the application's advertised path over a second entry for its root.
+	if assigned != "" && !slices.ContainsFunc(urls, func(address string) bool {
+		parsed, err := url.Parse(address)
+		return err == nil && parsed.Scheme+"://"+parsed.Host == assigned
+	}) {
+		urls = append([]string{assigned}, urls...)
+	}
+	return urls
 }
 
 // Worktree threads have no thread record, so agent titles are kept by path.

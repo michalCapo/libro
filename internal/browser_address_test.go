@@ -14,13 +14,13 @@ func TestAddressHistory(t *testing.T) {
 	const harness = `
 const assert=require('node:assert/strict'),vm=require('node:vm');
 let script='';process.stdin.on('data',d=>script+=d);process.stdin.on('end',async()=>{
- const storage=new Map();let navigated='',focused=false;
+ const storage=new Map();let navigated='',focused=false,request;
  function element(){return {value:'',dataset:{},children:[],classList:{hidden:true,add(){this.hidden=true},remove(){this.hidden=false},contains(){return this.hidden}},setAttribute(){},removeAttribute(){},append(...rows){this.children.push(...rows)},appendChild(row){this.children.push(row)},replaceChildren(){this.children=[]},addEventListener(n,f){this[n]=f},scrollIntoView(){},focus(){focused=true},select(){}}}
  function boot(electron){
   const input=element(),results=element(),dialog=element(),address=element();address.value='about:blank';
-  const nodes={'url-popup':dialog,'url-popup-input':input,'url-popup-results':results,'urlinput-a':address,'frame-a':{querySelector(){return element()}}};
+  const nodes={'url-popup':dialog,'url-popup-input':input,'url-popup-results':results,'urlinput-a':address,'frame-a':{querySelector(selector){return selector.includes('data-webview-app')?{getAttribute(){return 'test-session'}}:element()}}};
   const window={libroElectron:electron,__libroSelectedApp:'a',__libroNavigateAddress(id,url){navigated=url;return true}};
-  vm.runInNewContext(script,{window,__gsui:{show:()=>{dialog.hidden=false;dialog.classList.remove('hidden');}},document:{getElementById(id){return nodes[id]},createElement:element},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},Date});
+  vm.runInNewContext(script,{window,__ws:{call(action,data){request={action,data}}},__gsui:{show:()=>{dialog.hidden=false;dialog.classList.remove('hidden');}},document:{getElementById(id){return nodes[id]},createElement:element},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},Date});
   return {window,input,results,dialog};
  }
  let app=boot();app.window.__libroRememberURL('http://localhost:1411/');app.window.__libroRememberURL('https://example.com/');app.window.__libroRememberURL('http://localhost:1411/');
@@ -46,6 +46,29 @@ let script='';process.stdin.on('data',d=>script+=d);process.stdin.on('end',async
  app.window.__libroApplicationURL='http://localhost:5000';
  app.window.__libroOpenURLPopupFor('a');
  assert.equal(app.results.children[0].children[1].textContent,'http://localhost:5000');
+ // Fresh startup URLs arrive after opening, preserving paths and hiding history duplicates.
+ app.window.__libroActiveProject='project';
+ assert.equal(request.action,'app.urls');assert.equal(request.data.sid,'test-session');assert.equal(request.data.id,'a');
+ app.window.__libroRememberURL('http://localhost:43657/');
+ app.window.__libroSetApplicationURLs('project','a',['http://localhost:43655/link/','http://localhost:43657/','http://localhost:43656/']);
+ assert.equal(app.input.value,'http://localhost:43655/link/');
+ assert.deepEqual(app.results.children.slice(0,3).map(row=>row.children[1].textContent),['http://localhost:43655/link/','http://localhost:43657/','http://localhost:43656/']);
+ assert.equal(app.results.children.filter(row=>row.children[1].textContent==='http://localhost:43657/').length,1);
+ app.input.value='43657';app.input.input();assert.equal(app.results.children.length,1);
+ app.input.keydown({key:'Enter',preventDefault(){},stopImmediatePropagation(){}});assert.equal(navigated,'http://localhost:43657/');
+ // Opening with an existing address shows all ports before the user types.
+ app.window.__libroOpenURLPopupFor('a','http://localhost:43655/link/');
+ assert.equal(app.results.children[1].children[1].textContent,'http://localhost:43657/');
+ const many=Array.from({length:12},(_,i)=>'http://localhost:'+(6000+i));
+ app.window.__libroSetApplicationURLs('project','a',many);assert.equal(app.results.children.length,12);
+ assert.equal(app.input.value,'http://localhost:43655/link/');
+ app.window.__libroSetApplicationURLs('other','a',['http://localhost:9999']);assert.equal(app.window.__libroApplicationURLs.length,12);
+ app.window.__libroSetApplicationURLs('project','b',['http://localhost:9999']);assert.equal(app.window.__libroApplicationURLs.length,12);
+ app.input.keydown({key:'ArrowDown',preventDefault(){},stopImmediatePropagation(){}});
+ app.window.__libroSetApplicationURLs('project','a',many);
+ app.input.keydown({key:'Enter',preventDefault(){},stopImmediatePropagation(){}});assert.equal(navigated,many[0]);
+ // Responses from another workspace or a closed popup cannot replace the current list.
+ app.window.__libroSetApplicationURLs('project','a',['http://localhost:9999']);assert.equal(app.window.__libroApplicationURLs.length,12);
  let nativeFocus='guest',completeFocus;
  app=boot({focusWorkspace(){return new Promise(resolve=>{completeFocus=()=>{nativeFocus='host';resolve();};});}});
  app.input.focus=()=>{focused=nativeFocus==='host';};

@@ -2877,7 +2877,7 @@ func projectScriptNodes(state *AppState) []*r.Node {
 	if url == "" {
 		url = applicationURL(settings.Port)
 	}
-	return []*r.Node{clientScriptNode("window.__libroThreads=props[0];", state.Threads), clientScriptNode("window.__libroActiveProject=props[0];window.__libroApplicationURL=props[1];window.__libroProjects=props[2];if(window.libroWorkspace)libroWorkspace.refresh();", state.ActiveProject, url, all)}
+	return []*r.Node{clientScriptNode("window.__libroThreads=props[0];", state.Threads), clientScriptNode("window.__libroActiveProject=props[0];window.__libroApplicationURL=props[1];window.__libroProjects=props[2];window.__libroApplicationURLs=props[3];if(window.libroWorkspace)libroWorkspace.refresh();", state.ActiveProject, url, all, applicationBrowserURLs(state))}
 }
 
 // renderProjectDialog renders the create project modal

@@ -11,6 +11,11 @@ type actionAppNotifyInput struct {
 	Variant  string `json:"variant"`
 }
 
+type actionAppURLsInput struct {
+	SID string `json:"sid"`
+	ID  string `json:"id"`
+}
+
 type actionPluginOpenInput struct {
 	Dock   string `json:"dock"`
 	Plugin string `json:"plugin"`

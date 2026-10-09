@@ -12,6 +12,8 @@ func urlPopupJS(_ string) string {
   var historyKey='libro.browser.history';
   var matches=[], selected=-1;
   var focusRequest=0;
+  var showAll=false;
+  var autofill=false;
   function history(){
     try {
       var entries=JSON.parse(localStorage.getItem(historyKey)||'[]');
@@ -43,18 +45,25 @@ func urlPopupJS(_ string) string {
     results.hidden=!matches.length;
   }
   function filter(){
-    var query=input.value.trim().toLowerCase();
-    var url=window.__libroApplicationURL||'';
-    var entries=history();
-    if(url){
-      entries=entries.filter(function(e){return e.url.replace(/\/$/,'')!==url.replace(/\/$/,'');});
-      entries.unshift({url:url,application:true});
-    }
-    matches=entries.filter(function(e){return e.url.toLowerCase().includes(query);}).slice(0,8);
+    var query=showAll?'':input.value.trim().toLowerCase();
+    var urls=window.__libroApplicationURLs||[window.__libroApplicationURL||''];
+    urls=urls.filter(function(url,index){return url&&urls.indexOf(url)===index;});
+    var applications=urls.map(function(url){return {url:url,application:true};});
+    var entries=history().filter(function(e){return !urls.some(function(url){return e.url.replace(/\/$/,'')===url.replace(/\/$/,'');});});
+    matches=applications.filter(function(e){return e.url.toLowerCase().includes(query);});
+    matches=matches.concat(entries.filter(function(e){return e.url.toLowerCase().includes(query);}).slice(0,Math.max(0,8-matches.length)));
     selected=query&&matches.length?0:-1;
     render();
   }
-  input.addEventListener('input',filter);
+  input.addEventListener('input',function(){showAll=false;autofill=false;filter();});
+  window.__libroSetApplicationURLs=function(project,id,urls){
+    if(project!==window.__libroActiveProject||id!==appID||dialog.classList.contains('hidden'))return;
+    var selectedURL=matches[selected]&&matches[selected].url;
+    window.__libroApplicationURLs=urls;
+    filter();
+    if(autofill&&matches.length){input.value=matches[0].url;input.select();}
+    if(selectedURL){selected=matches.findIndex(function(e){return e.url===selectedURL;});render();}
+  };
   function close(){
     dialog.classList.add('hidden');
     if(window.__libroParkFloatingPopups)window.__libroParkFloatingPopups();
@@ -70,10 +79,14 @@ func urlPopupJS(_ string) string {
     if(window.__libroCloseAllPopups)window.__libroCloseAllPopups(dialog);
     input.value=typeof value==='string'?value:address.value;
     if(input.value==='about:blank')input.value='';
+    autofill=!input.value;
+    showAll=true;
     filter();
     if(!input.value&&matches.length)input.value=matches[0].url;
     __gsui.show(null,dialog.id);
     input.focus();input.select();
+    var browser=frame.querySelector('[data-webview-app], [data-browser-iframe-app]');
+    if(browser)__ws.call('app.urls',{sid:browser.getAttribute('data-sid'),id:appID});
     // DOM focus alone does not transfer native keyboard focus from an Electron guest.
     var request=++focusRequest;
     if(window.libroElectron&&window.libroElectron.focusWorkspace){

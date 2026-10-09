@@ -112,6 +112,10 @@ func RunApplicationCLI(args []string, out io.Writer) error {
 }
 
 func registerApplicationControl(app *r.App) {
+	r.RegisterAction(app, "app.urls", func(_ *r.Context, in actionAppURLsInput) (r.Result, error) {
+		state := sm.Get(inputSID(in.SID))
+		return clientScript("if(window.__libroSetApplicationURLs)window.__libroSetApplicationURLs(props[0],props[1],props[2]);", state.ActiveProject, in.ID, applicationBrowserURLs(state)), nil
+	})
 	r.RegisterAction(app, "project.command.agent", func(_ *r.Context, in actionProjectCommandAgentInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		id := in.Request
