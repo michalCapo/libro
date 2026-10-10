@@ -46,7 +46,7 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 .ws-project-new-thread:disabled{cursor:not-allowed}
 .ws-project-remove:hover{background:color-mix(in srgb,#c9362b 12%,transparent);color:#b42318}
 html.dark .ws-project-remove:hover{color:#ff8a80}
-.ws-project-shortcut{flex:none;min-width:18px;height:18px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;margin-left:auto;border:0;border-radius:4px;background:var(--ws-kbd);color:var(--ws-muted);font:500 10.5px/1 var(--ws-mono)}
+.ws-project-shortcut{flex:none;min-width:18px;height:18px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;margin-left:auto;border:0;border-radius:4px;background:var(--ws-raised);color:var(--ws-muted);font:500 10.5px/1 var(--ws-mono)}
 .ws-project-row[aria-current=true] .ws-project-shortcut{background:var(--ws-accent);color:var(--ws-on-accent)}
 .ws-project-terminal{width:16px;height:16px;flex-shrink:0;fill:none;stroke:#15803d;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 html.dark .ws-project-terminal{stroke:#4ade80}
