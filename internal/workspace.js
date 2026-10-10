@@ -1342,7 +1342,10 @@
     if (sizes.dataset.signature === signature) return;
     sizes.dataset.signature = signature; sizes.replaceChildren();
     if (!sizeFrame) return;
-    const trigger = node('button', 'ws-size-trigger', size); trigger.type = 'button'; trigger.dataset.sizeTrigger = ''; trigger.title = 'Tool panel size';
+    const pixels = size.match(/^(\d+)PX$/);
+    const trigger = node('button', 'ws-size-trigger', pixels ? '' : size); trigger.type = 'button';
+    trigger.dataset.sizeTrigger = ''; trigger.title = 'Tool panel size';
+    if (pixels) { trigger.classList.add('ws-size-custom'); trigger.append(node('span', '', pixels[1]), node('span', '', 'PX')); }
     trigger.setAttribute('aria-label', 'Tool panel size: ' + size); trigger.setAttribute('aria-expanded', 'false'); trigger.setAttribute('aria-controls', 'tool-sizes-' + grid.id);
     const picker = node('div', 'ws-size-picker'); picker.id = 'tool-sizes-' + grid.id; picker.setAttribute('popover', 'auto'); picker.setAttribute('role', 'group'); picker.setAttribute('aria-label', 'Tool panel size');
     options.forEach(([width, text, label, pressed]) => {
