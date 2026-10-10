@@ -2271,9 +2271,9 @@ func projectDialogJS(sid string) string {
 	function scheduleLookup(){
 		var q=query();
 		cancelLookup();
-		dirMatches=[];
 		hideCreateConfirm();
-		if(!q||(!isPathQuery(q)&&filtered.length>0)){render();return;}
+		// Keep previous folder matches visible until the new lookup returns to avoid flicker.
+		if(!q||(!isPathQuery(q)&&filtered.length>0)){dirMatches=[];render();return;}
 		lookupLoading=true;
 		render();
 		lookupTimer=setTimeout(function(){lookup(q);},90);
@@ -2379,9 +2379,6 @@ func projectDialogJS(sid string) string {
 		if(!item||!inp)return;
 		inp.value=simplifyPath(item.path).replace(/\/$/,'')+'/';
 		selectedIdx=0;
-		dirMatches=[];
-		lookupLoading=true;
-		render();
 		scheduleLookup();
 	}
 
