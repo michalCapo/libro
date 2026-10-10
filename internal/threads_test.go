@@ -195,20 +195,20 @@ func TestThreadAllowsToolsAndOneAgent(t *testing.T) {
 		{Type: AppTypeURL, PluginID: "files", Dock: "right"},
 	}
 	for _, app := range tools {
-		if !state.canStartThreadApp(app) {
+		if !state.canStartThreadApp(app, false) {
 			t.Fatal("thread rejected a tool panel")
 		}
 		state.Apps = append(state.Apps, app)
 	}
-	if !state.canStartThreadApp(agent) {
+	if !state.canStartThreadApp(agent, false) {
 		t.Fatal("tools must not prevent starting the thread agent")
 	}
 	state.Apps = append(state.Apps, agent)
-	if state.canStartThreadApp(agent) {
+	if state.canStartThreadApp(agent, false) {
 		t.Fatal("thread accepted a second agent")
 	}
 	for _, app := range tools {
-		if !state.canStartThreadApp(app) {
+		if !state.canStartThreadApp(app, false) {
 			t.Fatal("running agent must not prevent opening tools")
 		}
 	}
@@ -239,12 +239,12 @@ func TestCloseThreadAgentArchivesAndClosesTools(t *testing.T) {
 	}
 	manager.states["test"] = state
 	for _, id := range []string{"browser", "shell", "missing"} {
-		apps, err := manager.CloseThreadAgent("test", id)
+		apps, _, err := manager.CloseThreadAgent("test", id)
 		if err != nil || apps != nil || state.Threads[0].Archived || len(state.Apps) != 3 {
 			t.Fatalf("closing %s affected thread: %v", id, err)
 		}
 	}
-	apps, err := manager.CloseThreadAgent("test", "agent")
+	apps, _, err := manager.CloseThreadAgent("test", "agent")
 	if err != nil || len(apps) != 3 || len(state.Apps) != 0 || !state.Threads[0].Archived {
 		t.Fatalf("thread not closed and archived: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestCloseThreadAgentKeepsSharedProjectApps(t *testing.T) {
 	}
 	manager.states["test"] = state
 
-	closed, err := manager.CloseThreadAgent("test", "agent")
+	closed, _, err := manager.CloseThreadAgent("test", "agent")
 	if err != nil || len(closed) != 2 || len(state.Apps) != 3 {
 		t.Fatalf("close result: closed=%+v remaining=%+v err=%v", closed, state.Apps, err)
 	}
@@ -306,7 +306,7 @@ func TestCloseThreadAgentPreservesPanelsOnArchiveFailure(t *testing.T) {
 		Apps:          []Application{{ID: "agent", Type: AppTypeTerminal, PluginID: "codex", Dock: "center"}},
 	}
 	manager.states["test"] = state
-	if _, err := manager.CloseThreadAgent("test", "agent"); err == nil {
+	if _, _, err := manager.CloseThreadAgent("test", "agent"); err == nil {
 		t.Fatal("expected archive failure")
 	}
 	if state.Threads[0].Archived || len(state.Apps) != 1 {
@@ -594,7 +594,7 @@ func TestReplaceThreadAgentStartsFreshAndKeepsTools(t *testing.T) {
 	if err != nil || len(removed) != 1 || removed[0].ID != "old" {
 		t.Fatalf("replacement = %v, %v", removed, err)
 	}
-	if len(state.Apps) != 1 || state.Apps[0].ID != browserID || !state.canStartThreadApp(removed[0]) {
+	if len(state.Apps) != 1 || state.Apps[0].ID != browserID || !state.canStartThreadApp(removed[0], false) {
 		t.Fatal("replacement lost tools or blocked the new agent")
 	}
 	manager.saveThreadSession(sid, "thread:test", "old", "pi", "pi", "stale-session")

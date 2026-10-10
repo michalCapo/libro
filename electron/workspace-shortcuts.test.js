@@ -535,7 +535,7 @@ test('browser shortcuts accept brackets, custom bindings, and ignore repeat', ()
       vm.runInNewContext(normalize + '\nconst binding = shortcut(event); (function(){' + handler + '})()', {
         toolKeys: { 'new-browser': binding === 'Alt+B' ? binding : 'Ctrl+Shift+B', 'previous-browser': 'Ctrl+[', 'next-browser': 'Ctrl+]' },
         event: { key: input.key, ctrlKey: input.control, shiftKey: input.shift, altKey: input.alt, repeat, preventDefault() {}, stopImmediatePropagation() {} },
-        newBrowser: () => calls.push('new'), navigateBrowser: delta => calls.push(delta),
+        newBrowser: () => calls.push('new'), navigateBrowser: delta => calls.push(delta), navigateAgent: () => false,
       })
       assert.deepEqual(calls, repeat ? [] : [expected])
     }

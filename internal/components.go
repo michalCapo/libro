@@ -1390,6 +1390,7 @@ func commandPopupJS(sid string) string {
 		var selected=selectedAppInfo();
 		var commands=[
             {id:'new-agent',label:'New agent',scope:'workspace',icon:'add',keywords:'agent codex claude pi launch',run:function(){closePalette();libroWorkspace.launcher('center');}},
+            {id:'new-agent-panel',label:'New agent panel',scope:'workspace',icon:'add',keywords:'agent tab panel same worktree branch',run:function(){closePalette();libroWorkspace.newAgentPanel();}},
             {id:'replace-agent',label:'Replace agent',scope:'workspace',icon:'swap_horiz',keywords:'agent switch swap restart fresh',run:function(){closePalette();libroWorkspace.launcher('center',undefined,true);}},
             {id:'open-tool',label:'Open tool',scope:'workspace',icon:'apps',keywords:'tools plugins browser files editor git',run:function(){closePalette();libroWorkspace.launcher('right');}},
             {id:'terminal',label:'Toggle terminal tool',scope:'tools',icon:'terminal',keywords:'shell console',run:function(){closePalette();libroWorkspace.tool('terminal');}},

@@ -406,6 +406,10 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 .ws-tool-tab-group[data-visible=true] .ws-tool-tab{color:var(--ws-fg)}
 .ws-tool-tab-group[data-selected=true]{background:var(--ws-bg);box-shadow:inset 0 -1px 0 var(--ws-line)}
 .ws-tool-tab-group[data-selected=true] .ws-tool-tab{color:var(--ws-accent);font-weight:600}
+.ws-tool-tab-group .ws-agent-tab-close{align-self:center;width:24px;height:24px;margin-right:4px;border-radius:6px}
+.ws-tool-tab-group .ws-agent-tab-close .material-icons-round{font-size:15px}
+.ws-tool-tab-group:has(.ws-agent-tab-close) .ws-tool-tab{padding-right:4px}
+.ws-tool-tabs>.ws-agent-add{align-self:center;width:28px;height:28px;margin-left:2px}
 /* Tabs sit on the panel edges, so panels under a tab row get square top corners. */
 .ws-tool-tabs:not([hidden])+.ws-grid>[data-app-id]{border-top-left-radius:0!important;border-top-right-radius:0!important}
 .ws-tool-sizes .ws-size-picker button{padding:4px 6px;font-size:10px;border-radius:6px;color:var(--ws-fg)}

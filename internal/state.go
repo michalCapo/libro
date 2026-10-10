@@ -365,10 +365,12 @@ func (sm *StateManager) RemoveAppByID(sessionID, appID string) *Application {
 	}
 	for i, app := range s.Apps {
 		if app.ID == appID {
-			if isAgentApp(app) {
+			removed := removeApp(s, i)
+			// Keep the title while another agent panel still works here.
+			if isAgentApp(app) && primaryAgentID(s.Apps) == "" {
 				s.clearWorkspaceTitle(s.ActiveProject)
 			}
-			return removeApp(s, i)
+			return removed
 		}
 	}
 	for workspace, snapshot := range s.snapshots {
@@ -377,12 +379,12 @@ func (sm *StateManager) RemoveAppByID(sessionID, appID string) *Application {
 		}
 		for i, app := range snapshot.Apps {
 			if app.ID == appID {
-				if isAgentApp(app) {
-					s.clearWorkspaceTitle(workspace)
-				}
 				state := &AppState{Apps: snapshot.Apps, SelectedIndex: snapshot.SelectedIndex}
 				removed := removeApp(state, i)
 				snapshot.Apps, snapshot.SelectedIndex = state.Apps, state.SelectedIndex
+				if isAgentApp(app) && primaryAgentID(snapshot.Apps) == "" {
+					s.clearWorkspaceTitle(workspace)
+				}
 				return removed
 			}
 		}

@@ -115,7 +115,7 @@
   function activeGrid() { return [...document.querySelectorAll('[data-workspace-project]')].find(el => el.parentElement.style.display !== 'none'); }
   function frames(grid) { return [...grid.querySelectorAll(':scope > [data-app-id]')].sort((a, b) => Number(a.style.order) - Number(b.style.order)); }
   function isThread(grid = activeGrid()) { return grid?.dataset.thread === 'true'; }
-  function openPlugin(id, dock, trigger, replace = false) {
+  function openPlugin(id, dock, trigger, replace = false, add = false) {
     const plugin = window.__libroPlugins.find(candidate => candidate.id === id);
     if (!plugin || plugin.disabled || plugin.removed || trigger?.disabled) return;
     if (trigger) {
@@ -125,10 +125,11 @@
     const targetDock = dock || plugin.dock;
     const grid = targetDock === 'center' && activeGrid();
     const hasAgent = grid && frames(grid).some(frame => frame.dataset.dock === 'center');
-    if (targetDock === 'center' && !replace && isThread() && hasAgent) {
+    if (targetDock === 'center' && !replace && !add && isThread() && hasAgent) {
       call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''});
     } else call('app.start', {
       replaceAgent: replace,
+      addAgent: add,
       type: plugin.type,
       command: plugin.command || '',
       url: plugin.url || '',
@@ -185,11 +186,11 @@
     });
     return false;
   };
-  function launcher(dock, onLaunch, replace = false, newThread = false) {
+  function launcher(dock, onLaunch, replace = false, newThread = false, add = false) {
     if (dock === 'bottom') { bottom(); return; }
     let dialog = document.getElementById('workspace-plugin-dialog');
     if (dialog) dialog.remove();
-    dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-plugin-dialog'; dialog.setAttribute('aria-label', dock === 'center' ? (newThread ? 'New thread with agent' : replace ? 'Replace agent' : 'New agent session') : 'Open an app');
+    dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-plugin-dialog'; dialog.setAttribute('aria-label', dock === 'center' ? (newThread ? 'New thread with agent' : replace ? 'Replace agent' : add ? 'New agent panel' : 'New agent session') : 'Open an app');
     const searchBar = node('div', 'ws-command-search');
     const search = node('input', 'ws-palette-search'); search.placeholder = dock === 'center' ? 'Search agents…' : 'Search apps…'; search.setAttribute('aria-label', dock === 'center' ? 'Search agents' : 'Search apps'); search.autocomplete = 'off'; search.spellcheck = false;
     const dismiss = node('button', 'ws-command-dismiss'); dismiss.append(node('i', 'material-icons-round', 'close')); dismiss.firstChild.setAttribute('aria-hidden', 'true'); dismiss.type = 'button'; dismiss.setAttribute('aria-label', 'Close app launcher'); dismiss.onclick = () => dialog.close();
@@ -203,7 +204,7 @@
     const entries = node('div', 'ws-plugin-list');
     list.forEach(plugin => {
       const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; const icon = node('i', 'material-icons-round', plugin.type === 'url' ? 'language' : 'terminal'); icon.setAttribute('aria-hidden', 'true'); const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', plugin.name), node('small', '', plugin.description || plugin.command || 'Browser app')); entry.append(icon, copy); applyToolIcon(entry, plugin);
-      entry.onclick = () => { dialog.close(); if (newThread) call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''}); else openPlugin(plugin.id, dock, entry, replace); onLaunch?.(); }; entries.append(entry);
+      entry.onclick = () => { dialog.close(); if (newThread) call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''}); else openPlugin(plugin.id, dock, entry, replace, add); onLaunch?.(); }; entries.append(entry);
     });
     dialog.append(entries);
     let active = 0;
@@ -879,6 +880,24 @@
     const next = current < 0 ? (delta > 0 ? 0 : browsers.length - 1) : (current + delta + browsers.length) % browsers.length;
     select(browsers[next].dataset.appId);
   }
+  function newAgentPanel() { launcher('center', undefined, false, false, true); }
+  // Agent panels share one column; switching shows another agent in it.
+  function navigateAgent(delta) {
+    const grid = activeGrid(); if (!grid) return false;
+    const all = frames(grid);
+    const agents = all.filter(frame => frame.dataset.dock === 'center');
+    if (agents.length < 2) return false;
+    const selected = all.find(frame => frame.dataset.appId === window.__libroSelectedApp);
+    if (selected?.dataset.appType === 'url' && !['files', 'notes'].includes(selected.dataset.plugin)) return false;
+    const state = dockState(grid);
+    const current = Math.max(0, agents.findIndex(frame => frame.dataset.appId === state.agent));
+    // Like a tab click, show the agent instead of leaving a tool over it.
+    if (grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
+      all.filter(frame => frame.dataset.dock === 'right').forEach(frame => state.hidden.add(frame.dataset.appId));
+    }
+    select(agents[(current + delta + agents.length) % agents.length].dataset.appId);
+    return true;
+  }
   let toolKeys = window.__libroToolKeys || {};
   function syncWorkspaceShortcuts() {
     window.libroElectron?.setWorkspaceShortcuts?.(Object.values(toolKeys));
@@ -1052,7 +1071,8 @@
     }
     if (binding && (binding === toolKeys['previous-browser'] || binding === toolKeys['next-browser'])) {
       event.preventDefault(); event.stopImmediatePropagation();
-      if (!event.repeat) navigateBrowser(binding === toolKeys['previous-browser'] ? -1 : 1);
+      const delta = binding === toolKeys['previous-browser'] ? -1 : 1;
+      if (!event.repeat && !navigateAgent(delta)) navigateBrowser(delta);
       return;
     }
     if (binding && binding === toolKeys['thread-actions']) {
@@ -1083,6 +1103,11 @@
     if (binding && binding === toolKeys['new-agent']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) launcher('center');
+      return;
+    }
+    if (binding && binding === toolKeys['new-agent-panel']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) newAgentPanel();
       return;
     }
     if (binding && binding === toolKeys['project-picker']) {
@@ -1264,9 +1289,10 @@
     const width = frame => Math.min(grid.clientWidth, frame.style.width.endsWith('%') ? grid.clientWidth : parseFloat(frame.style.width) || frame.offsetWidth);
     const center = all.filter(frame => frame.dataset.dock === 'center');
     const tools = all.filter(frame => frame.dataset.dock === 'right' && !state.hidden.has(frame.dataset.appId));
+    const agent = center.find(frame => frame.dataset.appId === state.agent) || center[0];
+    const agents = agent ? [agent] : [];
     if (grid.parentElement && grid.parentElement.style.display !== 'none' && grid.parentElement.getAttribute('aria-hidden') !== 'true') {
-      const rememberedAgent = center.find(frame => frame.dataset.appId === state.agent) || center[0];
-      window.__libroActiveAgentID = rememberedAgent?.dataset.appId || '';
+      window.__libroActiveAgentID = agent?.dataset.appId || '';
     }
     const right = [tools.find(frame => frame.dataset.appId === state.right) || tools.at(-1)].filter(Boolean);
     const terminals = all.filter(frame => frame.dataset.dock === 'bottom');
@@ -1278,9 +1304,9 @@
     const agentMin = Math.min(agentMinWidth, grid.clientWidth);
     // Cards sit apart by the grid gap; one gap per agent column plus the tool column.
     const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
-    const overlay = !full && right.length > 0 && (center.length ? center.length * agentMin : 320) + width(right[0]) + gap * Math.max(1, center.length) > grid.clientWidth;
-    const visible = full ? [full] : [...center, ...right];
-    const columns = (overlay ? center : visible).map(frame => full ? grid.clientWidth + 'px' : frame.dataset.dock === 'center' ? 'minmax(' + agentMin + 'px, 1fr)' : width(frame) + 'px');
+    const overlay = !full && right.length > 0 && (agent ? agentMin : 320) + width(right[0]) + gap > grid.clientWidth;
+    const visible = full ? [full] : [...agents, ...right];
+    const columns = (overlay ? agents : visible).map(frame => full ? grid.clientWidth + 'px' : frame.dataset.dock === 'center' ? 'minmax(' + agentMin + 'px, 1fr)' : width(frame) + 'px');
     if (!center.length && !full) columns.unshift('minmax(0, 1fr)');
     grid.style.gridTemplateColumns = columns.join(' ') || 'minmax(0, 1fr)';
     const terminalHeight = Number.isFinite(prefs.terminalHeight) ? Math.max(80, Math.min(prefs.terminalHeight, grid.clientHeight - 120)) + 'px' : 'minmax(80px, 25.2875%)';
@@ -1311,9 +1337,12 @@
     if (!tabs) { tabs = node('div', 'ws-tool-tabs'); tabs.setAttribute('aria-label', 'Agents and tools'); grid.before(tabs); }
     // Tool panels share one width, so one size button in the rail serves them all.
     const toolFrames = all.filter(frame => frame.dataset.dock === 'right');
-    const signature = [...center, ...toolFrames, ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, frame.dataset.dock === 'center' ? (grid.dataset.projectLabel || frame.dataset.appName) : frame.dataset.appName, frame.dataset.selected, frame.dataset.dock, frame.dataset.dockVisible]);
-    if (tabs.dataset.signature !== JSON.stringify(signature)) {
-      tabs.dataset.signature = JSON.stringify(signature); tabs.replaceChildren();
+    // The first agent carries the workspace name; added agents show theirs.
+    const label = frame => frame.dataset.dock !== 'center' ? frame.dataset.appName : frame === center[0] ? (grid.dataset.projectLabel || frame.dataset.appName) : frame.dataset.appName + ' ' + (center.indexOf(frame) + 1);
+    const signature = [...center, ...toolFrames, ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, label(frame), frame.dataset.selected, frame.dataset.dock, frame.dataset.dockVisible]);
+    const addAgent = center.length > 0 && grid.dataset.managed !== 'true';
+    if (tabs.dataset.signature !== JSON.stringify([signature, addAgent])) {
+      tabs.dataset.signature = JSON.stringify([signature, addAgent]); tabs.replaceChildren();
       signature.forEach(([id, name, shown, dock, visible]) => {
         const group = node('div', 'ws-agent-tab ws-tool-tab-group'); group.dataset.selected = shown; group.dataset.visible = visible; group.dataset.tabDock = dock;
         const tab = node('button', 'ws-tool-tab', name); tab.type = 'button'; tab.title = name; tab.setAttribute('aria-pressed', shown);
@@ -1327,7 +1356,16 @@
           }
           else select(id);
         };
-        group.append(tab); tabs.append(group);
+        group.append(tab);
+        if (dock === 'center' && center.length > 1) {
+          const close = button('Close ' + name, 'close', () => call('app.close', {id}));
+          close.classList.add('ws-agent-tab-close'); group.append(close);
+        }
+        tabs.append(group);
+        if (addAgent && id === center.at(-1).dataset.appId) {
+          const add = button('New agent panel', 'add', newAgentPanel);
+          add.classList.add('ws-agent-add'); tabs.append(add);
+        }
       });
     }
     tabs.hidden = signature.length === 0;
@@ -1763,7 +1801,7 @@
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New tool panels will use this width.' : 'Could not save. Please try again.';
     settingsSaveFinished(ok);
   }
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }

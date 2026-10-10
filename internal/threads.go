@@ -62,18 +62,31 @@ func (s *AppState) thread(id string) *Thread {
 	return nil
 }
 
-// workspaceAgent ignores panels removed or replaced before their title arrived.
-func (s *AppState) workspaceAgent(workspace, appID string) bool {
-	apps := s.Apps
-	if workspace != s.ActiveProject {
-		apps = nil
-		if snapshot := s.snapshots[workspace]; snapshot != nil {
-			apps = snapshot.Apps
+func (s *AppState) workspaceApps(workspace string) []Application {
+	if workspace == s.ActiveProject {
+		return s.Apps
+	}
+	if snapshot := s.snapshots[workspace]; snapshot != nil {
+		return snapshot.Apps
+	}
+	return nil
+}
+
+// primaryAgentID returns the first agent panel. Only it names the workspace
+// and owns the thread's saved session; other agent panels keep their own.
+func primaryAgentID(apps []Application) string {
+	for _, app := range apps {
+		if isAgentApp(app) {
+			return app.ID
 		}
 	}
-	return slices.ContainsFunc(apps, func(app Application) bool {
-		return isAgentApp(app) && (appID == "" || app.ID == appID)
-	})
+	return ""
+}
+
+// workspaceAgent ignores panels removed or replaced before their title arrived.
+func (s *AppState) workspaceAgent(workspace, appID string) bool {
+	id := primaryAgentID(s.workspaceApps(workspace))
+	return id != "" && (appID == "" || appID == id)
 }
 
 // Empty checkouts must not display a description left by an earlier agent.
@@ -324,12 +337,17 @@ func (s *AppState) needsProjectThread(app Application) bool {
 	return slices.ContainsFunc(s.Apps, isAgentApp)
 }
 
-func (s *AppState) canStartThreadApp(app Application) bool {
+// An added agent panel joins the thread's other agents.
+func (s *AppState) canStartThreadApp(app Application, add bool) bool {
 	if appDock(app) != "center" {
 		return true
 	}
 	if !isAgentApp(app) {
 		return false
+	}
+	if add {
+		thread := s.thread(s.ActiveProject)
+		return thread == nil || !thread.Managed
 	}
 	for _, existing := range s.Apps {
 		if appDock(existing) == "center" {
@@ -378,25 +396,42 @@ func (sm *StateManager) ReplaceThreadAgent(sid, agentID, command string) ([]Appl
 }
 
 // CloseThreadAgent persists the archive before clearing the active thread.
-// A nil result leaves normal panel closing to the caller.
-func (sm *StateManager) CloseThreadAgent(sid, appID string) ([]Application, error) {
+// It returns the closed panels and whether the thread was archived. Nil panels
+// leave normal panel closing to the caller. Closing one of several agent panels
+// keeps the thread; the next agent takes over its session in the same lock, so
+// a late session report from the closed panel cannot win.
+func (sm *StateManager) CloseThreadAgent(sid, appID string) ([]Application, bool, error) {
 	defer sm.scheduleLayoutSave(sid)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	state := sm.states[sid]
 	if state == nil {
-		return nil, nil
+		return nil, false, nil
 	}
 	thread := state.thread(state.ActiveProject)
 	if thread == nil {
-		return nil, nil
+		return nil, false, nil
 	}
-	for _, app := range state.Apps {
+	for i, app := range state.Apps {
 		if app.ID != appID || appDock(app) != "center" {
 			continue
 		}
+		if next := slices.IndexFunc(state.Apps, func(other Application) bool { return other.ID != appID && isAgentApp(other) }); next >= 0 {
+			if primaryAgentID(state.Apps) == appID {
+				if err := thread.useAgent(state.Apps[next]); err != nil {
+					return nil, false, err
+				}
+			}
+			return []Application{*removeApp(state, i)}, false, nil
+		}
+		// A reordered panel may not have reported its session to the thread yet.
+		if app.SessionID != "" && app.SessionID != thread.SessionID {
+			if err := thread.useAgent(app); err != nil {
+				return nil, false, err
+			}
+		}
 		if _, err := db.Exec("UPDATE threads SET archived = 1 WHERE id = ?", thread.ID); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		thread.Archived = true
 		apps := make([]Application, 0, len(state.Apps))
@@ -410,9 +445,19 @@ func (sm *StateManager) CloseThreadAgent(sid, appID string) ([]Application, erro
 		}
 		state.Apps = shared
 		state.SelectedIndex = 0
-		return apps, nil
+		return apps, true, nil
 	}
-	return nil, nil
+	return nil, false, nil
+}
+
+// useAgent stores an agent panel's session as the thread's session.
+func (thread *Thread) useAgent(agent Application) error {
+	if _, err := db.Exec("UPDATE threads SET session_id = ?, agent_id = ?, agent_command = ?, agent_model = ?, agent_effort = ? WHERE id = ?", agent.SessionID, agent.PluginID, agent.Command, agent.AgentModel, agent.AgentEffort, thread.ID); err != nil {
+		return err
+	}
+	thread.SessionID, thread.AgentID, thread.AgentCommand = agent.SessionID, agent.PluginID, agent.Command
+	thread.AgentModel, thread.AgentEffort = agent.AgentModel, agent.AgentEffort
+	return nil
 }
 
 // Ignore late session reports from a panel that has been replaced.
@@ -457,6 +502,9 @@ func (sm *StateManager) recordAgentSession(sid, appID, agentID, command, session
 			continue
 		}
 		thread := state.thread(workspace)
+		if primaryAgentID(apps) != appID {
+			thread = nil
+		}
 		if panel.SessionID == sessionID {
 			if model == "" {
 				model = panel.AgentModel

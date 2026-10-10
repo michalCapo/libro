@@ -31,6 +31,7 @@ type actionAppDockInput struct {
 var actionAppStart r.ActionRef[actionAppStartInput]
 
 type actionAppStartInput struct {
+	AddAgent          bool    `json:"addAgent"`
 	AutolaunchProject *string `json:"autolaunchProject"`
 	Command           string  `json:"command"`
 	Dock              string  `json:"dock"`

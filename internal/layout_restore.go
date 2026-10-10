@@ -89,7 +89,7 @@ func (sm *StateManager) saveLayout(sid string) {
 		workspace := savedWorkspace{Name: name, Path: path, SelectedIndex: selected}
 		for _, app := range apps {
 			saved := saveApp(app)
-			if thread := state.thread(name); thread != nil && thread.AgentID == app.PluginID && isAgentApp(app) {
+			if thread := state.thread(name); thread != nil && saved.SessionID == "" && thread.AgentID == app.PluginID && primaryAgentID(apps) == app.ID {
 				saved.SessionID, saved.AgentModel, saved.AgentEffort = thread.SessionID, thread.AgentModel, thread.AgentEffort
 			}
 			workspace.Apps = append(workspace.Apps, saved)

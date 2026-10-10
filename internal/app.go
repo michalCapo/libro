@@ -206,11 +206,10 @@ func switchToProjectWithAgent(sid, name, agentID string) (r.Result, bool) {
 // Notes and the project command remain available to the other project threads.
 func closeWorkspaceApp(sid, appID string) r.Result {
 	target := sm.Get(sid).adjacentProjectThread()
-	apps, err := sm.CloseThreadAgent(sid, appID)
+	apps, closedThread, err := sm.CloseThreadAgent(sid, appID)
 	if err != nil {
 		return r.Result{}.Run(r.Notify("error", "Could not archive thread"))
 	}
-	closedThread := apps != nil
 	if apps == nil {
 		if removed := sm.RemoveAppByID(sid, appID); removed != nil {
 			apps = []Application{*removed}
@@ -297,7 +296,8 @@ func agentLaunchInWorkspace(sid, workspace string, term Application) (string, fu
 	sessionID, model, effort := term.SessionID, term.AgentModel, term.AgentEffort
 	sm.mu.RLock()
 	if state := sm.states[sid]; state != nil {
-		if thread := state.thread(workspace); thread != nil && thread.AgentID == term.PluginID {
+		// A panel's own session wins: reordering can make another agent primary.
+		if thread := state.thread(workspace); thread != nil && term.SessionID == "" && thread.AgentID == term.PluginID && primaryAgentID(state.workspaceApps(workspace)) == term.ID {
 			sessionID = thread.SessionID
 			if thread.AgentCommand != "" {
 				baseCommand = thread.AgentCommand
@@ -821,18 +821,18 @@ func Run(assets embed.FS, desktop bool) error {
 				replacedJS = replacedJS.Add(removeAppJS(existing.ID))
 			}
 		}
-		if threadState.needsProjectThread(candidate) {
+		if !in.AddAgent && threadState.needsProjectThread(candidate) {
 			return r.Result{}.Run(actionThreadCreate.Call(actionThreadCreateInput{SID: sid, Agent: pluginID, Project: threadState.ActiveProject})), nil
 		}
 		// A new agent in a project checkout or worktree starts a fresh
 		// conversation, so it drops the previous agent's description.
-		if isAgentApp(candidate) && threadState.thread(threadState.ActiveProject) == nil {
+		if !in.AddAgent && isAgentApp(candidate) && threadState.thread(threadState.ActiveProject) == nil {
 			if _, path := threadProjectContext(threadState, threadState.ActiveProject); path != "" {
 				_ = saveWorktreeTitle(path, "")
 			}
 		}
 		if threadState.thread(threadState.ActiveProject) != nil {
-			if !threadState.canStartThreadApp(candidate) {
+			if !threadState.canStartThreadApp(candidate, in.AddAgent) {
 				return r.Result{}, nil
 			}
 		}
@@ -1011,7 +1011,7 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 		// Keep a resumed project's description; only fresh agents clear it.
 		var js r.Result
-		if isAgentApp(*term) && term.SessionID == "" && state.thread(state.ActiveProject) == nil && saveWorktreeTitle(pwd, "") == nil {
+		if state.workspaceAgent(state.ActiveProject, term.ID) && term.SessionID == "" && state.thread(state.ActiveProject) == nil && saveWorktreeTitle(pwd, "") == nil {
 			js = projectsJS(state)
 		}
 		return r.Merge(js, clientScript("(function(){if(window.__libroRestartTerminal)window.__libroRestartTerminal(props[0]);})();", term.ID), settleAppFrameJS(term.ID), r.Result{}.Run(r.Notify("success", "Terminal restarted"))), nil
