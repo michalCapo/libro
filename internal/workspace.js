@@ -1336,15 +1336,15 @@
     if (!tabs) { tabs = node('div', 'ws-tool-tabs'); tabs.setAttribute('aria-label', 'Agents and tools'); grid.before(tabs); }
     // Tool panels share one width, so one size button in the rail serves them all.
     const toolFrames = all.filter(frame => frame.dataset.dock === 'right');
-    // The first agent carries the workspace name; added agents show theirs.
-    const label = frame => frame.dataset.dock !== 'center' ? frame.dataset.appName : frame === center[0] ? (grid.dataset.projectLabel || frame.dataset.appName) : frame.dataset.appName + ' ' + (center.indexOf(frame) + 1);
-    const signature = [...center, ...toolFrames, ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, label(frame), frame.dataset.selected, frame.dataset.dock, frame.dataset.dockVisible]);
+    // Agents show their name, numbered when there are several; the session title is the tooltip.
+    const label = frame => frame.dataset.dock === 'center' && center.length > 1 ? frame.dataset.appName + ' ' + (center.indexOf(frame) + 1) : frame.dataset.appName;
+    const signature = [...center, ...toolFrames, ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, label(frame), frame.dataset.selected, frame.dataset.dock, frame.dataset.dockVisible, frame.dataset.dock === 'center' && frame.dataset.taskTitle || label(frame)]);
     const addAgent = center.length > 0 && grid.dataset.managed !== 'true';
     if (tabs.dataset.signature !== JSON.stringify([signature, addAgent])) {
       tabs.dataset.signature = JSON.stringify([signature, addAgent]); tabs.replaceChildren();
-      signature.forEach(([id, name, shown, dock, visible]) => {
+      signature.forEach(([id, name, shown, dock, visible, title]) => {
         const group = node('div', 'ws-agent-tab ws-tool-tab-group'); group.dataset.selected = shown; group.dataset.visible = visible; group.dataset.tabDock = dock;
-        const tab = node('button', 'ws-tool-tab', name); tab.type = 'button'; tab.title = name; tab.setAttribute('aria-pressed', shown);
+        const tab = node('button', 'ws-tool-tab', name); tab.type = 'button'; tab.title = title; tab.setAttribute('aria-pressed', shown);
         tab.onclick = () => {
           if (dock === 'center' && grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
             all.filter(frame => frame.dataset.dock === 'right').forEach(frame => state.hidden.add(frame.dataset.appId));
