@@ -682,6 +682,21 @@
       return false;
     }
   }
+  function saveProjectRows(value) {
+    const status = document.getElementById('project-rows-status');
+    try {
+      const updated = {...prefs, projectRows:value === 'always' ? 'always' : 'hover'};
+      localStorage.setItem('libro.workspace', JSON.stringify(updated));
+      prefs = updated;
+      status.textContent = '';
+      refresh();
+      return true;
+    } catch (_) {
+      document.getElementById('project-rows').value = prefs.projectRows === 'always' ? 'always' : 'hover';
+      status.textContent = 'Could not save project rows. Please try again.';
+      return false;
+    }
+  }
   const acknowledgedAgents = new Set();
   function acknowledgeProjectActivity(key) {
     const grid = [...document.querySelectorAll('[data-workspace-project]')].find(grid => grid.dataset.workspaceProject === key);
@@ -793,6 +808,7 @@
     if (sidebar) resizeHandle(sidebar, 'sidebar');
     if (Number.isFinite(prefs.sidebarWidth)) root.style.setProperty('--ws-projects', Math.max(180, Math.min(prefs.sidebarWidth, 480, innerWidth - 48)) + 'px');
     root.dataset.thread = String(isThread());
+    root.dataset.projectRows = prefs.projectRows === 'always' ? 'always' : 'hover';
     renderToolRail();
     renderProjects();
     renderThreads();
@@ -1552,6 +1568,8 @@
     document.getElementById('page-tools-autoexecute-status').textContent = '';
     document.getElementById('workspace-theme').value = themePreference();
     document.getElementById('workspace-theme-status').textContent = '';
+    document.getElementById('project-rows').value = prefs.projectRows === 'always' ? 'always' : 'hover';
+    document.getElementById('project-rows-status').textContent = '';
     fillAgentEnvironment(environment);
     document.querySelector('#agent-environment-form [role=status]').textContent = '';
     toolKeys = bindings; fillToolKeys(bindings); updateToolHints();
@@ -1589,7 +1607,7 @@
     for (const form of page.querySelectorAll('form')) if (!form.reportValidity()) return;
     const value = id => document.getElementById(id).value;
     const agent = value('default-thread-agent'), width = value('default-panel-width');
-    const theme = value('workspace-theme'), sound = value('notification-sound'), pageTools = value('page-tools-autoexecute') === 'on';
+    const theme = value('workspace-theme'), projectRows = value('project-rows'), sound = value('notification-sound'), pageTools = value('page-tools-autoexecute') === 'on';
     settingsSaveSteps = [
       () => saveAgentCommand(document.getElementById('agent-commands-form')),
       () => saveTools(document.getElementById('tool-commands-form')),
@@ -1600,7 +1618,7 @@
       () => savePageTools(pageTools),
       () => saveSettings(width),
       () => {
-        const ok = saveTheme(theme) && saveNotificationSound(sound);
+        const ok = saveTheme(theme) && saveProjectRows(projectRows) && saveNotificationSound(sound);
         settingsSaveFinished(ok, 'Could not save appearance or sound. Please try again.');
       },
     ];

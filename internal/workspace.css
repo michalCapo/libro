@@ -59,6 +59,8 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-threads:empty,.ws-project-group>.ws-project-threads:not(:has(.ws-project-item)){display:none}
 /* Projects without open threads fade until hovered or focused. */
 .ws-project-group:not(:has(.ws-project-threads .ws-project-item))>.ws-project-item:not(:is(:hover,:focus-within,:has(.ws-project-row[aria-current=true]))){opacity:.52}
+/* In hover mode, project rows hide until the sidebar is hovered or keyboard focused; threads stay visible. */
+@media(hover:hover){#libro-workspace[data-project-rows=hover] .ws-sidebar:not(:hover,:has(:focus-visible)) :is(.ws-project-group>.ws-project-item,.ws-project-group:not(:has(.ws-project-threads .ws-project-item))){display:none}}
 .ws-thread-row{min-height:30px}
 /* Thread rows show the project name above the label; described rows add a details line. */
 .ws-row-grid{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:". project project project" "icon title end badge";gap:2px 8px;align-items:center}
