@@ -3,7 +3,7 @@
 ## Checks
 
 - Run `make check` before finishing code changes.
-- The target checks `go fix`, formatting, `go vet`, `staticcheck`, `gopls`, `golangci-lint`, dead code, builds, and tests.
+- The target checks `go fix`, formatting, `go vet`, `staticcheck`, `gopls`, `golangci-lint`, dead code, builds, Go tests, and Electron JS tests.
 - It is non-mutating and continues after failures so all problems are reported in one run.
 
 ## Commands

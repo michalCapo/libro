@@ -77,7 +77,7 @@ test('project switches preserve bottom terminal visibility when restoring select
       style: {}, querySelector: () => ({}),
     }
     const window = { __libroSelectedApp: 'shell' }
-    const context = { grid, shell, window, prefs: {}, resizeHandle() {}, dockState: () => state, keepBottomHidden: false, activeGrid: () => null, agentMinWidth: 600 }
+    const context = { grid, shell, window, prefs: {}, resizeHandle() {}, dockState: () => state, keepBottomHidden: false, activeGrid: () => null, agentMinWidth: 600, getComputedStyle: () => ({ columnGap: '6px' }) }
     // The inactive project's layout clears lastSelected before switching back.
     vm.runInNewContext(layout + ';layoutDocks(grid, [shell]);', context)
     window.__libroSelectedApp = 'other-project-agent'
@@ -755,7 +755,7 @@ test('shared panel focus moves from an agent to Files and preserves file input f
   assert.equal(focused, 1)
 })
 
-test('thread list keeps all open threads and only the newest ten archived threads', () => {
+test('thread list keeps all open threads and only the newest five archived threads', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = rowLabel + source.slice(source.indexOf('  function renderThreads()'), source.indexOf('  function renderProjects()'))
   const node = () => ({ dataset: {}, children: [], classList: { add() {} }, setAttribute() {}, append(...items) { this.children.push(...items) }, replaceChildren() { this.children = [] } })
@@ -766,9 +766,9 @@ test('thread list keeps all open threads and only the newest ten archived thread
     node, button: node, closeSettings() {}, innerWidth: 1000, call(action, data) { calls.push([action, data.name]) },
   })
   const rows = list.children.map(item => item.children[0])
-  assert.deepEqual(rows.map(row => row.dataset.projectKey), [...threads.filter(t => !t.archived).reverse(), ...threads.filter(t => t.archived).reverse().slice(0, 10)].map(t => t.id))
+  assert.deepEqual(rows.map(row => row.dataset.projectKey), [...threads.filter(t => !t.archived).reverse(), ...threads.filter(t => t.archived).reverse().slice(0, 5)].map(t => t.id))
   rows.at(-1).onclick()
-  assert.deepEqual(calls, [['project.switch', '6']])
+  assert.deepEqual(calls, [['project.switch', '16']])
   assert.equal(threads.length, 25, 'older archives remain stored')
 })
 
@@ -923,7 +923,7 @@ test('project groups contain the original branch first and number every worktree
   const group = list.children[0]
   assert.equal(group.classes, 'ws-project-group')
   const rows = flatten(group).filter(el => el.classes.split(' ').includes('ws-thread-row'))
-  assert.deepEqual(rows.map(row => row.children[1].textContent), ['main', 'feature'])
+  assert.deepEqual(rows.map(row => row.children[2].textContent), ['main', 'feature'])
   assert.deepEqual(rows.map(row => row.dataset.projectShortcut), ['1', '2'])
   rows[0].onclick()
   rows[1].onclick()

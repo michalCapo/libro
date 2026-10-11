@@ -93,6 +93,7 @@ function settingsHarness(valid = true) {
     savePageTools: () => calls.push('page-tools'),
     saveSettings: (value, tool) => calls.push(tool ? 'tool-width' : 'width'),
     saveTheme: () => { calls.push('theme'); return true },
+    saveProjectRows: () => { calls.push('project-rows'); return true },
     saveNotificationSound: () => { calls.push('sound'); return true },
   })
   vm.runInContext(saveAutoUpdate + saveAll + close + voice, context)
@@ -107,7 +108,7 @@ test('one Save waits for every section before showing a toast and keeps settings
   assert.equal(h.content.inert, true)
   assert.deepEqual(h.toasts, [])
   for (let i = 0; i < 8; i++) h.run('settingsSaveFinished(true)')
-  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', {key:'openrouter-key', clearKey:false}, {enabled:false}, 'default-thread-agent', 'page-tools', 'width', 'theme', 'sound'])
+  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', {key:'openrouter-key', clearKey:false}, {enabled:false}, 'default-thread-agent', 'page-tools', 'width', 'theme', 'project-rows', 'sound'])
   assert.equal(h.get('workspace-settings').hidden, false)
   assert.deepEqual(h.toasts, [['Settings saved', '', 'success']])
   assert.equal(h.get('settings-save').disabled, false)
