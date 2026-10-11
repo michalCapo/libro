@@ -449,10 +449,9 @@
   // and shortcut details move to a second line.
   function rowLabel(row, label, described, branch, projectName) {
     row.classList.add('ws-row-grid');
-    row.append(node('small', 'ws-row-project', projectName), node('span', '', label));
-    if (!described) return;
-    row.classList.add('ws-row-two-line');
-    const meta = node('small', 'ws-row-meta'); meta.append(node('span', 'ws-row-branch', branch)); row.append(meta);
+    const meta = node('small', 'ws-row-meta');
+    if (described) meta.append(node('span', 'ws-row-branch', branch));
+    row.append(node('small', 'ws-row-project', projectName), node('span', '', label), meta);
   }
   function threadMenu(project, trigger, point) {
     document.getElementById('thread-actions-menu')?.remove();

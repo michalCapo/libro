@@ -59,20 +59,18 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-threads:empty,.ws-project-group>.ws-project-threads:not(:has(.ws-project-item)){display:none}
 /* Projects without open threads fade until hovered or focused. */
 .ws-project-group:not(:has(.ws-project-threads .ws-project-item))>.ws-project-item:not(:is(:hover,:focus-within,:has(.ws-project-row[aria-current=true]))){opacity:.52}
-/* In hover mode, project rows hide until the sidebar is hovered or keyboard focused; threads stay visible. */
-@media(hover:hover){#libro-workspace[data-project-rows=hover] .ws-sidebar:not(:hover,:has(:focus-visible)) :is(.ws-project-group>.ws-project-item,.ws-project-group:not(:has(.ws-project-threads .ws-project-item))){display:none}}
+/* In hover mode, project rows fade out in place until the sidebar is hovered or keyboard focused, so threads never move. */
+.ws-project-group>.ws-project-item{transition:opacity .15s}
+@media(hover:hover){#libro-workspace[data-project-rows=hover] .ws-sidebar:not(:hover,:has(:focus-visible)) .ws-project-group>.ws-project-item{opacity:0}}
 .ws-thread-row{min-height:30px}
-/* Thread rows show the project name above the label; described rows add a details line. */
-.ws-row-grid{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:". project project project" "icon title end badge";gap:2px 8px;align-items:center}
-.ws-row-grid>.material-icons-round{grid-area:icon}
-.ws-row-grid>span{grid-area:title}
+/* Thread rows always use three lines: project name, label, and details (branch for described rows). */
+.ws-row-grid{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:". project project project" "icon title title title" ". meta end badge";gap:2px 8px;align-items:center}
+.ws-row-grid>.material-icons-round{grid-area:icon;align-self:start;margin-top:2px}
+.ws-row-grid>span{grid-area:title;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
 .ws-row-grid>.ws-project-terminal{grid-area:end}
 .ws-row-grid>.ws-project-shortcut{grid-area:badge}
-.ws-row-two-line{grid-template-areas:". project project project" "icon title title title" ". meta end badge"}
-.ws-row-two-line>.material-icons-round{align-self:start;margin-top:2px}
-.ws-row-two-line>span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
 .ws-row-project{grid-area:project;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:14px;color:var(--ws-accent)}
-.ws-row-meta{grid-area:meta;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;line-height:16px;color:var(--ws-muted)}
+.ws-row-meta{grid-area:meta;min-width:0;min-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;line-height:16px;color:var(--ws-muted)}
 .ws-row-branch{font:11px/16px var(--ws-mono)}
 /* Branch names show where a thread lives: the project's own checkout or a separate worktree. */
 .ws-thread-row[data-kind=base] .ws-row-branch{color:#b45309}
