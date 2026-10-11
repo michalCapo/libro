@@ -448,10 +448,10 @@
   // A described row keeps its description on one full line. Branch, agent,
   // and shortcut details move to a second line.
   function rowLabel(row, label, described, branch, projectName) {
-    row.append(node('span', '', label));
+    row.classList.add('ws-row-grid');
+    row.append(node('small', 'ws-row-project', projectName), node('span', '', label));
     if (!described) return;
-    row.classList.add('ws-row-two-line'); row.dataset.branch = branch;
-    row.prepend(node('small', 'ws-row-project', projectName));
+    row.classList.add('ws-row-two-line');
     const meta = node('small', 'ws-row-meta'); meta.append(node('span', 'ws-row-branch', branch)); row.append(meta);
   }
   function threadMenu(project, trigger, point) {
@@ -740,18 +740,15 @@
       }
       tab.setAttribute('aria-label', tab.querySelector('span').textContent + (status ? ': ' + status : ''));
     });
-    const projects = new Map(), agentNames = new Map();
+    const projects = new Map();
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
       const agents = frames(grid).filter(frame => frame.dataset.dock === 'center');
-      agentNames.set(grid.dataset.workspaceProject, [...new Set(agents.map(frame => frame.dataset.appName).filter(Boolean))].join(', '));
       const states = agents.map(frame => acknowledgedAgents.has(frame.dataset.appId) && statuses[frame.dataset.appId] === 'done' ? 'idle' : statuses[frame.dataset.appId]);
       projects.set(grid.dataset.workspaceProject, states.includes('working') ? 'working' :
         states.includes('done') && states.every(state => state === 'done' || state === 'idle') ? 'done' : '');
     });
     // Project rows keep their folder icon; their threads show agent activity.
     document.querySelectorAll('.ws-project-row:not([data-kind=project])').forEach(row => {
-      const meta = row.querySelector('.ws-row-meta');
-      if (meta) meta.replaceChildren(node('span', 'ws-row-branch', row.dataset.branch), ...[agentNames.get(row.dataset.projectKey)].filter(Boolean).map(names => ' · ' + names));
       const state = projects.get(row.dataset.projectKey) || '';
       if (row.dataset.agentStatus === state) return;
       row.dataset.agentStatus = state;

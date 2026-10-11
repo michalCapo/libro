@@ -60,13 +60,16 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 /* Projects without open threads fade until hovered or focused. */
 .ws-project-group:not(:has(.ws-project-threads .ws-project-item))>.ws-project-item:not(:is(:hover,:focus-within,:has(.ws-project-row[aria-current=true]))){opacity:.52}
 .ws-thread-row{min-height:30px}
-/* Described rows show the project name, then the description, then details. */
-.ws-row-two-line{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:". project project project" "icon title title title" ". meta end badge";gap:2px 8px;align-items:center}
-.ws-row-two-line>.material-icons-round{grid-area:icon;align-self:start;margin-top:2px}
-.ws-row-two-line>span{grid-area:title;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
-.ws-row-two-line>.ws-project-terminal{grid-area:end}
-.ws-row-two-line>.ws-project-shortcut{grid-area:badge}
-.ws-row-project{grid-area:project;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:14px;color:var(--ws-muted)}
+/* Thread rows show the project name above the label; described rows add a details line. */
+.ws-row-grid{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:". project project project" "icon title end badge";gap:2px 8px;align-items:center}
+.ws-row-grid>.material-icons-round{grid-area:icon}
+.ws-row-grid>span{grid-area:title}
+.ws-row-grid>.ws-project-terminal{grid-area:end}
+.ws-row-grid>.ws-project-shortcut{grid-area:badge}
+.ws-row-two-line{grid-template-areas:". project project project" "icon title title title" ". meta end badge"}
+.ws-row-two-line>.material-icons-round{align-self:start;margin-top:2px}
+.ws-row-two-line>span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
+.ws-row-project{grid-area:project;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:14px;color:var(--ws-accent)}
 .ws-row-meta{grid-area:meta;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;line-height:16px;color:var(--ws-muted)}
 .ws-row-branch{font:11px/16px var(--ws-mono)}
 /* Branch names show where a thread lives: the project's own checkout or a separate worktree. */
@@ -78,12 +81,12 @@ html.dark .ws-thread-row[data-kind=worktree] .ws-row-branch{color:#c4b5fd}
 /* The selected thread lifts off the chrome surface instead of drawing a ring. */
 .ws-project-item:has(>.ws-thread-row[aria-current=true]){background:var(--ws-raised);box-shadow:var(--ws-shadow)}
 .ws-thread-row[aria-current=true]>span{font-weight:600}
-/* Row actions sit before the shortcut badge so the number stays last; two-line rows keep them on the meta line. */
+/* Row actions sit before the shortcut badge so the number stays last; thread rows keep them on the last line. */
 .ws-project-item:has(.ws-project-shortcut)>.ws-button{position:absolute;right:31px;top:50%;translate:0 -50%}
-.ws-project-item:has(>.ws-row-two-line .ws-project-shortcut)>.ws-button{top:auto;bottom:2px;translate:none}
+.ws-project-item:has(>.ws-row-grid .ws-project-shortcut)>.ws-button{top:auto;bottom:2px;translate:none}
 .ws-project-item:is(:hover,:focus-within) .ws-project-shortcut{margin-left:24px}
 @media(hover:none){.ws-project-item .ws-project-shortcut{margin-left:24px}}
-.ws-project-item:has(>.ws-row-two-line)>.ws-button{align-self:flex-end;margin-bottom:2px}
+.ws-project-item:has(>.ws-row-grid)>.ws-button{align-self:flex-end;margin-bottom:2px}
 .ws-project-item[data-archived=true]{opacity:.52}
 .ws-project-item[data-archived=true]:is(:hover,:focus-within),.ws-project-item[data-archived=true]:has(.ws-project-row[aria-current=true]){opacity:1}
 .ws-thread-status{flex-shrink:0;font-size:11px;font-weight:500;color:var(--ws-muted)}
