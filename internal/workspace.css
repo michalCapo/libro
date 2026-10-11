@@ -63,9 +63,9 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-group>.ws-project-item{transition:opacity .15s}
 @media(hover:hover){#libro-workspace[data-project-rows=hover] .ws-sidebar:not(:hover,:has(:focus-visible)) .ws-project-group>.ws-project-item{opacity:0}}
 .ws-thread-row{min-height:30px}
-/* Thread rows always use three lines: project name, label, and details (branch for described rows). */
-.ws-row-grid{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:". project project project" "icon title title title" ". meta end badge";gap:2px 8px;align-items:center}
-.ws-row-grid>.material-icons-round{grid-area:icon;align-self:start;margin-top:2px}
+/* Thread rows always use three lines: project name with the status icon in the corner, label, and details (branch for described rows). */
+.ws-row-grid{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"project project icon" "title title title" "meta end badge";gap:2px 8px;align-items:center}
+.ws-row-grid>.material-icons-round{grid-area:icon;justify-self:center}
 .ws-row-grid>span{grid-area:title;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
 .ws-row-grid>.ws-project-terminal{grid-area:end}
 .ws-row-grid>.ws-project-shortcut{grid-area:badge}
