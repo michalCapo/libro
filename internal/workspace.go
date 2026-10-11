@@ -111,7 +111,6 @@ func renderWorkspaceStrip(state *AppState, sid, placeholderID string) *r.Node {
 
 func renderWorkspaceTools() *r.Node {
 	return r.El("aside", "ws-tool-rail").Attr("aria-label", "Workspace tools").Render(
-		workspaceButton("Toggle projects", "view_sidebar", r.UnsafeJS("libroWorkspace.toggle('projects')")),
 		r.Div("ws-tool-buttons").ID("workspace-tool-buttons"),
 		workspaceButton("More tools", "add", r.UnsafeJS("libroWorkspace.launcher('right')")),
 		r.Div("ws-tool-sizes").ID("workspace-tool-size").Attr("data-size-badges", ""),

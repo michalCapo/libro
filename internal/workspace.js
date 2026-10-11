@@ -14,7 +14,6 @@
   }
   let prefs = {};
   try { prefs = JSON.parse(localStorage.getItem('libro.workspace') || '{}') || {}; } catch (_) {}
-  if (typeof prefs.projects !== 'boolean') prefs.projects = innerWidth > 760;
   const call = (action, data = {}) => {
     if (action === 'project.switch') acknowledgeProjectActivity(data.name);
     if (action === 'worktree.switch') acknowledgeProjectActivity(data.project + '/' + data.branch);
@@ -448,10 +447,11 @@
   }
   // A described row keeps its description on one full line. Branch, agent,
   // and shortcut details move to a second line.
-  function rowLabel(row, label, described, branch) {
+  function rowLabel(row, label, described, branch, projectName) {
     row.append(node('span', '', label));
     if (!described) return;
     row.classList.add('ws-row-two-line'); row.dataset.branch = branch;
+    row.prepend(node('small', 'ws-row-project', projectName));
     const meta = node('small', 'ws-row-meta'); meta.append(node('span', 'ws-row-branch', branch)); row.append(meta);
   }
   function threadMenu(project, trigger, point) {
@@ -502,7 +502,6 @@
       row.append(icon, node('span', '', thread.name));
       row.onclick = () => {
         closeSettings();
-        if (innerWidth <= 760) { prefs.projects = false; save(); }
         if (thread.id !== window.__libroActiveProject) {
           call('project.switch', {name:thread.id, focusAgent:true});
           return;
@@ -542,7 +541,7 @@
       row.title = projectName + (project.path ? '\n' + project.path : '');
       const icon = node('i', 'material-icons-round', project.kind === 'worktree' ? 'account_tree' : 'folder_open'); icon.setAttribute('aria-hidden', 'true');
       row.append(icon, node('span', '', project.displayName || project.name));
-      row.onclick = () => { closeSettings(); if (innerWidth <= 760) { prefs.projects = false; save(); } if (project.kind === 'worktree') call('worktree.switch', {project:project.name, path:project.path, branch:project.branch}); else call('project.switch', {name:project.name}); };
+      row.onclick = () => { closeSettings(); if (project.kind === 'worktree') call('worktree.switch', {project:project.name, path:project.path, branch:project.branch}); else call('project.switch', {name:project.name}); };
       item.append(row);
       const settings = button('Settings for ' + projectName, 'settings', event => { event.stopPropagation(); projectSettings(row.dataset.projectKey); });
       settings.classList.add('ws-project-settings'); item.append(settings);
@@ -576,7 +575,7 @@
         const baseLabel = project.title || branch;
         base.title = baseLabel + (project.title ? '\n' + branch : '') + ' — ' + project.path;
         const baseIcon = node('i', 'material-icons-round', 'chat_bubble_outline'); baseIcon.setAttribute('aria-hidden', 'true');
-        base.append(baseIcon); rowLabel(base, baseLabel, !!project.title, branch);
+        base.append(baseIcon); rowLabel(base, baseLabel, !!project.title, branch, projectName);
         base.onclick = row.onclick;
         const actions = button('Branch actions for ' + baseLabel, 'more_horiz', event => { event.stopPropagation(); threadMenu(project, actions); });
         actions.setAttribute('aria-haspopup', 'menu');
@@ -600,8 +599,9 @@
       const label = project.title || project.branch;
       row.title = label + (project.title ? '\n' + project.branch : '') + ' — ' + project.path;
       const icon = node('i', 'material-icons-round', 'account_tree'); icon.setAttribute('aria-hidden', 'true');
-      row.append(icon); rowLabel(row, label, !!project.title, project.branch);
-      row.onclick = () => { closeSettings(); if (innerWidth <= 760) { prefs.projects = false; save(); } call('worktree.switch', {project:project.name, path:project.path, branch:project.branch}); };
+      const parent = projects.find(item => item.kind !== 'worktree' && item.name === project.name);
+      row.append(icon); rowLabel(row, label, !!project.title, project.branch, parent.displayName || parent.name);
+      row.onclick = () => { closeSettings(); call('worktree.switch', {project:project.name, path:project.path, branch:project.branch}); };
       const settings = button('Thread actions for ' + label, 'more_horiz', event => { event.stopPropagation(); threadMenu(project, settings); });
       settings.setAttribute('aria-haspopup', 'menu');
       row.oncontextmenu = event => { event.preventDefault(); threadMenu(project, row, {x:event.clientX, y:event.clientY}); };
@@ -795,7 +795,6 @@
     const sidebar = document.getElementById('workspace-projects');
     if (sidebar) resizeHandle(sidebar, 'sidebar');
     if (Number.isFinite(prefs.sidebarWidth)) root.style.setProperty('--ws-projects', Math.max(180, Math.min(prefs.sidebarWidth, 480, innerWidth - 48)) + 'px');
-    root.dataset.projects = String(prefs.projects);
     root.dataset.thread = String(isThread());
     renderToolRail();
     renderProjects();
@@ -1394,10 +1393,6 @@
     });
     sizes.append(trigger, picker);
   }
-  function toggle(zone) {
-    if (zone !== 'projects') return;
-    prefs.projects = !prefs.projects; save(); refresh();
-  }
   function maximize(id) {
     maximized = maximized === id ? '' : id;
     refresh();
@@ -1801,7 +1796,7 @@
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New tool panels will use this width.' : 'Could not save. Please try again.';
     settingsSaveFinished(ok);
   }
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, toggle, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }

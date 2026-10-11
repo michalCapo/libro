@@ -52,9 +52,9 @@ test('each agent completion sounds once even while another agent works', () => {
 })
 
 test('sound preference persists and muted completions are not replayed', () => {
-  const app = setup({ projects: true })
+  const app = setup({ sidebarWidth: 300 })
   vm.runInContext("saveNotificationSound('off')", app.context)
-  assert.deepEqual(app.stored(), { projects: true, notificationSound: false })
+  assert.deepEqual(app.stored(), { sidebarWidth: 300, notificationSound: false })
   app.update({ a: 'working' }); app.update({ a: 'done' })
   assert.equal(app.tones.length, 0)
   vm.runInContext("saveNotificationSound('on')", app.context)

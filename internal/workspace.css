@@ -60,12 +60,13 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 /* Projects without open threads fade until hovered or focused. */
 .ws-project-group:not(:has(.ws-project-threads .ws-project-item))>.ws-project-item:not(:is(:hover,:focus-within,:has(.ws-project-row[aria-current=true]))){opacity:.52}
 .ws-thread-row{min-height:30px}
-/* Described rows use the first line for the description and the second for details. */
-.ws-row-two-line{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"icon title title title" ". meta end badge";gap:2px 8px;align-items:center}
+/* Described rows show the project name, then the description, then details. */
+.ws-row-two-line{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:". project project project" "icon title title title" ". meta end badge";gap:2px 8px;align-items:center}
 .ws-row-two-line>.material-icons-round{grid-area:icon;align-self:start;margin-top:2px}
 .ws-row-two-line>span{grid-area:title;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
 .ws-row-two-line>.ws-project-terminal{grid-area:end}
 .ws-row-two-line>.ws-project-shortcut{grid-area:badge}
+.ws-row-project{grid-area:project;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:14px;color:var(--ws-muted)}
 .ws-row-meta{grid-area:meta;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;line-height:16px;color:var(--ws-muted)}
 .ws-row-branch{font:11px/16px var(--ws-mono)}
 /* Branch names show where a thread lives: the project's own checkout or a separate worktree. */
@@ -217,26 +218,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-shortcut-row:hover{background:var(--ws-sel)}
 .ws-shortcut-row>span{min-width:0;overflow-wrap:anywhere}
 .ws-shortcut-row kbd{flex-shrink:0;white-space:nowrap;font:500 11px/18px var(--ws-mono);color:var(--ws-muted);background:var(--ws-kbd);border:0;border-radius:4px;padding:1px 6px}
-#libro-workspace[data-projects=false] .ws-sidebar{display:flex;width:var(--ws-rail-width);padding:8px;position:static;box-shadow:none;gap:12px}
-#libro-workspace[data-projects=false] .ws-sidebar-heading>.ws-button,
-#libro-workspace[data-projects=false] .ws-sidebar-search,
-#libro-workspace[data-projects=false] .ws-project-row{display:flex;width:36px;min-width:36px;min-height:36px;height:36px;padding:0;justify-content:center;flex:none}
-#libro-workspace[data-projects=false] .ws-sidebar span,
-#libro-workspace[data-projects=false] .ws-no-threads,
-#libro-workspace[data-projects=false] #workspace-thread-list [data-archived=true],
-#libro-workspace[data-projects=false] .ws-project-row .ws-project-terminal,#libro-workspace[data-projects=false] .ws-thread-status,
-#libro-workspace[data-projects=false] .ws-row-meta,
-#libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-shortcut)>.material-icons-round,
-#libro-workspace[data-projects=false] .ws-project-item>.ws-button{display:none}
-#libro-workspace[data-projects=false] .ws-sidebar-heading{justify-content:center;min-height:36px;padding:8px 0 0;margin:0;font-size:0;line-height:0}
-#libro-workspace[data-projects=false] .ws-project-item{padding:0;justify-content:center}
-#libro-workspace[data-projects=false] :is(.ws-project-list,.ws-project-group>.ws-project-threads){gap:8px}
-#libro-workspace[data-projects=false] .ws-project-group>.ws-project-threads{margin:8px 0;padding:0;border:0}
-#libro-workspace[data-projects=false] .ws-project-shortcut{margin:0}
-#libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-terminal) .ws-project-shortcut{box-shadow:inset 0 0 0 1px #15803d}
-html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-terminal) .ws-project-shortcut{box-shadow:inset 0 0 0 1px #4ade80}
-#libro-workspace[data-projects=false] .ws-project-list{scrollbar-width:none}
-@media(max-width:760px){.ws-sidebar{position:absolute;left:0;top:0;bottom:0;width:min(var(--ws-projects),calc(100vw - 48px));z-index:60;box-shadow:8px 0 24px #0002}.ws-titlebar{gap:6px;padding-right:8px}.ws-titlebar-home{width:auto;border-right:0;background:transparent;padding:0 8px;gap:6px}.ws-brand{display:none}.ws-project-symbol{margin-left:0}.ws-project-title{max-width:35vw}.ws-shortcut-row{gap:8px;font-size:12px}.ws-empty h1{font-size:24px}}
+@media(max-width:760px){.ws-sidebar{width:min(var(--ws-projects),50vw)}.ws-titlebar{gap:6px;padding-right:8px}.ws-titlebar-home{width:auto;border-right:0;background:transparent;padding:0 8px;gap:6px}.ws-brand{display:none}.ws-project-symbol{margin-left:0}.ws-project-title{max-width:35vw}.ws-shortcut-row{gap:8px;font-size:12px}.ws-empty h1{font-size:24px}}
 @media(prefers-reduced-motion:reduce){#libro-workspace *,#libro-workspace *::before{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .ws-popup .font-mono{font-family:inherit}
@@ -250,7 +232,6 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 #resize-popup-buttons .resize-btn:hover,#resize-popup-buttons .resize-btn[aria-selected=true]{background:var(--ws-popup-row)!important}
 #resize-popup-buttons .resize-btn span{font-family:inherit;letter-spacing:0;font-size:14px}
 
-#libro-workspace[data-projects=false] .ws-titlebar-home{width:auto;border-right:0;background:transparent}
 
 #libro-confirm-popover{font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 #libro-confirm-popover button{min-height:32px;border-radius:8px;font-family:inherit}
@@ -291,7 +272,7 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 .ws-tool-rail{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;background:var(--ws-chrome);flex-shrink:0}
 .ws-tool-rail .ws-button{width:32px;height:32px}
 .ws-tool-rail .ws-button[aria-pressed=true]{background:var(--ws-raised);color:var(--ws-fg);box-shadow:var(--ws-shadow)}
-.ws-tool-buttons{display:flex;flex-direction:column;align-items:center;gap:2px;margin:8px 0}
+.ws-tool-buttons{display:flex;flex-direction:column;align-items:center;gap:2px;margin-bottom:8px}
 .ws-tool-buttons:empty{display:none}
 .ws-tool-rail .ws-tool-sizes:empty{display:none}
 .ws-tool-spacer{flex:1}
@@ -424,7 +405,6 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 
 :root{--ws-rail-width:48px}
 .ws-tool-rail{width:var(--ws-rail-width);box-sizing:border-box;overflow-y:auto;scrollbar-width:none}
-#libro-workspace[data-projects=false] .ws-sidebar{box-sizing:border-box}
 .ws-tool-settings{margin-top:44px}
 .ws-agent-config-row[hidden]{display:none}
 
@@ -567,9 +547,7 @@ html.dark #libro-workspace[data-projects=false] .ws-project-row:has(.ws-project-
 .ws-resizer-sidebar{top:0;right:0;bottom:0;width:6px;cursor:col-resize}
 .ws-resizer-terminal{top:0;left:0;right:0;height:6px;cursor:row-resize}
 .ws-resizer:hover,.ws-resizer:focus-visible{background:var(--ws-accent);outline:none}
-#libro-workspace[data-projects=false] .ws-resizer-sidebar{display:none}
 .ws-resize-shield{position:fixed;inset:0;z-index:99999;user-select:none}
-@media(max-width:760px){.ws-sidebar{position:absolute}}
 
 .ws-resizer-tools{top:0;left:0;bottom:0;width:6px;cursor:col-resize}
 .ws-grid>[data-maximized=true]>.ws-resizer-tools{display:none}

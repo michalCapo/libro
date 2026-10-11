@@ -220,7 +220,7 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 | `Caps Lock` | Voice typing |
 | `Alt + ,` / `Alt + .` | Lower / raise Claude effort for this session (Codex has this built in) |
 
-New agent, New agent panel, New thread, Replace agent, Finish current thread, and Close project have no default shortcut. Find them in the command palette or set one in Settings. Use the sidebar button to show or hide projects.
+New agent, New agent panel, New thread, Replace agent, Finish current thread, and Close project have no default shortcut. Find them in the command palette or set one in Settings.
 
 ### Panels and tools
 
