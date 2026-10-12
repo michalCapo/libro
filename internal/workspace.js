@@ -237,11 +237,12 @@
     el.append(node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.'));
     const actions = node('div', 'ws-agent-actions');
 
-    (center ? window.__libroPlugins.filter(p => p.dock === 'center' && p.type === 'terminal' && !p.disabled && !p.removed).slice(0, 3).map(p => p.id) : zone === 'right' ? ['browser', 'lazyrepo', 'terminal'] : ['terminal']).forEach(id => {
+    (center ? window.__libroPlugins.filter(p => p.dock === 'center' && p.type === 'terminal' && !p.disabled && !p.removed).slice(0, 3).map(p => p.id) : zone === 'right' ? ['browser', 'lazyrepo', 'terminal'] : ['terminal']).forEach((id, index) => {
       const plugin = window.__libroPlugins.find(p => p.id === id);
       if (!plugin || plugin.disabled || plugin.removed) return;
       const launch = node('button', 'ws-launch', plugin.name);
       launch.type = 'button';
+      if (center) { launch.dataset.agentShortcut = String(index + 1); launch.setAttribute('aria-keyshortcuts', String(index + 1)); launch.title = 'Press ' + (index + 1); }
       launch.onclick = () => openPlugin(id, zone, launch, center);
       actions.append(launch);
     });
@@ -1070,6 +1071,18 @@
         document.querySelector('[data-project-shortcut="' + number + '"]')?.click();
       }
       return;
+    }
+    // Digits 1-3 start the quick agents on an empty project page.
+    // Match the typed character, so Shift+1 (!) or an unshifted Czech top row does not launch.
+    if (!event.ctrlKey && !event.metaKey && !event.altKey && /^[1-3]$/.test(event.key) &&
+        !event.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])') &&
+        ![...document.querySelectorAll('[aria-modal="true"]')].some(modal => modal.getClientRects().length)) {
+      const launch = activeGrid()?.querySelector(':scope > .ws-empty[data-zone="center"] [data-agent-shortcut="' + event.key + '"]');
+      if (launch) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (!event.repeat) launch.click();
+        return;
+      }
     }
     if (binding && (binding === toolKeys['panel-size-down'] || binding === toolKeys['panel-size-up'])) {
       event.preventDefault(); event.stopImmediatePropagation();
