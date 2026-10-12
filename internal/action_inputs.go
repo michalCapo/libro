@@ -154,6 +154,11 @@ type actionProjectRemoveInput struct {
 	SID  string `json:"sid"`
 }
 
+type actionProjectReorderInput struct {
+	Names []string `json:"names"`
+	SID   string   `json:"sid"`
+}
+
 var actionAppCloseAll r.ActionRef[sessionInput]
 
 type actionWorktreeSwitchInput struct {

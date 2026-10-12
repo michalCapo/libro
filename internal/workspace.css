@@ -457,6 +457,9 @@ html.dark .ws-row-grid[data-agent-status=done]::before,html.dark .ws-row-grid[da
 .ws-agent-drag{cursor:grab}
 .ws-agent-drag:active{cursor:grabbing}
 .ws-agent-dragging{opacity:.45}
+.ws-project-dragging{opacity:.4}
+.ws-project-group[data-project-drop=before]{box-shadow:inset 0 2px var(--ws-fg)}
+.ws-project-group[data-project-drop=after]{box-shadow:inset 0 -2px var(--ws-fg)}
 #agent-command-rows [data-agent-drop=before]{box-shadow:inset 0 2px var(--ws-fg)}
 #agent-command-rows [data-agent-drop=after]{box-shadow:inset 0 -2px var(--ws-fg)}
 

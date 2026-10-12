@@ -1416,6 +1416,12 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 		return resp, nil
 	})
+	// Reorder projects in the sidebar
+	registerWorkspaceAction(app, "project.reorder", func(_ *r.Context, in actionProjectReorderInput) (r.Result, error) {
+		sid := inputSID(in.SID)
+		DBReorderProjects(sm.ReorderProjects(sid, in.Names))
+		return projectsJS(sm.Get(sid)), nil
+	})
 	// Remove a project
 	registerWorkspaceAction(app, "project.remove", func(_ *r.Context, in actionProjectRemoveInput) (r.Result, error) {
 		sid := inputSID(in.SID)

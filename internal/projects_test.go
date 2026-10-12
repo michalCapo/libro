@@ -102,3 +102,34 @@ func TestProjectBaseOpensOnNavigation(t *testing.T) {
 	}
 
 }
+
+func TestReorderProjects(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "projects.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	for _, name := range []string{"first", "second", "third"} {
+		DBSaveProject(name, t.TempDir())
+	}
+	manager := NewStateManager()
+	sid := manager.NewSession()
+	manager.Get(sid).Projects = append(manager.Get(sid).Projects, Project{Name: "folder", Transient: true})
+	DBReorderProjects(manager.ReorderProjects(sid, []string{"third", "folder", "first"}))
+	names := func(projects []Project) []string {
+		var out []string
+		for _, p := range projects {
+			out = append(out, p.Name)
+		}
+		return out
+	}
+	if got := names(manager.Get(sid).Projects); !slices.Equal(got, []string{"third", "folder", "first", "second"}) {
+		t.Fatalf("session order = %v", got)
+	}
+	if got := names(DBLoadProjects()); !slices.Equal(got, []string{"third", "first", "second"}) {
+		t.Fatalf("saved order = %v", got)
+	}
+}

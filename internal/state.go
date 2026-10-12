@@ -733,6 +733,33 @@ func (sm *StateManager) AddProjectWithOptions(sessionID, name, path string, tran
 	return true
 }
 
+// ReorderProjects moves the named projects into the given order and returns
+// the new order of saved projects. Projects missing from names keep their
+// relative order after them.
+func (sm *StateManager) ReorderProjects(sessionID string, names []string) []string {
+	defer sm.scheduleLayoutSave(sessionID)
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return nil
+	}
+	rank := func(p Project) int {
+		if i := slices.Index(names, p.Name); i >= 0 {
+			return i
+		}
+		return len(names)
+	}
+	slices.SortStableFunc(s.Projects, func(a, b Project) int { return rank(a) - rank(b) })
+	var saved []string
+	for _, p := range s.Projects {
+		if !p.Transient && !p.Virtual {
+			saved = append(saved, p.Name)
+		}
+	}
+	return saved
+}
+
 // RemoveProject removes a project from the session. Returns the project's snapshotted apps (for cleanup) and success.
 func (sm *StateManager) RemoveProject(sessionID, projectName string) ([]Application, bool) {
 	defer sm.scheduleLayoutSave(sessionID)

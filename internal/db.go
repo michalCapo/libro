@@ -268,6 +268,28 @@ func DBSaveProject(name, path string) {
 	}
 }
 
+// DBReorderProjects stores the sidebar order of saved projects.
+func DBReorderProjects(names []string) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("db: reorder projects: %v", err)
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+	for i, name := range names {
+		if _, err = tx.Exec("UPDATE projects SET position = ? WHERE name = ?", i+1, name); err != nil {
+			log.Printf("db: reorder projects: %v", err)
+			return
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		log.Printf("db: reorder projects: %v", err)
+	}
+}
+
 // DBRemoveProject deletes a project and its apps (via CASCADE).
 func DBRemoveProject(name string) {
 	dbMu.Lock()

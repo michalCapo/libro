@@ -560,6 +560,7 @@
         remove.classList.add('ws-project-remove'); item.append(remove);
       }
       const group = node('div', 'ws-project-group');
+      projectDrag(row, group, project.name);
       const branches = node('div', 'ws-project-threads');
       branches.setAttribute('role', 'group');
       branches.setAttribute('aria-label', projectName + ' threads');
@@ -607,6 +608,38 @@
       settings.classList.add('ws-project-settings');
       item.append(row, settings); branches.append(item);
     });
+  }
+  function projectDrag(row, group, name) {
+    group.dataset.projectName = name;
+    row.draggable = true;
+    row.ondragstart = event => {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', name);
+      group.classList.add('ws-project-dragging');
+    };
+    row.ondragend = () => {
+      group.classList.remove('ws-project-dragging');
+      group.parentElement?.querySelectorAll('[data-project-drop]').forEach(target => delete target.dataset.projectDrop);
+    };
+    const dragged = () => group.parentElement?.querySelector(':scope > .ws-project-dragging');
+    const before = event => { const bounds = group.getBoundingClientRect(); return event.clientY < bounds.top + bounds.height / 2; };
+    group.ondragover = event => {
+      const source = dragged(); if (!source || source === group) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      group.parentElement.querySelectorAll('[data-project-drop]').forEach(target => delete target.dataset.projectDrop);
+      group.dataset.projectDrop = before(event) ? 'before' : 'after';
+    };
+    group.ondragleave = event => {
+      if (!group.contains(event.relatedTarget)) delete group.dataset.projectDrop;
+    };
+    group.ondrop = event => {
+      const source = dragged(); if (!source || source === group) return;
+      event.preventDefault();
+      if (before(event)) group.before(source); else group.after(source);
+      delete group.dataset.projectDrop;
+      call('project.reorder', {names:[...group.parentElement.children].map(item => item.dataset.projectName).filter(Boolean)});
+    };
   }
   function toolOverlapsFrame(grid, frame) {
     const tool = grid.querySelector(':scope > [data-tool-overlay=true][data-dock-visible=true]');
