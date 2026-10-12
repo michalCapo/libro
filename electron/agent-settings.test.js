@@ -30,7 +30,7 @@ test('saving a new agent excludes removed tools and preserves removed agents', (
       { id: 'custom-old', dock: 'center', type: 'terminal', removed: true },
     ] },
     document: { getElementById: () => element, querySelector: () => element, querySelectorAll: () => [] },
-    fillThreadAgents() {}, fillToolKeys() {}, updateToolHints() {}, themePreference() {}, addAgentRow() {}, fillAgentEnvironment() {}, fillAutolaunchAgents() {}, fillEditorTools() {},
+    fillThreadAgents() {}, fillToolKeys() {}, updateToolHints() {}, themePreference() {}, projectRowsMode() {}, addAgentRow() {}, fillAgentEnvironment() {}, fillAutolaunchAgents() {}, fillEditorTools() {},
     call(action, data) { assert.equal(action, 'settings.agent-command'); payload = JSON.parse(JSON.stringify(data)) },
   })
   assert.deepEqual(payload.removed, { 'custom-old': true })

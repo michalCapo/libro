@@ -715,17 +715,20 @@
       return false;
     }
   }
+  function projectRowsMode(value) {
+    return ['always', 'faint'].includes(value) ? value : 'hover';
+  }
   function saveProjectRows(value) {
     const status = document.getElementById('project-rows-status');
     try {
-      const updated = {...prefs, projectRows:value === 'always' ? 'always' : 'hover'};
+      const updated = {...prefs, projectRows:projectRowsMode(value)};
       localStorage.setItem('libro.workspace', JSON.stringify(updated));
       prefs = updated;
       status.textContent = '';
       refresh();
       return true;
     } catch (_) {
-      document.getElementById('project-rows').value = prefs.projectRows === 'always' ? 'always' : 'hover';
+      document.getElementById('project-rows').value = projectRowsMode(prefs.projectRows);
       status.textContent = 'Could not save project rows. Please try again.';
       return false;
     }
@@ -841,7 +844,7 @@
     if (sidebar) resizeHandle(sidebar, 'sidebar');
     if (Number.isFinite(prefs.sidebarWidth)) root.style.setProperty('--ws-projects', Math.max(180, Math.min(prefs.sidebarWidth, 480, innerWidth - 48)) + 'px');
     root.dataset.thread = String(isThread());
-    root.dataset.projectRows = prefs.projectRows === 'always' ? 'always' : 'hover';
+    root.dataset.projectRows = projectRowsMode(prefs.projectRows);
     renderToolRail();
     renderProjects();
     renderThreads();
@@ -1613,7 +1616,7 @@
     document.getElementById('page-tools-autoexecute-status').textContent = '';
     document.getElementById('workspace-theme').value = themePreference();
     document.getElementById('workspace-theme-status').textContent = '';
-    document.getElementById('project-rows').value = prefs.projectRows === 'always' ? 'always' : 'hover';
+    document.getElementById('project-rows').value = projectRowsMode(prefs.projectRows);
     document.getElementById('project-rows-status').textContent = '';
     fillAgentEnvironment(environment);
     document.querySelector('#agent-environment-form [role=status]').textContent = '';

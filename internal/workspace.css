@@ -57,11 +57,11 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-threads:empty,.ws-project-group>.ws-project-threads:not(:has(.ws-project-item)){display:none}
 /* Projects without open threads fade until hovered or focused. */
 .ws-project-group:not(:has(.ws-project-threads .ws-project-item))>.ws-project-item:not(:is(:hover,:focus-within,:has(.ws-project-row[aria-current=true])))>*{opacity:.52}
-/* In hover mode, project rows fade out in place until the sidebar is hovered or keyboard focused, so threads never move. A text-like line of varied length marks each hidden row. */
+/* In hover mode, project rows fade out in place until the sidebar is hovered or keyboard focused, so threads never move. A text-like line of varied length marks each hidden row. Faint mode keeps the names barely visible instead, then shows every project row in full on hover. */
 .ws-project-group>.ws-project-item>*,.ws-project-group>.ws-project-item::after{transition:opacity .15s}
 .ws-project-group>.ws-project-item::after{content:"";position:absolute;left:12px;top:50%;width:var(--ws-placeholder,72px);height:2px;translate:0 -50%;border-radius:1px;background:color-mix(in srgb,var(--ws-muted) 8%,transparent);opacity:0;pointer-events:none}
 .ws-project-group:nth-child(4n+2){--ws-placeholder:104px}.ws-project-group:nth-child(4n+3){--ws-placeholder:56px}.ws-project-group:nth-child(4n){--ws-placeholder:88px}
-@media(hover:hover){#libro-workspace[data-project-rows=hover] .ws-sidebar:not(:hover,:has(:focus-visible)) .ws-project-group>.ws-project-item>*{opacity:0}#libro-workspace[data-project-rows=hover] .ws-sidebar:not(:hover,:has(:focus-visible)) .ws-project-group>.ws-project-item::after{opacity:1}}
+@media(hover:hover){#libro-workspace[data-project-rows=hover] .ws-sidebar:not(:hover,:has(:focus-visible)) .ws-project-group>.ws-project-item>*{opacity:0}#libro-workspace[data-project-rows=hover] .ws-sidebar:not(:hover,:has(:focus-visible)) .ws-project-group>.ws-project-item::after{opacity:1}#libro-workspace[data-project-rows=faint] .ws-project-group>.ws-project-item>*{opacity:1}#libro-workspace[data-project-rows=faint] .ws-sidebar:not(:hover,:has(:focus-visible)) .ws-project-group>.ws-project-item>*{opacity:.15}}
 .ws-thread-row{min-height:30px}
 /* Thread rows always use three lines: project name with the status icon in the corner, label, and details (branch for described rows). */
 .ws-row-grid{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"project status icon" "title title title" "meta end badge";gap:2px 8px;align-items:center}
