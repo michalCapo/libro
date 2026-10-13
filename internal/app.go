@@ -631,6 +631,7 @@ func Run(assets embed.FS, desktop bool) error {
 	defer func() { _ = listener.Close() }()
 
 	installShutdownSignalHandler()
+	installBundledTools()
 	InitDB()
 	defer CloseDB()
 	defer CleanupRuntime()

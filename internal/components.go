@@ -44,6 +44,7 @@ var knownTermIcons = map[string]termIconInfo{
 	// Editors
 	"nvim":   {URL: "https://cdn.simpleicons.org/neovim/57A143"},
 	"neovim": {URL: "https://cdn.simpleicons.org/neovim/57A143"},
+	"nvima":  {URL: "https://cdn.simpleicons.org/neovim/57A143"},
 	"vim":    {URL: "https://cdn.simpleicons.org/vim/019733"},
 	"vi":     {URL: "https://cdn.simpleicons.org/vim/019733"},
 	"emacs":  {URL: "https://cdn.simpleicons.org/gnuemacs/7F5AB6"},

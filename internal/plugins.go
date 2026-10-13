@@ -34,7 +34,7 @@ var builtinPlugins = []Plugin{
 	{ID: "claude", Name: "Claude", Type: AppTypeTerminal, Command: "claude", Dock: "center", Description: "Claude Code"},
 	{ID: "terminal", Name: "Terminal", Type: AppTypeTerminal, Dock: "right", Description: "Your default shell"},
 	{ID: "browser", Name: "Browser", Type: AppTypeURL, Dock: "right", Description: "Browse websites and local previews"},
-	{ID: "nvim", Name: "Nvim", Type: AppTypeTerminal, Command: "nvim", Dock: "right", Description: "Terminal text editor"},
+	{ID: "nvim", Name: "Nvim", Type: AppTypeTerminal, Command: "nvima", Dock: "right", Description: "Terminal text editor"},
 	{ID: "lazyrepo", Name: "Git", Type: AppTypeTerminal, Command: "lazyrepo", Dock: "right", Description: "Repository tools"},
 	{ID: "lazydata", Name: "Database", Type: AppTypeTerminal, Command: "lazydata", Dock: "right", Description: "Explore your data"},
 	{ID: "files", Name: "Files", Type: AppTypeURL, Dock: "right", Description: "Browse project files with Vim navigation"},

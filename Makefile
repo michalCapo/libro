@@ -220,6 +220,19 @@ install: ## Build and install Libro locally
 	# Build from the current repo checkout
 	# ---------------------------------------------------------------------------
 	
+	# Pack the ide tools (lazyrepo, lazydata, nvim, ...) published into tools/.
+	CLI_TOOLS_DIR="$$SCRIPT_DIR/internal/desktopbundledata/cli-tools"
+	rm -f "$$CLI_TOOLS_DIR"/*.tar.gz
+	trap 'rm -f "$$CLI_TOOLS_DIR"/*.tar.gz' EXIT
+	CLI_TOOLS="nvim-linux-$${ARCH/aarch64/arm64}.tar.gz"
+	if [[ "$$GOOS" == "linux" && -f "$$SCRIPT_DIR/tools/$$CLI_TOOLS" ]]; then
+	    (cd "$$SCRIPT_DIR/tools" && sha256sum --quiet -c --ignore-missing SHA256SUMS)
+	    cp "$$SCRIPT_DIR/tools/$$CLI_TOOLS" "$$CLI_TOOLS_DIR/"
+	    ok "Packed CLI tools $$CLI_TOOLS"
+	else
+	    info "No CLI tools in tools/; run 'make publish' in the ide project to add them"
+	fi
+	
 	info "Building libro v$${VERSION}..."
 	GOOS="$$GOOS" GOARCH="$$GOARCH" go build -ldflags "$$LDFLAGS" -o "$$SCRIPT_DIR/$$BIN_NAME" .
 	ok "Built $$BIN_NAME"
@@ -338,6 +351,7 @@ release: ## Bump, build, tag, push, and publish a release
 	BUNDLE_APP_DIR="$$BUNDLE_DIR/electron-app"
 	BUNDLE_RUNTIME_DIR="$$BUNDLE_DIR/electron-runtime"
 	DOWNLOAD_CACHE_DIR="$$SCRIPT_DIR/.cache/electron"
+	CLI_TOOLS_DIR="$$BUNDLE_DIR/cli-tools"
 	
 	DRY_RUN=false
 	
@@ -386,6 +400,7 @@ release: ## Bump, build, tag, push, and publish a release
 	
 	reset_embedded_bundle_dirs() {
 	    rm -rf "$$BUNDLE_APP_DIR" "$$BUNDLE_RUNTIME_DIR"
+	    rm -f "$$CLI_TOOLS_DIR"/*.tar.gz
 	    mkdir -p "$$BUNDLE_APP_DIR/electron" "$$BUNDLE_APP_DIR/winres" "$$BUNDLE_RUNTIME_DIR"
 	    printf '%s\n' "Generated release-time desktop app files live here." > "$$BUNDLE_APP_DIR/README.md"
 	    printf '%s\n' "Generated release-time Electron runtime zips live here." > "$$BUNDLE_RUNTIME_DIR/README.md"
@@ -438,7 +453,18 @@ release: ## Bump, build, tag, push, and publish a release
 	
 	    cached_zip="$$(cache_electron_zip "$$zip_name" "$$url")"
 	    cp "$$cached_zip" "$$BUNDLE_RUNTIME_DIR/$$zip_name"
+	    # The ide tools exist only for Linux.
+	    if [[ "$$os" == "linux" ]]; then
+	        cp "$$SCRIPT_DIR/tools/$$(cli_tools_archive "$$arch")" "$$CLI_TOOLS_DIR/"
+	    fi
 	    ok "Embedded desktop payload staged for $${os}/$${arch}"
+	}
+	
+	cli_tools_archive() {
+	    case "$$1" in
+	        amd64) echo "nvim-linux-x86_64.tar.gz" ;;
+	        *) echo "nvim-linux-$$1.tar.gz" ;;
+	    esac
 	}
 	
 	cleanup_generated_bundle() {
@@ -498,6 +524,17 @@ release: ## Bump, build, tag, push, and publish a release
 	    exit 1
 	fi
 	
+	for arch in amd64 arm64; do
+	    if [[ ! -f "$$SCRIPT_DIR/tools/$$(cli_tools_archive "$$arch")" ]]; then
+	        err "Missing tools/$$(cli_tools_archive "$$arch"); run 'make publish' in the ide project first"
+	        exit 1
+	    fi
+	done
+	if ! (cd "$$SCRIPT_DIR/tools" && sha256sum --quiet -c SHA256SUMS); then
+	    err "CLI tools in tools/ do not match tools/SHA256SUMS"
+	    exit 1
+	fi
+	
 	trap cleanup_generated_bundle EXIT
 	
 	# ---------------------------------------------------------------------------
@@ -546,7 +583,9 @@ release: ## Bump, build, tag, push, and publish a release
 	        ARCH="$${platform#*/}"
 	        EXT=""
 	        [[ "$$OS" == "windows" ]] && EXT=".exe"
-	        echo "    $${MODULE}-$${OS}-$${ARCH}$${EXT} (self-contained desktop runtime)"
+	        TOOLS=""
+	        [[ "$$OS" == "linux" ]] && TOOLS=", tools/$$(cli_tools_archive "$$ARCH")"
+	        echo "    $${MODULE}-$${OS}-$${ARCH}$${EXT} (self-contained desktop runtime$${TOOLS})"
 	    done
 	    echo ""
 	    echo "  Git commit:     git add VERSION && git commit -m \"$$TAG\""

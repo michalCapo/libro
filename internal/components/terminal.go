@@ -345,8 +345,22 @@ func terminalCommand(command, shell string) *exec.Cmd {
 	return exec.Command(shell, "-lc", terminalShellScript(command, shell))
 }
 
+// BundledToolsDir holds tools shipped with Libro. Terminal commands append it
+// to PATH after login files run, because some (Debian's /etc/profile) reset PATH.
+var BundledToolsDir string
+
 func terminalShellScript(command, shell string) string {
-	return command + "; exec " + shellQuote(shell)
+	script := command + "; exec " + shellQuote(shell)
+	if BundledToolsDir == "" {
+		return script
+	}
+	switch filepath.Base(shell) {
+	case "bash", "zsh", "sh", "dash", "ksh", "mksh":
+		return `PATH="$PATH":` + shellQuote(BundledToolsDir) + "; " + script
+	case "fish":
+		return "set -gx PATH $PATH " + shellQuote(BundledToolsDir) + "; " + script
+	}
+	return script
 }
 
 func (tm *TerminalManager) readLoop(s *TerminalSession) {
