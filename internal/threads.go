@@ -329,12 +329,24 @@ func (s *AppState) adjacentProjectThread() string {
 	return ""
 }
 
-// An occupied project workspace starts a new worktree for another agent.
-func (s *AppState) needsProjectThread(app Application) bool {
+// An agent starts in a new worktree when its project workspace is occupied,
+// or in a main folder the user did not choose, so main stays clean for merges.
+func (s *AppState) needsProjectThread(app Application, mainFolder bool) bool {
 	if s.projectScope(s.ActiveProject) == "" || !isAgentApp(app) {
 		return false
 	}
-	return slices.ContainsFunc(s.Apps, isAgentApp)
+	return slices.ContainsFunc(s.Apps, isAgentApp) || !mainFolder && s.worktreeBase(s.ActiveProject)
+}
+
+// worktreeBase reports whether the workspace is a project's main folder that
+// can branch into worktrees.
+func (s *AppState) worktreeBase(id string) bool {
+	for _, p := range s.Projects {
+		if p.Name == id {
+			return !p.Virtual && p.IsGitRepo && GitCurrentBranch(p.Path) != ""
+		}
+	}
+	return false
 }
 
 // An added agent panel joins the thread's other agents.

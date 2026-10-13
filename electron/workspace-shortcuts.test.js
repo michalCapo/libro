@@ -71,13 +71,13 @@ test('project switches preserve bottom terminal visibility when restoring select
   const layout = source.slice(source.indexOf('  function layoutDocks('), source.indexOf('    let tabs = grid.parentElement')) + '\n  }'
   for (const visible of [false, true]) {
     const state = { bottom: visible, hidden: new Set() }
-    const grid = { dataset: {}, style: {}, clientWidth: 1000, querySelector: () => ({}) }
+    const grid = { dataset: {}, style: {}, clientWidth: 1000, querySelector: () => ({ dataset: { branch: '' } }) }
     const shell = {
       dataset: { appId: 'shell', dock: 'bottom', dockSeen: 'true' },
       style: {}, querySelector: () => ({}),
     }
     const window = { __libroSelectedApp: 'shell' }
-    const context = { grid, shell, window, prefs: {}, resizeHandle() {}, dockState: () => state, keepBottomHidden: false, activeGrid: () => null, agentMinWidth: 600, getComputedStyle: () => ({ columnGap: '6px' }) }
+    const context = { grid, shell, window, prefs: {}, resizeHandle() {}, mainBranch: () => '', dockState: () => state, keepBottomHidden: false, activeGrid: () => null, agentMinWidth: 600, getComputedStyle: () => ({ columnGap: '6px' }) }
     // The inactive project's layout clears lastSelected before switching back.
     vm.runInNewContext(layout + ';layoutDocks(grid, [shell]);', context)
     window.__libroSelectedApp = 'other-project-agent'

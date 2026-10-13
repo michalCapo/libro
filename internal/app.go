@@ -360,7 +360,8 @@ func projectAutolaunchJS(state *AppState, sid string) r.Result {
 }
 
 func projectAutolaunchPlugin(state *AppState) *Plugin {
-	if state.ActiveProject == "" || slices.ContainsFunc(state.Apps, isAgentApp) {
+	// A main folder waits for the user to choose a new worktree or the folder itself.
+	if state.ActiveProject == "" || slices.ContainsFunc(state.Apps, isAgentApp) || state.worktreeBase(state.ActiveProject) {
 		return nil
 	}
 	agent := ""
@@ -822,7 +823,9 @@ func Run(assets embed.FS, desktop bool) error {
 				replacedJS = replacedJS.Add(removeAppJS(existing.ID))
 			}
 		}
-		if !in.AddAgent && threadState.needsProjectThread(candidate) {
+		// Only a second agent may join an occupied checkout without a new worktree.
+		addAgent := in.AddAgent && slices.ContainsFunc(threadState.Apps, isAgentApp)
+		if !addAgent && threadState.needsProjectThread(candidate, in.MainFolder) {
 			return r.Result{}.Run(actionThreadCreate.Call(actionThreadCreateInput{SID: sid, Agent: pluginID, Project: threadState.ActiveProject})), nil
 		}
 		// A new agent in a project checkout or worktree starts a fresh

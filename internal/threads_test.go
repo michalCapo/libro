@@ -370,10 +370,10 @@ func TestProjectAgentLaunchCreatesSiblingThreads(t *testing.T) {
 				state.Apps = append(state.Apps, agent)
 			}
 			want := (workspace == "project" || workspace == "thread:project") && occupied
-			if state.needsProjectThread(agent) != want {
+			if state.needsProjectThread(agent, false) != want {
 				t.Fatalf("workspace=%s occupied=%t: wrong agent destination", workspace, occupied)
 			}
-			if state.needsProjectThread(state.Apps[0]) {
+			if state.needsProjectThread(state.Apps[0], false) {
 				t.Fatal("opening a browser must stay in its thread")
 			}
 		}

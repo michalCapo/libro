@@ -114,7 +114,7 @@
   function activeGrid() { return [...document.querySelectorAll('[data-workspace-project]')].find(el => el.parentElement.style.display !== 'none'); }
   function frames(grid) { return [...grid.querySelectorAll(':scope > [data-app-id]')].sort((a, b) => Number(a.style.order) - Number(b.style.order)); }
   function isThread(grid = activeGrid()) { return grid?.dataset.thread === 'true'; }
-  function openPlugin(id, dock, trigger, replace = false, add = false) {
+  function openPlugin(id, dock, trigger, replace = false, add = false, mainFolder = false) {
     const plugin = window.__libroPlugins.find(candidate => candidate.id === id);
     if (!plugin || plugin.disabled || plugin.removed || trigger?.disabled) return;
     if (trigger) {
@@ -129,6 +129,7 @@
     } else call('app.start', {
       replaceAgent: replace,
       addAgent: add,
+      mainFolder,
       type: plugin.type,
       command: plugin.command || '',
       url: plugin.url || '',
@@ -171,6 +172,7 @@
     const agents = frames(grid).filter(frame => frame.dataset.dock === 'center' && frame.querySelector('[data-terminal-app]'));
     const agent = agents.find(frame => frame.dataset.appId === dockState(grid).agent) || agents[0];
     if (agent) { window.__libroActiveAgentID = agent.dataset.appId; return true; }
+    // Page Tools need the agent beside this browser, so it starts in this checkout.
     launcher('center', () => {
       let attempts = 0;
       const resume = setInterval(() => {
@@ -182,10 +184,10 @@
         select(browserID);
         window.__libroTogglePageTool?.(browserID, mode);
       }, 200);
-    });
+    }, false, false, false, !!mainBranch(grid));
     return false;
   };
-  function launcher(dock, onLaunch, replace = false, newThread = false, add = false) {
+  function launcher(dock, onLaunch, replace = false, newThread = false, add = false, mainFolder = false) {
     if (dock === 'bottom') { bottom(); return; }
     let dialog = document.getElementById('workspace-plugin-dialog');
     if (dialog) dialog.remove();
@@ -203,7 +205,7 @@
     const entries = node('div', 'ws-plugin-list');
     list.forEach(plugin => {
       const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; const icon = node('i', 'material-icons-round', plugin.type === 'url' ? 'language' : 'terminal'); icon.setAttribute('aria-hidden', 'true'); const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', plugin.name), node('small', '', plugin.description || plugin.command || 'Browser app')); entry.append(icon, copy); applyToolIcon(entry, plugin);
-      entry.onclick = () => { dialog.close(); if (newThread) call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''}); else openPlugin(plugin.id, dock, entry, replace, add); onLaunch?.(); }; entries.append(entry);
+      entry.onclick = () => { dialog.close(); if (newThread) call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''}); else openPlugin(plugin.id, dock, entry, replace, add, mainFolder); onLaunch?.(); }; entries.append(entry);
     });
     dialog.append(entries);
     let active = 0;
@@ -234,8 +236,11 @@
     if (center && grid.dataset.projectLabel) heading.append(node('span', 'ws-project-accent', grid.dataset.projectLabel), document.createTextNode('?'));
     else if (center) heading.textContent = heading.textContent.replace(/ on $/, '?');
     el.append(heading);
-    el.append(node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.'));
+    const branch = center ? mainBranch(grid) : ''; el.dataset.branch = branch;
+    el.append(node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : branch ? 'Each agent starts in a new worktree, so ' + branch + ' stays clean for merging.' : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.'));
     const actions = node('div', 'ws-agent-actions');
+    // Opt-out for work that belongs directly on the checked-out branch.
+    const mainFolder = node('input'); mainFolder.type = 'checkbox';
 
     (center ? window.__libroPlugins.filter(p => p.dock === 'center' && p.type === 'terminal' && !p.disabled && !p.removed).slice(0, 3).map(p => p.id) : zone === 'right' ? ['browser', 'lazyrepo', 'terminal'] : ['terminal']).forEach((id, index) => {
       const plugin = window.__libroPlugins.find(p => p.id === id);
@@ -243,10 +248,20 @@
       const launch = node('button', 'ws-launch', plugin.name);
       launch.type = 'button';
       if (center) { launch.dataset.agentShortcut = String(index + 1); launch.setAttribute('aria-keyshortcuts', String(index + 1)); launch.title = 'Press ' + (index + 1); }
-      launch.onclick = () => openPlugin(id, zone, launch, center);
+      launch.onclick = () => openPlugin(id, zone, launch, center, false, mainFolder.checked);
       actions.append(launch);
     });
-    const more = node('button', 'ws-launch', center ? 'Other agent…' : 'More…'); more.type = 'button'; more.onclick = () => launcher(zone, undefined, center); actions.append(more); el.append(actions); return el;
+    const more = node('button', 'ws-launch', center ? 'Other agent…' : 'More…'); more.type = 'button'; more.onclick = () => launcher(zone, undefined, center, false, false, mainFolder.checked); actions.append(more); el.append(actions);
+    if (branch) {
+      const label = node('label', 'ws-main-folder'); label.title = 'Start the agent in the project folder instead of a new worktree';
+      label.append(mainFolder, node('span', '', 'Work directly on ' + branch)); el.append(label);
+    }
+    return el;
+  }
+  // The checked-out branch of a project's main folder, which agents leave clean by default.
+  function mainBranch(grid) {
+    const project = (window.__libroProjects || []).find(project => project.kind === 'project' && project.name === grid.dataset.workspaceProject && project.isGit);
+    return project?.currentBranch || '';
   }
   function dialogKeys(dialog, form, submit, cancel) {
     dialog.addEventListener('keydown', event => {
@@ -375,12 +390,12 @@
   }
   function confirmAgentMerge(state, request) {
     const dialog = node('dialog', 'ws-plugin-dialog ws-finish-dialog'); dialog.setAttribute('aria-labelledby', 'agent-merge-title');
-    const heading = node('h2', '', 'Ask the agent to merge?'); heading.id = 'agent-merge-title';
-    const description = node('p', '', 'The merge failed. Ask this thread’s agent to resolve the problem and complete the merge? Your thread and worktree will stay open.');
+    const heading = node('h2', '', 'Ask the agent to fix the conflicts?'); heading.id = 'agent-merge-title';
+    const description = node('p', '', 'The merge failed. Ask this thread’s agent to resolve the conflicts in its worktree? Then finish the thread again. Your thread and worktree will stay open.');
     const status = node('p', 'ws-finish-status'); status.setAttribute('role', 'status');
     const form = node('form', ''); const actions = node('div', 'ws-agent-actions');
     const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
-    const submit = node('button', 'ws-launch', 'Ask agent to merge'); submit.type = 'submit';
+    const submit = node('button', 'ws-launch', 'Ask agent to fix'); submit.type = 'submit';
     actions.append(cancel, submit); form.append(status, actions); dialog.append(heading, description, form); root.append(dialog);
     form.onsubmit = event => {
       event.preventDefault(); if (submit.disabled) return;
@@ -1078,7 +1093,7 @@
     // Digits 1-3 start the quick agents on an empty project page.
     // Match the typed character, so Shift+1 (!) or an unshifted Czech top row does not launch.
     if (!event.ctrlKey && !event.metaKey && !event.altKey && /^[1-3]$/.test(event.key) &&
-        !event.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])') &&
+        !event.target.closest?.('input:not([type="checkbox"]), textarea, select, [contenteditable]:not([contenteditable="false"])') &&
         ![...document.querySelectorAll('[aria-modal="true"]')].some(modal => modal.getClientRects().length)) {
       const launch = activeGrid()?.querySelector(':scope > .ws-empty[data-zone="center"] [data-agent-shortcut="' + event.key + '"]');
       if (launch) {
@@ -1392,7 +1407,7 @@
     });
     const placeholder = grid.querySelector(':scope > .ws-empty');
     if (center.length || full) placeholder?.remove();
-    else if (!placeholder) grid.append(empty('center', grid));
+    else if (!placeholder || placeholder.dataset.branch !== mainBranch(grid)) { placeholder?.remove(); grid.append(empty('center', grid)); }
     let tabs = grid.parentElement.querySelector('.ws-tool-tabs');
     if (!tabs) { tabs = node('div', 'ws-tool-tabs'); tabs.setAttribute('aria-label', 'Agents and tools'); grid.before(tabs); }
     // Tool panels share one width, so one size button in the rail serves them all.

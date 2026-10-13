@@ -393,6 +393,7 @@ func mergeAgentRequest(sid string, info worktreeFinishPreview, method string) ma
 			}
 		}
 	}
-	prompt := fmt.Sprintf("The user confirmed that you should resolve a failed %s and complete the local integration. Source branch: %q in %q. Destination branch: %q in %q. Inspect the current Git state first; a merge or squash may already be in progress. Resolve conflicts and complete the %s into the destination branch. Preserve unrelated uncommitted work; do not discard changes or force push. Do not delete either branch or worktree, and do not stop shared applications. Report the result so the user can finish cleanup in Libro.", method, info.Branch, info.Path, info.Base, info.TargetPath, method)
+	// Conflicts are resolved in the thread's worktree so the destination checkout stays clean.
+	prompt := fmt.Sprintf("The user confirmed that you should fix a failed %s. Source branch: %q in %q. Destination branch: %q in %q. Inspect the Git state of both checkouts first. If the failed %s left changes in the destination checkout, undo only that unfinished merge there (git merge --abort, or git reset --merge after a squash) and make no other changes there. Then, in the source worktree, merge %q into %q, resolve the conflicts, and commit. Do not discard other changes or force push. Do not delete either branch or worktree, and do not stop shared applications. Report the result so the user can finish the thread again in Libro.", method, info.Branch, info.Path, info.Base, info.TargetPath, method, info.Base, info.Branch)
 	return map[string]string{"appID": id, "workspace": info.Name, "prompt": prompt}
 }

@@ -2783,6 +2783,10 @@ func projectItems(state *AppState) []jsProject {
 			}
 			entry.CurrentBranch = GitCurrentBranch(p.Path)
 		}
+		// A main folder that branches into worktrees is a thread only while an agent works in it.
+		if entry.CurrentBranch != "" && !state.workspaceAgent(p.Name, "") {
+			entry.BaseOpened = false
+		}
 
 		settings := loadApplicationSettings(p.Path)
 		entry.ApplicationMode = settings.Mode

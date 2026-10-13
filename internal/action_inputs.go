@@ -38,6 +38,7 @@ type actionAppStartInput struct {
 	EditorFile        *string `json:"editorFile"`
 	FilesPanel        string  `json:"filesPanel"`
 	IconUrl           string  `json:"iconUrl"`
+	MainFolder        bool    `json:"mainFolder"`
 	Name              string  `json:"name"`
 	Parents           float64 `json:"parents"`
 	Plugin            string  `json:"plugin"`
