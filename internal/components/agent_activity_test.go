@@ -125,6 +125,8 @@ func TestClaudeActivityHooks(t *testing.T) {
 		{"Stop", `{"background_tasks":[{"id":"b1"}]}`, "working"},
 		{"Stop", `{"background_tasks":[]}`, "done"}, {"Stop", "{}", "done"},
 		{"StopFailure", "", "error"}, {"SessionEnd", "", "idle"}, {"SessionStart", "", "idle"},
+		{"UserPromptSubmit", "", "working"}, {"SessionStart", `{"source":"compact"}`, "working"},
+		{"PreCompact", `{"trigger":"auto"}`, "working"}, {"PreCompact", `{"trigger":"manual"}`, "idle"},
 	} {
 		hook := exec.Command("sh", "-c", config.Hooks[step.event][0].Hooks[0].Command)
 		hook.Stdin = strings.NewReader(step.input)
@@ -276,8 +278,7 @@ assert.equal(name, 'Restore title');
 assert.equal(metadata().title, 'Restore title');
 assert.equal(metadata().session_id, 'resumed');
 hooks.agent_start({}); check('working');
-hooks.agent_end({willRetry:true}); check('working');
-hooks.agent_end({willRetry:false}); check('done');
+hooks.agent_settled({aborted:false}); check('done');
 hooks.session_start({reason:'new'}, ctx); check('idle');
 assert.equal(JSON.parse(readFileSync(process.argv[2].replace(/status$/, 'session'), 'utf8')).session_id, 'pi-session');
 hooks.agent_start({}); check('working');

@@ -92,8 +92,16 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 	switch kind {
 	case "claude":
 		hooks := map[string]any{}
-		for event, state := range map[string]string{"UserPromptSubmit": "working", "PreToolUse": "working", "PostToolUse": "working", "PostToolUseFailure": "working", "PermissionRequest": "done", "Stop": "done", "StopFailure": "error", "SessionEnd": "idle", "SessionStart": "idle"} {
+		for event, state := range map[string]string{"UserPromptSubmit": "working", "PreToolUse": "working", "PostToolUse": "working", "PostToolUseFailure": "working", "PermissionRequest": "done", "Stop": "done", "StopFailure": "error", "SessionEnd": "idle", "SessionStart": "idle", "PreCompact": "idle"} {
 			hookCommand := "printf '%s' " + shellQuote(state) + " > " + shellQuote(a.path)
+			if event == "SessionStart" {
+				// Auto-compaction starts the session again while the task keeps running.
+				hookCommand = `grep -Eq '"source"[[:space:]]*:[[:space:]]*"compact"' ` + shellQuote(filepath.Join(dir, "session")) + " || " + hookCommand
+			}
+			if event == "PreCompact" {
+				// Manual compaction runs from the prompt. It clears a stale state left by Esc.
+				hookCommand = `if grep -Eq '"trigger"[[:space:]]*:[[:space:]]*"manual"'; then ` + hookCommand + "; fi"
+			}
 			if event == "SessionStart" || event == "UserPromptSubmit" {
 				hookCommand = "cat > " + shellQuote(filepath.Join(dir, "session")) + "; " + hookCommand
 			}
@@ -145,7 +153,8 @@ export default function (pi) {
   pi.on('input', (event, ctx) => { if (event.source !== 'extension') { nameSession(event.text); reportSession(ctx); } });
   pi.on('session_info_changed', (_event, ctx) => reportSession(ctx));
   pi.on('agent_start', () => status('working'));
-  pi.on('agent_end', event => { if (!event.willRetry) status('done'); });
+  // Retries and compaction recovery start again before the run settles.
+  pi.on('agent_settled', () => status('done'));
   pi.on('session_shutdown', () => status('idle'));
 }`
 		args = " --extension " + shellQuote(filepath.Join(dir, filename)) + " --append-system-prompt " + shellQuote(AgentInstructions+"\nControl the saved project start command with libro application status|start|restart|stop|logs; see libro application --help. Application actions preserve the user’s active project and thread. Manage project notes with libro notes; see libro notes --help for create, list, read, set_status, and delete.")
