@@ -13,8 +13,9 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"terminal", "Terminal", "Ctrl+T"},
 	{"browser", "Browser", "Ctrl+B"},
 	{"new-browser", "New browser panel", "Ctrl+Shift+B"},
-	{"previous-browser", "Previous browser or agent panel", "Ctrl+["},
-	{"next-browser", "Next browser or agent panel", "Ctrl+]"},
+	{"new-terminal", "New terminal panel", "Ctrl+Shift+T"},
+	{"previous-browser", "Previous agent, browser or terminal panel", "Ctrl+["},
+	{"next-browser", "Next agent, browser or terminal panel", "Ctrl+]"},
 	{"files", "Files", "Ctrl+F"},
 	{"notes", "Notes", "Ctrl+I"},
 	{"nvim", "Nvim", "Ctrl+E"},
@@ -23,7 +24,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"close-panel", "Close panel", "Ctrl+Q"},
 	{"close-project", "Close project", ""},
 	{"run-project", "Start / restart application", "Ctrl+Shift+R"},
-	{"stop-project", "Stop application", "Ctrl+Shift+T"},
+	{"stop-project", "Stop application", "Ctrl+Shift+X"},
 	{"panel-size-down", "Decrease panel size", "Ctrl+."},
 	{"panel-size-up", "Increase panel size", "Ctrl+,"},
 	{"panel-size-max", "Toggle panel size to MAX", "Ctrl+M"},
@@ -102,6 +103,10 @@ func toolKeybindings() map[string]string {
 		var raw string
 		var saved map[string]string
 		if db.QueryRow(`SELECT value FROM settings WHERE key = 'tool_keybindings'`).Scan(&raw) == nil && json.Unmarshal([]byte(raw), &saved) == nil {
+			// Ctrl+Shift+T moved from stopping the application to a new terminal.
+			if _, exists := saved["new-terminal"]; !exists && saved["stop-project"] == "Ctrl+Shift+T" {
+				delete(saved, "stop-project")
+			}
 			// New shortcuts get their default unless the key is already taken.
 			for _, shortcut := range toolKeys {
 				if _, exists := saved[shortcut.ID]; exists {
@@ -159,7 +164,7 @@ func renderToolKeybindings() *r.Node {
 		{"General", []string{"command-palette", "settings", "voice"}},
 		{"Projects & threads", []string{"project-picker", "close-project", "new-thread", "finish-thread", "thread-actions", "run-project", "stop-project"}},
 		{"Agents", []string{"new-agent", "new-agent-panel", "new-thread-agent", "replace-agent"}},
-		{"Tools", []string{"terminal", "browser", "new-browser", "previous-browser", "next-browser", "files", "notes"}},
+		{"Tools", []string{"terminal", "browser", "new-browser", "new-terminal", "previous-browser", "next-browser", "files", "notes"}},
 		{"Panels", []string{"previous-agent", "next-agent", "close-panel", "panel-size-down", "panel-size-up", "panel-size-max"}},
 		{"Zoom", []string{"zoom-in", "zoom-out", "zoom-reset"}},
 	}

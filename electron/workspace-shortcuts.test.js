@@ -236,11 +236,11 @@ for (const overlay of [false, true]) test('Ctrl+A selects the remembered agent w
 test('project command shortcuts dispatch once and support custom bindings', () => {
   const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = workspace.slice(workspace.indexOf("    if (binding && (binding === toolKeys['run-project']"), workspace.indexOf("    if (binding && binding === toolKeys['close-project'])"))
-  for (const [binding, action] of [['Ctrl+Shift+R', 'project.command.run'], ['Ctrl+Shift+T', 'project.command.stop'], ['Alt+R', 'project.command.run']]) {
+  for (const [binding, action] of [['Ctrl+Shift+R', 'project.command.run'], ['Ctrl+Shift+X', 'project.command.stop'], ['Alt+R', 'project.command.run']]) {
     for (const repeat of [false, true]) {
       const calls = []
       vm.runInNewContext('(function () {' + handler + '})()', {
-        binding, toolKeys: { 'run-project': binding === 'Alt+R' ? binding : 'Ctrl+Shift+R', 'stop-project': 'Ctrl+Shift+T' },
+        binding, toolKeys: { 'run-project': binding === 'Alt+R' ? binding : 'Ctrl+Shift+R', 'stop-project': 'Ctrl+Shift+X' },
         call: action => calls.push(action), event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
       })
       assert.deepEqual(calls, repeat ? [] : [action])
@@ -475,7 +475,7 @@ for (const thread of [false, true]) for (const occupied of [false, true]) for (c
   }
 })
 
-test('browser navigation wraps, includes hidden browsers, and skips other tools', () => {
+test('browser and side terminal navigation stops at the ends, includes hidden panels, and skips other tools', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('  function navigateBrowser('), source.indexOf('  let toolKeys'))
   const panels = [
@@ -483,13 +483,16 @@ test('browser navigation wraps, includes hidden browsers, and skips other tools'
     { appId: 'one', appType: 'url', plugin: 'browser', dockVisible: 'false' },
     { appId: 'files', appType: 'url', plugin: 'files' },
     { appId: 'git', appType: 'terminal' },
+    { appId: 'shell1', appType: 'terminal', plugin: 'terminal', dock: 'right' },
     { appId: 'two', appType: 'url', plugin: 'browser' },
+    { appId: 'shell2', appType: 'terminal', plugin: 'terminal', dock: 'right' },
     { appId: 'legacy', appType: 'url' },
   ].map(dataset => ({ dataset }))
   for (const [selected, right, delta, expected] of [
-    ['one', 'one', 1, 'two'], ['one', 'one', -1, 'legacy'],
-    ['legacy', 'legacy', 1, 'one'], ['two', 'two', -1, 'one'],
+    ['one', 'one', 1, 'two'], ['one', 'one', -1, 'one'],
+    ['legacy', 'legacy', 1, 'legacy'], ['two', 'two', -1, 'one'],
     ['agent', 'two', 1, 'legacy'], ['git', 'git', 1, 'one'], ['git', 'git', -1, 'legacy'],
+    ['shell1', 'shell1', 1, 'shell2'], ['shell1', 'shell1', -1, 'shell1'], ['shell2', 'shell2', 1, 'shell2'],
   ]) {
     const calls = []
     vm.runInNewContext(handler + ';navigateBrowser(delta)', {
@@ -497,7 +500,7 @@ test('browser navigation wraps, includes hidden browsers, and skips other tools'
       window: { __libroSelectedApp: selected }, select: id => calls.push(id),
     })
     assert.deepEqual(calls, [expected])
-    assert.equal(panels.length, 6)
+    assert.equal(panels.length, 8)
   }
   for (const available of [[], [panels[1]]]) {
     const calls = []
@@ -509,7 +512,7 @@ test('browser navigation wraps, includes hidden browsers, and skips other tools'
   }
 })
 
-test('Ctrl+B toggles the current browser when multiple browsers exist', () => {
+test('Ctrl+B hides all browsers when multiple browsers exist', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('  function restoreAgentFocus('), source.indexOf('  function newBrowser'))
   const calls = []
@@ -520,7 +523,7 @@ test('Ctrl+B toggles the current browser when multiple browsers exist', () => {
     window: { __libroSelectedApp: 'two' }, select: id => calls.push(id), refresh() {},
   })
   assert.equal(state.hidden.has('two'), true)
-  assert.equal(state.hidden.has('one'), false)
+  assert.equal(state.hidden.has('one'), true)
   assert.deepEqual(calls, [])
 })
 

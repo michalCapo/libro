@@ -965,20 +965,27 @@
       matches.find(frame => frame.dataset.appId === state.right) || matches[0];
     if (!existing) { openPlugin(id, 'right'); return; }
     if (existing.dataset.dockVisible === 'true' && existing.dataset.appId === window.__libroSelectedApp) {
-      state.hidden.add(existing.dataset.appId); restoreAgentFocus(grid);
+      // Hide every panel of this tool so another one does not take its place.
+      matches.forEach(frame => state.hidden.add(frame.dataset.appId)); restoreAgentFocus(grid);
     } else select(existing.dataset.appId);
   }
   function newBrowser() { openPlugin('browser', 'right'); }
+  function newTerminal() { openPlugin('terminal', 'right'); }
   function navigateBrowser(delta) {
     const grid = activeGrid(); if (!grid) return;
-    const browsers = frames(grid).filter(frame => frame.dataset.appType === 'url' && !['files', 'notes'].includes(frame.dataset.plugin));
-    if (!browsers.length) return;
-    const selected = browsers.findIndex(frame => frame.dataset.appId === window.__libroSelectedApp);
+    const all = frames(grid);
+    // A selected side terminal cycles terminals; anything else cycles browsers.
+    const terminals = sideTerminal(all.find(frame => frame.dataset.appId === window.__libroSelectedApp));
+    const panels = all.filter(frame => terminals ? sideTerminal(frame) : frame.dataset.appType === 'url' && !['files', 'notes'].includes(frame.dataset.plugin));
+    if (!panels.length) return;
+    const selected = panels.findIndex(frame => frame.dataset.appId === window.__libroSelectedApp);
     const state = dockState(grid);
-    const current = selected >= 0 ? selected : browsers.findIndex(frame => frame.dataset.appId === (state.browser || state.right));
-    const next = current < 0 ? (delta > 0 ? 0 : browsers.length - 1) : (current + delta + browsers.length) % browsers.length;
-    select(browsers[next].dataset.appId);
+    const current = selected >= 0 ? selected : panels.findIndex(frame => frame.dataset.appId === (state.browser || state.right));
+    select(step(panels, current, delta).dataset.appId);
   }
+  // Step through a panel list, stopping at its first and last panel.
+  function step(list, current, delta) { return list[current < 0 ? (delta > 0 ? 0 : list.length - 1) : Math.max(0, Math.min(current + delta, list.length - 1))]; }
+  function sideTerminal(frame) { return frame?.dataset.dock === 'right' && frame.dataset.plugin === 'terminal'; }
   function newAgentPanel() { launcher('center', undefined, false, false, true); }
   // Agent panels share one column; switching shows another agent in it.
   function navigateAgent(delta) {
@@ -987,14 +994,14 @@
     const agents = all.filter(frame => frame.dataset.dock === 'center');
     if (agents.length < 2) return false;
     const selected = all.find(frame => frame.dataset.appId === window.__libroSelectedApp);
-    if (selected?.dataset.appType === 'url' && !['files', 'notes'].includes(selected.dataset.plugin)) return false;
+    if (selected?.dataset.appType === 'url' && !['files', 'notes'].includes(selected.dataset.plugin) || sideTerminal(selected)) return false;
     const state = dockState(grid);
     const current = Math.max(0, agents.findIndex(frame => frame.dataset.appId === state.agent));
     // Like a tab click, show the agent instead of leaving a tool over it.
     if (grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
       all.filter(frame => frame.dataset.dock === 'right').forEach(frame => state.hidden.add(frame.dataset.appId));
     }
-    select(agents[(current + delta + agents.length) % agents.length].dataset.appId);
+    select(step(agents, current, delta).dataset.appId);
     return true;
   }
   let toolKeys = window.__libroToolKeys || {};
@@ -1187,6 +1194,11 @@
     if (binding && binding === toolKeys['new-browser']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) newBrowser();
+      return;
+    }
+    if (binding && binding === toolKeys['new-terminal']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) newTerminal();
       return;
     }
     if (binding && (binding === toolKeys['previous-browser'] || binding === toolKeys['next-browser'])) {
@@ -1920,7 +1932,7 @@
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New tool panels will use this width.' : 'Could not save. Please try again.';
     settingsSaveFinished(ok);
   }
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, terminalExited, closeOtherPanels};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }
