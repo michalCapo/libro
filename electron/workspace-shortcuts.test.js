@@ -398,7 +398,7 @@ test('Ctrl+1–9 selects the numbered thread once', () => {
     let clicked = 0
     vm.runInNewContext('(function () {' + handler + '})()', {
       event: { key, ctrlKey: true, repeat, preventDefault() {}, stopImmediatePropagation() {} },
-      renderThreadShortcuts() {},
+      renderThreadShortcuts() {}, performance, lastCtrlNumber: '', lastCtrlNumberAt: 0,
       document: { querySelector(selector) {
         assert.equal(selector, '[data-project-shortcut="' + key + '"]')
         return { click() { clicked++ } }
@@ -700,6 +700,22 @@ test('standalone thread numbers continue after project agent threads and skip ar
   assert.equal(rows[4].dataset.projectShortcut, '3')
 })
 
+test('pressing the same Ctrl+digit twice quickly opens the owning project', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const handler = source.slice(source.indexOf('    const number = /^[1-9]$/'), source.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"))
+  const clicks = []
+  const project = { click() { clicks.push('project') } }
+  const thread = n => ({ click() { clicks.push(n) }, closest: () => ({ querySelector: selector => selector === '.ws-project-row[data-kind=project]' ? project : null }) })
+  let now = 0
+  const context = vm.createContext({
+    renderThreadShortcuts() {}, performance: { now: () => now }, lastCtrlNumber: '', lastCtrlNumberAt: 0,
+    document: { querySelector: selector => thread(selector.match(/"(\d)"/)[1]) },
+  })
+  const press = (key, at) => { now = at; context.event = { key, ctrlKey: true, repeat: false, preventDefault() {}, stopImmediatePropagation() {} }; vm.runInContext('(function () {' + handler + '})()', context) }
+  press('1', 1000); press('1', 1200); press('1', 1300); press('2', 1400); press('1', 1500); press('1', 2500)
+  assert.deepEqual(clicks, ['1', 'project', '1', '2', '1', '1'])
+})
+
 test('Ctrl+digits selects the shared project-agent and standalone-thread range', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('    const number = /^[1-9]$/'), source.indexOf("    if (binding && (binding === toolKeys['panel-size-down']"))
@@ -708,7 +724,7 @@ test('Ctrl+digits selects the shared project-agent and standalone-thread range',
       let clicked = 0
       vm.runInNewContext('(function(){' + handler + '})()', {
         event: { key, code, ctrlKey: true, shiftKey: false, repeat, preventDefault() {}, stopImmediatePropagation() {} },
-        renderThreadShortcuts() {},
+        renderThreadShortcuts() {}, performance, lastCtrlNumber: '', lastCtrlNumberAt: 0,
         document: { querySelector(selector) {
           assert.equal(selector, '[data-project-shortcut="' + number + '"]')
           return { click() { clicked++ } }

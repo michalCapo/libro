@@ -741,6 +741,21 @@
       return false;
     }
   }
+  function saveVoiceTyping(value) {
+    const enabled = value === 'on';
+    try {
+      const updated = {...prefs, voiceTyping:enabled};
+      localStorage.setItem('libro.workspace', JSON.stringify(updated));
+      prefs = updated;
+    } catch (_) {
+      document.getElementById('voice-typing').value = prefs.voiceTyping === false ? 'off' : 'on';
+      return false;
+    }
+    if (!enabled) window.libroVoice?.cancel();
+    syncWorkspaceShortcuts();
+    refresh();
+    return true;
+  }
   function projectRowsMode(value) {
     return ['always', 'faint'].includes(value) ? value : 'hover';
   }
@@ -879,6 +894,7 @@
     if (Number.isFinite(prefs.sidebarWidth)) root.style.setProperty('--ws-projects', Math.max(180, Math.min(prefs.sidebarWidth, 480, innerWidth - 48)) + 'px');
     root.dataset.thread = String(isThread());
     root.dataset.projectRows = projectRowsMode(prefs.projectRows);
+    root.dataset.voiceTyping = String(prefs.voiceTyping !== false);
     renderToolRail();
     renderProjects();
     renderThreads();
@@ -983,7 +999,7 @@
   }
   let toolKeys = window.__libroToolKeys || {};
   function syncWorkspaceShortcuts() {
-    window.libroElectron?.setWorkspaceShortcuts?.(Object.values(toolKeys));
+    window.libroElectron?.setWorkspaceShortcuts?.(Object.entries(toolKeys).filter(([id]) => id !== 'voice' || prefs.voiceTyping !== false).map(([, key]) => key));
   }
   syncWorkspaceShortcuts();
   function shortcut(event) {
@@ -1049,6 +1065,8 @@
   }
   let lastCtrlA = 0;
   let lastCtrlAGrid;
+  let lastCtrlNumber = '';
+  let lastCtrlNumberAt = 0;
   function hideTools() {
     const grid = activeGrid(); if (!grid) return;
     maximized = '';
@@ -1087,6 +1105,8 @@
       return;
     }
     if (binding && binding === toolKeys.voice) {
+      // Disabled voice typing leaves the key to the focused page.
+      if (prefs.voiceTyping === false) return;
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) void window.libroVoice?.toggle();
       return;
@@ -1106,7 +1126,12 @@
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) {
         renderThreadShortcuts();
-        document.querySelector('[data-project-shortcut="' + number + '"]')?.click();
+        const row = document.querySelector('[data-project-shortcut="' + number + '"]');
+        // A quick second press opens the project that owns the numbered thread.
+        const now = performance.now();
+        const twice = number === lastCtrlNumber && now - lastCtrlNumberAt < 450;
+        lastCtrlNumber = twice ? '' : number; lastCtrlNumberAt = now;
+        (twice ? row?.closest('.ws-project-group')?.querySelector('.ws-project-row[data-kind=project]') : row)?.click();
       }
       return;
     }
@@ -1644,6 +1669,7 @@
     document.getElementById('notification-sound').value = prefs.notificationSound === false ? 'off' : 'on';
     document.getElementById('notification-sound-status').textContent = '';
     fillVoice(voice);
+    document.getElementById('voice-typing').value = prefs.voiceTyping === false ? 'off' : 'on';
     document.getElementById('voice-status').textContent = '';
     document.getElementById('agent-auto-update').value = agentUpdates === false ? 'off' : 'on';
     document.getElementById('agent-auto-update-status').textContent = '';
@@ -1690,7 +1716,7 @@
     for (const form of page.querySelectorAll('form')) if (!form.reportValidity()) return;
     const value = id => document.getElementById(id).value;
     const agent = value('default-thread-agent'), width = value('default-panel-width');
-    const theme = value('workspace-theme'), projectRows = value('project-rows'), sound = value('notification-sound'), pageTools = value('page-tools-autoexecute') === 'on';
+    const theme = value('workspace-theme'), projectRows = value('project-rows'), sound = value('notification-sound'), voiceTyping = value('voice-typing'), pageTools = value('page-tools-autoexecute') === 'on';
     settingsSaveSteps = [
       () => saveAgentCommand(document.getElementById('agent-commands-form')),
       () => saveTools(document.getElementById('tool-commands-form')),
@@ -1701,8 +1727,8 @@
       () => savePageTools(pageTools),
       () => saveSettings(width),
       () => {
-        const ok = saveTheme(theme) && saveProjectRows(projectRows) && saveNotificationSound(sound);
-        settingsSaveFinished(ok, 'Could not save appearance or sound. Please try again.');
+        const ok = saveTheme(theme) && saveProjectRows(projectRows) && saveNotificationSound(sound) && saveVoiceTyping(voiceTyping);
+        settingsSaveFinished(ok, 'Could not save appearance, sound, or voice typing. Please try again.');
       },
     ];
     page.querySelector('.ws-settings-content').inert = true;

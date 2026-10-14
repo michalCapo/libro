@@ -64,11 +64,21 @@ func setVoiceSettings(key string, clearKey bool) error {
 
 func renderVoiceSettings() *r.Node {
 	return r.El("section", "").Render(
-		r.El("h2", "ws-shortcut-heading").Text("OpenRouter"),
+		r.El("h2", "ws-shortcut-heading").Text("Voice typing"),
 		r.Div("ws-settings-group").Render(
 			r.Div("ws-settings-row").Render(
 				r.Div("ws-settings-copy").Render(
-					r.El("label", "").Attr("for", "openrouter-key").Text("API key"),
+					r.El("label", "").Attr("for", "voice-typing").Text("Voice typing"),
+					r.P("").ID("voice-typing-help").Text("Off hides the microphone button and leaves its shortcut to the focused app."),
+				),
+				r.El("select", "ws-settings-select").ID("voice-typing").Attr("aria-describedby", "voice-typing-help").Render(
+					r.El("option", "").Attr("value", "on").Text("On"),
+					r.El("option", "").Attr("value", "off").Text("Off"),
+				),
+			),
+			r.Div("ws-settings-row").Render(
+				r.Div("ws-settings-copy").Render(
+					r.El("label", "").Attr("for", "openrouter-key").Text("OpenRouter API key"),
 					r.P("").ID("openrouter-key-help").Text("Required for voice typing, which uses GPT-4o Transcribe. Leave empty to keep the saved key. Without a saved key, Libro uses OPENROUTER_API_KEY from its environment."),
 				),
 				r.Div("ws-agent-command-row").Render(
