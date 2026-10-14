@@ -237,10 +237,21 @@
     else if (center) heading.textContent = heading.textContent.replace(/ on $/, '?');
     el.append(heading);
     const branch = center ? mainBranch(grid) : ''; el.dataset.branch = branch;
-    el.append(node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : branch ? 'Each agent starts in a new worktree, so ' + branch + ' stays clean for merging.' : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.'));
-    const actions = node('div', 'ws-agent-actions');
     // Opt-out for work that belongs directly on the checked-out branch.
+    // The choice is remembered per project.
     const mainFolder = node('input'); mainFolder.type = 'checkbox';
+    const project = grid.dataset.workspaceProject;
+    mainFolder.checked = !!prefs.mainFolder?.[project];
+    const branchText = () => mainFolder.checked ? 'Each agent works directly on ' + branch + ', without a new worktree.' : 'Each agent starts in a new worktree, so ' + branch + ' stays clean for merging.';
+    const description = node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : branch ? branchText() : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.');
+    el.append(description);
+    mainFolder.onchange = () => {
+      const projects = {...prefs.mainFolder};
+      if (mainFolder.checked) projects[project] = true; else delete projects[project];
+      prefs.mainFolder = projects; save();
+      description.textContent = branchText();
+    };
+    const actions = node('div', 'ws-agent-actions');
 
     (center ? window.__libroPlugins.filter(p => p.dock === 'center' && p.type === 'terminal' && !p.disabled && !p.removed).slice(0, 3).map(p => p.id) : zone === 'right' ? ['browser', 'lazyrepo', 'terminal'] : ['terminal']).forEach((id, index) => {
       const plugin = window.__libroPlugins.find(p => p.id === id);
