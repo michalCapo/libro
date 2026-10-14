@@ -49,6 +49,10 @@ func agentEnvironmentList() []string {
 		result = append(result, name+"="+value)
 	}
 	sort.Strings(result)
+	// Libro updates agents itself, so Claude's own update notice is redundant; user values still win.
+	if enabled := agentAutoUpdate(); enabled != nil && *enabled {
+		result = append([]string{"DISABLE_AUTOUPDATER=1"}, result...)
+	}
 	return result
 }
 

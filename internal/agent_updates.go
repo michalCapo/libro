@@ -91,16 +91,17 @@ func runAgentUpdateCommand(ctx context.Context, dir, file string, args ...string
 	output, err := cmd.Output()
 	return strings.TrimSpace(string(output)), err
 }
+func insideDir(dir, path string) bool {
+	relative, err := filepath.Rel(dir, path)
+	return err == nil && relative != "." && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
+}
 func agentUpdatePlan(agent agentUpdateDefinition, executable, npmRoot, npm, latest string, help func() string) (string, []string) {
 	resolved, err := filepath.EvalSymlinks(executable)
 	if err != nil {
 		return "", nil
 	}
-	if npmRoot != "" && npm != "" {
-		relative, err := filepath.Rel(filepath.Join(npmRoot, filepath.FromSlash(agent.pkg)), resolved)
-		if err == nil && relative != "." && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative) {
-			return npm, []string{"install", "--global", agent.pkg + "@" + latest}
-		}
+	if npmRoot != "" && npm != "" && insideDir(filepath.Join(npmRoot, filepath.FromSlash(agent.pkg)), resolved) {
+		return npm, []string{"install", "--global", agent.pkg + "@" + latest}
 	}
 	home, _ := os.UserHomeDir()
 	if agent.command == "claude" && strings.HasPrefix(resolved, filepath.Join(home, ".local", "share", "claude", "versions")+string(filepath.Separator)) {
@@ -166,6 +167,32 @@ func runAgentUpdates(ctx context.Context, notify func(string, string, string)) {
 			npmRoot, _ = filepath.EvalSymlinks(root)
 		}
 	}
+	// Mise owns the tools it installs; its outdated list honors pinned versions and release-age rules.
+	mise, _ := exec.LookPath("mise")
+	miseBinary, _ := filepath.EvalSymlinks(mise)
+	miseTools, miseLatest := map[string]string{}, map[string]string{}
+	if mise != "" {
+		if text, err := run(15*time.Second, mise, "ls", "--json", "--current"); err == nil {
+			var tools map[string][]struct {
+				InstallPath string `json:"install_path"`
+			}
+			_ = json.Unmarshal([]byte(text), &tools)
+			for name, versions := range tools {
+				for _, version := range versions {
+					if path, err := filepath.EvalSymlinks(version.InstallPath); err == nil {
+						miseTools[path] = name
+					}
+				}
+			}
+		}
+		if text, err := run(time.Minute, mise, "outdated", "--json"); err == nil {
+			var tools map[string]struct{ Latest string }
+			_ = json.Unmarshal([]byte(text), &tools)
+			for name, tool := range tools {
+				miseLatest[name] = agentVersion(tool.Latest)
+			}
+		}
+	}
 	var wg sync.WaitGroup
 	for _, definition := range updateAgents {
 		wg.Go(func() {
@@ -188,28 +215,57 @@ func runAgentUpdates(ctx context.Context, notify func(string, string, string)) {
 			if current == "" || strings.Contains(current, "-") {
 				return
 			}
-			requestCtx, stop := context.WithTimeout(ctx, 10*time.Second)
-			request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, "https://registry.npmjs.org/"+url.PathEscape(agent.pkg)+"/latest", nil)
-			latest := ""
-			if err == nil {
-				response, err := http.DefaultClient.Do(request)
-				if err == nil {
-					var metadata struct{ Version string }
-					if response.StatusCode == 200 {
-						_ = json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&metadata)
-						latest = agentVersion(metadata.Version)
-					}
-					_ = response.Body.Close()
+			resolved, _ := filepath.EvalSymlinks(executable)
+			if mise != "" && resolved == miseBinary {
+				// A mise shim runs the active version; ask mise for its real path.
+				if path, err := run(15*time.Second, mise, "which", agent.command); err == nil {
+					resolved, _ = filepath.EvalSymlinks(path)
 				}
 			}
-			stop()
+			// An npm package wins over the mise-managed Node that hosts it.
+			miseTool := ""
+			if npmRoot == "" || !insideDir(filepath.Join(npmRoot, filepath.FromSlash(agent.pkg)), resolved) {
+				for path, name := range miseTools {
+					if insideDir(path, resolved) {
+						miseTool = name
+					}
+				}
+			}
+			latest := ""
+			if miseTool != "" {
+				latest = miseLatest[miseTool]
+			} else {
+				requestCtx, stop := context.WithTimeout(ctx, 10*time.Second)
+				request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, "https://registry.npmjs.org/"+url.PathEscape(agent.pkg)+"/latest", nil)
+				if err == nil {
+					response, err := http.DefaultClient.Do(request)
+					if err == nil {
+						var metadata struct{ Version string }
+						if response.StatusCode == 200 {
+							_ = json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&metadata)
+							latest = agentVersion(metadata.Version)
+						}
+						_ = response.Body.Close()
+					}
+				}
+				stop()
+			}
 			if newerAgentVersion(latest, current) && ctx.Err() == nil {
-				file, args := agentUpdatePlan(agent, executable, npmRoot, npm, latest, func() string { text, _ := run(15*time.Second, executable, "--help"); return text })
+				file, args := mise, []string{"upgrade", miseTool}
+				if miseTool == "" {
+					file, args = agentUpdatePlan(agent, executable, npmRoot, npm, latest, func() string { text, _ := run(15*time.Second, executable, "--help"); return text })
+				}
 				if file == "" {
 					notify(agent.name+" "+latest+" is available", "Update it with its package manager.", "info")
 				} else {
 					notify("Updating "+agent.name+"…", current+" → "+latest, "info")
 					_, err := run(5*time.Minute, file, args...)
+					if miseTool != "" {
+						// The upgrade installs a new version directory, so look the command up again.
+						if path, err := run(15*time.Second, mise, "which", agent.command); err == nil {
+							executable = path
+						}
+					}
 					installed, _ := run(15*time.Second, executable, "--version")
 					if err == nil && newerAgentVersion(agentVersion(installed), current) {
 						notify(agent.name+" updated to "+agentVersion(installed), "New sessions use the updated version.", "success")
