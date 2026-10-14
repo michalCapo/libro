@@ -1915,15 +1915,18 @@
     settingsSaveFinished(ok);
   }
   // Narrow windows show the project list over the panels; picking a row, clicking outside, or Escape closes it.
+  // A closed list ignores hover until the pointer leaves the sidebar, so it does not reopen under the mouse.
+  const narrowWindow = matchMedia('(max-width:1000px)');
   function projectMenu(open = root.dataset.sidebar !== 'open') {
-    if (open) root.dataset.sidebar = 'open'; else delete root.dataset.sidebar;
+    root.dataset.sidebar = open ? 'open' : 'closed';
     document.querySelector('[data-sidebar-toggle]')?.setAttribute('aria-expanded', String(open));
   }
   document.addEventListener('click', event => {
-    if (root.dataset.sidebar === 'open' && (event.target.id === 'workspace-projects' || event.target.closest?.('.ws-project-row'))) projectMenu(false);
+    if (narrowWindow.matches && (event.target.id === 'workspace-projects' || event.target.closest?.('.ws-project-row'))) projectMenu(false);
   });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.sidebar === 'open') projectMenu(false); });
-  matchMedia('(max-width:1000px)').addEventListener('change', () => projectMenu(false));
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && narrowWindow.matches && root.dataset.sidebar !== 'closed') projectMenu(false); });
+  document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects')) delete root.dataset.sidebar; });
+  narrowWindow.addEventListener('change', () => projectMenu(false));
   window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, terminalExited, closeOtherPanels};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
