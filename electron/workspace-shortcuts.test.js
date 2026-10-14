@@ -370,7 +370,7 @@ test('base and worktree rows are numbered without requiring agents', () => {
   }))
   const context = vm.createContext({
     document: { querySelectorAll: selector => {
-      assert.equal(selector, '.ws-project-row:not([data-kind=project])')
+      assert.equal(selector, '.ws-project-row')
       return rows
     } },
     node: () => ({ setAttribute() {} }),
@@ -389,6 +389,31 @@ test('base and worktree rows are numbered without requiring agents', () => {
   rows[0].dataset.closed = 'false'
   vm.runInContext('renderThreadShortcuts();', context)
   assert.equal(rows[0].dataset.projectShortcut, '1')
+})
+
+test('an open project is numbered only while it has no thread rows', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  const render = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  // Each sound gets a fresh context.'))
+  const row = (kind, item) => ({
+    dataset: { kind }, parentElement: item, attributes: {}, badge: null,
+    querySelector() { return this.badge },
+    append(badge) { this.badge = badge; this.lastElementChild = badge; badge.remove = () => { this.badge = null } },
+    setAttribute(key, value) { this.attributes[key] = value },
+    removeAttribute(key) { delete this.attributes[key] },
+  })
+  const children = []
+  const group = { querySelectorAll: () => children }
+  const project = row('project', { dataset: { panels: 'true' } })
+  project.closest = () => group
+  const idle = row('project', { dataset: { panels: 'false' } })
+  const worktree = row('worktree', { dataset: {} })
+  let rows = [project, idle]
+  const context = vm.createContext({ document: { querySelectorAll: () => rows }, node: () => ({ setAttribute() {} }) })
+  vm.runInContext(render + ';renderThreadShortcuts()', context)
+  assert.deepEqual([project.dataset.projectShortcut, idle.dataset.projectShortcut], ['1', ''])
+  children.push(worktree); rows = [project, worktree, idle]
+  vm.runInContext('renderThreadShortcuts()', context)
+  assert.deepEqual(rows.map(item => item.dataset.projectShortcut), ['', '1', ''])
 })
 
 test('Ctrl+1–9 selects the numbered thread once', () => {
@@ -686,7 +711,7 @@ test('standalone thread numbers continue after project agent threads and skip ar
   }))
   const context = vm.createContext({
     document: { querySelectorAll: selector => {
-      assert.equal(selector, '.ws-project-row:not([data-kind=project])')
+      assert.equal(selector, '.ws-project-row')
       return rows
     } },
     node: () => ({ setAttribute() {} }),

@@ -680,9 +680,12 @@
   }
   function renderThreadShortcuts() {
     let index = 0;
-    document.querySelectorAll('.ws-project-row:not([data-kind=project])').forEach(row => {
-      const thread = row.dataset.kind === 'thread';
-      const available = row.dataset.closed !== 'true' && (!thread || row.parentElement.dataset.archived !== 'true');
+    const open = row => row.dataset.closed !== 'true' && (row.dataset.kind !== 'thread' || row.parentElement.dataset.archived !== 'true');
+    document.querySelectorAll('.ws-project-row').forEach(row => {
+      // A project with open panels and no thread rows of its own is numbered too.
+      const available = row.dataset.kind === 'project'
+        ? row.parentElement.dataset.panels === 'true' && ![...row.closest('.ws-project-group').querySelectorAll('.ws-thread-row')].some(open)
+        : open(row);
       const number = available && index < 9 ? String(++index) : '';
       row.dataset.projectShortcut = number;
       let badge = row.querySelector('.ws-project-shortcut');
@@ -898,10 +901,11 @@
     renderToolRail();
     renderProjects();
     renderThreads();
-    renderThreadShortcuts();
     renderProjectActivity();
     renderProjectTerminals();
     renderProjectPanels();
+    // Project numbers depend on the panel state set above.
+    renderThreadShortcuts();
     window.libroFiles?.init();
     window.libroNotes?.init();
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
