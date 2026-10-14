@@ -186,7 +186,7 @@ Use the system sans-serif stack in `body`; there is no separate display font. Bo
 
 ## Layout
 
-Project threads contain one center agent panel each. New thread creates a thread directly without opening the agent picker; its configurable shortcut is empty by default. Ctrl+Shift+A opens the agent picker and starts the chosen agent in a new thread. Replace agent starts a fresh session in the current thread and keeps its tools open. Notes and bottom terminal processes are shared across the project; browser and other tools belong to each thread. Project settings choose a shared application or one application per thread, with automatic ports and optional per-thread overrides. Standalone threads keep their existing behavior.
+Project agents start in the selected workspace. Ctrl+Shift+A opens the agent picker and adds the chosen agent as another panel in the current workspace. New thread (Ctrl+Shift+N) creates a new worktree thread directly without opening the agent picker. Replace agent starts a fresh session in the current thread and keeps its tools open. Notes and bottom terminal processes are shared across the project; browser and other tools belong to each thread. Project settings choose a shared application or one application per thread, with automatic ports and optional per-thread overrides. Standalone threads keep their existing behavior.
 
 The shell has a 56px titlebar, a 28px statusbar, and left project navigation. The sidebar is 216px wide. At 760px or less its width is `min(216px, 50vw)`, so the main area keeps space. The brand and trailing status text hide, and empty-state headings become 24px.
 

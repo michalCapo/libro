@@ -151,17 +151,7 @@ func TestProjectThreadsBranchFromBase(t *testing.T) {
 	if _, err := manager.createProjectWorktree("test", "repo", "first"); err == nil {
 		t.Fatal("duplicate branch accepted")
 	}
-	// Agents leave the main folder clean unless the user chooses it.
 	state := manager.states["test"]
-	agent := Application{Type: AppTypeTerminal, PluginID: "codex", Dock: "center"}
-	for _, workspace := range []string{"repo", first} {
-		state.ActiveProject = workspace
-		for _, mainFolder := range []bool{false, true} {
-			if got := state.needsProjectThread(agent, mainFolder); got != (workspace == "repo" && !mainFolder) {
-				t.Fatalf("workspace=%s mainFolder=%t: new worktree = %t", workspace, mainFolder, got)
-			}
-		}
-	}
 	state.ActiveProject = "repo"
 	if projectAutolaunchPlugin(state) != nil {
 		t.Fatal("autolaunched an agent in the main folder")

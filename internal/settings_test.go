@@ -2,6 +2,7 @@ package libro
 
 import (
 	"database/sql"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -388,5 +389,30 @@ func TestEditorToolPersistenceAndValidation(t *testing.T) {
 	}
 	if editorToolID() != "" {
 		t.Fatal("editor did not turn off")
+	}
+}
+
+func TestNewThreadAgentShortcutMigration(t *testing.T) {
+	original := db
+	path := filepath.Join(t.TempDir(), "settings.db")
+	var err error
+	db, err = sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	saved := defaultToolKeybindings()
+	saved["new-thread-agent"] = "Ctrl+Shift+A"
+	saved["new-agent-panel"] = ""
+	saved["new-thread"] = ""
+	saved["settings"] = "Ctrl+Alt+S"
+	raw, _ := json.Marshal(saved)
+	if _, err := db.Exec(`INSERT INTO settings (key, value) VALUES ('tool_keybindings', ?)`, string(raw)); err != nil {
+		t.Fatal(err)
+	}
+	got := toolKeybindings()
+	if _, exists := got["new-thread-agent"]; exists || got["new-agent-panel"] != "Ctrl+Shift+A" || got["new-thread"] != "Ctrl+Shift+N" || got["settings"] != "Ctrl+Alt+S" {
+		t.Fatalf("migrated shortcuts = %v", got)
 	}
 }

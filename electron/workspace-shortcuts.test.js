@@ -1029,47 +1029,6 @@ test('command palette uses its configured shortcut and ignores repeated presses'
 })
 
 
-test('new thread with agent shortcut opens a picker and ignores repeats', () => {
-  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const handler = source.slice(source.indexOf("    if (binding && binding === toolKeys['new-thread-agent'])"), source.indexOf("    if (binding && binding === toolKeys['replace-agent'])"))
-  for (const binding of ['Ctrl+Shift+A', 'Alt+A']) for (const repeat of [false, true]) {
-    const launches = []
-    vm.runInNewContext('(function(){' + handler + '})()', {
-      binding, toolKeys: { 'new-thread-agent': binding },
-      event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
-      launcher: (...args) => launches.push(args),
-    })
-    assert.deepEqual(launches, repeat ? [] : [['center', undefined, false, true]])
-  }
-})
-
-test('agent picker creates a new thread only in the new thread mode', () => {
-  const { JSDOM } = require('jsdom')
-  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const launcher = source.slice(source.indexOf('  function launcher('), source.indexOf('  function empty('))
-  for (const project of ['', 'thread:standalone', 'project', 'project/branch']) {
-    for (const [replace, newThread] of [[false, false], [true, false], [false, true]]) {
-      const dom = new JSDOM('<div id="root"></div>')
-      const { document } = dom.window
-      dom.window.HTMLDialogElement.prototype.showModal = function() {}
-      dom.window.HTMLDialogElement.prototype.close = function() {}
-      const calls = []
-      vm.runInNewContext(launcher + ';launcher("center", undefined, replace, newThread)', {
-        replace, newThread, document, root: document.getElementById('root'),
-        window: { __libroActiveProject: project, __libroPlugins: [{id:'codex', name:'Codex', dock:'center', type:'terminal'}] },
-        node(tag, cls, text) { const el = document.createElement(tag); el.className = cls; if (text) el.textContent = text; return el },
-        applyToolIcon() {},
-        call: (action, data) => calls.push([action, JSON.parse(JSON.stringify(data))]),
-        openPlugin: (...args) => calls.push(['openPlugin', args[0], args[1], args[3]]),
-      })
-      assert.equal(calls.length, 0, 'opening or dismissing the picker must not create a thread')
-      document.querySelector('.ws-plugin-entry').click()
-      assert.deepEqual(calls, newThread ? [['thread.create', {agent:'codex', project}]] : [['openPlugin', 'codex', 'center', replace]])
-      dom.window.close()
-    }
-  }
-})
-
 test('Ctrl+A stays in the selected thread even when another thread has an agent', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf("    if (binding === 'Ctrl+A')"), source.indexOf("    if (binding === 'Ctrl+D'"))

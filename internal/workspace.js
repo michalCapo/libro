@@ -114,7 +114,7 @@
   function activeGrid() { return [...document.querySelectorAll('[data-workspace-project]')].find(el => el.parentElement.style.display !== 'none'); }
   function frames(grid) { return [...grid.querySelectorAll(':scope > [data-app-id]')].sort((a, b) => Number(a.style.order) - Number(b.style.order)); }
   function isThread(grid = activeGrid()) { return grid?.dataset.thread === 'true'; }
-  function openPlugin(id, dock, trigger, replace = false, add = false, mainFolder = false) {
+  function openPlugin(id, dock, trigger, replace = false, add = false) {
     const plugin = window.__libroPlugins.find(candidate => candidate.id === id);
     if (!plugin || plugin.disabled || plugin.removed || trigger?.disabled) return;
     if (trigger) {
@@ -129,7 +129,6 @@
     } else call('app.start', {
       replaceAgent: replace,
       addAgent: add,
-      mainFolder,
       type: plugin.type,
       command: plugin.command || '',
       url: plugin.url || '',
@@ -184,14 +183,14 @@
         select(browserID);
         window.__libroTogglePageTool?.(browserID, mode);
       }, 200);
-    }, false, false, false, !!mainBranch(grid));
+    });
     return false;
   };
-  function launcher(dock, onLaunch, replace = false, newThread = false, add = false, mainFolder = false) {
+  function launcher(dock, onLaunch, replace = false, add = false) {
     if (dock === 'bottom') { bottom(); return; }
     let dialog = document.getElementById('workspace-plugin-dialog');
     if (dialog) dialog.remove();
-    dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-plugin-dialog'; dialog.setAttribute('aria-label', dock === 'center' ? (newThread ? 'New thread with agent' : replace ? 'Replace agent' : add ? 'New agent panel' : 'New agent session') : 'Open an app');
+    dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-plugin-dialog'; dialog.setAttribute('aria-label', dock === 'center' ? (replace ? 'Replace agent' : add ? 'New agent panel' : 'New agent session') : 'Open an app');
     const searchBar = node('div', 'ws-command-search');
     const search = node('input', 'ws-palette-search'); search.placeholder = dock === 'center' ? 'Search agents…' : 'Search apps…'; search.setAttribute('aria-label', dock === 'center' ? 'Search agents' : 'Search apps'); search.autocomplete = 'off'; search.spellcheck = false;
     const dismiss = node('button', 'ws-command-dismiss'); dismiss.append(node('i', 'material-icons-round', 'close')); dismiss.firstChild.setAttribute('aria-hidden', 'true'); dismiss.type = 'button'; dismiss.setAttribute('aria-label', 'Close app launcher'); dismiss.onclick = () => dialog.close();
@@ -205,7 +204,7 @@
     const entries = node('div', 'ws-plugin-list');
     list.forEach(plugin => {
       const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; const icon = node('i', 'material-icons-round', plugin.type === 'url' ? 'language' : 'terminal'); icon.setAttribute('aria-hidden', 'true'); const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', plugin.name), node('small', '', plugin.description || plugin.command || 'Browser app')); entry.append(icon, copy); applyToolIcon(entry, plugin);
-      entry.onclick = () => { dialog.close(); if (newThread) call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''}); else openPlugin(plugin.id, dock, entry, replace, add, mainFolder); onLaunch?.(); }; entries.append(entry);
+      entry.onclick = () => { dialog.close(); openPlugin(plugin.id, dock, entry, replace, add); onLaunch?.(); }; entries.append(entry);
     });
     dialog.append(entries);
     let active = 0;
@@ -237,20 +236,8 @@
     else if (center) heading.textContent = heading.textContent.replace(/ on $/, '?');
     el.append(heading);
     const branch = center ? mainBranch(grid) : ''; el.dataset.branch = branch;
-    // Opt-out for work that belongs directly on the checked-out branch.
-    // The choice is remembered per project.
-    const mainFolder = node('input'); mainFolder.type = 'checkbox';
-    const project = grid.dataset.workspaceProject;
-    mainFolder.checked = !!prefs.mainFolder?.[project];
-    const branchText = () => mainFolder.checked ? 'Each agent works directly on ' + branch + ', without a new worktree.' : 'Each agent starts in a new worktree, so ' + branch + ' stays clean for merging.';
-    const description = node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : branch ? branchText() : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.');
+    const description = node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : branch ? 'Agents work directly on ' + branch + '.' + (toolKeys['new-thread'] ? ' Press ' + toolKeys['new-thread'] + ' for a new worktree.' : '') : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.');
     el.append(description);
-    mainFolder.onchange = () => {
-      const projects = {...prefs.mainFolder};
-      if (mainFolder.checked) projects[project] = true; else delete projects[project];
-      prefs.mainFolder = projects; save();
-      description.textContent = branchText();
-    };
     const actions = node('div', 'ws-agent-actions');
 
     (center ? window.__libroPlugins.filter(p => p.dock === 'center' && p.type === 'terminal' && !p.disabled && !p.removed).slice(0, 3).map(p => p.id) : zone === 'right' ? ['browser', 'lazyrepo', 'terminal'] : ['terminal']).forEach((id, index) => {
@@ -259,17 +246,13 @@
       const launch = node('button', 'ws-launch', plugin.name);
       launch.type = 'button';
       if (center) { launch.dataset.agentShortcut = String(index + 1); launch.setAttribute('aria-keyshortcuts', String(index + 1)); launch.title = 'Press ' + (index + 1); }
-      launch.onclick = () => openPlugin(id, zone, launch, center, false, mainFolder.checked);
+      launch.onclick = () => openPlugin(id, zone, launch, center);
       actions.append(launch);
     });
-    const more = node('button', 'ws-launch', center ? 'Other agent…' : 'More…'); more.type = 'button'; more.onclick = () => launcher(zone, undefined, center, false, false, mainFolder.checked); actions.append(more); el.append(actions);
-    if (branch) {
-      const label = node('label', 'ws-main-folder'); label.title = 'Start the agent in the project folder instead of a new worktree';
-      label.append(mainFolder, node('span', '', 'Work directly on ' + branch)); el.append(label);
-    }
+    const more = node('button', 'ws-launch', center ? 'Other agent…' : 'More…'); more.type = 'button'; more.onclick = () => launcher(zone, undefined, center); actions.append(more); el.append(actions);
     return el;
   }
-  // The checked-out branch of a project's main folder, which agents leave clean by default.
+  // The checked-out branch of a project's main folder.
   function mainBranch(grid) {
     const project = (window.__libroProjects || []).find(project => project.kind === 'project' && project.name === grid.dataset.workspaceProject && project.isGit);
     return project?.currentBranch || '';
@@ -990,7 +973,7 @@
   // Step through a panel list, stopping at its first and last panel.
   function step(list, current, delta) { return list[current < 0 ? (delta > 0 ? 0 : list.length - 1) : Math.max(0, Math.min(current + delta, list.length - 1))]; }
   function sideTerminal(frame) { return frame?.dataset.dock === 'right' && frame.dataset.plugin === 'terminal'; }
-  function newAgentPanel() { launcher('center', undefined, false, false, true); }
+  function newAgentPanel() { launcher('center', undefined, false, true); }
   // Agent panels share one column; switching shows another agent in it.
   function navigateAgent(delta) {
     const grid = activeGrid(); if (!grid) return false;
@@ -1224,11 +1207,6 @@
     if (binding && binding === toolKeys['new-thread']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) newThread();
-      return;
-    }
-    if (binding && binding === toolKeys['new-thread-agent']) {
-      event.preventDefault(); event.stopImmediatePropagation();
-      if (!event.repeat) launcher('center', undefined, false, true);
       return;
     }
     if (binding && binding === toolKeys['replace-agent']) {

@@ -151,7 +151,6 @@ html.dark .ws-row-grid[data-agent-status=done]::before,html.dark .ws-row-grid[da
 .ws-grid>.ws-empty{flex:1}
 .ws-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;min-width:0;min-height:0;overflow:auto;background:var(--ws-bg);text-align:center}.ws-empty h1{overflow-wrap:anywhere;max-width:100%;font-size:28px;font-weight:500;letter-spacing:-.025em;margin:0}.ws-empty h2{font-size:15px;font-weight:550;margin:0}.ws-empty p{font-size:14px;line-height:1.65;color:var(--ws-muted);margin:0;max-width:46ch}.ws-agent-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:10px}.ws-launch{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:7px 14px;border:0;border-radius:9px;background:var(--ws-field);color:var(--ws-fg)}.ws-launch:hover{background:var(--ws-hover)}.ws-launch:disabled{opacity:.6;cursor:wait}
 .ws-grid>.ws-empty{border-radius:var(--ws-radius);box-shadow:var(--ws-card)}
-.ws-main-folder{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ws-muted);cursor:pointer}
 .ws-plugin-dialog{width:min(420px,calc(100vw - 24px));max-height:calc(100dvh - min(15vh,100px) - 24px);margin:min(15vh,100px) auto 0;padding:0;overflow:hidden;font:inherit}
 .ws-plugin-dialog[open]{display:flex;flex-direction:column}
 .ws-plugin-dialog::backdrop{background:rgb(0 0 0 / 10%)}

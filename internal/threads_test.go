@@ -356,30 +356,6 @@ func TestThreadSessionSurvivesRestartAndDefaultAgentChange(t *testing.T) {
 	}
 }
 
-func TestProjectAgentLaunchCreatesSiblingThreads(t *testing.T) {
-	agent := Application{Type: AppTypeTerminal, PluginID: "codex", Dock: "center"}
-	for _, workspace := range []string{"project", "thread:project", "thread:standalone"} {
-		for _, occupied := range []bool{false, true} {
-			state := &AppState{
-				ActiveProject: workspace,
-				Projects:      []Project{{Name: "project", Path: "/project"}},
-				Threads:       []Thread{{ID: "thread:project", Project: "project"}, {ID: "thread:standalone"}},
-				Apps:          []Application{{PluginID: "browser", Type: AppTypeURL, Dock: "right"}},
-			}
-			if occupied {
-				state.Apps = append(state.Apps, agent)
-			}
-			want := (workspace == "project" || workspace == "thread:project") && occupied
-			if state.needsProjectThread(agent, false) != want {
-				t.Fatalf("workspace=%s occupied=%t: wrong agent destination", workspace, occupied)
-			}
-			if state.needsProjectThread(state.Apps[0], false) {
-				t.Fatal("opening a browser must stay in its thread")
-			}
-		}
-	}
-}
-
 func TestCloseProjectArchivesThreadAndClosesTools(t *testing.T) {
 	original := db
 	var err error

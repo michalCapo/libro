@@ -112,7 +112,7 @@ bundle matches its source. Run the editor integration tests with
 
 ### AI assistants
 
-- Each project thread has one agent and its own browser and tool state. Starting another agent creates a new thread under the same project. Notes are shared across that project. Applications can be shared or run separately in each thread. Standalone threads are unchanged.
+- Agents start in the thread you have open. Each project thread has its own browser and tool state. Use `Ctrl + Shift + A` to add another agent to the same thread, or `Ctrl + Shift + N` to create a new worktree thread. Notes are shared across that project. Applications can be shared or run separately in each thread. Standalone threads are unchanged.
 - Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
@@ -212,8 +212,9 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl + Shift + A` | New thread with agent |
 | `Ctrl + A` | Jump to the current agent (press twice to hide tools) |
+| `Ctrl + Shift + A` | New agent panel in the current thread |
+| `Ctrl + Shift + N` | New thread in a new worktree |
 | `Ctrl + Shift + P` | Switch project |
 | `Ctrl + 1` – `Ctrl + 9` | Go to a numbered thread |
 | `Ctrl + ;` | Thread actions |
@@ -221,7 +222,7 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 | `Caps Lock` | Voice typing |
 | `Alt + ,` / `Alt + .` | Lower / raise Claude effort for this session (Codex has this built in) |
 
-New agent, New agent panel, New thread, Replace agent, Finish current thread, and Close project have no default shortcut. Find them in the command palette or set one in Settings.
+New agent, Replace agent, Finish current thread, and Close project have no default shortcut. Find them in the command palette or set one in Settings.
 
 ### Panels and tools
 

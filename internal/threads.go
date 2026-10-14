@@ -180,7 +180,7 @@ func (sm *StateManager) createProjectWorktree(sid, projectID, branch string) (st
 }
 
 func registerThreadActions(app *r.App, switchWorkspace func(string, string, string) (r.Result, bool)) {
-	actionThreadCreate = registerWorkspaceAction(app, "thread.create", func(_ *r.Context, in actionThreadCreateInput) (r.Result, error) {
+	registerWorkspaceAction(app, "thread.create", func(_ *r.Context, in actionThreadCreateInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		name := in.Name
 		name = strings.TrimSpace(name)
@@ -327,15 +327,6 @@ func (s *AppState) adjacentProjectThread() string {
 		previous = thread.ID
 	}
 	return ""
-}
-
-// An agent starts in a new worktree when its project workspace is occupied,
-// or in a main folder the user did not choose, so main stays clean for merges.
-func (s *AppState) needsProjectThread(app Application, mainFolder bool) bool {
-	if s.projectScope(s.ActiveProject) == "" || !isAgentApp(app) {
-		return false
-	}
-	return slices.ContainsFunc(s.Apps, isAgentApp) || !mainFolder && s.worktreeBase(s.ActiveProject)
 }
 
 // worktreeBase reports whether the workspace is a project's main folder that

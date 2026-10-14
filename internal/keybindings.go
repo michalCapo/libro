@@ -32,12 +32,11 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"voice", "Voice typing (toggle)", "CapsLock"},
 	{"project-picker", "Switch project", "Ctrl+Shift+P"},
 	{"new-agent", "New agent", ""},
-	{"new-agent-panel", "New agent panel", ""},
-	{"new-thread", "New thread", ""},
+	{"new-agent-panel", "New agent panel", "Ctrl+Shift+A"},
+	{"new-thread", "New thread", "Ctrl+Shift+N"},
 	{"finish-thread", "Finish current thread…", ""},
 	{"thread-actions", "Thread actions", "Ctrl+;"},
 	{"replace-agent", "Replace agent", ""},
-	{"new-thread-agent", "New thread with agent", "Ctrl+Shift+A"},
 	{"previous-agent", "Previous panel", "Ctrl+H"},
 	{"next-agent", "Next panel", "Ctrl+L"},
 	{"command-palette", "Command palette", "Meta+;"},
@@ -107,6 +106,16 @@ func toolKeybindings() map[string]string {
 			if _, exists := saved["new-terminal"]; !exists && saved["stop-project"] == "Ctrl+Shift+T" {
 				delete(saved, "stop-project")
 			}
+			// Ctrl+Shift+A moved from a new thread with an agent to a new agent
+			// panel, and Ctrl+Shift+N now creates the new thread.
+			if _, exists := saved["new-thread-agent"]; exists {
+				delete(saved, "new-thread-agent")
+				for _, id := range []string{"new-agent-panel", "new-thread"} {
+					if saved[id] == "" {
+						delete(saved, id)
+					}
+				}
+			}
 			// New shortcuts get their default unless the key is already taken.
 			for _, shortcut := range toolKeys {
 				if _, exists := saved[shortcut.ID]; exists {
@@ -163,7 +172,7 @@ func renderToolKeybindings() *r.Node {
 	}{
 		{"General", []string{"command-palette", "settings", "voice"}},
 		{"Projects & threads", []string{"project-picker", "close-project", "new-thread", "finish-thread", "thread-actions", "run-project", "stop-project"}},
-		{"Agents", []string{"new-agent", "new-agent-panel", "new-thread-agent", "replace-agent"}},
+		{"Agents", []string{"new-agent", "new-agent-panel", "replace-agent"}},
 		{"Tools", []string{"terminal", "browser", "new-browser", "new-terminal", "previous-browser", "next-browser", "files", "notes"}},
 		{"Panels", []string{"previous-agent", "next-agent", "close-panel", "panel-size-down", "panel-size-up", "panel-size-max"}},
 		{"Zoom", []string{"zoom-in", "zoom-out", "zoom-reset"}},
