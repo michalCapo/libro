@@ -62,6 +62,7 @@ func renderWorkspaceTopBar(_ *AppState, _ string) *r.Node {
 
 func renderWorkspaceSidebar(sid string) *r.Node {
 	return r.El("aside", "ws-sidebar").ID("workspace-projects").Attr("aria-label", "Projects").Render(
+		workspaceButton("Projects", "menu", r.UnsafeJS("libroWorkspace.projectMenu()")).Attr("data-sidebar-toggle", "").Attr("aria-expanded", "false"),
 		r.Div("ws-navigation").Render(
 			r.Div("ws-sidebar-heading").Render(
 				r.Span("").Text("Projects"),
