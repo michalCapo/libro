@@ -601,6 +601,10 @@ html.dark .ws-row-grid[data-agent-status=done]::before,html.dark .ws-row-grid[da
 [data-voice-button]{touch-action:none;flex-shrink:0}
 [data-voice-button][data-state=recording]{color:var(--ws-accent);background:var(--ws-hover)}
 .ws-voice-status{position:fixed;inset:auto;right:calc(var(--ws-rail-width) + 12px);margin:0;transform:translateY(-50%);z-index:70;width:max-content;max-width:min(320px,calc(100vw - 64px));padding:8px 12px;border:0;border-radius:8px;background:var(--ws-popup);color:var(--ws-fg);box-shadow:0 12px 36px rgb(0 0 0 / 14%);font-size:12px;line-height:1.4;white-space:normal}
+/* Narrow windows join the tool rail to the folded sidebar on the left, so one rail holds the menu button and the tools.
+   The sidebar floats over the rail. Its top strip holds the menu button, keeps the list open while the pointer crosses
+   to it, and stays above the tools, which scroll below it. Only the strip, list, and backdrop take the pointer. */
+@media(max-width:1000px){.ws-body{position:relative}.ws-tool-rail{order:-1;margin-top:38px}.ws-sidebar{position:absolute;top:0;bottom:0;left:0;background:transparent;pointer-events:none}.ws-sidebar::before{content:"";position:absolute;top:0;left:0;right:0;height:38px;background:var(--ws-chrome)}.ws-sidebar>[data-sidebar-toggle]{position:relative}.ws-sidebar::before,.ws-sidebar>[data-sidebar-toggle],.ws-sidebar>.ws-navigation,.ws-sidebar::after{pointer-events:auto}.ws-voice-status{right:auto;left:calc(var(--ws-rail-width) + 12px)}}
 
 #tool-key-form .ws-agent-command-row{padding:10px 16px;gap:16px}
 #tool-key-form h3{margin-top:44px;margin-bottom:12px}

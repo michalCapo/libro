@@ -77,9 +77,10 @@
     sizePicker = picker;
     picker.showPopover();
     const rect = trigger.getBoundingClientRect();
-    // The rail sits at the window edge, so its picker opens to the left.
+    // The rail sits at a window edge, so its picker opens away from that edge.
     const rail = trigger.closest('.ws-tool-rail');
-    picker.style.left = Math.max(8, Math.min((rail ? rect.left - 12 : rect.right) - picker.offsetWidth, innerWidth - picker.offsetWidth - 8)) + 'px';
+    const left = !rail ? rect.right - picker.offsetWidth : rect.left > innerWidth / 2 ? rect.left - 12 - picker.offsetWidth : rect.right + 12;
+    picker.style.left = Math.max(8, Math.min(left, innerWidth - picker.offsetWidth - 8)) + 'px';
     picker.style.top = Math.min(rail ? rect.top : rect.bottom, innerHeight - picker.offsetHeight - 8) + 'px';
     trigger.setAttribute('aria-expanded', 'true');
     picker.ontoggle = () => trigger.setAttribute('aria-expanded', String(picker.matches(':popover-open')));
@@ -1914,7 +1915,7 @@
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New tool panels will use this width.' : 'Could not save. Please try again.';
     settingsSaveFinished(ok);
   }
-  // Narrow windows show the project list over the panels; picking a row, clicking outside, or Escape closes it.
+  // Narrow windows show the project list over the panels; picking a row or tool, clicking outside, or Escape closes it.
   // A closed list ignores hover until the pointer leaves the sidebar, so it does not reopen under the mouse.
   const narrowWindow = matchMedia('(max-width:1000px)');
   function projectMenu(open = root.dataset.sidebar !== 'open') {
@@ -1922,7 +1923,7 @@
     document.querySelector('[data-sidebar-toggle]')?.setAttribute('aria-expanded', String(open));
   }
   document.addEventListener('click', event => {
-    if (narrowWindow.matches && (event.target.id === 'workspace-projects' || event.target.closest?.('.ws-project-row'))) projectMenu(false);
+    if (narrowWindow.matches && (event.target.id === 'workspace-projects' || event.target.closest?.('.ws-project-row, .ws-tool-rail'))) projectMenu(false);
   });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && narrowWindow.matches && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects')) delete root.dataset.sidebar; });
