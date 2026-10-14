@@ -220,7 +220,7 @@ install: ## Build and install Libro locally
 	# Build from the current repo checkout
 	# ---------------------------------------------------------------------------
 	
-	# Pack the ide tools (lazyrepo, lazydata, nvim, ...) published into tools/.
+	# Pack the ide tools (vime, vimg, vimd, nvim, ...) published into tools/.
 	CLI_TOOLS_DIR="$$SCRIPT_DIR/internal/desktopbundledata/cli-tools"
 	rm -f "$$CLI_TOOLS_DIR"/*.tar.gz
 	trap 'rm -f "$$CLI_TOOLS_DIR"/*.tar.gz' EXIT

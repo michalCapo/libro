@@ -53,7 +53,7 @@ func saveApp(app Application) savedApp {
 func (app savedApp) application() Application {
 	return Application{
 		ID: app.ID, PluginID: app.PluginID, Dock: app.Dock, Name: app.Name,
-		Command: app.Command, URL: app.URL, IconURL: app.IconURL, Type: app.Type,
+		Command: currentCommand(app.Command), URL: app.URL, IconURL: app.IconURL, Type: app.Type,
 		Width: app.Width, PreviousWidth: app.PreviousWidth, Writable: app.Writable,
 		ApplicationPath: app.ApplicationPath, ApplicationPerThread: app.ApplicationPerThread,
 		SessionID: app.SessionID, AgentModel: app.AgentModel, AgentEffort: app.AgentEffort,

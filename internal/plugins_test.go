@@ -39,7 +39,7 @@ func TestAppDockDefaultsAndOverrides(t *testing.T) {
 		{Application{Type: AppTypeTerminal, Command: "codex --resume"}, "center"},
 		{Application{Type: AppTypeTerminal, Command: "bash"}, "right"},
 		{Application{Type: AppTypeTerminal, Command: "nvim"}, "right"},
-		{Application{Type: AppTypeTerminal, Command: "lazyrepo"}, "right"},
+		{Application{Type: AppTypeTerminal, Command: "vimg"}, "right"},
 		{Application{Type: AppTypeTerminal, Command: "pi", Dock: "right"}, "right"},
 	} {
 		if got := appDock(tc.app); got != tc.dock {
@@ -63,7 +63,7 @@ func TestMainAreaRejectsTools(t *testing.T) {
 		{Type: AppTypeURL, Dock: "center"},
 		{Type: AppTypeTerminal, Command: "bash", Dock: "center"},
 		{Type: AppTypeTerminal, Command: "nvim", Dock: "center"},
-		{Type: AppTypeTerminal, Command: "lazyrepo", Dock: "center"},
+		{Type: AppTypeTerminal, Command: "vimg", Dock: "center"},
 	} {
 		if isAgentApp(app) || appDock(app) != "right" {
 			t.Errorf("tool allowed in main area: %+v", app)
@@ -73,6 +73,25 @@ func TestMainAreaRejectsTools(t *testing.T) {
 		app := Application{Type: AppTypeTerminal, Command: command, Dock: "center"}
 		if !isAgentApp(app) || appDock(app) != "center" {
 			t.Errorf("agent rejected: %s", command)
+		}
+	}
+}
+
+func TestOldToolCommandsAreRenamed(t *testing.T) {
+	layoutTestDB(t)
+	if _, err := db.Exec(`INSERT INTO settings (key,value) VALUES ('tool_configs',?)`, `[{"id":"nvim","name":"Nvim","type":"terminal","command":"nvima","dock":"right"},{"id":"lazyrepo","name":"Git","type":"terminal","command":"lazyrepo --all","dock":"right"}]`); err != nil {
+		t.Fatal(err)
+	}
+	commands := map[string]string{}
+	for _, p := range plugins() {
+		commands[p.ID] = p.Command
+	}
+	if commands["nvim"] != "vime" || commands["lazyrepo"] != "lazyrepo --all" || commands["lazydata"] != "vimd" {
+		t.Fatalf("saved tool commands: %v", commands)
+	}
+	for old, want := range map[string]string{"nvima": "vime", "lazyrepo": "vimg", "lazydata": "vimd", "lazydiff": "vimi", "lazydata-sql": "vimd-sql", "lazydata --dev": "lazydata --dev", "bash": "bash"} {
+		if got := (savedApp{Command: old}).application().Command; got != want {
+			t.Errorf("restored %q as %q, want %q", old, got, want)
 		}
 	}
 }

@@ -18,7 +18,7 @@ import (
 	desktopbundledata "libro/internal/desktopbundledata"
 )
 
-// installBundledTools unpacks the embedded ide tools (lazyrepo, lazydata,
+// installBundledTools unpacks the embedded ide tools (vime, vimg, vimd,
 // nvim, ...) and appends them to PATH. Appending keeps tools the user installed
 // themselves first; bundled launchers still find their sibling nvim.
 func installBundledTools() {

@@ -34,12 +34,24 @@ var builtinPlugins = []Plugin{
 	{ID: "claude", Name: "Claude", Type: AppTypeTerminal, Command: "claude", Dock: "center", Description: "Claude Code"},
 	{ID: "terminal", Name: "Terminal", Type: AppTypeTerminal, Dock: "right", Description: "Your default shell"},
 	{ID: "browser", Name: "Browser", Type: AppTypeURL, Dock: "right", Description: "Browse websites and local previews"},
-	{ID: "nvim", Name: "Nvim", Type: AppTypeTerminal, Command: "nvima", Dock: "right", Description: "Terminal text editor"},
-	{ID: "lazyrepo", Name: "Git", Type: AppTypeTerminal, Command: "lazyrepo", Dock: "right", Description: "Repository tools"},
-	{ID: "lazydata", Name: "Database", Type: AppTypeTerminal, Command: "lazydata", Dock: "right", Description: "Explore your data"},
+	{ID: "nvim", Name: "Nvim", Type: AppTypeTerminal, Command: "vime", Dock: "right", Description: "Terminal text editor"},
+	{ID: "lazyrepo", Name: "Git", Type: AppTypeTerminal, Command: "vimg", Dock: "right", Description: "Repository tools"},
+	{ID: "lazydata", Name: "Database", Type: AppTypeTerminal, Command: "vimd", Dock: "right", Description: "Explore your data"},
 	{ID: "files", Name: "Files", Type: AppTypeURL, Dock: "right", Description: "Browse project files with Vim navigation"},
 	{ID: "notes", Name: "Notes", Type: AppTypeURL, Dock: "right", Description: "Track project notes and send them to an agent"},
 	{ID: "opencode", Name: "OpenCode", Type: AppTypeTerminal, Command: "opencode", Dock: "center", Description: "OpenCode coding agent"},
+}
+
+// renamedCommands maps old bundled tool commands to their current names.
+var renamedCommands = map[string]string{"nvima": "vime", "lazydiff": "vimi", "lazyrepo": "vimg", "lazydata": "vimd", "lazydata-sql": "vimd-sql"}
+
+// currentCommand upgrades a saved command that still uses an old tool name.
+// Other commands are kept as typed.
+func currentCommand(command string) string {
+	if renamed, ok := renamedCommands[command]; ok {
+		return renamed
+	}
+	return command
 }
 
 var pluginOnce sync.Once
@@ -158,6 +170,7 @@ func plugins() (result []Plugin) {
 		var tools []Plugin
 		if db.QueryRow(`SELECT value FROM settings WHERE key = 'tool_configs'`).Scan(&raw) == nil && json.Unmarshal([]byte(raw), &tools) == nil {
 			for _, tool := range tools {
+				tool.Command = currentCommand(tool.Command)
 				found := false
 				for i := range result {
 					if result[i].ID == tool.ID {

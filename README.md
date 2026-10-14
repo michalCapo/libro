@@ -136,7 +136,7 @@ One layout is saved per Libro instance. Only the first window restores it. Reloa
 
 - Open the tool you need next to your assistants: Terminal, Browser, Notes, Files, Nvim, Git, Database, or any tool of your own.
 - Use whatever tool you like. Name it, add its command or web address, and it shows up next to the built-in tools.
-- On Linux, Nvim (`nvima`), Git (`lazyrepo`), and Database (`lazydata`) come with Libro. If you installed your own copy, Libro uses yours. On macOS and Windows, install them yourself.
+- On Linux, Nvim (`vime`), Git (`vimg`), and Database (`vimd`) come with Libro. If you installed your own copy, Libro uses yours. On macOS and Windows, install them yourself.
 
 ![Tools in Settings: named tools with their commands and shortcuts](demo/tools-settings.png)
 - The terminal at the bottom runs your project's start command. Start it again with `Ctrl + Shift + R`, stop it with `Ctrl + Shift + T`.
