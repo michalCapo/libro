@@ -859,6 +859,14 @@
     });
   }
   window.addEventListener('libro-process-status', renderProjectTerminals);
+  // Rows with open panels read as cards; the main folder uses its branch card when it has one.
+  function renderProjectPanels() {
+    const open = new Set(window.__libroPanels || []);
+    document.querySelectorAll('.ws-project-row').forEach(row => {
+      const card = row.dataset.kind === 'project' && row.closest('.ws-project-group')?.querySelector('.ws-thread-row[data-kind=base]');
+      row.parentElement.dataset.panels = String(!card && open.has(row.dataset.projectKey));
+    });
+  }
   let queued = false;
   const observer = new MutationObserver(records => {
     if (records.some(record => (record.type === 'attributes' && record.target.matches('[data-app-id]')) || [...record.addedNodes, ...record.removedNodes].some(n => n.nodeType === 1 && (n.matches('[data-app-id], [data-workspace-project], .ws-project, #top-bar') || n.querySelector('[data-app-id], [data-workspace-project]'))))) schedule();
@@ -877,6 +885,7 @@
     renderThreadShortcuts();
     renderProjectActivity();
     renderProjectTerminals();
+    renderProjectPanels();
     window.libroFiles?.init();
     window.libroNotes?.init();
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {

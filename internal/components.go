@@ -2880,7 +2880,21 @@ func projectScriptNodes(state *AppState) []*r.Node {
 	if url == "" {
 		url = applicationURL(settings.Port)
 	}
-	return []*r.Node{clientScriptNode("window.__libroThreads=props[0];", state.Threads), clientScriptNode("window.__libroActiveProject=props[0];window.__libroApplicationURL=props[1];window.__libroProjects=props[2];window.__libroApplicationURLs=props[3];if(window.libroWorkspace)libroWorkspace.refresh();", state.ActiveProject, url, all, applicationBrowserURLs(state))}
+	return []*r.Node{clientScriptNode("window.__libroThreads=props[0];", state.Threads), clientScriptNode("window.__libroActiveProject=props[0];window.__libroApplicationURL=props[1];window.__libroProjects=props[2];window.__libroApplicationURLs=props[3];window.__libroPanels=props[4];if(window.libroWorkspace)libroWorkspace.refresh();", state.ActiveProject, url, all, applicationBrowserURLs(state), workspacesWithPanels(state))}
+}
+
+// workspacesWithPanels lists open workspaces that have at least one panel.
+func workspacesWithPanels(state *AppState) []string {
+	workspaces := []string{}
+	if len(state.Apps) > 0 && !state.closedWorkspaces[state.ActiveProject] {
+		workspaces = append(workspaces, state.ActiveProject)
+	}
+	for workspace, snapshot := range state.snapshots {
+		if workspace != state.ActiveProject && len(snapshot.Apps) > 0 && !state.closedWorkspaces[workspace] {
+			workspaces = append(workspaces, workspace)
+		}
+	}
+	return workspaces
 }
 
 // renderProjectDialog renders the create project modal
