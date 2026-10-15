@@ -66,6 +66,7 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 		r.Div("ws-navigation").Render(
 			r.Div("ws-sidebar-heading").Render(
 				r.Span("").Text("Projects"),
+				workspaceButton("Fold sidebar", "keyboard_double_arrow_left", r.UnsafeJS("libroWorkspace.foldSidebar()")).Attr("data-sidebar-fold", ""),
 				workspaceButton("Add project", "add", r.UnsafeJS("if(window.__libroOpenProjectDialogBrowse){__libroOpenProjectDialogBrowse();}else{__ws.call('project.dialog.open',{sid:el.dataset.sid});}")).Attr("data-sid", sid),
 			),
 			r.Div("ws-project-list").ID("workspace-project-list"),

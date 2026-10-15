@@ -112,6 +112,18 @@
     if (!event.target.closest?.('.ws-size-picker')) closeSizePicker();
   }, true);
   function save() { try { localStorage.setItem('libro.workspace', JSON.stringify(prefs)); } catch (_) {} }
+  // Narrow windows always fold the sidebar into a rail; wide windows fold it when the user pins it closed.
+  const narrowWindow = matchMedia('(max-width:1000px)');
+  function foldState() {
+    const fold = narrowWindow.matches ? 'narrow' : prefs.sidebarFolded === true ? 'user' : '';
+    if (fold) root.dataset.fold = fold; else delete root.dataset.fold;
+    const button = document.querySelector('[data-sidebar-fold]');
+    if (!button) return;
+    const label = fold ? 'Keep sidebar open' : 'Fold sidebar';
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    button.firstElementChild.textContent = fold ? 'push_pin' : 'keyboard_double_arrow_left';
+  }
   function activeGrid() { return [...document.querySelectorAll('[data-workspace-project]')].find(el => el.parentElement.style.display !== 'none'); }
   function frames(grid) { return [...grid.querySelectorAll(':scope > [data-app-id]')].sort((a, b) => Number(a.style.order) - Number(b.style.order)); }
   function isThread(grid = activeGrid()) { return grid?.dataset.thread === 'true'; }
@@ -882,6 +894,7 @@
     root.dataset.thread = String(isThread());
     root.dataset.projectRows = projectRowsMode(prefs.projectRows);
     root.dataset.voiceTyping = String(prefs.voiceTyping !== false);
+    foldState();
     renderToolRail();
     renderProjects();
     renderThreads();
@@ -1915,20 +1928,26 @@
     document.getElementById('workspace-settings-status').textContent = ok ? 'Saved. New tool panels will use this width.' : 'Could not save. Please try again.';
     settingsSaveFinished(ok);
   }
-  // Narrow windows show the project list over the panels; picking a row or tool, clicking outside, or Escape closes it.
+  // A folded sidebar shows the project list over the panels; picking a row or tool, clicking outside, or Escape closes it.
   // A closed list ignores hover until the pointer leaves the sidebar, so it does not reopen under the mouse.
-  const narrowWindow = matchMedia('(max-width:1000px)');
   function projectMenu(open = root.dataset.sidebar !== 'open') {
     root.dataset.sidebar = open ? 'open' : 'closed';
     document.querySelector('[data-sidebar-toggle]')?.setAttribute('aria-expanded', String(open));
   }
+  // Wide windows fold the sidebar only when the user asks; the choice is remembered.
+  function foldSidebar(folded = !prefs.sidebarFolded) {
+    prefs.sidebarFolded = folded;
+    save();
+    foldState();
+    projectMenu(false);
+  }
   document.addEventListener('click', event => {
-    if (narrowWindow.matches && (event.target.id === 'workspace-projects' || event.target.closest?.('.ws-project-row, .ws-tool-rail'))) projectMenu(false);
+    if (root.dataset.fold && (event.target.id === 'workspace-projects' || event.target.closest?.('.ws-project-row, .ws-tool-rail'))) projectMenu(false);
   });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && narrowWindow.matches && root.dataset.sidebar !== 'closed') projectMenu(false); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects')) delete root.dataset.sidebar; });
-  narrowWindow.addEventListener('change', () => projectMenu(false));
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, terminalExited, closeOtherPanels};
+  narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, terminalExited, closeOtherPanels};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }

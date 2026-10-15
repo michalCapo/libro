@@ -23,16 +23,19 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 .ws-sidebar{width:var(--ws-projects);flex-shrink:0;background:var(--ws-chrome);display:flex;flex-direction:column;padding:6px 8px 8px;gap:8px;overflow:hidden}
 .ws-navigation{display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto;padding:0 1px;scrollbar-width:thin;scrollbar-color:var(--ws-line) transparent}
 .ws-navigation>*{flex-shrink:0}
-/* Narrow windows fold the sidebar into a rail; its menu button shows the project list over the panels.
+/* Narrow windows, or the fold button, fold the sidebar into a rail; its menu button shows the project list over the panels.
    The list shadow falls only on the panel side, so the rail and list read as one surface. */
 .ws-sidebar>[data-sidebar-toggle]{display:none}
-@media(max-width:1000px){.ws-sidebar{width:var(--ws-rail-width);box-sizing:border-box;align-items:center;padding:6px 0;overflow:visible}.ws-sidebar>[data-sidebar-toggle]{display:inline-flex;width:32px;height:32px}.ws-sidebar>.ws-resizer-sidebar{display:none}.ws-sidebar>.ws-navigation{display:none;position:absolute;z-index:1;top:0;bottom:0;left:100%;width:min(var(--ws-projects),calc(100vw - 2 * var(--ws-rail-width)));box-sizing:border-box;padding:6px 8px 8px;background:var(--ws-chrome);box-shadow:0 8px 24px rgb(0 0 0 / 18%);clip-path:inset(0 -32px 0 0)}#libro-workspace[data-sidebar=open] .ws-sidebar{z-index:60}#libro-workspace[data-sidebar=open] .ws-navigation{display:flex}#libro-workspace[data-sidebar=open] .ws-sidebar::after{content:"";position:fixed;inset:0 0 0 var(--ws-rail-width);background:rgb(0 0 0 / 25%)}#libro-workspace[data-sidebar=open] [data-sidebar-toggle]{background:var(--ws-raised);color:var(--ws-fg);box-shadow:var(--ws-shadow)}}
+#libro-workspace[data-fold] .ws-sidebar{width:var(--ws-rail-width);box-sizing:border-box;align-items:center;padding:6px 0;overflow:visible}#libro-workspace[data-fold] .ws-sidebar>[data-sidebar-toggle]{display:inline-flex;width:32px;height:32px}#libro-workspace[data-fold] .ws-sidebar>.ws-resizer-sidebar{display:none}#libro-workspace[data-fold] .ws-sidebar>.ws-navigation{display:none;position:absolute;z-index:1;top:0;bottom:0;left:100%;width:min(var(--ws-projects),calc(100vw - 2 * var(--ws-rail-width)));box-sizing:border-box;padding:6px 8px 8px;background:var(--ws-chrome);box-shadow:0 8px 24px rgb(0 0 0 / 18%);clip-path:inset(0 -32px 0 0)}#libro-workspace[data-fold][data-sidebar=open] .ws-sidebar{z-index:60}#libro-workspace[data-fold][data-sidebar=open] .ws-navigation{display:flex}#libro-workspace[data-fold][data-sidebar=open] .ws-sidebar::after{content:"";position:fixed;inset:0 0 0 var(--ws-rail-width);background:rgb(0 0 0 / 25%)}#libro-workspace[data-fold][data-sidebar=open] [data-sidebar-toggle]{background:var(--ws-raised);color:var(--ws-fg);box-shadow:var(--ws-shadow)}
 /* With a mouse, hovering the rail fades the project list in; it stays while the pointer or focus is in the list. */
-@media(max-width:1000px) and (hover:hover){#libro-workspace:not([data-sidebar]) .ws-sidebar:is(:hover,:has(>.ws-navigation:focus-within)){z-index:60}#libro-workspace:not([data-sidebar]) .ws-sidebar:is(:hover,:has(>.ws-navigation:focus-within))>.ws-navigation{display:flex;animation:ws-fade-in .12s ease-out}}
+@media(hover:hover){#libro-workspace[data-fold]:not([data-sidebar]) .ws-sidebar:is(:hover,:has(>.ws-navigation:focus-within)){z-index:60}#libro-workspace[data-fold]:not([data-sidebar]) .ws-sidebar:is(:hover,:has(>.ws-navigation:focus-within))>.ws-navigation{display:flex;animation:ws-fade-in .12s ease-out}}
 @keyframes ws-fade-in{from{opacity:0}}
 .ws-navigation .ws-project-list+.ws-sidebar-heading{margin-top:auto;padding-top:12px}
 .ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;min-height:28px;padding:0 2px 0 10px;margin:4px 0 2px;color:var(--ws-muted);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
 .ws-sidebar-heading>.ws-button{width:26px;height:26px}
+/* The fold button sits beside the add button; narrow windows always fold, so they hide it. */
+.ws-sidebar-heading>span{margin-right:auto}
+#libro-workspace[data-fold=narrow] [data-sidebar-fold]{display:none}
 .ws-sidebar-heading>.ws-button .material-icons-round{font-size:17px}
 .ws-no-threads{color:var(--ws-muted);font-size:12px;padding:4px 10px}
 .ws-project-list{display:flex;flex-direction:column;gap:2px}
@@ -606,10 +609,10 @@ html.dark .ws-row-grid[data-agent-status=done]::before,html.dark .ws-row-grid[da
 [data-voice-button]{touch-action:none;flex-shrink:0}
 [data-voice-button][data-state=recording]{color:var(--ws-accent);background:var(--ws-hover)}
 .ws-voice-status{position:fixed;inset:auto;right:calc(var(--ws-rail-width) + 12px);margin:0;transform:translateY(-50%);z-index:70;width:max-content;max-width:min(320px,calc(100vw - 64px));padding:8px 12px;border:0;border-radius:8px;background:var(--ws-popup);color:var(--ws-fg);box-shadow:0 12px 36px rgb(0 0 0 / 14%);font-size:12px;line-height:1.4;white-space:normal}
-/* Narrow windows join the tool rail to the folded sidebar on the left, so one rail holds the menu button and the tools.
+/* A folded sidebar joins the tool rail on the left, so one rail holds the menu button and the tools.
    The sidebar floats over the rail. Its top strip holds the menu button, keeps the list open while the pointer crosses
    to it, and stays above the tools, which scroll below it. Only the strip, list, and backdrop take the pointer. */
-@media(max-width:1000px){.ws-body{position:relative}.ws-tool-rail{order:-1;margin-top:38px}.ws-sidebar{position:absolute;top:0;bottom:0;left:0;background:transparent;pointer-events:none}.ws-sidebar::before{content:"";position:absolute;top:0;left:0;right:0;height:38px;background:var(--ws-chrome)}.ws-sidebar>[data-sidebar-toggle]{position:relative}.ws-sidebar::before,.ws-sidebar>[data-sidebar-toggle],.ws-sidebar>.ws-navigation,.ws-sidebar::after{pointer-events:auto}.ws-voice-status{right:auto;left:calc(var(--ws-rail-width) + 12px)}}
+#libro-workspace[data-fold] .ws-body{position:relative}#libro-workspace[data-fold] .ws-tool-rail{order:-1;margin-top:38px}#libro-workspace[data-fold] .ws-sidebar{position:absolute;top:0;bottom:0;left:0;background:transparent;pointer-events:none}#libro-workspace[data-fold] .ws-sidebar::before{content:"";position:absolute;top:0;left:0;right:0;height:38px;background:var(--ws-chrome)}#libro-workspace[data-fold] .ws-sidebar>[data-sidebar-toggle]{position:relative}#libro-workspace[data-fold] .ws-sidebar::before,#libro-workspace[data-fold] .ws-sidebar>[data-sidebar-toggle],#libro-workspace[data-fold] .ws-sidebar>.ws-navigation,#libro-workspace[data-fold] .ws-sidebar::after{pointer-events:auto}#libro-workspace[data-fold] .ws-voice-status{right:auto;left:calc(var(--ws-rail-width) + 12px)}
 
 #tool-key-form .ws-agent-command-row{padding:10px 16px;gap:16px}
 #tool-key-form h3{margin-top:44px;margin-bottom:12px}
