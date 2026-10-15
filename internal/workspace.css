@@ -97,6 +97,11 @@ html.dark .ws-thread-row[data-kind=worktree] .ws-row-branch{color:#c4b5fd}
 .ws-project-item:has(>.ws-row-grid .ws-project-shortcut)>.ws-button{top:auto;bottom:2px;translate:none}
 .ws-project-item:is(:hover,:focus-within) .ws-project-shortcut{margin-left:24px}
 @media(hover:none){.ws-project-item .ws-project-shortcut{margin-left:24px}}
+/* Project rows have three actions, so they line up side by side before the badge instead of stacking. */
+.ws-project-item[data-kind=project]:has(.ws-project-shortcut)>.ws-project-settings{right:56px}
+.ws-project-item[data-kind=project]:has(.ws-project-shortcut)>.ws-project-new-thread{right:81px}
+.ws-project-item[data-kind=project]:is(:hover,:focus-within) .ws-project-shortcut{margin-left:74px}
+@media(hover:none){.ws-project-item[data-kind=project] .ws-project-shortcut{margin-left:74px}}
 .ws-project-item:has(>.ws-row-grid)>.ws-button{align-self:flex-end;margin-bottom:2px}
 .ws-project-item[data-archived=true]{opacity:.52}
 .ws-project-item[data-archived=true]:is(:hover,:focus-within),.ws-project-item[data-archived=true]:has(.ws-project-row[aria-current=true]){opacity:1}
