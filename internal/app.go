@@ -47,6 +47,24 @@ func hydrateAppAfterScrollJS(in actionAppHydrateInput) r.Result {
 `, in.ID, in)
 }
 
+// insertURLPanel adds a URL panel to the active workspace, selects and renders it.
+func insertURLPanel(sid, url, name, pluginID, dock string, width Width, index int) r.Result {
+	hadApps := len(sm.Get(sid).Apps)
+	sm.InsertApp(sid, url, width, name, index)
+	state := sm.Get(sid)
+	sm.SetAppPlugin(sid, state.Apps[state.SelectedIndex].ID, pluginID, dock)
+	state = sm.Get(sid)
+	topBarJS := r.Result{}.Morph(TopBarID, renderTopBar(state, sid))
+	projJS := projectsJS(state)
+	hydrateJS := hydrateAppAfterScrollJS(actionAppHydrateInput{SID: sid, ID: state.Apps[state.SelectedIndex].ID, OpenURL: state.Apps[state.SelectedIndex].URL == ""})
+	if hadApps > 0 {
+		newApp := state.Apps[state.SelectedIndex]
+		frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid)
+		return r.Merge(insertAppJS(frame, false, state.ActiveProject), navigateJS(state, sid), topBarJS, projJS, hydrateJS)
+	}
+	return r.Merge(r.Result{}.Morph(projectMainID(state.ActiveProject), renderMainAreaWithPlaceholder(state, sid, state.Apps[state.SelectedIndex].ID)), topBarJS, projJS, navigateJS(state, sid), hydrateJS)
+}
+
 // hydrateApp is the single start path for new and restored terminal panels.
 func hydrateApp(sid, appID string, openURL bool) r.Result {
 	if appID == "" {
@@ -631,6 +649,7 @@ func Run(assets embed.FS, desktop bool) error {
 	}
 	defer func() { _ = listener.Close() }()
 
+	desktopWindow = desktop
 	installShutdownSignalHandler()
 	installBundledTools()
 	InitDB()
@@ -916,22 +935,7 @@ func Run(assets embed.FS, desktop bool) error {
 			url = ensureScheme(url)
 		}
 
-		// Check if strip already exists
-		stateBefore := sm.Get(sid)
-		hadApps := len(stateBefore.Apps)
-		sm.InsertApp(sid, url, width, name, insertIdx)
-		state := sm.Get(sid)
-		sm.SetAppPlugin(sid, state.Apps[state.SelectedIndex].ID, pluginID, dock)
-		state = sm.Get(sid)
-		topBarJS := r.Result{}.Morph(TopBarID, renderTopBar(state, sid))
-		projJS := projectsJS(state)
-		hydrateJS := hydrateAppAfterScrollJS(actionAppHydrateInput{SID: sid, ID: state.Apps[state.SelectedIndex].ID, OpenURL: state.Apps[state.SelectedIndex].URL == ""})
-		if hadApps > 0 {
-			newApp := state.Apps[state.SelectedIndex]
-			frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid)
-			return r.Merge(insertAppJS(frame, false, state.ActiveProject), navigateJS(state, sid), topBarJS, projJS, hydrateJS), nil
-		}
-		return r.Merge(r.Result{}.Morph(projectMainID(state.ActiveProject), renderMainAreaWithPlaceholder(state, sid, state.Apps[state.SelectedIndex].ID)), topBarJS, projJS, navigateJS(state, sid), hydrateJS), nil
+		return insertURLPanel(sid, url, name, pluginID, dock, width, insertIdx), nil
 	})
 	registerWorkspaceAction(app, "app.hydrate", func(_ *r.Context, in actionAppHydrateInput) (r.Result, error) {
 		return hydrateApp(inputSID(in.SID), in.ID, in.OpenURL), nil
@@ -1197,28 +1201,11 @@ func Run(assets embed.FS, desktop bool) error {
 		case "right":
 			insertIdx = sm.SelectedIndex(sid) + 1
 		}
-		stateBefore := sm.Get(sid)
-		hadApps := len(stateBefore.Apps)
 		width := DBDefaultPanelWidth()
 		if w, ok := sm.ToolWidth(sid); ok {
 			width = w
 		}
-		sm.InsertApp(sid, "", width, "New Tab", insertIdx)
-		state := sm.Get(sid)
-		topBarJS := r.Result{}.Morph(TopBarID, renderTopBar(state, sid))
-		projJS := projectsJS(state)
-		hydrateJS := hydrateAppAfterScrollJS(actionAppHydrateInput{SID: sid, ID: state.Apps[state.SelectedIndex].ID, OpenURL: state.Apps[state.SelectedIndex].URL == ""})
-		if hadApps > 0 {
-			newApp := state.Apps[state.SelectedIndex]
-			frame := renderAppFramePlaceholder(newApp, state.SelectedIndex, true, sid)
-			return r.Merge(insertAppJS(frame, false, state.ActiveProject), navigateJS(state, sid), topBarJS, projJS, hydrateJS), nil
-		}
-		return r.Result{}.
-			Morph(projectMainID(state.ActiveProject), renderMainAreaWithPlaceholder(state, sid, state.Apps[state.SelectedIndex].ID)).
-			Morph(TopBarID, renderTopBar(state, sid)).
-			Add(projectsJS(state)).
-			Add(navigateJS(state, sid)).
-			Add(hydrateJS), nil
+		return insertURLPanel(sid, "", "New Tab", "", "", width, insertIdx), nil
 	})
 	// Quick open - show the app search dialog
 	registerWorkspaceAction(app, "plugin.launcher.open", func(_ *r.Context, in sessionInput) (r.Result, error) {

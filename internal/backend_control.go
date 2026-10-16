@@ -103,7 +103,10 @@ func backendControlHandler(app *r.App, token, sid string) http.Handler {
 		if err == nil {
 			backendActionMu.Lock()
 			var patch r.Result
-			patch, result, err = dispatchBackendCommand(sid, command)
+			// A caller that gave up while waiting may already have used a fallback.
+			if err = request.Context().Err(); err == nil {
+				patch, result, err = dispatchBackendCommand(sid, command)
+			}
 			if broadcastErr := app.Broadcast(patch); broadcastErr != nil {
 				log.Printf("libro: backend control update: %v", broadcastErr)
 			}
@@ -126,6 +129,8 @@ type backendCommand struct {
 	Project   string       `json:"project"`
 	Command   childCommand `json:"command"`
 	Note      noteCommand  `json:"note"`
+	Panel     string       `json:"panel,omitempty"`
+	URL       string       `json:"url,omitempty"`
 }
 
 // dispatchBackendCommand operates on the persistent backend workspace. It does not
@@ -168,6 +173,8 @@ func dispatchBackendCommand(sid string, command backendCommand) (r.Result, any, 
 		return clientScript("window.libroNotes?.refresh();"), result, err
 	case "children":
 		return controlChildren(sid, command.Project, command.Command)
+	case "open":
+		return openFilePanel(sid, command.Panel, command.URL)
 	default:
 		return r.Result{}, nil, errors.New("unknown backend control action")
 	}

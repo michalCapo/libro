@@ -235,7 +235,12 @@ func (tm *TerminalManager) startTerminal(generation uint64, appID, command, cwd 
 		environment = append(environment, "BASH_ENV=", "ENV=")
 	}
 	cmd.Dir = cwd
-	cmd.Env = mergeEnvironment(os.Environ(), append(environment, "TERM=xterm-256color", "COLORTERM=truecolor"))
+	// LIBRO_PANEL_ID lets tools such as libro open act beside this panel.
+	environment = append(environment, "TERM=xterm-256color", "COLORTERM=truecolor", "LIBRO_PANEL_ID="+appID)
+	if executable, err := os.Executable(); err == nil {
+		environment = append(environment, "LIBRO_BIN="+executable)
+	}
+	cmd.Env = mergeEnvironment(os.Environ(), environment)
 	if activity != nil {
 		cmd.Env = append(cmd.Env, activity.env...)
 		for _, value := range cmd.Env {

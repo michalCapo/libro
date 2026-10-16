@@ -616,10 +616,19 @@ async function quitApp() {
 }
 
 const libroSessions = new Set()
+// Local files shown in a panel may load their own scripts, styles, and images,
+// but their scripts must not read other local files.
+function blocksLocalFileRead(details) {
+  return ['xhr', 'subFrame', 'object'].includes(details.resourceType)
+}
+
 function configureLibroSession(libroSession) {
   if (libroSessions.has(libroSession)) return
   libroSessions.add(libroSession)
   registerLibroWebviewPreload(libroSession)
+  libroSession.webRequest.onBeforeRequest({ urls: ['file:///*'] }, (details, callback) => {
+    callback({ cancel: blocksLocalFileRead(details) })
+  })
 
   // Allow embedded browser apps to use media devices and related browser APIs.
   // Teams relies on `media` for microphone/camera/speaker access and
