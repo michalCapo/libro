@@ -25,6 +25,7 @@ var browserShortcutsScript = '(' + function(){
 	var pageToolHighlight = null;
 	var pageToolOverlay = null;
 	var pageToolStart = null;
+	var pageToolHovered = null;
 	var pageToolPrompt = null;
 	var pageToolPending = false;
 	var pageToolSession = 0;
@@ -45,26 +46,30 @@ var browserShortcutsScript = '(' + function(){
 			pageToolHighlight = document.createElement('div');
 			pageToolHighlight.setAttribute('aria-hidden', 'true');
 			pageToolHighlight.setAttribute('popover', 'manual');
-			pageToolHighlight.style.inset = 'auto';
-			pageToolHighlight.style.margin = '0';
-			pageToolHighlight.style.padding = '0';
-			pageToolHighlight.style.overflow = 'visible';
-			pageToolHighlight.style.position = 'fixed';
-			pageToolHighlight.style.pointerEvents = 'none';
-			pageToolHighlight.style.zIndex = '2147483647';
-			pageToolHighlight.style.boxSizing = 'border-box';
-			var modals = document.querySelectorAll('dialog:modal');
-			(modals[modals.length - 1] || document.documentElement).appendChild(pageToolHighlight);
+			pageToolModalRoot().appendChild(pageToolHighlight);
 			pageToolHighlight.showPopover();
 		}
+		// Clip to the viewport, the part the screenshot can contain. Important
+		// inline styles keep page CSS from changing the outline geometry.
+		var left = Math.max(0, rect.left), top = Math.max(0, rect.top);
+		var width = Math.max(0, Math.min(window.innerWidth, rect.right) - left), height = Math.max(0, Math.min(window.innerHeight, rect.bottom) - top);
 		pageToolHighlight.className = className || '';
-		pageToolHighlight.style.left = Math.max(0, rect.left) + 'px';
-		pageToolHighlight.style.top = Math.max(0, rect.top) + 'px';
-		pageToolHighlight.style.width = Math.max(0, rect.width) + 'px';
-		pageToolHighlight.style.height = Math.max(0, rect.height) + 'px';
-		pageToolHighlight.style.border = '2px solid #2563eb';
-		pageToolHighlight.style.background = 'rgba(37,99,235,.10)';
-		pageToolHighlight.style.boxShadow = '0 0 0 1px rgba(255,255,255,.8), 0 2px 12px rgba(37,99,235,.18)';
+		pageToolHighlight.style.cssText = ['all:initial', 'display:block', 'position:fixed', 'inset:auto', 'left:' + left + 'px', 'top:' + top + 'px',
+			'width:' + width + 'px', 'height:' + height + 'px', 'margin:0', 'padding:0', 'overflow:visible', 'box-sizing:border-box',
+			'pointer-events:none', 'z-index:2147483647', 'border:2px solid #2563eb', 'background:rgba(37,99,235,.10)',
+			'box-shadow:0 0 0 1px rgba(255,255,255,.8), 0 2px 12px rgba(37,99,235,.18)'].join('!important;') + '!important';
+	}
+	// Only the most recently opened modal dialog is not inert, and hit
+	// testing skips inert content. Dialogs in shadow roots count too.
+	function pageToolModalRoot() {
+		var modals = [];
+		pageToolRoots(document, []).forEach(function(root) { modals.push.apply(modals, root.querySelectorAll('dialog:modal')); });
+		for (var i = modals.length - 1; i >= 0; i--) {
+			var box = modals[i].getBoundingClientRect();
+			var hit = modals[i].getRootNode().elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+			if (hit && modals[i].contains(hit)) return modals[i];
+		}
+		return modals[modals.length - 1] || document.documentElement;
 	}
 	function pageToolSelector(el) {
 		if (!el || !el.tagName) return '';
@@ -83,14 +88,13 @@ var browserShortcutsScript = '(' + function(){
 		var rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
 		return {
 			selector: pageToolSelector(el),
-			viewportRect: rect ? {x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height)} : null
+			viewportRect: rect ? pageToolAreaData(rect) : null
 		};
 	}
+	// Exact CSS pixels plus the device pixel ratio, so Libro can crop the
+	// device-pixel screenshot to the drawn rectangle at any zoom or display scale.
 	function pageToolAreaData(rect) {
-		return {
-			x: Math.round(rect.left), y: Math.round(rect.top),
-			width: Math.round(rect.width), height: Math.round(rect.height)
-		};
+		return {x: rect.left, y: rect.top, width: rect.width, height: rect.height, pixelRatio: window.devicePixelRatio};
 	}
 	// A session argument closes only that capture, so a late result cannot
 	// close a newer prompt.
@@ -104,11 +108,14 @@ var browserShortcutsScript = '(' + function(){
 	}
 	// Libro captures the screenshot and then opens the prompt; the page stays
 	// frozen in between.
-	function pageToolCapture(payload) {
+	// An element is measured again right before capture, in case the page
+	// scrolled or moved it while the outline was being removed.
+	function pageToolCapture(payload, el) {
 		pageToolPending = true;
 		payload.session = ++pageToolSession;
 		pageToolSync();
 		requestAnimationFrame(function() { requestAnimationFrame(function() {
+			if (el && el.isConnected && payload.element) payload.element.viewportRect = pageToolAreaData(el.getBoundingClientRect());
 			pageToolMessage('capture-area', payload);
 		}); });
 	}
@@ -208,8 +215,7 @@ var browserShortcutsScript = '(' + function(){
 		header.append(title, close); actions.append(cancel, send); card.append(header, summary, input, attachments, actions); root.appendChild(card);
 		// Popovers paint above page dialogs. Keep the prompt inside the active
 		// modal as well, so the browser does not make its input inert.
-		var modals = document.querySelectorAll('dialog:modal');
-		(modals[modals.length - 1] || document.documentElement).appendChild(panel);
+		pageToolModalRoot().appendChild(panel);
 		panel.showPopover();
 		pageToolPrompt = panel;
 		pageToolSync();
@@ -282,6 +288,7 @@ var browserShortcutsScript = '(' + function(){
 	function pageToolStop(mode) {
 		pageToolMode = '';
 		pageToolStart = null;
+		pageToolHovered = null;
 		removePageToolHighlight();
 		if (pageToolOverlay && pageToolOverlay.parentNode) pageToolOverlay.parentNode.removeChild(pageToolOverlay);
 		pageToolOverlay = null;
@@ -312,8 +319,16 @@ var browserShortcutsScript = '(' + function(){
 		if (pageToolMode !== 'annotate') return;
 		var el = event.target && event.target.nodeType === 1 ? event.target : event.target && event.target.parentElement;
 		if (!el || el === pageToolHighlight || (pageToolOverlay && pageToolOverlay.contains(el))) return;
+		pageToolHovered = el;
 		try { pageToolRect(el.getBoundingClientRect(), 'libro-page-tool-highlight'); } catch (err) {}
 	}
+	// Scrolling stays available, so keep the outline on the hovered element.
+	function pageToolRefreshHover() {
+		if (pageToolMode !== 'annotate' || !pageToolHighlight || !pageToolHovered || !pageToolHovered.isConnected) return;
+		pageToolRect(pageToolHovered.getBoundingClientRect(), 'libro-page-tool-highlight');
+	}
+	window.addEventListener('scroll', pageToolRefreshHover, {capture: true, passive: true});
+	window.addEventListener('resize', pageToolRefreshHover);
 	function pageToolPointerOut(event) {
 		if (pageToolMode !== 'annotate') return;
 		if (event.relatedTarget && event.relatedTarget.nodeType === 1) return;
@@ -326,7 +341,7 @@ var browserShortcutsScript = '(' + function(){
 		var data = pageToolElementData(el);
 		pageToolStop('annotate');
 		pageToolPromptClose();
-		pageToolCapture({kind: 'element', url: window.location.href, element: data});
+		pageToolCapture({kind: 'element', url: window.location.href, element: data}, el);
 	}
 	function pageToolPointerDown(event) {
 		if (pageToolMode !== 'area' || event.button !== 0) return;
@@ -346,18 +361,27 @@ var browserShortcutsScript = '(' + function(){
 		}
 		pageToolRect({left:event.clientX, top:event.clientY, right:event.clientX, bottom:event.clientY, width:0, height:0}, 'libro-page-tool-area');
 	}
+	// Pointer capture reports positions outside the page while dragging past
+	// its edge; keep the rectangle inside the viewport so it matches the capture.
+	function pageToolDragRect(event) {
+		var x = Math.max(0, Math.min(window.innerWidth, event.clientX)), y = Math.max(0, Math.min(window.innerHeight, event.clientY));
+		var left = Math.min(pageToolStart.x, x), top = Math.min(pageToolStart.y, y);
+		var right = Math.max(pageToolStart.x, x), bottom = Math.max(pageToolStart.y, y);
+		return {left:left, top:top, right:right, bottom:bottom, width:right-left, height:bottom-top};
+	}
 	function pageToolPointerMove(event) {
 		if (pageToolMode !== 'area' || !pageToolStart) return;
-		var left = Math.min(pageToolStart.x, event.clientX), top = Math.min(pageToolStart.y, event.clientY);
-		var right = Math.max(pageToolStart.x, event.clientX), bottom = Math.max(pageToolStart.y, event.clientY);
-		pageToolRect({left:left, top:top, right:right, bottom:bottom, width:right-left, height:bottom-top}, 'libro-page-tool-area');
+		pageToolRect(pageToolDragRect(event), 'libro-page-tool-area');
+	}
+	function pageToolPointerCancel() {
+		if (pageToolMode !== 'area' || !pageToolStart) return;
+		pageToolStart = null;
+		removePageToolHighlight();
 	}
 	function pageToolPointerUp(event) {
 		if (pageToolMode !== 'area' || !pageToolStart) return;
-		var left = Math.min(pageToolStart.x, event.clientX), top = Math.min(pageToolStart.y, event.clientY);
-		var right = Math.max(pageToolStart.x, event.clientX), bottom = Math.max(pageToolStart.y, event.clientY);
-		var rect = {left:left, top:top, right:right, bottom:bottom, width:right-left, height:bottom-top};
-		if (rect.width < 6 || rect.height < 6) { pageToolStart = null; return; }
+		var rect = pageToolDragRect(event);
+		if (rect.width < 6 || rect.height < 6) { pageToolPointerCancel(); return; }
 		var data = pageToolAreaData(rect);
 		try { if (event.target.releasePointerCapture) event.target.releasePointerCapture(event.pointerId); } catch (err) {}
 		pageToolStop('area');
@@ -367,7 +391,7 @@ var browserShortcutsScript = '(' + function(){
 	// While a page tool or its prompt is active, the page is frozen: its own
 	// handlers never see input (no link, menu, key, or route changes) and
 	// reloads are blocked until the prompt is sent or cancelled.
-	var pageToolHandlers = {pointerover: pageToolPointerOver, pointerout: pageToolPointerOut, click: pageToolClick, pointerdown: pageToolPointerDown, pointermove: pageToolPointerMove, pointerup: pageToolPointerUp, pointercancel: pageToolPointerUp, keydown: pageToolKeydown};
+	var pageToolHandlers = {pointerover: pageToolPointerOver, pointerout: pageToolPointerOut, click: pageToolClick, pointerdown: pageToolPointerDown, pointermove: pageToolPointerMove, pointerup: pageToolPointerUp, pointercancel: pageToolPointerCancel, keydown: pageToolKeydown};
 	function pageToolKeydown(event) {
 		if (event.key !== 'Escape') browserKeydown(event);
 		else if (pageToolMode) pageToolStop(pageToolMode);
