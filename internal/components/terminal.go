@@ -347,7 +347,9 @@ func terminalCommand(command, shell string) *exec.Cmd {
 	if strings.TrimSpace(command) == "" {
 		return exec.Command(shell)
 	}
-	return exec.Command(shell, "-lc", terminalShellScript(command, shell))
+	// Interactive, like a shell where the user types the command, so rc files
+	// that stop early for non-interactive shells still export provider keys.
+	return exec.Command(shell, "-lic", terminalShellScript(command, shell))
 }
 
 // BundledToolsDir holds tools shipped with Libro. Terminal commands append it
