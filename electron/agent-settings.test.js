@@ -30,7 +30,7 @@ test('saving a new agent excludes removed tools and preserves removed agents', (
       { id: 'custom-old', dock: 'center', type: 'terminal', removed: true },
     ] },
     document: { getElementById: () => element, querySelector: () => element, querySelectorAll: () => [] },
-    fillThreadAgents() {}, fillToolKeys() {}, updateToolHints() {}, themePreference() {}, projectRowsMode() {}, addAgentRow() {}, fillAgentEnvironment() {}, fillAutolaunchAgents() {}, fillEditorTools() {},
+    fillThreadAgents() {}, fillToolKeys() {}, updateToolHints() {}, themePreference() {}, addAgentRow() {}, fillAgentEnvironment() {}, fillAutolaunchAgents() {}, fillEditorTools() {},
     call(action, data) { assert.equal(action, 'settings.agent-command'); payload = JSON.parse(JSON.stringify(data)) },
   })
   assert.deepEqual(payload.removed, { 'custom-old': true })
@@ -93,7 +93,6 @@ function settingsHarness(valid = true) {
     savePageTools: () => calls.push('page-tools'),
     saveSettings: (value, tool) => calls.push(tool ? 'tool-width' : 'width'),
     saveTheme: () => { calls.push('theme'); return true },
-    saveProjectRows: () => { calls.push('project-rows'); return true },
     saveNotificationSound: () => { calls.push('sound'); return true },
     saveVoiceTyping: () => { calls.push('voice-typing'); return true },
   })
@@ -109,7 +108,7 @@ test('one Save waits for every section before showing a toast and keeps settings
   assert.equal(h.content.inert, true)
   assert.deepEqual(h.toasts, [])
   for (let i = 0; i < 8; i++) h.run('settingsSaveFinished(true)')
-  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', {key:'openrouter-key', clearKey:false}, {enabled:false}, 'default-thread-agent', 'page-tools', 'width', 'theme', 'project-rows', 'sound', 'voice-typing'])
+  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', {key:'openrouter-key', clearKey:false}, {enabled:false}, 'default-thread-agent', 'page-tools', 'width', 'theme', 'sound', 'voice-typing'])
   assert.equal(h.get('workspace-settings').hidden, false)
   assert.deepEqual(h.toasts, [['Settings saved', '', 'success']])
   assert.equal(h.get('settings-save').disabled, false)

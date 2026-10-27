@@ -10,10 +10,10 @@ import (
 )
 
 var toolKeys = []struct{ ID, Name, Key string }{
-	{"terminal", "Terminal", "Ctrl+T"},
+	{"terminal", "Terminal", "Ctrl+Shift+Enter"},
 	{"browser", "Browser", "Ctrl+B"},
 	{"new-browser", "New browser panel", "Ctrl+Shift+B"},
-	{"new-terminal", "New terminal panel", "Ctrl+Shift+T"},
+	{"new-terminal", "New terminal panel", "Ctrl+Enter"},
 	{"previous-browser", "Previous agent, browser or terminal panel", "Ctrl+["},
 	{"next-browser", "Next agent, browser or terminal panel", "Ctrl+]"},
 	{"files", "Files", "Ctrl+F"},
@@ -33,7 +33,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"project-picker", "Switch project", "Ctrl+Shift+P"},
 	{"new-agent", "New agent", ""},
 	{"new-agent-panel", "New agent panel", "Ctrl+Shift+A"},
-	{"new-thread", "New thread", "Ctrl+Shift+N"},
+	{"new-thread", "New thread", "Ctrl+T"},
 	{"finish-thread", "Finish current thread…", ""},
 	{"thread-actions", "Thread actions", "Ctrl+;"},
 	{"replace-agent", "Replace agent", ""},
@@ -44,7 +44,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"zoom-out", "Zoom out", "Ctrl+-"},
 	{"zoom-reset", "Reset zoom", "Ctrl+0"},
 }
-var shortcutPattern = regexp.MustCompile(`^(Ctrl\+)?(Alt\+)?(Shift\+)?(Meta\+)?[A-Z0-9=,.;\[\]\-]$`)
+var shortcutPattern = regexp.MustCompile(`^(Ctrl\+)?(Alt\+)?(Shift\+)?(Meta\+)?([A-Z0-9=,.;\[\]\-]|Enter)$`)
 
 var reservedNavigationShortcut = regexp.MustCompile(`^Ctrl\+(Shift\+)?[1-9]$`)
 
@@ -84,7 +84,7 @@ func validateToolKeybindings(bindings map[string]string) error {
 			return fmt.Errorf("%s is reserved for workspace navigation", key)
 		}
 		if (id != "voice" || key != "CapsLock") && (!shortcutPattern.MatchString(key) || (!strings.Contains(key, "Ctrl+") && !strings.Contains(key, "Alt+") && !strings.Contains(key, "Meta+"))) {
-			return fmt.Errorf("use CapsLock for voice typing, or Ctrl, Alt, or Meta with a letter, number, comma, period, semicolon, brackets, = or -")
+			return fmt.Errorf("use CapsLock for voice typing, or Ctrl, Alt, or Meta with a letter, number, comma, period, semicolon, brackets, =, - or Enter")
 		}
 		if used[key] {
 			return fmt.Errorf("%s is assigned more than once", key)
@@ -114,6 +114,21 @@ func toolKeybindings() map[string]string {
 					if saved[id] == "" {
 						delete(saved, id)
 					}
+				}
+			}
+			// Ctrl+T moved from the terminal to a new thread, and the terminals
+			// moved to Ctrl+Enter keys. Only untouched old defaults move; older
+			// settings may not have the other two shortcuts yet.
+			old := map[string]string{"terminal": "Ctrl+T", "new-terminal": "Ctrl+Shift+T", "new-thread": "Ctrl+Shift+N"}
+			moved := saved["terminal"] == "Ctrl+T"
+			for id, key := range old {
+				if value, exists := saved[id]; exists && value != key {
+					moved = false
+				}
+			}
+			if moved {
+				for id := range old {
+					delete(saved, id)
 				}
 			}
 			// New shortcuts get their default unless the key is already taken.

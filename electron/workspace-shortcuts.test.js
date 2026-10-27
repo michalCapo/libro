@@ -111,7 +111,8 @@ test('bottom terminal focuses before toggling closed', () => {
 })
 
 function inputFor(binding, repeat = false) {
-  const key = binding.split('+').at(-1).toLowerCase()
+  const last = binding.split('+').at(-1)
+  const key = last.length > 1 ? last : last.toLowerCase()
   return { key, code: 'Key' + key.toUpperCase(), control: binding.includes('Ctrl+'),
     alt: binding.includes('Alt+'), meta: binding.includes('Meta+'), shift: binding.includes('Shift+'), isAutoRepeat: repeat }
 }
@@ -661,7 +662,7 @@ test('address popup reclaims native focus only for the workspace sender', () => 
 })
 
 
-test('new thread shortcut uses the current project and ignores repeats', () => {
+test('new thread shortcut opens the project picker and ignores repeats', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const create = source.slice(source.indexOf('  function newThread('), source.indexOf('  function threadArchived()'))
   const handler = source.slice(source.indexOf("    if (binding && binding === toolKeys['new-thread'])"), source.indexOf("    if (binding && binding === toolKeys['new-agent'])"))
@@ -672,8 +673,9 @@ test('new thread shortcut uses the current project and ignores repeats', () => {
       binding, toolKeys: { 'new-thread': binding },
       event: { repeat, preventDefault() {}, stopImmediatePropagation() {} },
       call(action, data) { calls.push([action, data.project]) },
+      threadPicker() { calls.push(['picker']) },
     })
-    assert.deepEqual(calls, repeat ? [] : [['thread.create', project]])
+    assert.deepEqual(calls, repeat ? [] : [['picker']])
   }
 })
 
@@ -810,9 +812,9 @@ test('thread list keeps all open threads and only the newest five archived threa
     node, button: node, closeSettings() {}, innerWidth: 1000, call(action, data) { calls.push([action, data.name]) },
   })
   const rows = list.children.map(item => item.children[0])
-  assert.deepEqual(rows.map(row => row.dataset.projectKey), [...threads.filter(t => !t.archived).reverse(), ...threads.filter(t => t.archived).reverse().slice(0, 5)].map(t => t.id))
+  assert.deepEqual(rows.map(row => row.dataset.projectKey), [...threads.filter(t => !t.archived), ...threads.filter(t => t.archived).slice(-5)].map(t => t.id))
   rows.at(-1).onclick()
-  assert.deepEqual(calls, [['project.switch', '16']])
+  assert.deepEqual(calls, [['project.switch', '24']])
   assert.equal(threads.length, 25, 'older archives remain stored')
 })
 
@@ -884,15 +886,16 @@ test('project threads hide archived agents and stay separate from standalone thr
   assert.equal(hidden.has('browser'), true)
 })
 
-test('new thread uses the active project context, while standalone creation remains explicit', () => {
+test('new thread without a project opens the picker, while explicit projects create directly', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('  function newThread('), source.indexOf('  function threadArchived()'))
   const calls = []
   vm.runInNewContext(handler + ";newThread();newThread('');newThread('other')", {
     window: { __libroActiveProject: 'thread:project' },
     call: (action, data) => calls.push([action, data.project]),
+    threadPicker: () => calls.push(['picker']),
   })
-  assert.deepEqual(calls, [['thread.create', 'thread:project'], ['thread.create', ''], ['thread.create', 'other']])
+  assert.deepEqual(calls, [['picker'], ['thread.create', ''], ['thread.create', 'other']])
 })
 
 test('workspace dividers resize, clamp, persist, and clean up cancelled drags', () => {

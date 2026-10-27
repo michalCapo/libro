@@ -1,6 +1,6 @@
 # Sidebar Redesign: Active Threads Only
 
-Status: design, not implemented.
+Status: implemented. No project threads form the last group, newest at the bottom of each group. The Project rows setting (Lines, Faint names, Always) was removed; All projects replaces it.
 
 Mockup: https://claude.ai/artifact/HirB3ocg1EmFNNfzPZk5CN
 
@@ -11,7 +11,7 @@ Mockup: https://claude.ai/artifact/HirB3ocg1EmFNNfzPZk5CN
 - Threads stay in the list until the user closes them (also when Done).
 - Threads of the same project sit next to each other. A new thread goes right under the other threads of its project.
 - Threads without a project are normal cards in the same list, labelled "No project". No separate list at the bottom.
-- Open idea (not decided): treat "No project" as one more group and put it last. Newest thread at the bottom of each group.
+- "No project" is one more group and comes last. Newest thread at the bottom of each group.
 - Small "All projects (count)" row at the bottom opens the full project list.
 
 ## New thread

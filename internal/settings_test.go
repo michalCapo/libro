@@ -412,7 +412,38 @@ func TestNewThreadAgentShortcutMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := toolKeybindings()
-	if _, exists := got["new-thread-agent"]; exists || got["new-agent-panel"] != "Ctrl+Shift+A" || got["new-thread"] != "Ctrl+Shift+N" || got["settings"] != "Ctrl+Alt+S" {
+	if _, exists := got["new-thread-agent"]; exists || got["new-agent-panel"] != "Ctrl+Shift+A" || got["new-thread"] != "Ctrl+T" || got["settings"] != "Ctrl+Alt+S" {
 		t.Fatalf("migrated shortcuts = %v", got)
+	}
+}
+
+func TestNewThreadCtrlTShortcutMigration(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "settings.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	// Older settings still hold the agent thread shortcut and no new thread key.
+	for _, legacy := range []bool{false, true} {
+		saved := defaultToolKeybindings()
+		saved["terminal"] = "Ctrl+T"
+		saved["new-terminal"] = "Ctrl+Shift+T"
+		saved["new-thread"] = "Ctrl+Shift+N"
+		if legacy {
+			saved["new-thread-agent"] = "Ctrl+Shift+A"
+			saved["new-agent-panel"] = ""
+			saved["new-thread"] = ""
+		}
+		raw, _ := json.Marshal(saved)
+		if _, err := db.Exec(`INSERT OR REPLACE INTO settings (key, value) VALUES ('tool_keybindings', ?)`, string(raw)); err != nil {
+			t.Fatal(err)
+		}
+		got := toolKeybindings()
+		if got["terminal"] != "Ctrl+Shift+Enter" || got["new-terminal"] != "Ctrl+Enter" || got["new-thread"] != "Ctrl+T" {
+			t.Fatalf("legacy=%v migrated shortcuts = %v", legacy, got)
+		}
 	}
 }

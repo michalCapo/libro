@@ -448,7 +448,7 @@ function isWorkspaceShortcut(input) {
       (input.code === 'Backquote' || input.key === '`')) return true
   const key = input.key === '+' ? '=' : input.key || ''
   const binding = (input.control ? 'Ctrl+' : '') + (input.alt ? 'Alt+' : '') +
-    (input.shift && input.key !== '+' ? 'Shift+' : '') + (input.meta ? 'Meta+' : '') + (key.toLowerCase() === 'capslock' ? 'CapsLock' : key.toUpperCase())
+    (input.shift && input.key !== '+' ? 'Shift+' : '') + (input.meta ? 'Meta+' : '') + (key.toLowerCase() === 'capslock' ? 'CapsLock' : key === 'Enter' ? key : key.toUpperCase())
   return workspaceShortcuts.has(binding) || binding === 'Ctrl+A' ||
     (/^Ctrl\+[1-9]$/.test(binding) ||
       (!!input.control && !input.meta && !input.alt && !input.shift && /^Digit[1-9]$/.test(input.code || '')))

@@ -65,13 +65,24 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 		workspaceButton("Projects", "menu", r.UnsafeJS("libroWorkspace.projectMenu()")).Attr("data-sidebar-toggle", "").Attr("aria-expanded", "false"),
 		r.Div("ws-navigation").Render(
 			r.Div("ws-sidebar-heading").Render(
-				r.Span("").Text("Projects"),
+				r.Span("").Text("Threads"),
 				workspaceButton("Fold sidebar", "keyboard_double_arrow_left", r.UnsafeJS("libroWorkspace.foldSidebar()")).Attr("data-sidebar-fold", ""),
-				workspaceButton("Add project", "add", r.UnsafeJS("if(window.__libroOpenProjectDialogBrowse){__libroOpenProjectDialogBrowse();}else{__ws.call('project.dialog.open',{sid:el.dataset.sid});}")).Attr("data-sid", sid),
+			),
+			r.Button("ws-new-thread").Attr("type", "button").Attr("aria-label", "New thread").OnClick(r.UnsafeJS("libroWorkspace.newThread()")).Render(
+				r.I("material-icons-round").Attr("aria-hidden", "true").Text("add"),
+				r.Span("").Text("New thread"),
+				r.El("kbd", "ws-new-thread-key").Attr("aria-hidden", "true"),
 			),
 			r.Div("ws-project-list").ID("workspace-project-list"),
-			r.Div("ws-sidebar-heading").Render(r.Span("").Text("Threads"), workspaceButton("New thread", "add", r.UnsafeJS("libroWorkspace.newThread('')"))),
-			r.Div("").ID("workspace-thread-list"),
+			r.Div("ws-project-list").ID("workspace-thread-list"),
+			r.Div("ws-sidebar-footer").Render(
+				r.Button("ws-sidebar-search").ID("workspace-all-projects").Attr("type", "button").Attr("aria-expanded", "false").OnClick(r.UnsafeJS("libroWorkspace.toggleProjects()")).Render(
+					r.I("material-icons-round").Attr("aria-hidden", "true").Text("folder_open"),
+					r.Span("").Text("All projects"),
+					r.El("small", "").ID("workspace-project-count"),
+				),
+				workspaceButton("Add project", "add", r.UnsafeJS("if(window.__libroOpenProjectDialogBrowse){__libroOpenProjectDialogBrowse();}else{__ws.call('project.dialog.open',{sid:el.dataset.sid});}")).Attr("data-sid", sid),
+			),
 		),
 	)
 }

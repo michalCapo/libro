@@ -251,3 +251,29 @@ test('branch menu targets its own workspace and disables new threads without a c
       : [['project.close', 'repo'], ['settings', 'repo']])
   }
 })
+
+test('thread picker puts the current project first, also from a child thread, and creates a worktree unless the box is cleared', () => {
+  const code = source.slice(source.indexOf('  function threadPicker('), source.indexOf('  function paletteDialog('))
+  let args
+  const calls = []
+  vm.runInNewContext(code + ';threadPicker();', {
+    node: tag => ({tag, children:[], append(...items) { this.children.push(...items) }}),
+    paletteDialog: (...values) => { args = values },
+    call: (action, data) => calls.push([action, data.project ?? data.name]),
+    window: {__libroActiveProject:'child', __libroThreads:[{id:'child', project:'web/thread-1'}], __libroPanels:[], __libroProjects:[
+      {kind:'project', name:'api', isGit:true, currentBranch:'main', baseOpened:true},
+      {kind:'project', name:'idle', isGit:true, currentBranch:'main'},
+      {kind:'project', name:'web', isGit:true, currentBranch:'main'},
+      {kind:'worktree', name:'web', branch:'thread-1'},
+      {kind:'project', name:'notes', isGit:false},
+    ]},
+  })
+  const [, , , entries, [option], active] = args
+  assert.deepEqual(Array.from(entries, entry => entry.heading || entry.label), ['No project', 'Recent', 'web', 'api', 'All projects', 'idle', 'notes', 'Add project…'])
+  assert.equal(active, 1)
+  const run = label => entries.find(entry => entry.label === label).run()
+  run('web'); run('notes')
+  option.children[0].checked = false
+  run('web'); run('No project')
+  assert.deepEqual(calls, [['thread.create', 'web'], ['project.switch', 'notes'], ['project.switch', 'web'], ['thread.create', '']])
+})

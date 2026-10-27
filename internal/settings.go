@@ -416,20 +416,8 @@ func renderWorkspaceSettings() *r.Node {
 						r.El("option", "").Attr("value", "dark").Text("Dark"),
 					),
 				),
-				r.Div("ws-settings-row").Render(
-					r.Div("ws-settings-copy").Render(
-						r.El("label", "").Attr("for", "project-rows").Text("Project rows"),
-						r.P("").ID("project-rows-help").Text("Lines and Faint names hide project rows until you point at the sidebar. Threads stay in place."),
-					),
-					r.El("select", "ws-settings-select").ID("project-rows").Attr("aria-describedby", "project-rows-help").Render(
-						r.El("option", "").Attr("value", "hover").Text("Lines"),
-						r.El("option", "").Attr("value", "faint").Text("Faint names"),
-						r.El("option", "").Attr("value", "always").Text("Always"),
-					),
-				),
 			),
 			r.P("ws-settings-status").ID("workspace-theme-status").Attr("role", "status"),
-			r.P("ws-settings-status").ID("project-rows-status").Attr("role", "status"),
 			r.El("h2", "ws-shortcut-heading").Text("Notifications"),
 			r.Div("ws-settings-group").Render(
 				r.Div("ws-settings-row").Render(

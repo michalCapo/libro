@@ -249,7 +249,7 @@
     else if (center) heading.textContent = heading.textContent.replace(/ on $/, '?');
     el.append(heading);
     const branch = center ? mainBranch(grid) : ''; el.dataset.branch = branch;
-    const description = node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : branch ? 'Agents work directly on ' + branch + '.' + (toolKeys['new-thread'] ? ' Press ' + toolKeys['new-thread'] + ' for a new worktree.' : '') : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.');
+    const description = node('p', '', center ? (standalone ? 'Explore an idea or work on your computer and servers.' : branch ? 'Agents work directly on ' + branch + '.' + (toolKeys['new-thread'] ? ' Press ' + toolKeys['new-thread'] + ' for a new thread.' : '') : 'Start an agent in this project. Your tools and terminals stay close by.') : zone === 'right' ? 'Open a browser, repository tool, or terminal.' : 'Run commands without leaving your agent.');
     el.append(description);
     const actions = node('div', 'ws-agent-actions');
 
@@ -434,28 +434,63 @@
     actions.unshift({label:'New thread', icon:'add', description:'Create a new thread in ' + project.name, run:() => newThread(project.name)});
     if (project.kind !== 'worktree') actions.push({label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep files, branch and worktree', run:() => call('project.close')});
     actions.push({label:'Close other panels', icon:'close_fullscreen', description:'Close every panel except the selected one', run:() => closeOtherPanels()});
-    document.getElementById('thread-action-dialog')?.remove();
-    const dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'thread-action-dialog'; dialog.setAttribute('aria-label', 'Thread actions');
+    actions.forEach(action => { action.description ||= project.branch || project.currentBranch || project.name; });
+    paletteDialog('thread-action-dialog', 'Thread actions', 'Search thread actions…', actions);
+  }
+  // New thread asks for its project. The current project comes first, so Enter makes a thread there.
+  function threadPicker() {
+    const all = window.__libroProjects || [];
+    const projects = all.filter(p => p.kind !== 'worktree');
+    // A child thread belongs to the project of its parent workspace.
+    const active = (window.__libroThreads || []).find(thread => thread.id === window.__libroActiveProject)?.project || window.__libroActiveProject;
+    const current = all.find(p => (p.kind === 'worktree' ? p.name + '/' + p.branch : p.name) === active)?.name;
+    const open = new Set(window.__libroPanels || []);
+    const recent = projects.filter(p => p.name === current || p.baseOpened || open.has(p.name) || all.some(w => w.kind === 'worktree' && w.name === p.name && !w.closed))
+      .sort((a, b) => (b.name === current) - (a.name === current));
+    const worktree = node('input'); worktree.type = 'checkbox'; worktree.checked = true;
+    const option = node('label', 'ws-palette-option'); option.append(worktree, node('span', '', 'Own worktree'), node('small', '', 'New branch from the current branch'));
+    const entry = p => ({label:p.displayName || p.name, icon:'folder_open', description:p.isGit && p.currentBranch ? p.currentBranch : 'No Git: opens the folder', run:() => {
+      if (worktree.checked && p.isGit && p.currentBranch) call('thread.create', {project:p.name});
+      else call('project.switch', {name:p.name});
+    }});
+    const rest = projects.filter(p => !recent.includes(p));
+    paletteDialog('thread-picker-dialog', 'New thread', 'Which project?', [
+      {label:'No project', icon:'chat_bubble_outline', description:'Just chat, no folder', run:() => call('thread.create', {project:''})},
+      ...(recent.length ? [{heading:'Recent'}, ...recent.map(entry)] : []),
+      ...(rest.length ? [{heading:'All projects'}, ...rest.map(entry)] : []),
+      {label:'Add project…', icon:'create_new_folder', description:'Open a folder as a new project', run:() => window.__libroOpenProjectDialogBrowse ? window.__libroOpenProjectDialogBrowse() : call('project.dialog.open')},
+    ], [option], current ? 1 : 0);
+  }
+  // A searchable list dialog. Arrows move the selection and Enter opens it; headings hide while searching.
+  function paletteDialog(id, label, placeholder, actions, extra = [], active = 0) {
+    document.getElementById(id)?.remove();
+    const dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = id; dialog.setAttribute('aria-label', label);
     const searchBar = node('div', 'ws-command-search');
-    const search = node('input', 'ws-palette-search'); search.placeholder = 'Search thread actions…'; search.setAttribute('aria-label', 'Search thread actions'); search.autocomplete = 'off';
-    const dismiss = button('Close thread actions', 'close', () => dialog.close()); dismiss.className = 'ws-command-dismiss';
+    const search = node('input', 'ws-palette-search'); search.placeholder = placeholder; search.setAttribute('aria-label', placeholder.replace('…', '')); search.autocomplete = 'off';
+    const dismiss = button('Close ' + label.toLowerCase(), 'close', () => dialog.close()); dismiss.className = 'ws-command-dismiss';
     const icon = node('i', 'material-icons-round', 'search'); icon.setAttribute('aria-hidden', 'true');
     searchBar.append(icon, search, dismiss); dialog.append(searchBar);
-    const entries = node('div', 'ws-plugin-list');
-    actions.forEach(action => {
-      const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; entry.dataset.label = action.label.toLowerCase();
+    // Focus stays in search, so the list is a listbox whose selected option the search names.
+    const entries = node('div', 'ws-plugin-list'); entries.id = id + '-list'; entries.setAttribute('role', 'listbox'); entries.setAttribute('aria-label', label);
+    search.setAttribute('role', 'combobox'); search.setAttribute('aria-controls', entries.id); search.setAttribute('aria-expanded', 'true');
+    actions.forEach((action, index) => {
+      if (action.heading) { const heading = node('div', 'ws-palette-heading', action.heading); heading.setAttribute('role', 'presentation'); entries.append(heading); return; }
+      const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; entry.id = id + '-' + index; entry.setAttribute('role', 'option'); entry.dataset.label = action.label.toLowerCase();
       const glyph = node('i', 'material-icons-round', action.icon); glyph.setAttribute('aria-hidden', 'true');
-      const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', action.label), node('small', '', action.description || project.branch || project.currentBranch || project.name)); entry.append(glyph, copy);
+      const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', action.label), node('small', '', action.description)); entry.append(glyph, copy);
       entry.onclick = () => { dialog.close(); action.run(); }; entries.append(entry);
     });
-    const empty = node('p', 'ws-palette-empty', 'No matching actions'); empty.hidden = true;
-    dialog.append(entries, empty, node('div', 'ws-command-footer', '↑ ↓ Navigate · Enter open · Esc close'));
-    let active = 0;
-    const visible = () => [...entries.children].filter(entry => !entry.hidden);
-    const highlight = () => visible().forEach((entry, index) => entry.dataset.selected = String(index === active));
+    const empty = node('p', 'ws-palette-empty', 'No matches'); empty.hidden = true;
+    dialog.append(entries, empty, ...extra, node('div', 'ws-command-footer', '↑ ↓ Navigate · Enter open · Esc close'));
+    const visible = () => [...entries.children].filter(entry => entry.dataset.label && !entry.hidden);
+    const highlight = () => {
+      visible().forEach((entry, index) => { entry.dataset.selected = String(index === active); entry.setAttribute('aria-selected', String(index === active)); });
+      const selected = visible()[active];
+      if (selected) search.setAttribute('aria-activedescendant', selected.id); else search.removeAttribute('aria-activedescendant');
+    };
     search.oninput = () => {
       const query = search.value.trim().toLowerCase();
-      [...entries.children].forEach(entry => { entry.hidden = !entry.dataset.label.includes(query); });
+      [...entries.children].forEach(entry => { entry.hidden = entry.dataset.label ? !entry.dataset.label.includes(query) : !!query; });
       active = 0; empty.hidden = visible().length > 0; highlight();
     };
     search.onkeydown = event => {
@@ -467,6 +502,8 @@
     };
     dialog.addEventListener('close', () => dialog.remove());
     highlight(); root.append(dialog); dialog.showModal(); search.focus();
+    // DOM focus alone does not take native keyboard focus back from a browser panel.
+    window.libroElectron?.focusWorkspace?.().then(() => { if (dialog.open) search.focus(); }).catch(() => {});
   }
   // A described row keeps its description on one full line. Branch, agent,
   // and shortcut details move to a second line.
@@ -498,8 +535,10 @@
     menu.addEventListener('toggle', event => { if (event.newState === 'closed') { menu.remove(); if (!document.querySelector('dialog[open]')) trigger.focus(); } });
     menu.querySelector('button').focus();
   }
-  function newThread(project = window.__libroActiveProject || '') {
-    call('thread.create', {project});
+  // Without a project, the picker asks where the thread goes.
+  function newThread(project) {
+    if (project === undefined) threadPicker();
+    else call('thread.create', {project});
   }
   function threadArchived() { refresh(); }
   function renderThreads() {
@@ -511,7 +550,6 @@
   }
   function renderThreadList(list, threads) {
     if (!list) return;
-    if (!list.dataset.projectThreads) threads = threads.slice().reverse();
     const signature = JSON.stringify([threads, window.__libroActiveProject]);
     if (list.dataset.signature === signature) return;
     list.dataset.signature = signature; list.replaceChildren();
@@ -521,7 +559,7 @@
       const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button'; row.title = thread.name; row.dataset.projectKey = thread.id; row.dataset.kind = 'thread';
       row.setAttribute('aria-current', String(thread.id === window.__libroActiveProject));
       const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
-      row.append(icon, node('span', '', thread.name));
+      row.append(icon); rowLabel(row, thread.name, false, '', thread.project || 'No project');
       row.onclick = () => {
         closeSettings();
         if (thread.id !== window.__libroActiveProject) {
@@ -543,15 +581,14 @@
       list.append(item);
     };
     threads.filter(thread => !thread.archived).forEach(appendThread);
-    if (!threads.length && !list.dataset.projectThreads) {
-      list.append(node('div', 'ws-no-threads', 'No threads to show'));
-    }
-    threads.filter(thread => thread.archived).slice(0, 5).forEach(appendThread);
+    threads.filter(thread => thread.archived).slice(-5).forEach(appendThread);
   }
   function renderProjects() {
     const list = document.getElementById('workspace-project-list'); if (!list) return;
     const projects = window.__libroProjects || []; const signature = JSON.stringify(projects);
     if (list.dataset.signature === signature) return; list.dataset.signature = signature; list.replaceChildren();
+    const count = document.getElementById('workspace-project-count');
+    if (count) count.textContent = String(projects.filter(project => project.kind !== 'worktree').length);
     const groups = new Map();
     projects.filter(project => project.kind !== 'worktree').forEach(project => {
       const item = node('div', 'ws-project-item'); item.dataset.kind = project.kind;
@@ -755,23 +792,8 @@
     refresh();
     return true;
   }
-  function projectRowsMode(value) {
-    return ['always', 'faint'].includes(value) ? value : 'hover';
-  }
-  function saveProjectRows(value) {
-    const status = document.getElementById('project-rows-status');
-    try {
-      const updated = {...prefs, projectRows:projectRowsMode(value)};
-      localStorage.setItem('libro.workspace', JSON.stringify(updated));
-      prefs = updated;
-      status.textContent = '';
-      refresh();
-      return true;
-    } catch (_) {
-      document.getElementById('project-rows').value = projectRowsMode(prefs.projectRows);
-      status.textContent = 'Could not save project rows. Please try again.';
-      return false;
-    }
+  function toggleProjects(show = !prefs.allProjects) {
+    prefs.allProjects = show; save(); refresh();
   }
   const acknowledgedAgents = new Set();
   function acknowledgeProjectActivity(key) {
@@ -892,7 +914,9 @@
     if (sidebar) resizeHandle(sidebar, 'sidebar');
     if (Number.isFinite(prefs.sidebarWidth)) root.style.setProperty('--ws-projects', Math.max(180, Math.min(prefs.sidebarWidth, 480, innerWidth - 48)) + 'px');
     root.dataset.thread = String(isThread());
-    root.dataset.projectRows = projectRowsMode(prefs.projectRows);
+    // Only open threads show until All projects lists every project with its closed and archived threads.
+    root.dataset.allProjects = String(!!prefs.allProjects);
+    document.getElementById('workspace-all-projects')?.setAttribute('aria-expanded', String(!!prefs.allProjects));
     root.dataset.voiceTyping = String(prefs.voiceTyping !== false);
     foldState();
     renderToolRail();
@@ -1013,8 +1037,8 @@
   function shortcut(event) {
     if (event.key === 'CapsLock' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) return 'CapsLock';
     const key = event.key === '+' ? '=' : event.key;
-    if (!/^[a-z0-9=,.;\[\]\-]$/i.test(key) || !(event.ctrlKey || event.altKey || event.metaKey)) return '';
-    return (event.ctrlKey ? 'Ctrl+' : '') + (event.altKey ? 'Alt+' : '') + (event.shiftKey && event.key !== '+' ? 'Shift+' : '') + (event.metaKey ? 'Meta+' : '') + key.toUpperCase();
+    if (!/^([a-z0-9=,.;\[\]\-]|Enter)$/i.test(key) || !(event.ctrlKey || event.altKey || event.metaKey)) return '';
+    return (event.ctrlKey ? 'Ctrl+' : '') + (event.altKey ? 'Alt+' : '') + (event.shiftKey && event.key !== '+' ? 'Shift+' : '') + (event.metaKey ? 'Meta+' : '') + (key === 'Enter' ? key : key.toUpperCase());
   }
   function zoom(action) {
     const method = {'zoom-in':'zoomIn', 'zoom-out':'zoomOut', 'zoom-reset':'zoomReset'}[action];
@@ -1043,7 +1067,8 @@
   function updateToolHints() {
     syncWorkspaceShortcuts();
     window.libroVoice?.refresh();
-    document.querySelectorAll('.ws-tool-rail button, .ws-sidebar button.ws-button').forEach(button => {
+    document.querySelectorAll('.ws-new-thread-key').forEach(key => key.textContent = toolKeys['new-thread'] || '');
+    document.querySelectorAll('.ws-tool-rail button, .ws-sidebar button:is(.ws-button, .ws-new-thread)').forEach(button => {
       const name = button.getAttribute('aria-label');
       const plugin = window.__libroPlugins.find(plugin => plugin.id === button.dataset.toolId);
       if (plugin) button.title = name + (toolKeys[plugin.id] ? ' (' + toolKeys[plugin.id] + ')' : '');
@@ -1685,8 +1710,6 @@
     document.getElementById('page-tools-autoexecute-status').textContent = '';
     document.getElementById('workspace-theme').value = themePreference();
     document.getElementById('workspace-theme-status').textContent = '';
-    document.getElementById('project-rows').value = projectRowsMode(prefs.projectRows);
-    document.getElementById('project-rows-status').textContent = '';
     fillAgentEnvironment(environment);
     document.querySelector('#agent-environment-form [role=status]').textContent = '';
     toolKeys = bindings; fillToolKeys(bindings); updateToolHints();
@@ -1724,7 +1747,7 @@
     for (const form of page.querySelectorAll('form')) if (!form.reportValidity()) return;
     const value = id => document.getElementById(id).value;
     const agent = value('default-thread-agent'), width = value('default-panel-width');
-    const theme = value('workspace-theme'), projectRows = value('project-rows'), sound = value('notification-sound'), voiceTyping = value('voice-typing'), pageTools = value('page-tools-autoexecute') === 'on';
+    const theme = value('workspace-theme'), sound = value('notification-sound'), voiceTyping = value('voice-typing'), pageTools = value('page-tools-autoexecute') === 'on';
     settingsSaveSteps = [
       () => saveAgentCommand(document.getElementById('agent-commands-form')),
       () => saveTools(document.getElementById('tool-commands-form')),
@@ -1735,7 +1758,7 @@
       () => savePageTools(pageTools),
       () => saveSettings(width),
       () => {
-        const ok = saveTheme(theme) && saveProjectRows(projectRows) && saveNotificationSound(sound) && saveVoiceTyping(voiceTyping);
+        const ok = saveTheme(theme) && saveNotificationSound(sound) && saveVoiceTyping(voiceTyping);
         settingsSaveFinished(ok, 'Could not save appearance, sound, or voice typing. Please try again.');
       },
     ];
@@ -1947,7 +1970,7 @@
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects')) delete root.dataset.sidebar; });
   narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, terminalExited, closeOtherPanels};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }

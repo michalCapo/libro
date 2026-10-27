@@ -30,14 +30,28 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 /* With a mouse, hovering the rail fades the project list in; it stays while the pointer or focus is in the list. */
 @media(hover:hover){#libro-workspace[data-fold]:not([data-sidebar]) .ws-sidebar:is(:hover,:has(>.ws-navigation:focus-within)){z-index:60}#libro-workspace[data-fold]:not([data-sidebar]) .ws-sidebar:is(:hover,:has(>.ws-navigation:focus-within))>.ws-navigation{display:flex;animation:ws-fade-in .12s ease-out}}
 @keyframes ws-fade-in{from{opacity:0}}
-.ws-navigation .ws-project-list+.ws-sidebar-heading{margin-top:auto;padding-top:12px}
+/* New thread is the main sidebar action; All projects and Add project sit at the bottom. */
+.ws-new-thread{display:flex;align-items:center;gap:8px;min-height:36px;margin:0 0 10px;padding:6px 8px 6px 10px;border:1px solid var(--ws-control-line);border-radius:8px;background:var(--ws-raised);color:var(--ws-fg);font:inherit;font-size:13px;font-weight:600;text-align:left;box-shadow:var(--ws-shadow)}
+.ws-new-thread:hover{background:var(--ws-hover)}
+.ws-new-thread>.material-icons-round{font-size:18px;color:var(--ws-accent)}
+.ws-new-thread>span{flex:1}
+.ws-new-thread-key{padding:3px 5px;border-radius:4px;background:var(--ws-kbd);color:var(--ws-muted);font:500 10.5px/1 var(--ws-mono)}
+.ws-new-thread-key:empty{display:none}
+#workspace-thread-list{margin-top:2px}
+.ws-sidebar-footer{display:flex;align-items:center;gap:2px;margin-top:auto;padding-top:8px;border-top:1px solid var(--ws-line)}
+.ws-sidebar-footer>.ws-button{width:30px;height:30px}
+.ws-sidebar-footer small{font-size:12px}
+#workspace-all-projects[aria-expanded=true]{color:var(--ws-fg)}
+/* Only open threads show until All projects lists every project with its closed and archived threads.
+   The selected project keeps its row while none of its threads is selected, so an empty project still shows where you are. */
+#libro-workspace:not([data-all-projects=true]) .ws-project-group>.ws-project-item:not([data-panels=true],:has(>.ws-project-row[aria-current=true])),#libro-workspace:not([data-all-projects=true]) .ws-project-group:has(.ws-thread-row[aria-current=true])>.ws-project-item:not([data-panels=true]),#libro-workspace:not([data-all-projects=true]) .ws-project-item:has(>.ws-thread-row[data-closed=true]),#libro-workspace:not([data-all-projects=true]) .ws-project-item[data-archived=true],#libro-workspace:not([data-all-projects=true]) .ws-project-group:not(:has(>.ws-project-item[data-panels=true],>.ws-project-item>.ws-project-row[aria-current=true],.ws-thread-row:not([data-closed=true]))){display:none}
+#libro-workspace:not([data-all-projects=true]) .ws-project-group>.ws-project-threads{margin:0}
 .ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;min-height:28px;padding:0 2px 0 10px;margin:4px 0 2px;color:var(--ws-muted);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
 .ws-sidebar-heading>.ws-button{width:26px;height:26px}
-/* The fold button sits beside the add button; narrow windows always fold, so they hide it. */
+/* Narrow windows always fold, so they hide the fold button. */
 .ws-sidebar-heading>span{margin-right:auto}
 #libro-workspace[data-fold=narrow] [data-sidebar-fold]{display:none}
 .ws-sidebar-heading>.ws-button .material-icons-round{font-size:17px}
-.ws-no-threads{color:var(--ws-muted);font-size:12px;padding:4px 10px}
 .ws-project-list{display:flex;flex-direction:column;gap:2px}
 .ws-project-item{position:relative;display:flex;align-items:center;gap:1px;padding-right:3px;border-radius:8px}
 .ws-project-item:hover{background:var(--ws-hover)}
@@ -67,13 +81,6 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-threads:empty,.ws-project-group>.ws-project-threads:not(:has(.ws-project-item)){display:none}
 /* Projects without open threads fade until hovered or focused. */
 .ws-project-group:not(:has(.ws-project-threads .ws-project-item))>.ws-project-item:not([data-panels=true],:is(:hover,:focus-within,:has(.ws-project-row[aria-current=true])))>*{opacity:.52}
-/* In hover mode, project rows fade out in place until the sidebar is hovered or keyboard focused, so threads never move. A text-like line of varied length marks each hidden row. Faint mode keeps the names barely visible instead, then shows every project row in full on hover. */
-.ws-project-group>.ws-project-item>*,.ws-project-group>.ws-project-item::after{transition:opacity .15s}
-.ws-project-group>.ws-project-item::after{content:"";position:absolute;left:12px;top:50%;width:var(--ws-placeholder,72px);height:2px;translate:0 -50%;border-radius:1px;background:color-mix(in srgb,var(--ws-muted) 8%,transparent);opacity:0;pointer-events:none}
-.ws-project-group:nth-child(4n+2){--ws-placeholder:104px}.ws-project-group:nth-child(4n+3){--ws-placeholder:56px}.ws-project-group:nth-child(4n){--ws-placeholder:88px}
-@media(hover:hover){#libro-workspace[data-project-rows=hover] .ws-sidebar:not(:hover,:has(:focus-visible)) .ws-project-group>.ws-project-item:not([data-panels=true])>*{opacity:0}#libro-workspace[data-project-rows=hover] .ws-sidebar:not(:hover,:has(:focus-visible)) .ws-project-group>.ws-project-item:not([data-panels=true])::after{opacity:1}#libro-workspace[data-project-rows=faint] .ws-project-group>.ws-project-item:not([data-panels=true])>*{opacity:1}#libro-workspace[data-project-rows=faint] .ws-sidebar:not(:hover,:has(:focus-visible)) .ws-project-group>.ws-project-item:not([data-panels=true])>*{opacity:.15}}
-/* The selected project stays readable in hover and faint modes while none of its threads is selected, so the main folder still shows where you are. */
-#libro-workspace .ws-sidebar .ws-project-group:not(:has(.ws-thread-row[aria-current=true]))>.ws-project-item:has(>.ws-project-row[aria-current=true])>*{opacity:1}#libro-workspace .ws-sidebar .ws-project-group:not(:has(.ws-thread-row[aria-current=true]))>.ws-project-item:has(>.ws-project-row[aria-current=true])::after{opacity:0}
 .ws-thread-row{min-height:30px}
 /* Thread rows always use three lines: project name with the status icon in the corner, label, and details (branch for described rows). */
 .ws-row-grid{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"project status icon" "title title title" "meta end badge";gap:2px 8px;align-items:center}
@@ -224,6 +231,11 @@ html.dark .ws-row-grid[data-agent-status=done]::before,html.dark .ws-row-grid[da
 .ws-plugin-entry[data-selected=true]{background:var(--ws-popup-row)}
 .ws-plugin-entry[hidden],.ws-shortcut-row[hidden]{display:none!important}
 .ws-palette-empty{padding:24px;text-align:center;color:var(--ws-muted)}
+/* The thread picker groups projects under quiet headings; its worktree option sits above the key hints. */
+.ws-palette-heading{padding:10px 10px 4px;color:var(--ws-popup-muted);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.ws-palette-option{display:flex;align-items:center;gap:8px;flex-shrink:0;padding:10px 18px 0;color:var(--ws-fg);font-size:13px}
+.ws-palette-option>input{margin:0;accent-color:var(--ws-accent)}
+.ws-palette-option>small{margin-left:auto;color:var(--ws-popup-muted);font-size:11px}
 :is(#project-results,#move-project-results){padding:6px;max-height:min(560px,calc(100dvh - 240px));overflow-x:hidden}
 :is(#project-results,#move-project-results)>div{border:0!important;border-radius:8px;padding:8px 10px;min-height:44px;box-sizing:border-box;margin:1px 0}
 :is(#project-results,#move-project-results) [class*=border-blue]{background:var(--ws-popup-row)!important}
