@@ -535,7 +535,7 @@
     }});
     const rest = projects.filter(p => !recent.includes(p));
     paletteDialog('thread-picker-dialog', 'New thread', 'Which project?', [
-      {label:'No project', icon:'chat_bubble_outline', description:'Just chat, no folder', run:() => call('thread.create', {project:''})},
+      {label:'General', icon:'chat_bubble_outline', description:'Just chat, no folder', run:() => call('thread.create', {project:''})},
       ...(recent.length ? [{heading:'Recent'}, ...recent.map(entry)] : []),
       ...(rest.length ? [{heading:'All projects'}, ...rest.map(entry)] : []),
       {label:'Add project…', icon:'create_new_folder', description:'Open a folder as a new project', run:() => window.__libroOpenProjectDialogBrowse ? window.__libroOpenProjectDialogBrowse() : call('project.dialog.open')},
@@ -643,7 +643,7 @@
       const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button'; row.title = thread.name; row.dataset.projectKey = thread.id; row.dataset.kind = 'thread';
       row.setAttribute('aria-current', String(thread.id === window.__libroActiveProject));
       const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
-      row.append(icon); rowLabel(row, thread.name, '', thread.project || 'No project');
+      row.append(icon); rowLabel(row, thread.name, '', thread.project || 'General');
       row.onclick = () => {
         closeSettings();
         // A closed thread can still be active, so it switches to reopen.

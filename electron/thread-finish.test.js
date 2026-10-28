@@ -269,11 +269,11 @@ test('thread picker puts the current project first, also from a child thread, an
     ]},
   })
   const [, , , entries, [option], active] = args
-  assert.deepEqual(Array.from(entries, entry => entry.heading || entry.label), ['No project', 'Recent', 'web', 'api', 'All projects', 'idle', 'notes', 'Add project…'])
+  assert.deepEqual(Array.from(entries, entry => entry.heading || entry.label), ['General', 'Recent', 'web', 'api', 'All projects', 'idle', 'notes', 'Add project…'])
   assert.equal(active, 1)
   const run = label => entries.find(entry => entry.label === label).run()
   run('web'); run('notes')
   option.children[0].checked = false
-  run('web'); run('No project')
+  run('web'); run('General')
   assert.deepEqual(calls, [['thread.create', 'web'], ['project.switch', 'notes'], ['project.switch', 'web'], ['thread.create', '']])
 })

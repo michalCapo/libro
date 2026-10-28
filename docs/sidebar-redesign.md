@@ -1,6 +1,6 @@
 # Sidebar Redesign: Active Threads Only
 
-Status: implemented. No project threads form the last group, newest at the bottom of each group. The Project rows setting (Lines, Faint names, Always) was removed; All projects replaces it.
+Status: implemented. General threads (no project) form the last group, newest at the bottom of each group. The Project rows setting (Lines, Faint names, Always) was removed; All projects replaces it.
 
 Mockup: https://claude.ai/artifact/HirB3ocg1EmFNNfzPZk5CN
 
@@ -10,14 +10,14 @@ Mockup: https://claude.ai/artifact/HirB3ocg1EmFNNfzPZk5CN
 - Each card: project name, title, branch, status, number.
 - Threads stay in the list until the user closes them (also when Done).
 - Threads of the same project sit next to each other. A new thread goes right under the other threads of its project.
-- Threads without a project are normal cards in the same list, labelled "No project". No separate list at the bottom.
-- "No project" is one more group and comes last. Newest thread at the bottom of each group.
+- Threads without a project are normal cards in the same list, labelled "General". No separate list at the bottom.
+- "General" is one more group and comes last. Newest thread at the bottom of each group.
 - Small "All projects (count)" row at the bottom opens the full project list.
 
 ## New thread
 
 - Large "New thread" button at the top of the sidebar.
-- Opens a project picker: search box, "No project" first, then Recent, then All projects.
+- Opens a project picker: search box, "General" first, then Recent, then All projects.
 - "Own worktree" checkbox, ticked by default: creates a new worktree with a branch from main.
 - Enter creates the thread. The current project is first in Recent, so Ctrl+T then Enter makes a thread in the current project.
 - The old behaviour (new thread in the current project with no question) is removed.
