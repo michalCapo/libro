@@ -5,6 +5,7 @@
 - Run `make check` before finishing code changes.
 - The target checks `go fix`, formatting, `go vet`, `staticcheck`, `gopls`, `golangci-lint`, dead code, builds, Go tests, and Electron JS tests.
 - It is non-mutating and continues after failures so all problems are reported in one run.
+- Tailwind CSS is compiled ahead of time. After adding or changing Tailwind classes, run `npm run build:css`.
 
 ## Commands
 

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//go:embed workspace.css workspace.js voice.js files.js file-editor.bundle.js notes.js note-editor.bundle.js page_attachments.js
+//go:embed workspace.css workspace.js voice.js files.js file-editor.bundle.js notes.js note-editor.bundle.js page_attachments.js tailwind.min.css material-icons-round.woff2
 var workspaceAssets embed.FS
 
 func workspaceJS() string {
@@ -22,6 +22,15 @@ func workspaceJS() string {
 		code.Write(data)
 	}
 	return code.String()
+}
+
+// registerStyles serves the compiled Tailwind CSS and the icon font with the
+// app, so pages need no CDN. Rebuild them with npm run build:css.
+func registerStyles(app *r.App) {
+	css, _ := workspaceAssets.ReadFile("tailwind.min.css")
+	app.TailwindCSS(css)
+	font, _ := workspaceAssets.ReadFile("material-icons-round.woff2")
+	app.IconFont(font)
 }
 
 func registerWidgets(app *r.App) {

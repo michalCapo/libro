@@ -665,6 +665,7 @@ func Run(assets embed.FS, desktop bool) error {
 	app.Description = "Application Manager"
 	app.Assets(assets, "assets", "/assets/")
 	app.Favicon = "/assets/logo.svg"
+	registerStyles(app)
 	registerWidgets(app)
 
 	registerSettingsActions(app)

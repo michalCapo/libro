@@ -97,6 +97,7 @@ check: ## Run all code checks
 	run go build ./...
 	run go test ./...
 	run node --test electron/*.test.js
+	run node scripts/build-css.cjs --check
 	
 	if [[ $$status -eq 0 ]]; then
 	  echo "All checks passed."
