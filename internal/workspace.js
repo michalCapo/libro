@@ -315,6 +315,12 @@
     dialog.append(heading, form); root.append(dialog); dialog.showModal(); input.focus();
   }
   let finishDialog = null;
+  // A removed thread lands on its project. That project row stays hidden until the project is opened again.
+  let leftProject = '';
+  function leaveProject(name) {
+    leftProject = name;
+    document.querySelectorAll('#workspace-project-list>.ws-project-group').forEach(group => { group.dataset.left = String(group.dataset.projectName === name); });
+  }
   function finishThread(name = window.__libroActiveProject, discard = false, method = 'merge') {
     const projects = window.__libroProjects || [];
     // A thread on the project's own checkout can only be discarded; its branch stays.
@@ -401,6 +407,7 @@
       state.cancel.disabled = false; state.cancel.textContent = 'Done'; state.cancel.focus(); return;
     }
     state.dialog.close();
+    leaveProject(window.__libroActiveProject);
     window.__libroShowToast?.(reply.warning || (state.checkout ? 'Changes discarded and thread closed' : 'Thread removed'), '', reply.warning ? 'error' : 'success');
   }
   function confirmAgentMerge(state, request) {
@@ -613,6 +620,7 @@
     const list = document.getElementById('workspace-project-list'); if (!list) return;
     const projects = window.__libroProjects || []; const signature = JSON.stringify(projects);
     if (list.dataset.signature === signature) return; list.dataset.signature = signature; list.replaceChildren();
+    if (leftProject !== window.__libroActiveProject) leftProject = '';
     const count = document.getElementById('workspace-project-count');
     if (count) count.textContent = String(projects.filter(project => project.kind !== 'worktree').length);
     // Projects stay one click away below the threads.
@@ -620,7 +628,7 @@
       const row = node('button', 'ws-quick-project'); row.type = 'button'; row.title = project.path || '';
       const icon = node('i', 'material-icons-round', 'folder_open'); icon.setAttribute('aria-hidden', 'true');
       row.append(icon, node('span', '', project.displayName || project.name));
-      row.onclick = () => { closeSettings(); call('project.switch', {name:project.name}); };
+      row.onclick = () => { closeSettings(); if (project.name === leftProject) leaveProject(''); call('project.switch', {name:project.name}); };
       return row;
     }));
     const groups = new Map();
@@ -634,7 +642,7 @@
       row.title = projectName + (project.path ? '\n' + project.path : '');
       const icon = node('i', 'material-icons-round', project.kind === 'worktree' ? 'account_tree' : 'folder_open'); icon.setAttribute('aria-hidden', 'true');
       row.append(icon, node('span', '', project.displayName || project.name));
-      row.onclick = () => { closeSettings(); if (project.kind === 'worktree') call('worktree.switch', {project:project.name, path:project.path, branch:project.branch}); else call('project.switch', {name:project.name}); };
+      row.onclick = () => { closeSettings(); if (project.name === leftProject) leaveProject(''); if (project.kind === 'worktree') call('worktree.switch', {project:project.name, path:project.path, branch:project.branch}); else call('project.switch', {name:project.name}); };
       item.append(row);
       const settings = button('Settings for ' + projectName, 'settings', event => { event.stopPropagation(); projectSettings(row.dataset.projectKey); });
       settings.classList.add('ws-project-settings'); item.append(settings);
@@ -653,7 +661,7 @@
         });
         remove.classList.add('ws-project-remove'); item.append(remove);
       }
-      const group = node('div', 'ws-project-group');
+      const group = node('div', 'ws-project-group'); group.dataset.left = String(project.name === leftProject);
       projectDrag(row, group, project.name);
       const branches = node('div', 'ws-project-threads');
       branches.setAttribute('role', 'group');

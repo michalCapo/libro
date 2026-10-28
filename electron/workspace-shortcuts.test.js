@@ -961,7 +961,7 @@ test('project groups contain the original branch first and number every worktree
       querySelectorAll: () => flatten(list).filter(el => el.classes.split(' ').includes('ws-project-row') && el.dataset.kind !== 'project'),
     },
     node, button: (label, icon, onclick) => Object.assign(node('button', '', label), { onclick }),
-    call: (action, data) => calls.push([action, data]), closeSettings() {}, innerWidth:1000,
+    call: (action, data) => calls.push([action, data]), closeSettings() {}, innerWidth:1000, leftProject:'',
     newThread() {}, projectSettings() {},
     threadMenu: (project, trigger) => calls.push(['menu', project.name, trigger.textContent]),
   }
