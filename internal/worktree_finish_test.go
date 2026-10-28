@@ -141,8 +141,15 @@ func TestFinishThreadDefaultsExistingWorktreeToBaseBranch(t *testing.T) {
 	if err != nil || info.Blocker != "" {
 		t.Fatal("explicit destination rejected")
 	}
-	if _, err := inspectFinishThread(state, "repo", "main"); err == nil {
-		t.Fatal("base project could be removed")
+	if info, err := inspectFinishThread(state, "repo", "main"); err != nil || !info.Checkout || info.Blocker == "" {
+		t.Fatal("base project could be merged or removed")
+	}
+	state.Projects[0].Path = filepath.Join(root, "sub")
+	if err := os.MkdirAll(state.Projects[0].Path, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := inspectFinishThread(state, "repo", ""); err == nil {
+		t.Fatal("a project inside a repository could discard the whole repository")
 	}
 }
 
@@ -161,6 +168,45 @@ func TestFinishThreadCleanupRejectsNewChangesAndDiscardRemovesThem(t *testing.T)
 	}
 	if _, err := worktreeGit(info.Root, "rev-parse", "--verify", "refs/heads/feature"); err == nil {
 		t.Fatal("discard kept the thread branch")
+	}
+}
+
+func TestDiscardCheckoutThreadKeepsBranchCommitsAndIgnoredFiles(t *testing.T) {
+	state, root, _ := finishFixture(t)
+	oldSM, oldTM := sm, tm
+	sm, tm = NewStateManager(), components.NewTerminalManager()
+	t.Cleanup(func() { tm.StopAll(); sm, tm = oldSM, oldTM })
+	sm.states["discard"] = state
+	state.ActiveProject = "repo"
+	commitFinishFile(t, root, ".gitignore", "ignored.txt\n")
+	writeFinishFile(t, root, "file.txt", "changed\n")
+	writeFinishFile(t, root, "new.txt", "new\n")
+	writeFinishFile(t, root, "ignored.txt", "keep\n")
+	writeFinishFile(t, root, ".gitignore", "ignored.txt\nlocal.txt\n")
+	writeFinishFile(t, root, "local.txt", "keep\n")
+	info, err := inspectFinishThread(state, "repo", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Checkout || info.Branch != "main" || info.Dirty == "" {
+		t.Fatalf("checkout thread preview = %+v", info)
+	}
+	if _, err := discardCheckoutThread("discard", info); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := worktreeGit(root, "status", "--porcelain=v1", "--untracked-files=all"); status != "?? local.txt" {
+		t.Fatalf("discard kept changes: %q", status)
+	}
+	for _, name := range []string{"ignored.txt", "local.txt"} {
+		if _, err := os.Stat(filepath.Join(root, name)); err != nil {
+			t.Fatal("discard removed an ignored file: " + name)
+		}
+	}
+	if head, _ := worktreeGit(root, "rev-parse", "HEAD"); head != info.SourceHead || GitCurrentBranch(root) != "main" {
+		t.Fatal("discard changed the branch or its commits")
+	}
+	if !state.closedWorkspaces["repo"] {
+		t.Fatal("discard kept the thread open")
 	}
 }
 

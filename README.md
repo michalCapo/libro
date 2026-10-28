@@ -300,6 +300,9 @@ Successful local merges and squashes remove the thread, branch, and worktree
 automatically. Removing a worktree also removes ignored files in its folder. **Discard thread…** is a
 separate menu action: its final button removes the thread, branch, and worktree,
 including uncommitted and untracked files, without a typed confirmation.
+On a thread that works directly on the project's own branch, **Discard thread…**
+closes the thread and throws away uncommitted and untracked files. The branch,
+its commits, and ignored files stay.
 
 ### Agent application control
 

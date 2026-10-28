@@ -43,6 +43,8 @@ type worktreeFinishPreview struct {
 	Path       string   `json:"-"`
 	Root       string   `json:"-"`
 	Parent     string   `json:"-"`
+	// Checkout marks a thread on the project's own checkout; it can only discard changes.
+	Checkout bool `json:"checkout"`
 }
 
 func inspectFinishThread(state *AppState, name, base string) (worktreeFinishPreview, error) {
@@ -64,7 +66,17 @@ func inspectFinishThread(state *AppState, name, base string) (worktreeFinishPrev
 		}
 	}
 	if info.Path == "" {
-		return info, fmt.Errorf("choose a project worktree thread; the base project cannot be removed")
+		for _, project := range state.Projects {
+			// Only a repository root, so a discard never reaches files outside the project.
+			if !project.Virtual && project.Name == name && GitIsRepo(project.Path) {
+				if branch := GitCurrentBranch(project.Path); branch != "" {
+					info.Branch, info.Path, info.Root, info.Parent, info.Checkout = branch, project.Path, project.Path, project.Name, true
+				}
+			}
+		}
+	}
+	if info.Path == "" {
+		return info, fmt.Errorf("choose a project thread on a Git branch")
 	}
 	var err error
 	info.SourceHead, err = worktreeGit(info.Path, "rev-parse", "HEAD")
@@ -74,6 +86,10 @@ func inspectFinishThread(state *AppState, name, base string) (worktreeFinishPrev
 	info.Dirty, err = worktreeGit(info.Path, "status", "--porcelain=v1", "--untracked-files=all")
 	if err != nil {
 		return info, err
+	}
+	if info.Checkout {
+		info.Blocker = "Merge, squash and pull requests need a thread with its own worktree."
+		return info, nil
 	}
 	info.Branches, err = GitListBranches(info.Root)
 	if err != nil {
@@ -338,6 +354,13 @@ func registerFinishThreadActions(app *r.App) {
 		if sourceHead != info.SourceHead || method != "discard" && targetHead != info.TargetHead {
 			return finish(fmt.Errorf("the branches changed; refresh the preview and review again"), "", ""), nil
 		}
+		if info.Checkout {
+			if method != "discard" {
+				return finish(fmt.Errorf("%s", info.Blocker), "", ""), nil
+			}
+			js, err := discardCheckoutThread(sid, info)
+			return r.Merge(js, finish(err, "", "")), nil
+		}
 		if method == "pr" {
 			url, err := createFinishPR(info, message, body)
 			return finish(err, "", url), nil
@@ -377,6 +400,30 @@ func cleanupFinishedThread(sid string, info worktreeFinishPreview, discard bool)
 	sm.RemoveProject(sid, name)
 	js = r.Merge(js, r.Result{}.Run(r.Remove(projectMainID(name))))
 	return r.Merge(js, projectsJS(sm.Get(sid))), warning, nil
+}
+
+// A checkout thread keeps its branch, commits and ignored files. Discarding
+// closes it first so its agent stops writing, then drops uncommitted changes.
+func discardCheckoutThread(sid string, info worktreeFinishPreview) (r.Result, error) {
+	js, err := closeWorkspace(sid, info.Name)
+	if err != nil {
+		return js, err
+	}
+	head, err := worktreeGit(info.Path, "rev-parse", "HEAD")
+	if err != nil {
+		return js, err
+	}
+	if head != info.SourceHead || GitCurrentBranch(info.Path) != info.Branch {
+		return js, fmt.Errorf("the thread changed while closing; nothing was discarded")
+	}
+	// Clean before reset, so ignore rules that are not committed yet still protect their files.
+	if _, err := worktreeGit(info.Path, "clean", "-fd"); err != nil {
+		return js, err
+	}
+	if _, err := worktreeGit(info.Path, "reset", "--hard", info.SourceHead); err != nil {
+		return js, err
+	}
+	return js, nil
 }
 
 // Only the failed thread's agent may receive this request.

@@ -89,10 +89,11 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 /* Projects without open threads fade until hovered or focused. */
 .ws-project-group:not(:has(.ws-project-threads .ws-project-item))>.ws-project-item:not([data-panels=true],:is(:hover,:focus-within,:has(.ws-project-row[aria-current=true])))>*{opacity:.52}
 .ws-thread-row{min-height:30px}
-/* Thread rows always use three lines: project name with the status icon in the corner, label, and details (branch for described rows). */
+/* Thread rows use up to three lines: project name with the status icon in the corner, label when set, and details with the branch. */
 .ws-row-grid{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"project status icon" "title title title" "meta end badge";gap:2px 8px;align-items:center}
 .ws-row-grid>.material-icons-round{grid-area:icon;justify-self:end}
 .ws-row-grid>span{grid-area:title;font-size:11px;line-height:14px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
+.ws-row-grid>span:empty{display:none}
 .ws-row-grid>.ws-project-terminal{grid-area:end;justify-self:end}
 .ws-row-grid>.ws-project-shortcut{grid-area:badge}
 .ws-row-project{grid-area:project;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:22px;line-height:28px;font-weight:700;color:var(--ws-muted)}

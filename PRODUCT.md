@@ -36,7 +36,7 @@ Project settings choose Application per thread (default) or Shared application. 
 
 ## Finish threads
 
-The original branch row has an overflow and right-click menu with Close branch, New thread, and Branch settings. Close branch keeps files and the Git branch, closes its panels and terminals, and hides the Base row until the project is reopened; closing an inactive branch preserves the active workspace. New thread is disabled without a committed Git branch.
+The original branch row has an overflow and right-click menu with Close thread, New thread, Thread settings, and Discard thread. Close thread keeps files and the Git branch, closes its panels and terminals, and hides the Base row until the project is reopened; closing an inactive branch preserves the active workspace. New thread is disabled without a committed Git branch. Discard thread closes the row and throws away uncommitted and untracked files; the branch, its commits, and ignored files stay.
 
 Worktree threads have a right-click / overflow menu with Close thread, Merge thread, Squash thread, Create draft PR, Thread settings, and a separate Discard thread action. Finish thread is also in the command palette and supports an optional configurable shortcut. Merge, squash, and draft GitHub PR each have a dedicated review dialog showing the destination and changes. Successful local integration automatically removes the worktree, thread, and branch. PR creation keeps the thread. New worktrees record their source branch. Dirty checkouts, stale previews, and conflicts block cleanup. Discard removes the thread, branch, and worktree together, without a typed confirmation.
 

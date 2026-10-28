@@ -1333,40 +1333,9 @@ func Run(assets embed.FS, desktop bool) error {
 	})
 	// Close every panel and terminal in the requested workspace (active by default).
 	actionProjectClose = registerWorkspaceAction(app, "project.close", func(_ *r.Context, in actionProjectCloseInput) (r.Result, error) {
-		sid := inputSID(in.SID)
-		state := sm.Get(sid)
-		name := in.Name
-		if name == "" {
-			name = state.ActiveProject
-		}
-		active := name == state.ActiveProject
-		target := ""
-		if active {
-			target = state.adjacentProjectThread()
-		}
-		apps, err := sm.CloseProject(sid, name)
+		response, err := closeWorkspace(inputSID(in.SID), in.Name)
 		if err != nil {
 			return r.Result{}.Run(r.Notify("error", "Could not close workspace: "+err.Error())), nil
-		}
-		for _, a := range apps {
-			if a.Type == AppTypeTerminal {
-				tm.Stop(a.ID)
-			}
-		}
-		state = sm.Get(sid)
-		resp := r.Result{}.Add(closeDevtoolsForAppsJS(apps))
-		if active {
-			resp = resp.Add(trustedResponse(parkFloatingPopupsJS())).
-				Morph(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
-				Morph(TopBarID, renderTopBar(state, sid))
-		} else {
-			for _, a := range apps {
-				resp = resp.Add(removeAppJS(a.ID))
-			}
-		}
-		response := resp.Add(projectsJS(state))
-		if target != "" {
-			response = r.Merge(response, switchToProjectName(sid, target))
 		}
 		return response, nil
 	})
@@ -1672,4 +1641,42 @@ func restoreWorktreeProject(manager *StateManager, sid, name string) {
 			}
 		}
 	}
+}
+
+// closeWorkspace closes every panel and terminal in the named workspace (active by default).
+func closeWorkspace(sid, name string) (r.Result, error) {
+	state := sm.Get(sid)
+	if name == "" {
+		name = state.ActiveProject
+	}
+	active := name == state.ActiveProject
+	target := ""
+	if active {
+		target = state.adjacentProjectThread()
+	}
+	apps, err := sm.CloseProject(sid, name)
+	if err != nil {
+		return r.Result{}, err
+	}
+	for _, a := range apps {
+		if a.Type == AppTypeTerminal {
+			tm.Stop(a.ID)
+		}
+	}
+	state = sm.Get(sid)
+	resp := r.Result{}.Add(closeDevtoolsForAppsJS(apps))
+	if active {
+		resp = resp.Add(trustedResponse(parkFloatingPopupsJS())).
+			Morph(projectMainID(state.ActiveProject), renderMainArea(state, sid)).
+			Morph(TopBarID, renderTopBar(state, sid))
+	} else {
+		for _, a := range apps {
+			resp = resp.Add(removeAppJS(a.ID))
+		}
+	}
+	response := resp.Add(projectsJS(state))
+	if target != "" {
+		response = r.Merge(response, switchToProjectName(sid, target))
+	}
+	return response, nil
 }

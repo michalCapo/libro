@@ -314,7 +314,10 @@
   }
   let finishDialog = null;
   function finishThread(name = window.__libroActiveProject, discard = false, method = 'merge') {
-    const project = (window.__libroProjects || []).find(p => p.kind === 'worktree' && p.name + '/' + p.branch === name);
+    const projects = window.__libroProjects || [];
+    // A thread on the project's own checkout can only be discarded; its branch stays.
+    const checkout = discard && projects.find(p => p.kind !== 'worktree' && p.name === name && p.isGit && p.currentBranch);
+    const project = checkout ? {...checkout, branch:checkout.currentBranch} : projects.find(p => p.kind === 'worktree' && p.name + '/' + p.branch === name);
     if (!project) { window.__libroShowToast?.('Select a worktree thread first', '', 'error'); return; }
     if (finishDialog?.busy) return;
     finishDialog?.dialog.remove();
@@ -332,19 +335,20 @@
     const status = node('p', 'ws-finish-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     const actions = node('div', 'ws-agent-actions');
     const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
-    const submit = node('button', 'ws-launch', discard ? 'Discard and remove thread' : 'Merge and remove thread'); submit.type = 'submit'; submit.disabled = true; submit.classList.toggle('ws-launch-danger', discard);
+    const discardLabel = checkout ? 'Discard and close thread' : 'Discard and remove thread';
+    const submit = node('button', 'ws-launch', discard ? discardLabel : 'Merge and remove thread'); submit.type = 'submit'; submit.disabled = true; submit.classList.toggle('ws-launch-danger', discard);
     actions.append(cancel, submit); form.append(note, status, actions); dialog.append(title, source, form); root.append(dialog);
-    const state = {name, dialog, form, base, method, summary, status, submit, cancel, info:null, busy:false, request:'', discard}; finishDialog = state;
+    const state = {name, dialog, form, base, method, summary, status, submit, cancel, info:null, busy:false, request:'', discard, checkout:!!checkout}; finishDialog = state;
     function update() {
       const pr = !discard && method === 'pr';
       base.hidden = baseLabel.hidden = discard;
       message.hidden = messageLabel.hidden = discard || method === 'merge'; messageLabel.textContent = pr ? 'Pull request title' : 'Commit message';
       body.hidden = bodyLabel.hidden = !pr;
-      note.textContent = pr ? 'Pushes this branch to origin and creates a draft PR using GitHub CLI. The thread and worktree stay open.' : discard ? 'Permanently deletes this thread, its branch, and its worktree folder, including uncommitted and ignored files. Stops its processes. Shared applications stay running.' : 'After a successful merge, stops this thread’s processes and removes the thread, its branch, and its worktree folder, including ignored files. Shared applications stay running. Conflicts keep the thread open.';
+      note.textContent = pr ? 'Pushes this branch to origin and creates a draft PR using GitHub CLI. The thread and worktree stay open.' : checkout ? 'Permanently deletes uncommitted changes and new files in this folder. Stops its processes and closes the thread. The branch, its commits and ignored files stay.' : discard ? 'Permanently deletes this thread, its branch, and its worktree folder, including uncommitted and ignored files. Stops its processes. Shared applications stay running.' : 'After a successful merge, stops this thread’s processes and removes the thread, its branch, and its worktree folder, including ignored files. Shared applications stay running. Conflicts keep the thread open.';
       const info = state.info;
       const blocker = !info ? 'Loading changes…' : discard ? '' : pr ? (info.dirty ? 'Commit or stash this thread’s changes first.' : !info.targetHead ? 'Choose a destination branch.' : '') : info.blocker;
       status.textContent = [state.error, blocker].filter(Boolean).join(" ");
-      submit.textContent = discard ? 'Discard and remove thread' : pr ? 'Push branch and create draft PR' : method === 'squash' ? 'Squash and remove thread' : 'Merge and remove thread';
+      submit.textContent = discard ? discardLabel : pr ? 'Push branch and create draft PR' : method === 'squash' ? 'Squash and remove thread' : 'Merge and remove thread';
       submit.disabled = state.busy || !info || !!blocker || (pr && !message.value.trim());
     }
     function preview() {
@@ -360,7 +364,7 @@
       state.busy = true; state.error = "";
       const info = state.info;
       form.querySelectorAll('input,select,textarea,button').forEach(control => { control.disabled = true; });
-      status.textContent = discard ? 'Removing thread…' : method === 'pr' ? 'Pushing branch and creating draft PR…' : 'Merging and removing thread…';
+      status.textContent = checkout ? 'Discarding changes…' : discard ? 'Removing thread…' : method === 'pr' ? 'Pushing branch and creating draft PR…' : 'Merging and removing thread…';
       call('thread.finish', {name, base:info.base, method:discard ? 'discard' : method, sourceHead:info.sourceHead, targetHead:info.targetHead, message:message.value, body:body.value});
     };
     dialogKeys(dialog, form, submit, cancel);
@@ -374,7 +378,7 @@
     const placeholder = node('option', '', 'Choose a destination…'); placeholder.value = ''; state.base.append(placeholder);
     (reply.info.branches || []).forEach(branch => { const option = node('option', '', branch); option.value = branch; state.base.append(option); });
     state.base.value = reply.info.base;
-    state.summary.textContent = state.discard ? (reply.info.dirty || 'No uncommitted changes. Committed work will not be merged.') : (reply.info.summary || 'No commits to merge.');
+    state.summary.textContent = state.discard ? (reply.info.dirty || (state.checkout ? 'No uncommitted changes.' : 'No uncommitted changes. Committed work will not be merged.')) : (reply.info.summary || 'No commits to merge.');
     state.update();
   }
   function finishThreadResult(name, reply) {
@@ -393,7 +397,7 @@
       state.cancel.disabled = false; state.cancel.textContent = 'Done'; return;
     }
     state.dialog.close();
-    window.__libroShowToast?.(reply.warning || 'Thread removed', '', reply.warning ? 'error' : 'success');
+    window.__libroShowToast?.(reply.warning || (state.checkout ? 'Changes discarded and thread closed' : 'Thread removed'), '', reply.warning ? 'error' : 'success');
   }
   function confirmAgentMerge(state, request) {
     const dialog = node('dialog', 'ws-plugin-dialog ws-finish-dialog'); dialog.setAttribute('aria-labelledby', 'agent-merge-title');
@@ -438,12 +442,15 @@
     const actions = thread ? agentThreadActions(thread) : project.kind === 'worktree' ? threadActions(project) : [{label:'Thread settings', icon:'settings', run:() => projectSettings(project.name)}];
     const name = project ? project.name : thread.project;
     actions.unshift({label:'New thread', icon:'add', description:name ? 'Create a new thread in ' + name : 'Create a new thread', run:() => newThread(name || undefined)});
-    if (project && project.kind !== 'worktree') actions.push({label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep files, branch and worktree', run:() => call('project.close')});
+    if (project && project.kind !== 'worktree') {
+      actions.push({label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep files, branch and worktree', run:() => call('project.close')});
+      if (project.isGit && project.currentBranch) actions.push({label:'Discard thread…', icon:'delete_outline', description:'Throw away uncommitted changes and close; keep the branch', run:() => finishThread(project.name, true), danger:true});
+    }
     actions.push({label:'Close other panels', icon:'close_fullscreen', description:'Close every panel except the selected one', run:() => closeOtherPanels()});
     actions.forEach(action => { action.description ||= project ? project.branch || project.currentBranch || project.name : thread.name; });
     paletteDialog('thread-action-dialog', 'Thread actions', 'Search thread actions…', actions);
   }
-  // New thread asks for its project. The current project comes first, so Enter makes a thread there.
+  // New thread asks for its project. No project is selected first; the current project leads the recent list.
   function threadPicker() {
     const all = window.__libroProjects || [];
     const projects = all.filter(p => p.kind !== 'worktree');
@@ -465,10 +472,11 @@
       ...(recent.length ? [{heading:'Recent'}, ...recent.map(entry)] : []),
       ...(rest.length ? [{heading:'All projects'}, ...rest.map(entry)] : []),
       {label:'Add project…', icon:'create_new_folder', description:'Open a folder as a new project', run:() => window.__libroOpenProjectDialogBrowse ? window.__libroOpenProjectDialogBrowse() : call('project.dialog.open')},
-    ], [option], current ? 1 : 0);
+    ], [option]);
   }
   // A searchable list dialog. Arrows move the selection and Enter opens it; headings hide while searching.
-  function paletteDialog(id, label, placeholder, actions, extra = [], active = 0) {
+  function paletteDialog(id, label, placeholder, actions, extra = []) {
+    let active = 0;
     document.getElementById(id)?.remove();
     const dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = id; dialog.setAttribute('aria-label', label);
     const searchBar = node('div', 'ws-command-search');
@@ -511,26 +519,27 @@
     // DOM focus alone does not take native keyboard focus back from a browser panel.
     window.libroElectron?.focusWorkspace?.().then(() => { if (dialog.open) search.focus(); }).catch(() => {});
   }
-  // A described row keeps its description on one full line. Branch, agent,
-  // and shortcut details move to a second line.
-  function rowLabel(row, label, described, branch, projectName) {
+  // A row keeps its description on one full line. Branch, agent,
+  // and shortcut details move to the last line.
+  function rowLabel(row, label, branch, projectName) {
     row.classList.add('ws-row-grid');
     const meta = node('small', 'ws-row-meta');
-    if (described) meta.append(node('span', 'ws-row-branch', branch));
+    if (branch) meta.append(node('span', 'ws-row-branch', branch));
     row.append(node('small', 'ws-row-project', projectName), node('span', '', label), meta);
   }
   function threadMenu(project, trigger, point) {
     document.getElementById('thread-actions-menu')?.remove();
     const worktree = project.kind === 'worktree', thread = !project.kind;
-    const menu = node('div', 'ws-browser-menu ws-thread-menu'); menu.id = 'thread-actions-menu'; menu.setAttribute('popover', 'auto'); menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', worktree || thread ? 'Thread actions' : 'Branch actions');
+    const menu = node('div', 'ws-browser-menu ws-thread-menu'); menu.id = 'thread-actions-menu'; menu.setAttribute('popover', 'auto'); menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', 'Thread actions');
     const add = (label, run, danger = false) => {
       const item = node('button', 'ws-thread-menu-item' + (danger ? ' ws-thread-discard' : ''), label); item.type = 'button'; item.setAttribute('role', 'menuitem');
       item.onclick = () => { menu.hidePopover(); run(); }; menu.append(item);
     };
     const actions = worktree ? threadActions(project) : thread ? agentThreadActions(project) : [
-      {label:'Close branch', run:() => call('project.close', {name:project.name})},
+      {label:'Close thread', run:() => call('project.close', {name:project.name})},
       {label:'New thread', run:() => newThread(project.name)},
-      {label:'Branch settings', run:() => projectSettings(project.name)},
+      {label:'Thread settings', run:() => projectSettings(project.name)},
+      ...(project.isGit && project.currentBranch ? [{label:'Discard thread…', run:() => finishThread(project.name, true), danger:true}] : []),
     ];
     actions.forEach(action => add(action.label, action.run, action.danger));
     if (!worktree && !thread && (!project.isGit || !project.currentBranch)) menu.children[1].disabled = true;
@@ -564,7 +573,7 @@
       const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button'; row.title = thread.name; row.dataset.projectKey = thread.id; row.dataset.kind = 'thread';
       row.setAttribute('aria-current', String(thread.id === window.__libroActiveProject));
       const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
-      row.append(icon); rowLabel(row, thread.name, false, '', thread.project || 'No project');
+      row.append(icon); rowLabel(row, thread.name, '', thread.project || 'No project');
       row.onclick = () => {
         closeSettings();
         // A closed thread can still be active, so it switches to reopen.
@@ -652,9 +661,9 @@
         const baseLabel = project.title || branch;
         base.title = baseLabel + (project.title ? '\n' + branch : '') + ' — ' + project.path;
         const baseIcon = node('i', 'material-icons-round', 'chat_bubble_outline'); baseIcon.setAttribute('aria-hidden', 'true');
-        base.append(baseIcon); rowLabel(base, baseLabel, !!project.title, branch, projectName);
+        base.append(baseIcon); rowLabel(base, project.title || '', branch, projectName);
         base.onclick = row.onclick;
-        const actions = button('Branch actions for ' + baseLabel, 'more_horiz', event => { event.stopPropagation(); threadMenu(project, actions); });
+        const actions = button('Thread actions for ' + baseLabel, 'more_horiz', event => { event.stopPropagation(); threadMenu(project, actions); });
         actions.setAttribute('aria-haspopup', 'menu');
         actions.classList.add('ws-project-settings');
         base.oncontextmenu = event => { event.preventDefault(); threadMenu(project, base, {x:event.clientX, y:event.clientY}); };
@@ -677,7 +686,7 @@
       row.title = label + (project.title ? '\n' + project.branch : '') + ' — ' + project.path;
       const icon = node('i', 'material-icons-round', 'account_tree'); icon.setAttribute('aria-hidden', 'true');
       const parent = projects.find(item => item.kind !== 'worktree' && item.name === project.name);
-      row.append(icon); rowLabel(row, label, !!project.title, project.branch, parent.displayName || parent.name);
+      row.append(icon); rowLabel(row, project.title || '', project.branch, parent.displayName || parent.name);
       row.onclick = () => { closeSettings(); call('worktree.switch', {project:project.name, path:project.path, branch:project.branch}); };
       const settings = button('Thread actions for ' + label, 'more_horiz', event => { event.stopPropagation(); threadMenu(project, settings); });
       settings.setAttribute('aria-haspopup', 'menu');

@@ -240,8 +240,8 @@ test('branch menu targets its own workspace and disables new threads without a c
       window:{__libroActiveProject:'other'},
     })
     const menu = root.children[0]
-    assert.equal(menu.attributes['aria-label'], 'Branch actions')
-    assert.deepEqual(menu.children.map(item => item.textContent), ['Close branch', 'New thread', 'Branch settings'])
+    assert.equal(menu.attributes['aria-label'], 'Thread actions')
+    assert.deepEqual(menu.children.map(item => item.textContent), ['Close thread', 'New thread', 'Thread settings', ...(isGit ? ['Discard thread…'] : [])])
     assert.equal(!!menu.children[1].disabled, !isGit)
     menu.children[0].onclick()
     if (isGit) menu.children[1].onclick()
@@ -268,9 +268,8 @@ test('thread picker puts the current project first, also from a child thread, an
       {kind:'project', name:'notes', isGit:false},
     ]},
   })
-  const [, , , entries, [option], active] = args
+  const [, , , entries, [option]] = args
   assert.deepEqual(Array.from(entries, entry => entry.heading || entry.label), ['No project', 'Recent', 'web', 'api', 'All projects', 'idle', 'notes', 'Add project…'])
-  assert.equal(active, 1)
   const run = label => entries.find(entry => entry.label === label).run()
   run('web'); run('notes')
   option.children[0].checked = false
