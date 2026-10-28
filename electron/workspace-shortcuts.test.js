@@ -716,6 +716,7 @@ test('standalone thread numbers continue after project agent threads and skip ar
       assert.equal(selector, '.ws-project-row')
       return rows
     } },
+    leftProject: '',
     node: () => ({ setAttribute() {} }),
   })
   vm.runInContext(render + ';renderThreadShortcuts()', context)

@@ -811,7 +811,7 @@
   }
   function renderThreadShortcuts() {
     let index = 0;
-    const open = row => row.dataset.closed !== 'true' && (row.dataset.kind !== 'thread' || row.parentElement.dataset.archived !== 'true');
+    const open = row => row.dataset.closed !== 'true' && (row.dataset.kind !== 'thread' || row.parentElement.dataset.archived !== 'true') && !(row.dataset.kind === 'base' && row.dataset.projectKey === leftProject);
     document.querySelectorAll('.ws-project-row').forEach(row => {
       // A project with open panels and no thread rows of its own is numbered too.
       const available = row.dataset.kind === 'project'
