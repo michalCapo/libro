@@ -247,6 +247,10 @@ func (sm *StateManager) restoreLayout(sid string) {
 			}
 			snapshot.Apps = append(snapshot.Apps, saved.application())
 		}
+		// A workspace with nothing left to reopen stays closed.
+		if len(snapshot.Apps) == 0 {
+			continue
+		}
 		state.snapshots[workspace.Name] = snapshot
 	}
 	state.ActiveProject = ""

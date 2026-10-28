@@ -96,7 +96,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &layout); err != nil {
 		t.Fatal(err)
 	}
-	if layout.ActiveProject != "folder" || len(layout.Open) != 4 {
+	if layout.ActiveProject != "folder" || len(layout.Open) != 3 {
 		t.Fatal("second window overwrote layout on shutdown")
 	}
 }
@@ -104,6 +104,7 @@ func TestLayoutRoundTrip(t *testing.T) {
 func TestLayoutDropsUnavailableWorkspacesAndApplication(t *testing.T) {
 	layoutTestDB(t)
 	DBSaveProject("good", t.TempDir())
+	DBSaveProject("empty", t.TempDir())
 	missingPath := filepath.Join(t.TempDir(), "removed")
 	DBSaveProject("missing-path", missingPath)
 	if _, err := db.Exec(`INSERT INTO threads (id,name,archived,path) VALUES
@@ -123,6 +124,7 @@ func TestLayoutDropsUnavailableWorkspacesAndApplication(t *testing.T) {
 	for _, name := range []string{"gone", "missing-path", "thread:archived", "thread:gone", "thread:missing-path", "closed"} {
 		state.snapshots[name] = &projectSnapshot{Apps: []Application{{ID: name}}}
 	}
+	state.snapshots["empty"] = &projectSnapshot{Apps: []Application{{ID: "app-53", Type: AppTypeTerminal, PluginID: "project-command"}}}
 	state.closedWorkspaces = map[string]bool{"closed": true}
 	state.Projects = append(state.Projects, Project{Name: "transient-gone", Path: missingPath, Transient: true})
 	manager.saveLayout(sid)
