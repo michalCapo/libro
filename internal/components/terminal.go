@@ -205,9 +205,7 @@ func (tm *TerminalManager) startTerminal(generation uint64, appID, command, cwd 
 	if appID == "" {
 		return nil, fmt.Errorf("empty terminal id")
 	}
-	if cwd == "" {
-		cwd, _ = os.UserHomeDir()
-	}
+	// Never fall back to the home folder: agents there can read everything.
 	if cwd == "" {
 		cwd = "/"
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -107,12 +108,18 @@ func NewStateManager() *StateManager {
 	}
 }
 
-func defaultHomeDir() string {
+// generalDir is where threads without a project run. It keeps them out of
+// the home folder and is created on first use.
+func generalDir() string {
 	home, _ := os.UserHomeDir()
 	if home == "" {
-		home = "/"
+		return "/"
 	}
-	return home
+	dir := filepath.Join(home, "general")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		log.Printf("state: create %s failed: %v", dir, err)
+	}
+	return dir
 }
 
 // NewSession creates a new session and returns its ID.
@@ -1018,20 +1025,20 @@ func (sm *StateManager) GetActiveProjectPath(sessionID string) string {
 	defer sm.mu.RUnlock()
 	s := sm.states[sessionID]
 	if s == nil {
-		return defaultHomeDir()
+		return generalDir()
 	}
 	if thread := s.thread(s.ActiveProject); thread != nil {
 		if thread.Path != "" {
 			return thread.Path
 		}
-		return defaultHomeDir()
+		return generalDir()
 	}
 	for _, p := range s.Projects {
 		if p.Name == s.ActiveProject {
 			return p.Path
 		}
 	}
-	return defaultHomeDir()
+	return generalDir()
 }
 
 // ProjectApps holds the running apps for a single project

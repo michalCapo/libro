@@ -282,6 +282,9 @@ func hydrateProjectCommand(sid, id string) (r.Result, bool) {
 			if path == "" {
 				_, path = threadProjectContext(sm.Get(sid), workspace.Name)
 			}
+			if path == "" {
+				path = generalDir()
+			}
 			var environment []string
 			if panel.ApplicationPort != 0 {
 				environment = []string{"PORT=" + strconv.Itoa(panel.ApplicationPort)}

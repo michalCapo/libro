@@ -234,7 +234,7 @@ func TestProjectAgentSessionRestoresWithoutThreadRow(t *testing.T) {
 		t.Fatal("hidden workspace report lost")
 	}
 	app, workspace, path, found := sm.workspaceApp(sid, panel.ID)
-	if !found || workspace != "project" || path == defaultHomeDir() || app.TerminalReady {
+	if !found || workspace != "project" || path == generalDir() || app.TerminalReady {
 		t.Fatal("hydration used active workspace")
 	}
 }

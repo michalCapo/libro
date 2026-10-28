@@ -349,7 +349,7 @@ func (sm *StateManager) workspaceApp(sid, appID string) (Application, string, st
 			}
 			_, path := threadProjectContext(state, workspace)
 			if path == "" {
-				path = defaultHomeDir()
+				path = generalDir()
 			}
 			return app, workspace, path, true
 		}

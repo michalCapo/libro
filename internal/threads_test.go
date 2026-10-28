@@ -2,12 +2,15 @@ package libro
 
 import (
 	"database/sql"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 )
 
 func TestStandaloneThreadPersistenceAndIsolation(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 	original := db
 	var err error
 	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "threads.db"))
@@ -35,8 +38,10 @@ func TestStandaloneThreadPersistenceAndIsolation(t *testing.T) {
 	if len(state.Projects) != 1 || len(state.Apps) != 0 {
 		t.Fatal("thread mixed with project")
 	}
-	if manager.GetActiveProjectPath(sid) != defaultHomeDir() {
-		t.Fatal("thread inherited project directory")
+	if path := manager.GetActiveProjectPath(sid); path != filepath.Join(home, "general") {
+		t.Fatalf("thread path = %q, want ~/general", path)
+	} else if info, err := os.Stat(path); err != nil || !info.IsDir() {
+		t.Fatal("general folder not created")
 	}
 	if workspaceProjectLabel(state) != "Fix server" {
 		t.Fatal("thread label missing")
