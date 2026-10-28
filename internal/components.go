@@ -2761,6 +2761,7 @@ func projectItems(state *AppState) []jsProject {
 	}
 
 	var all []jsProject
+	panels := workspacesWithPanels(state)
 	for _, p := range state.Projects {
 		if p.Virtual {
 			continue
@@ -2785,8 +2786,8 @@ func projectItems(state *AppState) []jsProject {
 			}
 			entry.CurrentBranch = GitCurrentBranch(p.Path)
 		}
-		// A main folder that branches into worktrees is a thread only while an agent works in it.
-		if entry.CurrentBranch != "" && !state.workspaceAgent(p.Name, "") {
+		// A main folder that branches into worktrees is a thread only while it is open or an agent works in it.
+		if entry.CurrentBranch != "" && state.ActiveProject != p.Name && !slices.Contains(panels, p.Name) && !state.workspaceAgent(p.Name, "") {
 			entry.BaseOpened = false
 		}
 
