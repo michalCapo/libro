@@ -886,6 +886,12 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 	}
 
 	delete(s.closedWorkspaces, projectName)
+	// Opening a closed thread reopens it.
+	if thread := s.thread(projectName); thread != nil && thread.Archived {
+		if _, err := db.Exec("UPDATE threads SET archived = 0 WHERE id = ?", thread.ID); err == nil {
+			thread.Archived = false
+		}
+	}
 	if s.ActiveProject == projectName {
 		return true
 	}

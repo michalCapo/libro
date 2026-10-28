@@ -282,24 +282,6 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string, stri
 		}
 		return r.Result{}, nil
 	})
-	registerWorkspaceAction(app, "thread.archive", func(_ *r.Context, in actionThreadArchiveInput) (r.Result, error) {
-		sid := inputSID(in.SID)
-		id := in.ID
-		archived := in.Archived
-		state := sm.Get(sid)
-		if state.thread(id) == nil {
-			return r.Result{}.Run(r.Notify("error", "Thread not found")), nil
-		}
-		if _, err := db.Exec("UPDATE threads SET archived = ? WHERE id = ?", archived, id); err != nil {
-			return r.Result{}.Run(r.Notify("error", "Could not save thread")), nil
-		}
-		sm.mu.Lock()
-		state.thread(id).Archived = archived
-		sm.mu.Unlock()
-		sm.scheduleLayoutSave(sid)
-		// Archiving keeps the workspace alive and recoverable without interrupting commands.
-		return r.Merge(projectsJS(state), clientScript("if(window.libroWorkspace)libroWorkspace.threadArchived(props[0]);", archived)), nil
-	})
 }
 
 // adjacentProjectThread prefers the previous open thread in the same project.

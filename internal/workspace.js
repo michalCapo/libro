@@ -427,14 +427,20 @@
       {label:'Discard thread…', icon:'delete_outline', run:() => finishThread(name, true), danger:true},
     ];
   }
+  // Agent threads are not projects; they get the actions that need no project.
+  function agentThreadActions(thread) {
+    return [{label:'Close thread', icon:'close', description:'Stop processes and close all panels', run:() => call('project.close', {name:thread.id})}];
+  }
   function threadActionPalette() {
     const project = (window.__libroProjects || []).find(p => (p.kind === 'worktree' ? p.name + '/' + p.branch : p.name) === window.__libroActiveProject);
-    if (!project) { window.__libroShowToast?.('Select a project thread first', '', 'error'); return; }
-    const actions = project.kind === 'worktree' ? threadActions(project) : [{label:'Thread settings', icon:'settings', run:() => projectSettings(project.name)}];
-    actions.unshift({label:'New thread', icon:'add', description:'Create a new thread in ' + project.name, run:() => newThread(project.name)});
-    if (project.kind !== 'worktree') actions.push({label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep files, branch and worktree', run:() => call('project.close')});
+    const thread = !project && (window.__libroThreads || []).find(thread => thread.id === window.__libroActiveProject);
+    if (!project && !thread) { window.__libroShowToast?.('Select a thread first', '', 'error'); return; }
+    const actions = thread ? agentThreadActions(thread) : project.kind === 'worktree' ? threadActions(project) : [{label:'Thread settings', icon:'settings', run:() => projectSettings(project.name)}];
+    const name = project ? project.name : thread.project;
+    actions.unshift({label:'New thread', icon:'add', description:name ? 'Create a new thread in ' + name : 'Create a new thread', run:() => newThread(name || undefined)});
+    if (project && project.kind !== 'worktree') actions.push({label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep files, branch and worktree', run:() => call('project.close')});
     actions.push({label:'Close other panels', icon:'close_fullscreen', description:'Close every panel except the selected one', run:() => closeOtherPanels()});
-    actions.forEach(action => { action.description ||= project.branch || project.currentBranch || project.name; });
+    actions.forEach(action => { action.description ||= project ? project.branch || project.currentBranch || project.name : thread.name; });
     paletteDialog('thread-action-dialog', 'Thread actions', 'Search thread actions…', actions);
   }
   // New thread asks for its project. The current project comes first, so Enter makes a thread there.
@@ -515,19 +521,19 @@
   }
   function threadMenu(project, trigger, point) {
     document.getElementById('thread-actions-menu')?.remove();
-    const worktree = project.kind === 'worktree';
-    const menu = node('div', 'ws-browser-menu ws-thread-menu'); menu.id = 'thread-actions-menu'; menu.setAttribute('popover', 'auto'); menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', worktree ? 'Thread actions' : 'Branch actions');
+    const worktree = project.kind === 'worktree', thread = !project.kind;
+    const menu = node('div', 'ws-browser-menu ws-thread-menu'); menu.id = 'thread-actions-menu'; menu.setAttribute('popover', 'auto'); menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', worktree || thread ? 'Thread actions' : 'Branch actions');
     const add = (label, run, danger = false) => {
       const item = node('button', 'ws-thread-menu-item' + (danger ? ' ws-thread-discard' : ''), label); item.type = 'button'; item.setAttribute('role', 'menuitem');
       item.onclick = () => { menu.hidePopover(); run(); }; menu.append(item);
     };
-    const actions = worktree ? threadActions(project) : [
+    const actions = worktree ? threadActions(project) : thread ? agentThreadActions(project) : [
       {label:'Close branch', run:() => call('project.close', {name:project.name})},
       {label:'New thread', run:() => newThread(project.name)},
       {label:'Branch settings', run:() => projectSettings(project.name)},
     ];
     actions.forEach(action => add(action.label, action.run, action.danger));
-    if (!worktree && (!project.isGit || !project.currentBranch)) menu.children[1].disabled = true;
+    if (!worktree && !thread && (!project.isGit || !project.currentBranch)) menu.children[1].disabled = true;
     root.append(menu); menu.showPopover();
     const rect = trigger.getBoundingClientRect();
     menu.style.left = Math.max(8, Math.min(point?.x ?? rect.left, innerWidth - menu.offsetWidth - 8)) + 'px';
@@ -540,7 +546,6 @@
     if (project === undefined) threadPicker();
     else call('thread.create', {project});
   }
-  function threadArchived() { refresh(); }
   function renderThreads() {
     const threads = window.__libroThreads || [];
     renderThreadList(document.getElementById('workspace-thread-list'), threads.filter(thread => !thread.project));
@@ -562,7 +567,8 @@
       row.append(icon); rowLabel(row, thread.name, false, '', thread.project || 'No project');
       row.onclick = () => {
         closeSettings();
-        if (thread.id !== window.__libroActiveProject) {
+        // A closed thread can still be active, so it switches to reopen.
+        if (thread.id !== window.__libroActiveProject || thread.archived) {
           call('project.switch', {name:thread.id, focusAgent:true});
           return;
         }
@@ -575,8 +581,11 @@
       };
       item.append(row);
       if (!thread.project) {
-        const archive = button(thread.archived ? 'Restore thread' : 'Archive thread', thread.archived ? 'unarchive' : 'archive', () => call('thread.archive', {id:thread.id, archived:!thread.archived}));
-        archive.classList.add('ws-project-remove'); item.append(archive);
+        const actions = button('Thread actions for ' + thread.name, 'more_horiz', event => { event.stopPropagation(); threadMenu(thread, actions); });
+        actions.setAttribute('aria-haspopup', 'menu');
+        actions.classList.add('ws-project-settings');
+        row.oncontextmenu = event => { event.preventDefault(); threadMenu(thread, row, {x:event.clientX, y:event.clientY}); };
+        item.append(actions);
       }
       list.append(item);
     };
@@ -1970,7 +1979,7 @@
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects')) delete root.dataset.sidebar; });
   narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, threadArchived,newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }

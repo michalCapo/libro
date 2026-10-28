@@ -664,7 +664,7 @@ test('address popup reclaims native focus only for the workspace sender', () => 
 
 test('new thread shortcut opens the project picker and ignores repeats', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const create = source.slice(source.indexOf('  function newThread('), source.indexOf('  function threadArchived()'))
+  const create = source.slice(source.indexOf('  function newThread('), source.indexOf('  function renderThreads()'))
   const handler = source.slice(source.indexOf("    if (binding && binding === toolKeys['new-thread'])"), source.indexOf("    if (binding && binding === toolKeys['new-agent'])"))
   for (const project of ['', 'project', 'thread:project']) for (const binding of ['Ctrl+N', 'Alt+N']) for (const repeat of [false, true]) {
     const calls = []
@@ -888,7 +888,7 @@ test('project threads hide archived agents and stay separate from standalone thr
 
 test('new thread without a project opens the picker, while explicit projects create directly', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const handler = source.slice(source.indexOf('  function newThread('), source.indexOf('  function threadArchived()'))
+  const handler = source.slice(source.indexOf('  function newThread('), source.indexOf('  function renderThreads()'))
   const calls = []
   vm.runInNewContext(handler + ";newThread();newThread('');newThread('other')", {
     window: { __libroActiveProject: 'thread:project' },

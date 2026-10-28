@@ -278,12 +278,6 @@ type actionWorktreeTitleInput struct {
 	Fallback bool   `json:"fallback"`
 }
 
-type actionThreadArchiveInput struct {
-	Archived bool   `json:"archived"`
-	ID       string `json:"id"`
-	SID      string `json:"sid"`
-}
-
 type actionSettingsToolsInput struct {
 	Bindings map[string]string `json:"bindings"`
 	Editor   *string           `json:"editor"`

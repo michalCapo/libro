@@ -335,7 +335,7 @@ func TestThreadSessionSurvivesRestartAndDefaultAgentChange(t *testing.T) {
 	manager.saveThreadSession(sid, "thread:test", "agent", "pi", "pi --model example", "saved-session")
 	state := newAppStateFromDB()
 	thread := state.thread("thread:test")
-	if thread == nil || thread.Name != "Existing" || !thread.Archived || thread.SessionID != "saved-session" || thread.AgentID != "pi" || thread.AgentCommand != "pi --model example" {
+	if thread == nil || thread.Name != "Existing" || thread.Archived || thread.SessionID != "saved-session" || thread.AgentID != "pi" || thread.AgentCommand != "pi --model example" {
 		t.Fatalf("resume metadata lost: %+v", thread)
 	}
 	if err := setDefaultThreadAgent("codex"); err != nil {

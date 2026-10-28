@@ -85,10 +85,10 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 /* Thread rows always use three lines: project name with the status icon in the corner, label, and details (branch for described rows). */
 .ws-row-grid{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"project status icon" "title title title" "meta end badge";gap:2px 8px;align-items:center}
 .ws-row-grid>.material-icons-round{grid-area:icon;justify-self:end}
-.ws-row-grid>span{grid-area:title;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
+.ws-row-grid>span{grid-area:title;font-size:11px;line-height:14px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
 .ws-row-grid>.ws-project-terminal{grid-area:end;justify-self:end}
 .ws-row-grid>.ws-project-shortcut{grid-area:badge}
-.ws-row-project{grid-area:project;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:14px;color:var(--ws-muted)}
+.ws-row-project{grid-area:project;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:22px;line-height:28px;font-weight:700;color:var(--ws-muted)}
 .ws-row-meta{grid-area:meta;min-width:0;min-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;line-height:16px;color:var(--ws-muted)}
 .ws-row-branch{font:11px/16px var(--ws-mono)}
 /* Branch names show where a thread lives: the project's own checkout or a separate worktree. */
@@ -101,7 +101,6 @@ html.dark .ws-thread-row[data-kind=worktree] .ws-row-branch{color:#c4b5fd}
 .ws-project-item[data-panels=true]{background:var(--ws-hover)}
 /* The selected card lifts off the chrome surface instead of drawing a ring; a selected thread lifts even before it has panels. */
 .ws-project-item:has(>.ws-thread-row[aria-current=true]),.ws-project-group:not(:has(.ws-thread-row[aria-current=true]))>.ws-project-item[data-panels=true]:has(>.ws-project-row[aria-current=true]){background:var(--ws-raised);box-shadow:var(--ws-shadow)}
-.ws-thread-row>span{font-weight:600}
 /* Row actions sit before the shortcut badge so the number stays last; thread rows keep them on the last line. */
 .ws-project-item:has(.ws-project-shortcut)>.ws-button{position:absolute;right:31px;top:50%;translate:0 -50%}
 .ws-project-item:has(>.ws-row-grid .ws-project-shortcut)>.ws-button{top:auto;bottom:2px;translate:none}
