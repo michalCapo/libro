@@ -679,14 +679,6 @@
     if (leftProject !== window.__libroActiveProject) leftProject = '';
     const count = document.getElementById('workspace-project-count');
     if (count) count.textContent = String(projects.filter(project => project.kind !== 'worktree').length);
-    // Projects stay one click away below the threads.
-    document.getElementById('workspace-quick-projects')?.replaceChildren(...projects.filter(project => project.kind !== 'worktree').map(project => {
-      const row = node('button', 'ws-quick-project'); row.type = 'button'; row.title = project.path || '';
-      const icon = node('i', 'material-icons-round', 'folder_open'); icon.setAttribute('aria-hidden', 'true');
-      row.append(icon, node('span', '', project.displayName || project.name));
-      row.onclick = () => { closeSettings(); call('project.switch', {name:project.name}); };
-      return row;
-    }));
     const groups = new Map();
     projects.filter(project => project.kind !== 'worktree').forEach(project => {
       const item = node('div', 'ws-project-item'); item.dataset.kind = project.kind;

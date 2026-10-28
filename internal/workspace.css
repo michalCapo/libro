@@ -38,13 +38,6 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 .ws-new-thread-key{padding:3px 5px;border-radius:4px;background:var(--ws-kbd);color:var(--ws-muted);font:500 10.5px/1 var(--ws-mono)}
 .ws-new-thread-key:empty{display:none}
 #workspace-thread-list{margin-top:2px}
-/* Below the threads, projects stay faint until pointed at. All projects already lists them. */
-.ws-quick-projects{display:flex;flex-direction:column;gap:1px;margin-top:12px}
-#libro-workspace[data-all-projects=true] .ws-quick-projects{display:none}
-.ws-quick-project{display:flex;align-items:center;gap:8px;min-height:28px;padding:4px 10px;border:0;border-radius:6px;background:transparent;color:var(--ws-muted);opacity:.5;font:inherit;font-size:13px;text-align:left;transition:opacity .15s}
-.ws-quick-project:is(:hover,:focus-visible){opacity:1;color:var(--ws-fg);background:var(--ws-hover)}
-.ws-quick-project>.material-icons-round{font-size:16px}
-.ws-quick-project>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ws-sidebar-footer{display:flex;align-items:center;gap:2px;margin-top:auto;padding-top:8px;border-top:1px solid var(--ws-line)}
 .ws-sidebar-footer>.ws-button{width:30px;height:30px}
 .ws-sidebar-footer small{font-size:12px}
