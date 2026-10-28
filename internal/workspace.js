@@ -238,6 +238,8 @@
     highlight();
     dialog.append(node('div', 'ws-command-footer', '↑ ↓ Navigate · Enter open · Esc close'));
     root.append(dialog); dialog.showModal(); search.focus();
+    // Page tool keys open this from a browser panel; DOM focus alone does not take native keyboard focus back from it.
+    window.libroElectron?.focusWorkspace?.().then(() => { if (dialog.open) search.focus(); }).catch(() => {});
     dialog.addEventListener('click', e => { if (e.target === dialog) { const rect = dialog.getBoundingClientRect(); if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) dialog.close(); } });
   }
   function empty(zone, grid) {
@@ -408,6 +410,9 @@
     }
     state.dialog.close();
     leaveProject(window.__libroActiveProject);
+    // The project's row is hidden, so the first open thread shown takes over its place.
+    [...document.querySelectorAll('.ws-thread-row,.ws-project-item[data-panels=true]>.ws-project-row')]
+      .find(row => row.dataset.closed !== 'true' && row.parentElement.dataset.archived !== 'true' && !row.closest('.ws-project-group[data-left=true]>.ws-project-item') && row.checkVisibility())?.click();
     window.__libroShowToast?.(reply.warning || (state.checkout ? 'Changes discarded and thread closed' : 'Thread removed'), '', reply.warning ? 'error' : 'success');
   }
   function confirmAgentMerge(state, request) {
@@ -461,7 +466,7 @@
     actions.forEach(action => { action.description ||= project ? project.branch || project.currentBranch || project.name : thread.name; });
     paletteDialog('thread-action-dialog', 'Thread actions', 'Search thread actions…', actions);
   }
-  // New thread asks for its project. No project is selected first; the current project leads the recent list.
+  // New thread asks for its project. The current or last opened project leads the recent list and is selected, so Enter makes a thread there.
   function threadPicker() {
     const all = window.__libroProjects || [];
     const projects = all.filter(p => p.kind !== 'worktree');
@@ -483,11 +488,10 @@
       ...(recent.length ? [{heading:'Recent'}, ...recent.map(entry)] : []),
       ...(rest.length ? [{heading:'All projects'}, ...rest.map(entry)] : []),
       {label:'Add project…', icon:'create_new_folder', description:'Open a folder as a new project', run:() => window.__libroOpenProjectDialogBrowse ? window.__libroOpenProjectDialogBrowse() : call('project.dialog.open')},
-    ], [option]);
+    ], [option], recent.length ? 1 : 0);
   }
   // A searchable list dialog. Arrows move the selection and Enter opens it; headings hide while searching.
-  function paletteDialog(id, label, placeholder, actions, extra = []) {
-    let active = 0;
+  function paletteDialog(id, label, placeholder, actions, extra = [], active = 0) {
     document.getElementById(id)?.remove();
     const dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = id; dialog.setAttribute('aria-label', label);
     const searchBar = node('div', 'ws-command-search');
