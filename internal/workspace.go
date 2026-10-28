@@ -75,6 +75,7 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 			),
 			r.Div("ws-project-list").ID("workspace-project-list"),
 			r.Div("ws-project-list").ID("workspace-thread-list"),
+			r.Div("ws-quick-projects").ID("workspace-quick-projects").Attr("role", "group").Attr("aria-label", "Projects"),
 			r.Div("ws-sidebar-footer").Render(
 				r.Button("ws-sidebar-search").ID("workspace-all-projects").Attr("type", "button").Attr("aria-expanded", "false").OnClick(r.UnsafeJS("libroWorkspace.toggleProjects()")).Render(
 					r.I("material-icons-round").Attr("aria-hidden", "true").Text("folder_open"),
