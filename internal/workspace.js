@@ -278,7 +278,9 @@
         if (!event.repeat && !cancel.disabled) cancel.click();
       } else if (event.key === 'Enter' && !['TEXTAREA', 'SELECT'].includes(event.target.tagName)) {
         event.preventDefault(); event.stopImmediatePropagation();
-        if (!event.repeat && !submit.disabled) form.requestSubmit(submit);
+        // With the action finished, Enter closes through the focused Done button.
+        if (event.repeat) return;
+        if (!submit.disabled) form.requestSubmit(submit); else if (event.target === cancel && !cancel.disabled) cancel.click();
       }
     }, true);
   }
@@ -350,6 +352,8 @@
       status.textContent = [state.error, blocker].filter(Boolean).join(" ");
       submit.textContent = discard ? discardLabel : pr ? 'Push branch and create draft PR' : method === 'squash' ? 'Squash and remove thread' : 'Merge and remove thread';
       submit.disabled = state.busy || !info || !!blocker || (pr && !message.value.trim());
+      // The action takes focus once the changes load, unless a text field has it.
+      if (!submit.disabled && !state.focused && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) { state.focused = true; submit.focus(); }
     }
     function preview() {
       state.info = null; state.request = crypto.randomUUID(); update();
@@ -368,7 +372,7 @@
       call('thread.finish', {name, base:info.base, method:discard ? 'discard' : method, sourceHead:info.sourceHead, targetHead:info.targetHead, message:message.value, body:body.value});
     };
     dialogKeys(dialog, form, submit, cancel);
-    dialog.showModal(); preview(); cancel.focus();
+    dialog.showModal(); preview();
   }
   function finishThreadPreview(request, reply) {
     const state = finishDialog; if (!state || state.request !== request || state.busy) return;
@@ -386,7 +390,7 @@
     state.busy = false;
     if (reply.error) {
       state.form.querySelectorAll('input,select,textarea,button').forEach(control => { control.disabled = false; });
-      state.error = reply.error; state.preview();
+      state.error = reply.error; state.focused = false; state.preview();
       if (reply.agentMerge) confirmAgentMerge(state, reply.agentMerge);
       return;
     }
@@ -394,7 +398,7 @@
       state.status.replaceChildren(node('span', '', 'Draft PR created. Thread kept open. '));
       const url = reply.url.split('\n').find(line => /^https:\/\//.test(line));
       if (url) { const link = node('a', '', 'Open pull request'); link.href = url; link.target = '_blank'; link.rel = 'noopener'; state.status.append(link); }
-      state.cancel.disabled = false; state.cancel.textContent = 'Done'; return;
+      state.cancel.disabled = false; state.cancel.textContent = 'Done'; state.cancel.focus(); return;
     }
     state.dialog.close();
     window.__libroShowToast?.(reply.warning || (state.checkout ? 'Changes discarded and thread closed' : 'Thread removed'), '', reply.warning ? 'error' : 'success');
@@ -495,7 +499,10 @@
       entry.onclick = () => { dialog.close(); action.run(); }; entries.append(entry);
     });
     const empty = node('p', 'ws-palette-empty', 'No matches'); empty.hidden = true;
-    dialog.append(entries, empty, ...extra, node('div', 'ws-command-footer', '↑ ↓ Navigate · Enter open · Esc close'));
+    // Tab flips the dialog's checkbox, so the option changes without leaving the search.
+    const toggle = extra.map(item => item.querySelector('input[type=checkbox]')).find(Boolean);
+    toggle?.addEventListener('change', () => search.focus());
+    dialog.append(entries, empty, ...extra, node('div', 'ws-command-footer', '↑ ↓ Navigate · ' + (toggle ? 'Tab toggle · ' : '') + 'Enter open · Esc close'));
     const visible = () => [...entries.children].filter(entry => entry.dataset.label && !entry.hidden);
     const highlight = () => {
       visible().forEach((entry, index) => { entry.dataset.selected = String(index === active); entry.setAttribute('aria-selected', String(index === active)); });
@@ -513,6 +520,7 @@
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault(); active = Math.max(0, Math.min(rows.length - 1, active + (event.key === 'ArrowDown' ? 1 : -1))); highlight(); rows[active]?.scrollIntoView({block:'nearest'});
       } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) rows[active]?.click(); }
+      else if (event.key === 'Tab' && toggle && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) { event.preventDefault(); toggle.checked = !toggle.checked; }
     };
     dialog.addEventListener('close', () => dialog.remove());
     highlight(); root.append(dialog); dialog.showModal(); search.focus();

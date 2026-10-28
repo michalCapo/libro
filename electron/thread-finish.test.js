@@ -25,7 +25,7 @@ function harness(discard = false, method = 'merge') {
   }
   let sequence = 0
   const context = vm.createContext({
-    node, root:node('div'), crypto:{randomUUID:() => String(++sequence)},
+    node, root:node('div'), document:{}, crypto:{randomUUID:() => String(++sequence)},
     call:(action, data) => calls.push({action, data}),
     window:{__libroActiveProject:'repo/feature', __libroProjects:[{kind:'worktree',name:'repo',branch:'feature'}]},
   })
