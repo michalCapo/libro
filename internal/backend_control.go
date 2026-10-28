@@ -124,13 +124,14 @@ func backendControlHandler(app *r.App, token, sid string) http.Handler {
 }
 
 type backendCommand struct {
-	Action    string       `json:"action"`
-	Operation string       `json:"operation,omitempty"`
-	Project   string       `json:"project"`
-	Command   childCommand `json:"command"`
-	Note      noteCommand  `json:"note"`
-	Panel     string       `json:"panel,omitempty"`
-	URL       string       `json:"url,omitempty"`
+	Action    string        `json:"action"`
+	Operation string        `json:"operation,omitempty"`
+	Project   string        `json:"project"`
+	Command   childCommand  `json:"command"`
+	Thread    threadCommand `json:"thread"`
+	Note      noteCommand   `json:"note"`
+	Panel     string        `json:"panel,omitempty"`
+	URL       string        `json:"url,omitempty"`
 }
 
 // dispatchBackendCommand operates on the persistent backend workspace. It does not
@@ -173,6 +174,8 @@ func dispatchBackendCommand(sid string, command backendCommand) (r.Result, any, 
 		return clientScript("window.libroNotes?.refresh();"), result, err
 	case "children":
 		return controlChildren(sid, command.Project, command.Command)
+	case "thread":
+		return controlThread(sid, command.Project, command.Thread)
 	case "open":
 		return openFilePanel(sid, command.Panel, command.URL)
 	default:

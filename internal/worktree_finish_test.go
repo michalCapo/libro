@@ -233,6 +233,52 @@ func TestFinishThreadCleanupPreservesSharedApplication(t *testing.T) {
 	}
 }
 
+func TestThreadControlFinishesOnlyTheCallersThread(t *testing.T) {
+	state, root, branch := finishFixture(t)
+	oldSM, oldTM := sm, tm
+	sm, tm = NewStateManager(), components.NewTerminalManager()
+	t.Cleanup(func() { tm.StopAll(); sm, tm = oldSM, oldTM })
+	sm.states["finish"] = state
+	child := filepath.Join(t.TempDir(), "repo-qa")
+	state.Threads = []Thread{{Managed: true, ID: "thread:qa", Project: "repo", Path: child}}
+	if _, _, err := controlThread("finish", child, threadCommand{Action: "discard"}); err == nil {
+		t.Fatal("a QA child finished its parent project")
+	}
+	commitFinishFile(t, branch, "done.txt", "done\n")
+	_, preview, err := controlThread("finish", branch, threadCommand{Action: "preview"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := preview.(worktreeFinishPreview)
+	if _, _, err := controlThread("finish", branch, threadCommand{Action: "merge", SourceHead: info.SourceHead, TargetHead: "stale"}); err == nil {
+		t.Fatal("merged without a current preview")
+	}
+	if _, _, err := controlThread("finish", branch, threadCommand{Action: "merge", SourceHead: info.SourceHead, TargetHead: info.TargetHead}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "done.txt")); err != nil || state.ActiveProject != "repo" {
+		t.Fatalf("merge did not land or thread stayed active: %v %s", err, state.ActiveProject)
+	}
+	if _, err := os.Stat(branch); !os.IsNotExist(err) {
+		t.Fatal("merge kept the worktree")
+	}
+}
+
+func TestThreadControlCloseKeepsWorktree(t *testing.T) {
+	state, _, branch := finishFixture(t)
+	oldSM, oldTM := sm, tm
+	sm, tm = NewStateManager(), components.NewTerminalManager()
+	t.Cleanup(func() { tm.StopAll(); sm, tm = oldSM, oldTM })
+	sm.states["finish"] = state
+	writeFinishFile(t, branch, "draft.txt", "draft\n")
+	if _, _, err := controlThread("finish", branch, threadCommand{Action: "close"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(branch, "draft.txt")); err != nil || !state.closedWorkspaces["repo/feature"] {
+		t.Fatalf("close lost work or kept the thread open: %v", err)
+	}
+}
+
 func TestFinishPRRepositoryUsesOriginHostAndOwner(t *testing.T) {
 	for _, remote := range []string{"git@github.com:owner/repo.git", "ssh://git@github.com/owner/repo.git", "https://github.com/owner/repo.git"} {
 		got, err := finishPRRepository(remote)

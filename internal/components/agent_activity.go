@@ -28,12 +28,17 @@ One-shot builds, lint checks, and tests that do not launch another application s
 // AgentInstructions adds browser testing guidance to the shared application rules.
 const AgentInstructions = ApplicationInstructions + `
 
-Use the agent-browser CLI for browsing and browser testing. Libro's MCP provides application and notes tools; it does not provide browser automation.
+Use the agent-browser CLI for browsing and browser testing. Libro's MCP provides application, notes, children and thread tools; it does not provide browser automation.
 Before first use, run agent-browser --help and read its bundled guide with agent-browser skills get core --full when available.
 Choose a unique session name for this agent/thread and pass --session <name> on every browser command. Keep using that name for this task so concurrent agents do not share a browser. Do not use the default session or close other agents' sessions.
 Typical flow: agent-browser --session <name> open <url>, then snapshot -i, click @ref or fill @ref "text", and screenshot <path>. Include --session <name> on each command and take a fresh snapshot after navigation or page changes.
 Use the application managed by Libro for testing, following the application rules above. Agent-browser runs its own browser and does not share Libro panel logins.
-When finished, close only your session with agent-browser --session <name> close. If agent-browser is not installed, report that it is required for browser testing.`
+When finished, close only your session with agent-browser --session <name> close. If agent-browser is not installed, report that it is required for browser testing.
+
+When the user asks to merge, squash, finish, close or discard this thread, use the Libro thread tool (CLI: libro thread; see libro thread --help), not raw git merge or worktree commands. The user's request is the confirmation.
+Merge or squash: commit your work, call action preview, then merge or squash with the sourceHead and targetHead from that preview. Merge is the default.
+Close: call action close. It keeps files, branch and worktree. Discard: call preview, then discard with its sourceHead, without committing. Discard deletes work, so use it only when the user asks to discard, delete or throw away the thread.
+Each of these closes the thread's panels, including this agent, so report what you are doing before the final call.`
 
 // Launch-local integrations never modify the user's agent settings. Only a
 // status and session metadata are written to temporary activity files.
@@ -123,7 +128,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 		}
 		data, _ := json.Marshal(map[string]any{
 			"hooks":       hooks,
-			"permissions": map[string]any{"allow": []string{"mcp__libro__application", "mcp__libro__notes", "mcp__libro__children"}},
+			"permissions": map[string]any{"allow": []string{"mcp__libro__application", "mcp__libro__notes", "mcp__libro__children", "mcp__libro__thread"}},
 		})
 		filename, content = "claude.json", string(data)
 		mcpJSON, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"libro": libroMCP}})
@@ -157,7 +162,7 @@ export default function (pi) {
   pi.on('agent_settled', () => status('done'));
   pi.on('session_shutdown', () => status('idle'));
 }`
-		args = " --extension " + shellQuote(filepath.Join(dir, filename)) + " --append-system-prompt " + shellQuote(AgentInstructions+"\nControl the saved project start command with libro application status|start|restart|stop|logs; see libro application --help. Application actions preserve the user’s active project and thread. Manage project notes with libro notes; see libro notes --help for create, list, read, set_status, and delete.")
+		args = " --extension " + shellQuote(filepath.Join(dir, filename)) + " --append-system-prompt " + shellQuote(AgentInstructions+"\nControl the saved project start command with libro application status|start|restart|stop|logs; see libro application --help. Application actions preserve the user’s active project and thread. Manage project notes with libro notes; see libro notes --help for create, list, read, set_status, and delete. Merge or discard this thread with libro thread; see libro thread --help.")
 	case "opencode":
 		filename = "opencode.mjs"
 		content = `import { writeFileSync } from 'node:fs';

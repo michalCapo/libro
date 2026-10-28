@@ -49,6 +49,8 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
    The main folder it lands on is not opened by the user, so its card hides too. */
 #libro-workspace:not([data-all-projects=true]) .ws-project-group[data-left=true]>.ws-project-item:not([data-panels=true]),#libro-workspace:not([data-all-projects=true]) .ws-project-group[data-left=true]:not(:has(>.ws-project-item[data-panels=true],.ws-thread-row:not([data-kind=base]))),.ws-project-group[data-left=true] .ws-project-item:has(>.ws-thread-row[data-kind=base]){display:none}
 #libro-workspace:not([data-all-projects=true]) .ws-project-group>.ws-project-threads{margin:0}
+/* Thread cards need room to read as separate cards. */
+#libro-workspace:not([data-all-projects=true]) :is(.ws-project-list,.ws-project-group>.ws-project-threads){gap:8px}
 .ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;min-height:28px;padding:0 2px 0 10px;margin:4px 0 2px;color:var(--ws-muted);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
 .ws-sidebar-heading>.ws-button{width:26px;height:26px}
 /* Narrow windows always fold, so they hide the fold button. */

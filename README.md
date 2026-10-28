@@ -253,7 +253,7 @@ Change shortcuts in **Settings**. **Restore defaults** resets them.
 
 New Codex, Claude (including Ollama-launched Claude), and OpenCode sessions
 register the `libro` MCP server automatically. It provides `application`,
-`notes`, and `children` tools. Pi receives instructions for the equivalent CLI commands.
+`notes`, `children`, and `thread` tools. Pi receives instructions for the equivalent CLI commands.
 Custom agents can register `libro mcp` as a stdio MCP server.
 Agents also receive instructions to use the separately installed `agent-browser`
 CLI for browser testing, with a unique session per agent/thread. Libro does not
@@ -303,6 +303,19 @@ including uncommitted and untracked files, without a typed confirmation.
 On a thread that works directly on the project's own branch, **Discard thread…**
 closes the thread and throws away uncommitted and untracked files. The branch,
 its commits, and ignored files stay.
+
+Agents can do the same with the `thread` tool on the `libro` MCP server, or
+`libro thread`. Ask the agent to merge, squash, close, or discard its thread.
+It previews first, then finishes with the reviewed commits. Close keeps files,
+branch, and worktree, like **Close thread**. The tool only acts on the agent's
+own thread, and every action closes the thread, including the agent.
+
+```bash
+libro thread '{"action":"preview"}'
+libro thread '{"action":"merge","sourceHead":"<sourceHead>","targetHead":"<targetHead>"}'
+libro thread '{"action":"close"}'
+libro thread '{"action":"discard","sourceHead":"<sourceHead>"}'
+```
 
 ### Agent application control
 

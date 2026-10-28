@@ -179,7 +179,7 @@ Does not work for apps with hardcoded `localhost:N` in HTML/JS, CORS, or OAuth c
 
 The bridge (`internal/agent_control.go`) reads a local descriptor and calls Electron on the laptop. It does not work on a server without Electron. Remote agents need:
 
-- `notes`, `application`, `children`, and MCP handled directly in the backend;
+- `notes`, `application`, `children`, `thread`, and MCP handled directly in the backend;
 - a local authenticated endpoint on the server (also used by `libro devices remove`);
 - the same workspace restrictions as today.
 

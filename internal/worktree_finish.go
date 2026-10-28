@@ -351,29 +351,38 @@ func registerFinishThreadActions(app *r.App) {
 		if err != nil {
 			return finish(err, "", ""), nil
 		}
-		if sourceHead != info.SourceHead || method != "discard" && targetHead != info.TargetHead {
-			return finish(fmt.Errorf("the branches changed; refresh the preview and review again"), "", ""), nil
+		js, warning, url, conflict, err := finishThread(sid, info, method, sourceHead, targetHead, message, body)
+		if conflict {
+			agentMerge = mergeAgentRequest(sid, info, method)
 		}
-		if info.Checkout {
-			if method != "discard" {
-				return finish(fmt.Errorf("%s", info.Blocker), "", ""), nil
-			}
-			js, err := discardCheckoutThread(sid, info)
-			return r.Merge(js, finish(err, "", "")), nil
-		}
-		if method == "pr" {
-			url, err := createFinishPR(info, message, body)
-			return finish(err, "", url), nil
-		}
-		if method != "discard" {
-			if err := integrateFinishThread(info, method, message); err != nil {
-				agentMerge = mergeAgentRequest(sid, info, method)
-				return finish(err, "", ""), nil
-			}
-		}
-		js, warning, err := cleanupFinishedThread(sid, info, method == "discard")
-		return r.Merge(js, finish(err, warning, "")), nil
+		return r.Merge(js, finish(err, warning, url)), nil
 	})
+}
+
+// finishThread runs a reviewed finish. Conflict reports a failed local merge,
+// which leaves the thread open. The caller holds worktreeFinishMu.
+func finishThread(sid string, info worktreeFinishPreview, method, sourceHead, targetHead, message, body string) (js r.Result, warning, url string, conflict bool, err error) {
+	if sourceHead != info.SourceHead || method != "discard" && targetHead != info.TargetHead {
+		return js, "", "", false, fmt.Errorf("the branches changed; refresh the preview and review again")
+	}
+	if info.Checkout {
+		if method != "discard" {
+			return js, "", "", false, fmt.Errorf("%s", info.Blocker)
+		}
+		js, err = discardCheckoutThread(sid, info)
+		return js, "", "", false, err
+	}
+	if method == "pr" {
+		url, err = createFinishPR(info, message, body)
+		return js, "", url, false, err
+	}
+	if method != "discard" {
+		if err = integrateFinishThread(info, method, message); err != nil {
+			return js, "", "", true, err
+		}
+	}
+	js, warning, err = cleanupFinishedThread(sid, info, method == "discard")
+	return js, warning, "", false, err
 }
 
 func cleanupFinishedThread(sid string, info worktreeFinishPreview, discard bool) (r.Result, string, error) {
