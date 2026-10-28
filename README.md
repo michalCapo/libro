@@ -146,7 +146,7 @@ One layout is saved per Libro instance. Only the first window restores it. Reloa
 
 - A project is a folder on your computer. Add as many as you like.
 - Open the project list with `Ctrl + Shift + P`. Jump to a numbered thread with `Ctrl + 1` to `Ctrl + 9`. Base and worktree threads both get numbers.
-- Projects without open threads are dimmed in the sidebar.
+- Projects without open threads are dimmed in All projects.
 - Project-backed threads keep the project folder as their working directory.
 - Each thread remembers its own browser, files, terminal, and other thread-local tools. Threads in the same project share Notes. Project settings choose a shared application or one application per thread.
 
