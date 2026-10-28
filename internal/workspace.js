@@ -13,9 +13,10 @@
     return dockStates.get(key);
   }
   let prefs = {};
+  let leftProject = '';
   try { prefs = JSON.parse(localStorage.getItem('libro.workspace') || '{}') || {}; } catch (_) {}
   const call = (action, data = {}) => {
-    if (action === 'project.switch') acknowledgeProjectActivity(data.name);
+    if (action === 'project.switch') { acknowledgeProjectActivity(data.name); if (leftProject && data.name === leftProject) leaveProject(''); }
     if (action === 'worktree.switch') acknowledgeProjectActivity(data.project + '/' + data.branch);
     return __ws.call(action, {sid, ...data});
   };
@@ -246,6 +247,13 @@
     const el = node('section', 'ws-empty'); el.dataset.zone = zone;
     const center = zone === 'center';
     const standalone = (window.__libroThreads || []).some(thread => thread.id === grid.dataset.workspaceProject);
+    // A closed thread, or a project whose thread was removed, no longer offers agents here.
+    const closed = center && closedWorkspace(grid.dataset.workspaceProject); el.dataset.closed = String(closed);
+    if (closed) {
+      const left = grid.dataset.workspaceProject === leftProject;
+      el.append(node('h1', '', left ? 'What are we building?' : 'Thread closed'), node('p', '', (left ? 'Pick a project on the left' : 'Click it in the list to open it again') + (toolKeys['new-thread'] ? ' or press ' + toolKeys['new-thread'] + ' for a new thread.' : '.')));
+      return el;
+    }
     const heading = node(center ? 'h1' : 'h2', '', center ? (standalone ? 'What would you like to do in ' : 'What are we building on ') : zone === 'right' ? 'Tools for your workspace' : 'Your project terminal');
     if (center && grid.dataset.projectLabel) heading.append(node('span', 'ws-project-accent', grid.dataset.projectLabel), document.createTextNode('?'));
     else if (center) heading.textContent = heading.textContent.replace(/ on $/, '?');
@@ -318,10 +326,14 @@
   }
   let finishDialog = null;
   // A removed thread lands on its project. That project row stays hidden until the project is opened again.
-  let leftProject = '';
+  function closedWorkspace(id) {
+    return !!leftProject && id === leftProject || (window.__libroThreads || []).some(thread => thread.id === id && thread.archived) ||
+      (window.__libroProjects || []).some(p => p.kind === 'worktree' && p.closed && p.name + '/' + p.branch === id);
+  }
   function leaveProject(name) {
     leftProject = name;
     document.querySelectorAll('#workspace-project-list>.ws-project-group').forEach(group => { group.dataset.left = String(group.dataset.projectName === name); });
+    schedule();
   }
   function finishThread(name = window.__libroActiveProject, discard = false, method = 'merge') {
     const projects = window.__libroProjects || [];
@@ -409,11 +421,14 @@
       state.cancel.disabled = false; state.cancel.textContent = 'Done'; state.cancel.focus(); return;
     }
     state.dialog.close();
+    threadRemoved();
+    window.__libroShowToast?.(reply.warning || (state.checkout ? 'Changes discarded and thread closed' : 'Thread removed'), '', reply.warning ? 'error' : 'success');
+  }
+  // A removed thread lands on a project whose row then hides, so the first open thread shown takes its place.
+  function threadRemoved() {
     leaveProject(window.__libroActiveProject);
-    // The project's row is hidden, so the first open thread shown takes over its place.
     [...document.querySelectorAll('.ws-thread-row,.ws-project-item[data-panels=true]>.ws-project-row')]
       .find(row => row.dataset.closed !== 'true' && row.parentElement.dataset.archived !== 'true' && !row.closest('.ws-project-group[data-left=true]>.ws-project-item') && row.checkVisibility())?.click();
-    window.__libroShowToast?.(reply.warning || (state.checkout ? 'Changes discarded and thread closed' : 'Thread removed'), '', reply.warning ? 'error' : 'success');
   }
   function confirmAgentMerge(state, request) {
     const dialog = node('dialog', 'ws-plugin-dialog ws-finish-dialog'); dialog.setAttribute('aria-labelledby', 'agent-merge-title');
@@ -436,6 +451,26 @@
     dialog.addEventListener('close', () => dialog.remove());
     dialogKeys(dialog, form, submit, cancel); dialog.showModal(); submit.focus();
   }
+  // Ctrl+Q on a thread with nothing to close asks what to do with the thread itself.
+  function confirmThreadQuit({name, source, note, discardLabel, discard}) {
+    const dialog = node('dialog', 'ws-plugin-dialog ws-finish-dialog'); dialog.setAttribute('aria-labelledby', 'thread-quit-title');
+    const heading = node('h2', '', 'Close or discard this thread?'); heading.id = 'thread-quit-title';
+    const description = node('p', '', note);
+    const form = node('form', ''); const actions = node('div', 'ws-agent-actions');
+    const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
+    const close = node('button', 'ws-launch', 'Close thread'); close.type = 'button'; close.onclick = () => { dialog.close(); call('project.close', {name}); };
+    const submit = node('button', 'ws-launch ws-launch-danger', discardLabel); submit.type = 'submit';
+    actions.append(cancel, close, submit); form.append(actions);
+    dialog.append(heading, node('p', 'ws-finish-source', source), description, form, node('div', 'ws-command-footer', 'Esc cancel · Space close · Enter discard')); root.append(dialog);
+    form.onsubmit = event => { event.preventDefault(); dialog.close(); discard(); };
+    // Space closes the thread from any button, so it must not also press the focused one.
+    const space = event => { if (event.key !== ' ' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return; event.preventDefault(); event.stopImmediatePropagation(); if (event.type === 'keydown' && !event.repeat) close.click(); };
+    dialog.addEventListener('keydown', space, true); dialog.addEventListener('keyup', space, true);
+    dialog.addEventListener('close', () => dialog.remove());
+    dialogKeys(dialog, form, submit, cancel); dialog.showModal(); submit.focus();
+    // A hidden browser panel can keep native keyboard focus; take it back so the keys reach the dialog.
+    window.libroElectron?.focusWorkspace?.().then(() => { if (dialog.open) submit.focus(); }).catch(() => {});
+  }
   function threadActions(project) {
     const name = project.name + '/' + project.branch;
     return [
@@ -449,7 +484,23 @@
   }
   // Agent threads are not projects; they get the actions that need no project.
   function agentThreadActions(thread) {
-    return [{label:'Close thread', icon:'close', description:'Stop processes and close all panels', run:() => call('project.close', {name:thread.id})}];
+    return [
+      {label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep it in the list', run:() => call('project.close', {name:thread.id})},
+      // Child threads belong to a project and leave with it.
+      ...(thread.project ? [] : [{label:'Discard thread…', icon:'delete_outline', description:'Remove it from the list for good', run:() => confirmDiscardThread(thread), danger:true}]),
+    ];
+  }
+  function confirmDiscardThread(thread) {
+    const dialog = node('dialog', 'ws-plugin-dialog ws-finish-dialog'); dialog.setAttribute('aria-labelledby', 'thread-discard-title');
+    const heading = node('h2', '', 'Discard this thread?'); heading.id = 'thread-discard-title';
+    const description = node('p', '', 'Stops its processes and removes it from the list for good. Its agent session can’t be reopened from Libro.');
+    const form = node('form', ''); const actions = node('div', 'ws-agent-actions');
+    const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
+    const submit = node('button', 'ws-launch ws-launch-danger', 'Discard thread'); submit.type = 'submit';
+    actions.append(cancel, submit); form.append(actions); dialog.append(heading, node('p', 'ws-finish-source', thread.name), description, form); root.append(dialog);
+    form.onsubmit = event => { event.preventDefault(); dialog.close(); call('thread.discard', {id:thread.id}); };
+    dialog.addEventListener('close', () => dialog.remove());
+    dialogKeys(dialog, form, submit, cancel); dialog.showModal(); submit.focus();
   }
   function threadActionPalette() {
     const project = (window.__libroProjects || []).find(p => (p.kind === 'worktree' ? p.name + '/' + p.branch : p.name) === window.__libroActiveProject);
@@ -617,8 +668,9 @@
       }
       list.append(item);
     };
+    // Closed threads stay listed after the open ones until they are discarded.
     threads.filter(thread => !thread.archived).forEach(appendThread);
-    threads.filter(thread => thread.archived).slice(-5).forEach(appendThread);
+    threads.filter(thread => thread.archived).forEach(appendThread);
   }
   function renderProjects() {
     const list = document.getElementById('workspace-project-list'); if (!list) return;
@@ -632,7 +684,7 @@
       const row = node('button', 'ws-quick-project'); row.type = 'button'; row.title = project.path || '';
       const icon = node('i', 'material-icons-round', 'folder_open'); icon.setAttribute('aria-hidden', 'true');
       row.append(icon, node('span', '', project.displayName || project.name));
-      row.onclick = () => { closeSettings(); if (project.name === leftProject) leaveProject(''); call('project.switch', {name:project.name}); };
+      row.onclick = () => { closeSettings(); call('project.switch', {name:project.name}); };
       return row;
     }));
     const groups = new Map();
@@ -1336,7 +1388,12 @@
       if (event.repeat) return;
       const grid = activeGrid();
       const frame = grid && frames(grid).find(frame => frame.dataset.appId === window.__libroSelectedApp && frame.dataset.dockVisible === 'true');
-      if (frame) call('app.close', {id:frame.dataset.appId});
+      if (frame) { call('app.close', {id:frame.dataset.appId}); return; }
+      const id = grid?.dataset.workspaceProject;
+      const worktree = id && (window.__libroProjects || []).find(p => p.kind === 'worktree' && p.name + '/' + p.branch === id);
+      const thread = id && (window.__libroThreads || []).find(thread => thread.id === id && !thread.project);
+      if (worktree) confirmThreadQuit({name:id, source:worktree.branch, note:'Close keeps its files, branch and worktree. Discard shows what will be deleted first.', discardLabel:'Discard thread…', discard:() => finishThread(id, true)});
+      else if (thread) confirmThreadQuit({name:id, source:thread.name, note:'Close keeps it in the list. Discard removes it for good.', discardLabel:'Discard thread', discard:() => call('thread.discard', {id})});
       return;
     }
     if (binding === 'Ctrl+A') {
@@ -1530,8 +1587,10 @@
       }
     });
     const placeholder = grid.querySelector(':scope > .ws-empty');
+    // An agent started in a left project opens it again.
+    if (center.length && leftProject && grid.dataset.workspaceProject === leftProject) leaveProject('');
     if (center.length || full) placeholder?.remove();
-    else if (!placeholder || placeholder.dataset.branch !== mainBranch(grid)) { placeholder?.remove(); grid.append(empty('center', grid)); }
+    else if (!placeholder || placeholder.dataset.closed !== String(closedWorkspace(grid.dataset.workspaceProject)) || placeholder.dataset.closed !== 'true' && placeholder.dataset.branch !== mainBranch(grid)) { placeholder?.remove(); grid.append(empty('center', grid)); }
     let tabs = grid.parentElement.querySelector('.ws-tool-tabs');
     if (!tabs) { tabs = node('div', 'ws-tool-tabs'); tabs.setAttribute('aria-label', 'Agents and tools'); grid.before(tabs); }
     // Tool panels share one width, so one size button in the rail serves them all.
@@ -2016,7 +2075,7 @@
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects')) delete root.dataset.sidebar; });
   narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name})};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }

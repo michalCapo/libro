@@ -445,6 +445,28 @@ func (thread *Thread) useAgent(agent Application) error {
 	return nil
 }
 
+// DiscardThread forgets a thread without a project for good. Close it first.
+func (sm *StateManager) DiscardThread(sessionID, id string) error {
+	defer sm.scheduleLayoutSave(sessionID)
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil || s.thread(id) == nil || s.thread(id).Project != "" {
+		return fmt.Errorf("thread not found")
+	}
+	if _, err := db.Exec("DELETE FROM threads WHERE id = ?", id); err != nil {
+		return err
+	}
+	s.Threads = slices.DeleteFunc(s.Threads, func(thread Thread) bool { return thread.ID == id })
+	delete(s.snapshots, id)
+	delete(s.renderedProjects, id)
+	delete(s.closedWorkspaces, id)
+	if s.ActiveProject == id {
+		s.ActiveProject = ""
+	}
+	return nil
+}
+
 // Ignore late session reports from a panel that has been replaced.
 func (sm *StateManager) saveThreadSession(sid, _ string, appID, agentID, command, sessionID string) {
 	// Empty Codex titles can be temporary; retain the last confirmed session.

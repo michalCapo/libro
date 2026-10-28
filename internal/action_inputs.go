@@ -262,6 +262,11 @@ type actionThreadCreateInput struct {
 	SID     string `json:"sid"`
 }
 
+type actionThreadDiscardInput struct {
+	ID  string `json:"id"`
+	SID string `json:"sid"`
+}
+
 type actionThreadRenameInput struct {
 	AppID    string `json:"appId"`
 	ID       string `json:"id"`

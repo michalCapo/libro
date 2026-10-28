@@ -71,13 +71,13 @@ test('project switches preserve bottom terminal visibility when restoring select
   const layout = source.slice(source.indexOf('  function layoutDocks('), source.indexOf('    let tabs = grid.parentElement')) + '\n  }'
   for (const visible of [false, true]) {
     const state = { bottom: visible, hidden: new Set() }
-    const grid = { dataset: {}, style: {}, clientWidth: 1000, querySelector: () => ({ dataset: { branch: '' } }) }
+    const grid = { dataset: {}, style: {}, clientWidth: 1000, querySelector: () => ({ dataset: { branch: '', closed: 'false' } }) }
     const shell = {
       dataset: { appId: 'shell', dock: 'bottom', dockSeen: 'true' },
       style: {}, querySelector: () => ({}),
     }
     const window = { __libroSelectedApp: 'shell' }
-    const context = { grid, shell, window, prefs: {}, resizeHandle() {}, mainBranch: () => '', dockState: () => state, keepBottomHidden: false, activeGrid: () => null, agentMinWidth: 600, getComputedStyle: () => ({ columnGap: '6px' }) }
+    const context = { grid, shell, window, prefs: {}, leftProject: '', closedWorkspace: () => false, resizeHandle() {}, mainBranch: () => '', dockState: () => state, keepBottomHidden: false, activeGrid: () => null, agentMinWidth: 600, getComputedStyle: () => ({ columnGap: '6px' }) }
     // The inactive project's layout clears lastSelected before switching back.
     vm.runInNewContext(layout + ';layoutDocks(grid, [shell]);', context)
     window.__libroSelectedApp = 'other-project-agent'
@@ -801,7 +801,7 @@ test('shared panel focus moves from an agent to Files and preserves file input f
   assert.equal(focused, 1)
 })
 
-test('thread list keeps all open threads and only the newest five archived threads', () => {
+test('thread list keeps open threads first, then every closed thread', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = rowLabel + source.slice(source.indexOf('  function renderThreads()'), source.indexOf('  function renderProjects()'))
   const node = () => ({ dataset: {}, children: [], classList: { add() {} }, setAttribute() {}, append(...items) { this.children.push(...items) }, replaceChildren() { this.children = [] } })
@@ -812,10 +812,9 @@ test('thread list keeps all open threads and only the newest five archived threa
     node, button: node, closeSettings() {}, innerWidth: 1000, call(action, data) { calls.push([action, data.name]) },
   })
   const rows = list.children.map(item => item.children[0])
-  assert.deepEqual(rows.map(row => row.dataset.projectKey), [...threads.filter(t => !t.archived), ...threads.filter(t => t.archived).slice(-5)].map(t => t.id))
+  assert.deepEqual(rows.map(row => row.dataset.projectKey), [...threads.filter(t => !t.archived), ...threads.filter(t => t.archived)].map(t => t.id))
   rows.at(-1).onclick()
   assert.deepEqual(calls, [['project.switch', '24']])
-  assert.equal(threads.length, 25, 'older archives remain stored')
 })
 
 test('closing panels restores focus without revealing hidden terminals', () => {

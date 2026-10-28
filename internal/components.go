@@ -2330,7 +2330,8 @@ func projectDialogJS(sid string) string {
 			__ws.call('worktree.switch',{sid:'%s',project:item.name,path:item.path,branch:item.branch});
 		}else{
 			history.replaceState(null,'','#'+item.name);
-			__ws.call('project.switch',{sid:'%s',name:item.name});
+			// The workspace reopens a project whose row hid after its thread was removed.
+			if(window.libroWorkspace)libroWorkspace.openProject(item.name);else __ws.call('project.switch',{sid:'%s',name:item.name});
 		}
 	}
 

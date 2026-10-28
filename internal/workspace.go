@@ -99,9 +99,11 @@ func workspaceProjectLabel(state *AppState) string {
 	if state.ActiveProject == "" {
 		return ""
 	}
-	projectLabel := filepath.Base(state.ActiveProject)
+	// A worktree thread shows the name of its project, not of its folder.
+	name := state.noteScope(state.ActiveProject)
+	projectLabel := filepath.Base(name)
 	for _, project := range state.Projects {
-		if project.Name == state.ActiveProject && project.Path != "" {
+		if project.Name == name && project.Path != "" {
 			projectLabel = filepath.Base(project.Path)
 			break
 		}

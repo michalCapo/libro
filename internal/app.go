@@ -1340,6 +1340,34 @@ func Run(assets embed.FS, desktop bool) error {
 		return response, nil
 	})
 
+	// Discarding a thread without a project removes it from the list for good.
+	registerWorkspaceAction(app, "thread.discard", func(_ *r.Context, in actionThreadDiscardInput) (r.Result, error) {
+		sid := inputSID(in.SID)
+		if thread := sm.Get(sid).thread(in.ID); thread == nil || thread.Project != "" {
+			return r.Result{}.Run(r.Notify("error", "Thread not found")), nil
+		}
+		js, err := closeWorkspace(sid, in.ID)
+		if err != nil {
+			return r.Merge(js, r.Result{}.Run(r.Notify("error", "Could not discard thread: "+err.Error()))), nil
+		}
+		// With no other open thread to land on, the first project takes over.
+		active := sm.Get(sid).ActiveProject == in.ID
+		if projects := sm.Get(sid).Projects; active && len(projects) > 0 {
+			js = r.Merge(js, switchToProjectName(sid, projects[0].Name))
+		}
+		if err := sm.DiscardThread(sid, in.ID); err != nil {
+			return r.Merge(js, r.Result{}.Run(r.Notify("error", "Could not discard thread: "+err.Error()))), nil
+		}
+		js = r.Merge(js, r.Result{}.Run(r.Remove(projectMainID(in.ID))), projectsJS(sm.Get(sid)))
+		// Without any project left, the empty workspace takes the thread's place.
+		if state := sm.Get(sid); active && state.ActiveProject == "" {
+			js = r.Merge(js, switchProjectJS("", renderMainArea(state, sid)), r.Result{}.Morph(TopBarID, renderTopBar(state, sid)))
+		}
+		if active {
+			js = r.Merge(js, trustedResponse("if(window.libroWorkspace)libroWorkspace.threadRemoved();"))
+		}
+		return js, nil
+	})
 	registerThreadActions(app, switchToProjectWithAgent)
 	registerFinishThreadActions(app)
 	// Switch active project

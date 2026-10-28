@@ -393,6 +393,39 @@ func TestCloseProjectArchivesThreadAndClosesTools(t *testing.T) {
 	}
 }
 
+func TestDiscardThreadForgetsOnlyThreadsWithoutProject(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "threads.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	if _, err := db.Exec("INSERT INTO threads (id, name, archived) VALUES ('thread:closed', 'Closed', 1), ('thread:kept', 'Kept', 1)"); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewStateManager()
+	state := &AppState{
+		ActiveProject: "thread:closed",
+		Threads:       []Thread{{ID: "thread:closed", Archived: true}, {ID: "thread:kept", Archived: true}, {ID: "thread:project", Project: "repo"}},
+		snapshots:     map[string]*projectSnapshot{"thread:closed": {}},
+	}
+	manager.states["test"] = state
+	if err := manager.DiscardThread("test", "thread:project"); err == nil {
+		t.Fatal("a project thread was discarded")
+	}
+	if err := manager.DiscardThread("test", "thread:closed"); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Threads) != 2 || state.thread("thread:closed") != nil || state.snapshots["thread:closed"] != nil || state.ActiveProject != "" {
+		t.Fatalf("thread not forgotten: %+v", state)
+	}
+	if threads := loadThreads(); len(threads) != 1 || threads[0].ID != "thread:kept" {
+		t.Fatalf("closed thread list after discard: %+v", threads)
+	}
+}
+
 func TestCloseProjectPreservesPanelsOnArchiveFailure(t *testing.T) {
 	original := db
 	var err error
