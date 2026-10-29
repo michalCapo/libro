@@ -22,7 +22,7 @@ var (
 func InitDB() {
 	dbPath := dbFilePath()
 	var err error
-	db, err = sql.Open("sqlite", dbPath)
+	db, err = sql.Open("sqlite", dbDSN(dbPath))
 	if err != nil {
 		log.Fatalf("db: failed to open %s: %v", dbPath, err)
 	}
@@ -30,15 +30,18 @@ func InitDB() {
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		log.Printf("db: WAL pragma failed: %v", err)
 	}
-	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		log.Printf("db: foreign_keys pragma failed: %v", err)
-	}
 
 	createTables()
 	if err := os.Chmod(dbPath, 0o600); err != nil {
 		log.Printf("db: failed to restrict permissions on %s: %v", dbPath, err)
 	}
 	removeDefaultHomeProject()
+}
+
+// dbDSN turns on foreign keys for every pool connection. The pragma is per
+// connection, so running it once with db.Exec covers only one of them.
+func dbDSN(path string) string {
+	return path + "?_pragma=foreign_keys(1)"
 }
 
 func dbFilePath() string {
