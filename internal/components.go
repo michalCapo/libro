@@ -922,7 +922,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			{"Copy URL", "", "", "Browser", copyURL("copy-url-menu-" + app.ID)},
 			{"Open browser console", "", "", "Browser", consoleAction},
 			{"Annotate element", "A", "annotate", "Annotation", r.UnsafeJS("window.__libroTogglePageTool(el.dataset.browserApp,'annotate');")},
-			{"Anotate area", "D", "area", "Annotation", r.UnsafeJS("window.__libroTogglePageTool(el.dataset.browserApp,'area');")},
+			{"Annotate area", "D", "area", "Annotation", r.UnsafeJS("window.__libroTogglePageTool(el.dataset.browserApp,'area');")},
 			{"Annotate page", "P", "page", "Annotation", r.UnsafeJS("window.__libroTogglePageTool(el.dataset.browserApp,'page');")},
 			{"Zoom out", "-", "", "Zoom", r.UnsafeJS("window.__libroWvZoom(el.dataset.browserApp,-1);")},
 			{"Reset zoom to 100%", "0", "", "Zoom", r.UnsafeJS("window.__libroWvZoom(el.dataset.browserApp,0);")},

@@ -19,7 +19,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"files", "Files", "Ctrl+F"},
 	{"notes", "Notes", "Ctrl+I"},
 	{"repos", "Repositories", "Ctrl+Shift+G"},
-	{"releases", "Releases", ""},
+	{"releases", "Releases", "Ctrl+Shift+D"},
 	{"nvim", "Nvim", "Ctrl+E"},
 	{"lazyrepo", "Git", "Ctrl+G"},
 	{"lazydata", "Database", "Ctrl+D"},
