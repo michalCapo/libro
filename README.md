@@ -110,7 +110,7 @@ app opens a window or database.
 
 ### AI assistants
 
-- Agents start in the thread you have open. Each project thread has its own browser and tool state. Use `Ctrl + Shift + A` to add another agent to the same thread, or `Ctrl + Shift + N` to create a new worktree thread. Applications can be shared or run separately in each thread. Standalone threads are unchanged.
+- Agents start in the thread you have open. Each project thread has its own browser and tool state. Use `Ctrl + Shift + A` to add another agent to the same thread, or `Ctrl + T` to create a new worktree thread. Applications can be shared or run separately in each thread. Standalone threads are unchanged.
 - Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
@@ -137,7 +137,7 @@ One layout is saved per Libro instance. Only the first window restores it. Reloa
 - On Linux, Nvim (`vime`), Git (`vimg`), and Database (`vimd`) come with Libro. If you installed your own copy, Libro uses yours. On macOS and Windows, install them yourself.
 
 ![Tools in Settings: named tools with their commands and shortcuts](demo/tools-settings.png)
-- The terminal at the bottom runs your project's start command. Start it again with `Ctrl + Shift + R`, stop it with `Ctrl + Shift + T`.
+- The terminal at the bottom runs your project's start command. Start it again with `Ctrl + Shift + R`, stop it with `Ctrl + Shift + X`.
 - In Files, press `Backspace` to go up one folder.
 
 ### Projects
@@ -221,7 +221,7 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 | --- | --- |
 | `Ctrl + A` | Jump to the current agent (press twice to hide tools) |
 | `Ctrl + Shift + A` | New agent panel in the current thread |
-| `Ctrl + Shift + N` | New thread in a new worktree |
+| `Ctrl + T` | New thread in a new worktree |
 | `Ctrl + Shift + P` | Switch project |
 | `Ctrl + 1` – `Ctrl + 9` | Go to a numbered thread |
 | `Ctrl + ;` | Thread actions |
@@ -237,10 +237,11 @@ New agent, Replace agent, and Close project have no default shortcut. Find them 
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl + T` | Terminal |
+| `Ctrl + Enter` | Terminal |
+| `Ctrl + Shift + Enter` | New terminal panel |
 | `Ctrl + B` | Browser |
 | `Ctrl + Shift + B` | New browser panel |
-| `Ctrl + [` / `Ctrl + ]` | Previous / next browser panel when a browser is focused, otherwise previous / next agent panel |
+| `Ctrl + [` / `Ctrl + ]` | Previous / next agent, browser or terminal panel |
 | `Ctrl + F` | Files |
 | `Ctrl + E` | Nvim |
 | `Ctrl + G` | Git |
@@ -251,7 +252,7 @@ New agent, Replace agent, and Close project have no default shortcut. Find them 
 | `Ctrl + M` | Full width on or off |
 | `Ctrl + H` / `Ctrl + L` | Previous / next panel |
 | `` Ctrl + ` `` | Bottom terminal |
-| `Ctrl + Shift + R` / `Ctrl + Shift + T` | Start or restart / stop the application |
+| `Ctrl + Shift + R` / `Ctrl + Shift + X` | Start or restart / stop the application |
 | `Ctrl + Shift + S` | Settings |
 | `Ctrl + =` / `Ctrl + -` / `Ctrl + 0` | Zoom in / out / reset |
 

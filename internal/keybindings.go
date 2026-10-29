@@ -10,10 +10,10 @@ import (
 )
 
 var toolKeys = []struct{ ID, Name, Key string }{
-	{"terminal", "Terminal", "Ctrl+Shift+Enter"},
+	{"terminal", "Terminal", "Ctrl+Enter"},
 	{"browser", "Browser", "Ctrl+B"},
 	{"new-browser", "New browser panel", "Ctrl+Shift+B"},
-	{"new-terminal", "New terminal panel", "Ctrl+Enter"},
+	{"new-terminal", "New terminal panel", "Ctrl+Shift+Enter"},
 	{"previous-browser", "Previous agent, browser or terminal panel", "Ctrl+["},
 	{"next-browser", "Next agent, browser or terminal panel", "Ctrl+]"},
 	{"files", "Files", "Ctrl+F"},
@@ -131,6 +131,12 @@ func toolKeybindings() map[string]string {
 				for id := range old {
 					delete(saved, id)
 				}
+			}
+			// Terminal and new terminal panel swapped their Enter keys. Only
+			// untouched old defaults move.
+			if saved["terminal"] == "Ctrl+Shift+Enter" && saved["new-terminal"] == "Ctrl+Enter" {
+				delete(saved, "terminal")
+				delete(saved, "new-terminal")
 			}
 			// Releases joined Repositories, and Ctrl+Shift+D moved to
 			// discarding the current thread. Finishing the thread got

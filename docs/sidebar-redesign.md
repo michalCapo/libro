@@ -25,8 +25,8 @@ Mockup: https://claude.ai/artifact/HirB3ocg1EmFNNfzPZk5CN
 ## Shortcuts (new defaults)
 
 - Ctrl+T: new thread (opens the project picker)
-- Ctrl+Enter: new terminal panel
-- Ctrl+Shift+Enter: Terminal
+- Ctrl+Enter: Terminal
+- Ctrl+Shift+Enter: new terminal panel
 - Ctrl+Shift+T and Ctrl+Shift+N: free
 - Users who set their own shortcuts keep them.
 - Shortcut settings must allow the Enter key (today the key pattern only allows letters, numbers and a few symbols).

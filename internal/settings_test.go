@@ -442,8 +442,19 @@ func TestNewThreadCtrlTShortcutMigration(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := toolKeybindings()
-		if got["terminal"] != "Ctrl+Shift+Enter" || got["new-terminal"] != "Ctrl+Enter" || got["new-thread"] != "Ctrl+T" {
+		if got["terminal"] != "Ctrl+Enter" || got["new-terminal"] != "Ctrl+Shift+Enter" || got["new-thread"] != "Ctrl+T" {
 			t.Fatalf("legacy=%v migrated shortcuts = %v", legacy, got)
 		}
+	}
+	// Terminal shortcuts saved before the Enter keys were swapped.
+	saved := defaultToolKeybindings()
+	saved["terminal"] = "Ctrl+Shift+Enter"
+	saved["new-terminal"] = "Ctrl+Enter"
+	raw, _ := json.Marshal(saved)
+	if _, err := db.Exec(`INSERT OR REPLACE INTO settings (key, value) VALUES ('tool_keybindings', ?)`, string(raw)); err != nil {
+		t.Fatal(err)
+	}
+	if got := toolKeybindings(); got["terminal"] != "Ctrl+Enter" || got["new-terminal"] != "Ctrl+Shift+Enter" {
+		t.Fatalf("swapped terminal shortcuts = %v", got)
 	}
 }
