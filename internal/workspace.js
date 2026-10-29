@@ -1095,7 +1095,12 @@
     if (rail.dataset.signature === signature) return;
     rail.dataset.signature = signature; rail.replaceChildren();
     const icons = {terminal:'terminal',browser:'language',files:'folder_open',notes:'description',repos:'fact_check',nvim:'edit',lazyrepo:'account_tree',lazydata:'storage'};
-    list.forEach(p => { const entry = button(p.name, icons[p.id] || (p.type === 'url' ? 'language' : 'terminal'), () => tool(p.id)); applyToolIcon(entry, p); entry.dataset.toolId = p.id; rail.append(entry); });
+    // The name and shortcut show only in the open sidebar; the folded rail keeps the icon alone.
+    list.forEach(p => {
+      const entry = button(p.name, icons[p.id] || (p.type === 'url' ? 'language' : 'terminal'), () => tool(p.id)); applyToolIcon(entry, p); entry.dataset.toolId = p.id;
+      const key = node('kbd', 'ws-tool-key'); key.setAttribute('aria-hidden', 'true');
+      entry.append(node('span', 'ws-tool-label', p.name), key); rail.append(entry);
+    });
     updateToolHints();
   }
   function restorePanelFocus() {
@@ -1202,7 +1207,7 @@
     document.querySelectorAll('.ws-tool-rail button, .ws-sidebar button:is(.ws-button, .ws-new-thread)').forEach(button => {
       const name = button.getAttribute('aria-label');
       const plugin = window.__libroPlugins.find(plugin => plugin.id === button.dataset.toolId);
-      if (plugin) button.title = name + (toolKeys[plugin.id] ? ' (' + toolKeys[plugin.id] + ')' : '');
+      if (plugin) { button.title = name + (toolKeys[plugin.id] ? ' (' + toolKeys[plugin.id] + ')' : ''); const key = button.querySelector('.ws-tool-key'); if (key) key.textContent = toolKeys[plugin.id] || ''; }
       else if (name === 'New thread') button.title = name + (toolKeys['new-thread'] ? ' (' + toolKeys['new-thread'] + ')' : '');
     });
   }
