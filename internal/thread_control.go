@@ -143,7 +143,8 @@ func controlThread(sid, scope string, args threadCommand) (r.Result, any, error)
 			return js, nil, err
 		}
 		done := "Thread " + map[string]string{"merge": "merged", "squash": "squashed"}[args.Action] + " into " + info.Base + "; it stays open"
-		return clientScript("window.__libroShowToast?.(props[0],'','success');", done), map[string]string{"result": done, "base": info.Base, "targetPath": info.TargetPath}, nil
+		// The agent keeps working and reports to the user, so no toast.
+		return r.Result{}, map[string]string{"result": done, "base": info.Base, "targetPath": info.TargetPath}, nil
 	}
 	done := map[string]string{"merge": "Thread merged", "squash": "Thread squashed", "cleanup": "Thread removed", "discard": "Thread discarded"}[args.Action]
 	if info.Checkout {
