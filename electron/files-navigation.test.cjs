@@ -212,6 +212,29 @@ test('Space p toggles preview',t=>{
  f.w.document.querySelector('.ws-file-tree').focus();f.keys(' p');assert.equal(preview.checked,false);
 });
 
+test('rendered preview scrolls with Vim keys and returns to the tree',t=>{
+ const f=fixture(t);
+ f.reply({directory:true,entries:[{name:'example.md',path:'example.md',dir:false}]});f.w.document.querySelector('.ws-file-tree').focus();f.key('Enter');
+ f.reply({path:'example.md',text:'# Title',html:'<h1>Title</h1>'});f.keys(' p');
+ const frame=f.w.document.querySelector('.ws-file-rendered'),tree=f.w.document.querySelector('.ws-file-tree');
+ assert.equal(f.w.document.activeElement,frame);
+ const sent=[];frame.contentWindow.postMessage=data=>sent.push(Array.from(data.libroFilesScroll));
+ f.keys('jGgg');f.key('d',{ctrlKey:true});
+ assert.deepEqual(sent,[[0,40,0],[0,1e9,0],[0,0,0],[0,-1e9,0],[0,0,0.5]]);
+ f.keys(' l');assert.equal(sent.length,5);f.key('Escape');
+ f.key('Escape');assert.equal(f.w.document.activeElement,tree);
+ f.key('Escape');assert.equal(f.w.document.activeElement,frame);
+ f.keys(' p');f.reply({path:'example.md',text:'# Title'});f.keys(' f');assert.equal(f.w.document.activeElement,tree);
+});
+
+test('pending Vim commands keep e, pickers restore their opener and buttons keep Enter',t=>{
+ const f=fixture(t);f.open();const count=f.calls.length,tree=f.w.document.querySelector('.ws-file-tree');
+ f.keys('ge');f.keys('ye');assert.equal(f.calls.length,count);
+ tree.focus();f.keys(' sk');f.key('Escape');assert.equal(f.w.document.activeElement,tree);
+ f.keys(' sk');f.w.document.querySelector('.ws-file-picker .ws-button').focus();f.key('Enter');
+ assert.ok(f.w.document.querySelector('.ws-file-help-dialog'));
+});
+
 test('go opens compact symbols with short names and two-stage Escape',t=>{
  const f=fixture(t);f.open('symbols.ts','const timestamp = () => new Date();\nfunction makeCommon(config: string) { return config; }');f.keys('go');
  const dialog=f.w.document.querySelector('.ws-file-symbol-dialog');assert.ok(dialog);

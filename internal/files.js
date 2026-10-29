@@ -3,18 +3,21 @@
   // Tokens are unique across mounts, so a reply to a removed panel never matches its replacement.
   let sequence = 0;
   const shortcutHelp = [
-    ['j / k', 'Move down / up'],
-    ['h / l', 'Fold / open folder'],
-    ['Backspace', 'Parent folder'],
-    ['gg / G', 'First / last item'],
-    ['/', 'Filter files'],
+    ['j / k', 'Tree and lists: move down / up'],
+    ['h / l', 'Tree: fold / open folder'],
+    ['Backspace', 'Tree: parent folder'],
+    ['gg / G', 'Tree, lists and previews: first / last'],
+    ['/', 'Tree: filter files'],
     ['Enter', 'Preview file'],
-    ['o', 'Open externally'],
+    ['o', 'Tree: open externally'],
     ['e', 'Open in editor'],
     ['Space Space', 'Find project files in tree'],
+    ['Space f / Esc', 'Back to file tree (Esc outside source)'],
+    ['h j k l', 'Rendered preview and image: scroll'],
+    ['+ / - / 0', 'Image: zoom in / out / reset'],
     ['h j k l / w b', 'Source movement'],
-    ['00 / 44 / 5', 'Line start / end / matching bracket'],
-    ['Ctrl+d / Ctrl+u', 'Move 15 lines'],
+    ['00 / 44 / 5', 'Source: line start / end / matching bracket'],
+    ['Ctrl+d / Ctrl+u', 'Source: 15 lines; previews and lists: half page'],
     ['/ / n / N', 'Find in file / next / previous'],
     ['v / V / y / yy', 'Select / select lines / copy'],
     ['Space yy', 'Copy file:line'],
@@ -22,7 +25,7 @@
     ['gD / gi / gt', 'Declaration / implementation / type definition'],
     ['go / [f / ]f', 'Symbols / previous / next function'],
     ['Space ss / Space sw', 'Project search / word or selection'],
-    ['Ctrl+o / Tab', 'Jump back / forward'],
+    ['Ctrl+o / Ctrl+i', 'Jump back / forward (also Tab in source)'],
     ['Space ,', 'Recent files'],
     ['Space sk', 'Search shortcuts'],
     ['Space lr', 'Restart language server'],
@@ -33,8 +36,11 @@
     if (s.file && s.editor) s.positions.set(s.parents + ':' + s.file.path, s.editor.position());
   }
   function focusPreview(s) {
-    if (s.editor && !s.el.querySelector('.ws-file-text').hidden) s.editor.focus();
-    else { const target=s.el.querySelector('.ws-file-text').hidden?s.el.querySelector('.ws-file-media'):s.el.querySelector('.ws-file-text');target.tabIndex=0;target.focus(); }
+    const text=s.el.querySelector('.ws-file-text'),media=s.el.querySelector('.ws-file-media'),frame=media.querySelector('.ws-file-rendered');
+    if (s.editor && !text.hidden) s.editor.focus();
+    // Focus inside the rendered preview so its keys reach the workspace.
+    else if (frame) frame.focus();
+    else { const target=text.hidden?media:text;target.tabIndex=0;target.focus(); }
   }
   async function copy(s, text) {
     try { await navigator.clipboard.writeText(text); s.status.textContent='Copied to clipboard'; }
@@ -49,6 +55,8 @@
     const text=s.el.querySelector('.ws-file-text');
     s.editor?.destroy(); s.editor=null;
     text.replaceChildren();
+    // The editor is the tab stop; a focused wrapper would ignore Vim keys.
+    text.tabIndex=path?-1:0;
     if (!path) { text.textContent=source; return; }
     s.editor=libroFileEditor.create({element:text,path,source,wrap:s.wrap.checked,
       onSymbols:()=>picker(s,'symbols'),onNavigate:kind=>codeNavigation(s,kind),onChange:()=>context(s),copy:value=>copy(s,value)});
@@ -110,11 +118,14 @@
   }
   function closePicker(s,focus=true) {
     clearTimeout(s.searchTimer);s.searchRequest=null;s.navigationRequest=null;
+    const opener=s.picker?.opener;
     s.picker?.covered?.forEach(el=>{el.inert=false;});
     s.picker?.element.remove();s.picker=null;
-    if(focus)focusPreview(s);
+    if(focus && opener?.isConnected && s.el.contains(opener))opener.focus();
+    else if(focus)focusPreview(s);
   }
   function picker(s,kind,query='') {
+    const opener=document.activeElement;
     closePicker(s,false);
     const element=document.createElement('section');element.className='ws-file-picker'+(kind==='navigation'?' ws-file-navigation':kind==='help'?' ws-file-help-dialog':kind==='symbols'?' ws-file-symbol-dialog':'');
     const header=document.createElement('div');header.className='ws-file-picker-header';
@@ -128,7 +139,7 @@
     }
     const list=document.createElement('div');list.className='ws-file-results';list.tabIndex=0;list.setAttribute('role','listbox');list.setAttribute('aria-label',title+' results');
     const message=document.createElement('div');message.className='ws-file-result-status';message.setAttribute('role','status');
-    const p=s.picker={element,input,list,message,kind,index:0,items:[],sourceItems:[]};
+    const p=s.picker={element,input,list,message,kind,opener,index:0,items:[],sourceItems:[]};
     if(kind==='search'){
       const label=document.createElement('label');label.className='ws-file-hidden';
       const ignored=document.createElement('input');ignored.type='checkbox';label.append(ignored,document.createTextNode('Include hidden and ignored files'));element.append(label);p.ignored=ignored;ignored.onchange=()=>update();
@@ -136,15 +147,15 @@
     element.append(list,message);
     if(kind==='symbols'){
       input.placeholder='Search buffer symbols…';element.setAttribute('role','dialog');element.setAttribute('aria-label','Buffer symbols');
-      const hints=document.createElement('div');hints.className='ws-file-symbol-keys';hints.textContent='↑/↓ move   Ctrl+d/u half page   / search   Backspace erase   Enter open   Esc unfocus   2× Esc close';element.append(hints);
+      const hints=document.createElement('div');hints.className='ws-file-symbol-keys';hints.textContent='↑/↓ move   Ctrl+d/u half page   gg/G first/last   / search   Backspace erase   Enter open   Esc unfocus   2× Esc close';element.append(hints);
     }
     if(kind==='navigation'){
       const hints=document.createElement('div');hints.className='ws-file-navigation-keys';
-      hints.textContent='j/k · Ctrl+n/p · ]e/[e next/previous   e/Enter open   q/Esc return';element.append(hints);
+      hints.textContent='j/k · Ctrl+n/p · ]e/[e next/previous   Ctrl+d/u half page   gg/G first/last   e/Enter open   q/Esc return';element.append(hints);
     }
     if(kind==='help'){
       const hints=document.createElement('div');hints.className='ws-file-navigation-keys';
-      hints.textContent='↑/↓ move   / search   Esc close';element.append(hints);
+      hints.textContent='↑/↓ move   Ctrl+d/u half page   gg/G first/last   / search   Esc close';element.append(hints);
     }
     s.el.querySelector('.ws-file-preview').prepend(element);
     if(kind==='navigation'||kind==='help'){element.setAttribute('role','region');element.setAttribute('aria-label',title);p.covered=Array.from(element.parentElement.children).filter(el=>el!==element);p.covered.forEach(el=>{el.inert=true;});}
@@ -170,9 +181,11 @@
     element.onkeydown=event=>{
       if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(kind==='symbols'&&event.target===input){list.focus();return;}closePicker(s);return;}
       const inList=event.target===list;
-      if(kind==='symbols'&&event.ctrlKey&&['d','u'].includes(event.key)){
+      if(event.ctrlKey&&['d','u'].includes(event.key)){
         event.preventDefault();event.stopPropagation();const row=list.querySelector('.ws-file-result');const half=Math.max(1,Math.floor(list.clientHeight/(row?.getBoundingClientRect().height||26)/2));p.index+=(event.key==='d'?1:-1)*half;drawPicker(s);list.focus();return;
       }
+      if(inList&&(event.key==='G'||event.key==='g'&&p.lastKey==='g')){event.preventDefault();p.index=event.key==='G'?p.items.length-1:0;p.lastKey=null;drawPicker(s);return;}
+      p.lastKey=inList?event.key:null;
       if(kind==='symbols'&&inList&&event.key==='Backspace'){event.preventDefault();input.value=input.value.slice(0,-1);update();return;}
       if(kind==='symbols'&&event.key==='Tab'){event.preventDefault();(inList?input:list).focus();return;}
       if(kind==='navigation'&&inList){
@@ -182,15 +195,14 @@
         else if(event.key==='['||event.key===']'){p.prefix=event.key;event.preventDefault();return;}
         else {p.prefix=null;if(event.key==='*'||event.ctrlKey&&['n','e'].includes(event.key))delta=1;
           if(event.key==='#'||event.ctrlKey&&event.key==='p')delta=-1;}
-        if(event.ctrlKey&&['d','u'].includes(event.key))delta=event.key==='d'?5:-5;
-        if(event.key==='G'||event.key==='g'&&p.lastKey==='g'){event.preventDefault();p.index=event.key==='G'?p.items.length-1:0;p.lastKey=null;drawPicker(s);return;}p.lastKey=event.key;
         if(delta){event.preventDefault();event.stopPropagation();p.index+=delta;drawPicker(s);return;}
         if(event.key==='e'){event.preventDefault();choosePicker(s);return;}
       }
       if(event.key==='ArrowDown'||event.key==='ArrowUp'||inList&&['j','k'].includes(event.key)){
         event.preventDefault();event.stopPropagation();p.index+=['ArrowDown','j'].includes(event.key)?1:-1;drawPicker(s);list.focus();
       }else if(kind!=='navigation' && inList && event.key==='/'){event.preventDefault();input.focus();input.select();}
-      else if(event.key==='Enter'){event.preventDefault();event.stopPropagation();choosePicker(s);}
+      // Buttons keep their own Enter.
+      else if(event.key==='Enter'&&(inList||event.target===input)){event.preventDefault();event.stopPropagation();choosePicker(s);}
     };
     update();if(kind==='navigation')list.focus();else input.focus();
   }
@@ -267,14 +279,26 @@
     __ws.call('app.start', {sid:window.__libroWorkspaceSID, editorFile:file.path, filesPanel:s.id, parents:tree && s.filter.value ? 0 : s.parents});
   }
   function focusTree(s,filter=false) {
-    if(filter){s.filter.focus();s.filter.select();}
-    else s.tree.focus();
+    if(filter){s.filter.focus();s.filter.select();return;}
+    const index=s.items.findIndex(item=>!item.dir && item.path===s.file?.path);
+    if(index>=0 && index!==s.index){s.index=index;render(s);}
+    s.tree.focus();s.tree.querySelector('[aria-selected=true]')?.scrollIntoView({block:'nearest'});
+  }
+  // Scroll steps sent to the rendered preview as [x, y, pages].
+  const previewScroll={j:[0,40,0],k:[0,-40,0],h:[-40,0,0],l:[40,0,0],G:[0,1e9,0]};
+  function scrollPreview(s,event){
+    if(event.key!=='g')s.previewG=0;
+    if(event.ctrlKey)return {d:[0,0,.5],u:[0,0,-.5]}[event.key];
+    if(event.shiftKey && event.key!=='G')return;
+    if(event.key==='g'){const twice=Date.now()-(s.previewG || 0)<500;s.previewG=twice?0:Date.now();return twice?[0,-1e9,0]:[0,0,0];}
+    return previewScroll[event.key];
   }
   const leaderActions={
-    ' ':s=>focusTree(s,true), ',':s=>picker(s,'recent'),
+    ' ':s=>focusTree(s,true), 'f':s=>focusTree(s), ',':s=>picker(s,'recent'),
     'ss':s=>picker(s,'search'), 'sw':s=>picker(s,'search',s.editor?.selection() || s.editor?.word() || ''),
     'sk':s=>picker(s,'help'), 'lr':s=>codeNavigation(s,'restart'),
-    'p':s=>{s.preview.checked=!s.preview.checked;s.preview.onchange();},
+    // Toggling replaces the focused view, so keep focus in the preview.
+    'p':s=>{const tree=document.activeElement===s.tree;s.preview.checked=!s.preview.checked;s.preview.onchange();if(!tree)focusPreview(s);},
     'yy':s=>{if(s.file)copy(s,s.file.path+':'+(s.editor?.position().line || 1));},
     'yl':s=>leaderActions.yy(s),
     'w':s=>{s.wrap.checked=!s.wrap.checked;s.wrap.onchange();},
@@ -283,12 +307,14 @@
   window.addEventListener('keydown',event=>{
     const el=event.target.closest?.('[data-files]'),s=el&&states.get(el.dataset.files);
     if(!s || event.isComposing)return;
-    const typing=event.target.matches('input,textarea,select') || event.target.closest('.cm-vim-panel');
+    const typing=event.libroTyping || event.target.matches('input,textarea,select') || event.target.closest('.cm-vim-panel');
     const source=event.target.closest('.cm-content');
-    const navigation=source || event.target===s.tree || event.target===s.el.querySelector('.ws-file-media') || event.target===s.el.querySelector('.ws-file-text');
-    let action;
+    const frame=event.target.matches('.ws-file-rendered'),image=event.target===s.imageView?.media;
+    const navigation=source || event.target===s.tree || event.target.matches('.ws-file-text') || event.target.closest('.ws-file-media');
+    let action,scroll;
     if(navigation && !typing && !event.metaKey && !event.altKey){
-      if(!event.ctrlKey && !event.shiftKey && event.key==='e' && s.leader==null)action=()=>{if(!event.repeat)openEditor(s);};
+      // In source, e only opens the editor when Vim is not waiting for more keys (ye, ge, fe).
+      if(!event.ctrlKey && !event.shiftKey && event.key==='e' && s.leader==null && !(source && s.editor?.pending()))action=()=>{if(!event.repeat)openEditor(s);};
       // Workspace shortcuts win over Vim's Ctrl+O and Ctrl+I; Tab still moves forward in source.
       else if(event.ctrlKey && event.key.toLowerCase()==='o' && !window.libroWorkspace?.bound('Ctrl+O'))action=()=>historyMove(s,-1);
       else if((event.ctrlKey && event.key.toLowerCase()==='i' && !window.libroWorkspace?.bound('Ctrl+I')) || source && event.key==='Tab'&&!event.shiftKey)action=()=>historyMove(s,1);
@@ -300,6 +326,9 @@
         else if(event.key==='Escape'||!Object.keys(leaderActions).some(key=>key.startsWith(s.leader))){s.leader=null;s.status.textContent='';action=()=>{};}
         else {s.status.textContent='Space '+s.leader+' …';s.leaderTimer=setTimeout(()=>{s.leader=null;s.status.textContent='';},1500);action=()=>{};}
       }
+      else if((frame || image) && (scroll=scrollPreview(s,event)))action=()=>frame?event.target.contentWindow?.postMessage({libroFilesScroll:scroll},'*'):event.target.scrollBy(scroll[0],scroll[1]+scroll[2]*event.target.clientHeight);
+      // Esc leaves previews for the tree; in source Vim keeps it.
+      else if(!source && event.target!==s.tree && event.key==='Escape' && !event.ctrlKey)action=()=>focusTree(s);
     }
     if(action){event.preventDefault();event.stopImmediatePropagation();action();}
   },true);
@@ -366,10 +395,10 @@
       if (event.key === '+' || event.key === '=') zoomImage(s, s.imageView.zoom * 1.2);
       else if (event.key === '-') zoomImage(s, s.imageView.zoom / 1.2);
       else if (event.key === '0') zoomImage(s, 1);
-      else if (event.key === 'ArrowLeft' || event.key === 'h') media.scrollLeft -= 48;
-      else if (event.key === 'ArrowRight' || event.key === 'l') media.scrollLeft += 48;
-      else if (event.key === 'ArrowUp' || event.key === 'k') media.scrollTop -= 48;
-      else if (event.key === 'ArrowDown' || event.key === 'j') media.scrollTop += 48;
+      else if (event.key === 'ArrowLeft') media.scrollLeft -= 48;
+      else if (event.key === 'ArrowRight') media.scrollLeft += 48;
+      else if (event.key === 'ArrowUp') media.scrollTop -= 48;
+      else if (event.key === 'ArrowDown') media.scrollTop += 48;
       else return;
       event.preventDefault();
     };
@@ -516,6 +545,7 @@
         }
         if (key === '/') { focusTree(s,true); return; }
         if (key === 'o') { if (item && !item.dir && !event.repeat) request(s,item.path,false,true,s.filter.value?0:s.parents); return; }
+        if (key !== 'g') s.lastG = 0;
         if (key === 'g') { if (Date.now() - (s.lastG || 0) < 500) s.index = 0; s.lastG = Date.now(); }
         else if (key === 'G' || key === 'End') s.index = s.items.length - 1;
         else if (key === 'Home') s.index = 0;
@@ -564,6 +594,7 @@
       media.hidden = false;
       s.wrap.disabled = true;
       const frame = document.createElement('iframe');
+      frame.className = 'ws-file-rendered';
       frame.title = 'Preview of ' + result.path;
       frame.setAttribute('sandbox', 'allow-scripts');
       const html = result.html || '';
@@ -648,7 +679,7 @@
       s.children.set(pending.path,entries); render(s);
     }
     else {
-      const restoreFocus=pending.refresh && !!s.editor?.view.hasFocus;
+      const active=document.activeElement,restoreFocus=pending.refresh && s.el.contains(active) && !!active.closest('.ws-file-text, .ws-file-media');
       remember(s);
       s.file = result;
       s.jumpPending=!!pending.position;showFile(s);
@@ -660,14 +691,34 @@
       else if(restoreFocus)focusPreview(s);
     }
   }
-  // The sandboxed preview cannot reach the workspace, so it posts shortcut keys
-  // and they are replayed on the iframe element for the workspace handlers.
-  const previewKeys = '<script>addEventListener("keydown",e=>{if(e.ctrlKey||e.metaKey||e.altKey)parent.postMessage({libroFilesKey:{key:e.key,code:e.code,ctrlKey:e.ctrlKey,metaKey:e.metaKey,altKey:e.altKey,shiftKey:e.shiftKey,repeat:e.repeat}},"*");},true);<\/script>';
+  // Runs inside the sandboxed preview, which cannot reach the workspace. It posts
+  // shortcut and Vim keys, which are replayed on the iframe element for the
+  // workspace handlers, and applies the scroll steps the workspace sends back.
+  function previewScript() {
+    const typing=target=>!!target.closest?.('input,textarea,select,[contenteditable]');
+    addEventListener('keydown',e=>{
+      const editing=typing(e.target);
+      if(editing && e.key==='Escape'){e.target.blur();return;}
+      if(!e.ctrlKey && !e.metaKey && !e.altKey && (editing || e.key.length!==1 && e.key!=='Escape'))return;
+      if(e.key===' ')e.preventDefault();
+      parent.postMessage({libroFilesKey:{key:e.key,code:e.code,ctrlKey:e.ctrlKey,metaKey:e.metaKey,altKey:e.altKey,shiftKey:e.shiftKey,repeat:e.repeat,typing:editing}},'*');
+    },true);
+    // Scroll the scrollable box under focus or at the centre, else the page.
+    addEventListener('message',e=>{
+      const step=e.source===parent && e.data?.libroFilesScroll;if(!step)return;
+      let box=document.activeElement===document.body?document.elementFromPoint(innerWidth/2,innerHeight/2):document.activeElement;
+      while(box && box!==document.body && box!==document.documentElement && !(box.scrollHeight>box.clientHeight && /auto|scroll/.test(getComputedStyle(box).overflowY)))box=box.parentElement;
+      const page=!box || box===document.body || box===document.documentElement;
+      (page?window:box).scrollBy(step[0],step[1]+step[2]*(page?innerHeight:box.clientHeight));
+    });
+  }
+  const previewKeys = '<script>('+previewScript+')();<\/script>';
   window.addEventListener('message', event => {
     const key = event.data?.libroFilesKey;
     if (!key) return;
     const frame = [...document.querySelectorAll('[data-files] .ws-file-media iframe')].find(item => item.contentWindow === event.source);
-    frame?.dispatchEvent(new KeyboardEvent('keydown', {...key, bubbles:true, cancelable:true}));
+    const {typing,...init}=key,replay=new KeyboardEvent('keydown', {...init, bubbles:true, cancelable:true});
+    replay.libroTyping=typing;frame?.dispatchEvent(replay);
   });
   window.libroFiles = {init,receive,dispose};
 })();

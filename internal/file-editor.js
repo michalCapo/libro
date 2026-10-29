@@ -166,6 +166,7 @@ export function create({element,path,source,wrap,onSymbols,onNavigate,onChange,c
     selection:()=>view.state.sliceDoc(view.state.selection.main.from,view.state.selection.main.to),
     word:()=>{const range=view.state.wordAt(view.state.selection.main.head);return range ? view.state.sliceDoc(range.from,range.to):'';},
     focus:()=>view.focus(),
+    pending:()=>{const vim=cm.state.vim,input=vim.inputState;return vim.insertMode || vim.visualMode || !!input.operator || input.keyBuffer.length>0 || input.prefixRepeat.length>0 || input.motionRepeat.length>0;},
     wrap:value=>view.dispatch({effects:wrapping.reconfigure(value ? EditorView.lineWrapping : [])}),
     destroy:()=>{clearTimeout(digitTimer);editors.delete(cm);view.destroy();},
   };
