@@ -262,6 +262,11 @@ func registerFilesActions(app *r.App) {
 
 func renderFiles(app Application) *r.Node {
 	return r.Widget("files", struct{}{}, "ws-files").Key("files-"+app.ID).Attr("data-files", app.ID).Render(
+		r.Div("ws-file-sidebar").Render(
+			r.Input("ws-file-filter").Attr("placeholder", "Find project files…").Attr("aria-label", "Filter files"),
+			r.Div("ws-file-tree").Attr("role", "tree").Attr("aria-label", "Project files").Attr("tabindex", "0"),
+			r.Div("ws-file-status").Attr("role", "status"),
+		),
 		r.Div("ws-file-preview").Render(
 			r.Div("ws-file-toolbar").Render(r.Div("ws-file-path").Text("Open file"),
 				r.Div("ws-file-image-tools").Attr("hidden", "hidden").Attr("role", "group").Attr("aria-label", "Image zoom").Render(
@@ -276,11 +281,6 @@ func renderFiles(app Application) *r.Node {
 			r.Div("ws-file-context").Attr("aria-label", "Source location"),
 			r.Div("ws-file-text is-wrapped").Attr("tabindex", "0").Text("Select a file from the project tree."),
 			r.Div("ws-file-media").Attr("hidden", "hidden"),
-		),
-		r.Div("ws-file-sidebar").Render(
-			r.Input("ws-file-filter").Attr("placeholder", "Find project files…").Attr("aria-label", "Filter files"),
-			r.Div("ws-file-tree").Attr("role", "tree").Attr("aria-label", "Project files").Attr("tabindex", "0"),
-			r.Div("ws-file-status").Attr("role", "status"),
 		),
 	)
 }

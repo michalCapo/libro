@@ -125,7 +125,8 @@
     else if(focus)focusPreview(s);
   }
   function picker(s,kind,query='') {
-    const opener=document.activeElement;
+    // A clicked toolbar button is not a place to return to.
+    const active=document.activeElement,opener=active?.closest('.ws-file-toolbar')?s.focusBack:active;
     closePicker(s,false);
     const element=document.createElement('section');element.className='ws-file-picker'+(kind==='navigation'?' ws-file-navigation':kind==='help'?' ws-file-help-dialog':kind==='symbols'?' ws-file-symbol-dialog':'');
     const header=document.createElement('div');header.className='ws-file-picker-header';
@@ -506,6 +507,16 @@
       const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,parents:0,items:[],positions:new Map(),history:[],historyIndex:-1,recent:new Map()};
       states.set(s.id,s);
       el.addEventListener('focusout',()=>{s.leader=null;clearTimeout(s.leaderTimer);});
+      // A mouse click on a toolbar control returns focus to the tree or preview, so Space and Esc keep working.
+      el.addEventListener('mousedown',()=>{s.focusBack=document.activeElement;},true);
+      el.addEventListener('click',event=>{
+        const control=event.target.closest('.ws-file-toolbar label, .ws-file-toolbar button'),back=s.focusBack;
+        if(!control || !event.detail)return;
+        setTimeout(()=>{
+          if(!control.contains(document.activeElement))return;
+          if(back?.isConnected && s.el.contains(back) && !back.closest('.ws-file-toolbar'))back.focus();else focusPreview(s);
+        });
+      });
       s.preview = el.querySelector('.ws-file-render input');
       const preferenceKey = 'libro.files.preview:' + el.closest('[data-workspace-project]').dataset.workspaceProject;
       try { s.preview.checked = localStorage.getItem(preferenceKey) === 'true'; } catch (_) {}

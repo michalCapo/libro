@@ -4,7 +4,7 @@ const {readFileSync}=require('node:fs');
 const {JSDOM}=require('jsdom');
 
 function fixture(t, scoped=false) {
-  const dom=new JSDOM(`<div data-workspace-project="test"><div data-files="files"><div class="ws-file-preview"><div class="ws-file-path"></div><button class="ws-file-refresh"></button><button class="ws-file-help"></button><div class="ws-file-image-tools"><button class="ws-file-image-reset"></button></div><label class="ws-file-render"><input type="checkbox"></label><label class="ws-file-wrap"><input type="checkbox" checked></label><div class="ws-file-text"></div><div class="ws-file-context"></div><div class="ws-file-media" hidden></div></div><div class="ws-file-sidebar"><input class="ws-file-filter"><label class="ws-file-hidden"><input type="checkbox"></label><div class="ws-file-tree" tabindex="0"></div><div class="ws-file-shortcuts"><span>Copy line</span><kbd>yy</kbd></div><div role="status"></div></div></div></div>`,{url:'http://localhost',runScripts:'outside-only',pretendToBeVisual:true});
+  const dom=new JSDOM(`<div data-workspace-project="test"><div data-files="files"><div class="ws-file-sidebar"><input class="ws-file-filter"><label class="ws-file-hidden"><input type="checkbox"></label><div class="ws-file-tree" tabindex="0"></div><div class="ws-file-shortcuts"><span>Copy line</span><kbd>yy</kbd></div><div role="status"></div></div><div class="ws-file-preview"><div class="ws-file-toolbar"><div class="ws-file-path"></div><button class="ws-file-refresh"></button><button class="ws-file-help"></button><div class="ws-file-image-tools"><button class="ws-file-image-reset"></button></div><label class="ws-file-render"><input type="checkbox"></label><label class="ws-file-wrap"><input type="checkbox" checked></label></div><div class="ws-file-text"></div><div class="ws-file-context"></div><div class="ws-file-media" hidden></div></div></div></div>`,{url:'http://localhost',runScripts:'outside-only',pretendToBeVisual:true});
   const w=dom.window,calls=[],copied=[];t.after(()=>w.close());
   let refresh;const interval=w.setInterval.bind(w);w.setInterval=(fn,ms)=>{if(ms===3000)refresh=fn;return interval(fn,ms);};
   w.HTMLElement.prototype.scrollIntoView=()=>{};
@@ -277,4 +277,17 @@ test('a refresh refused during a project switch keeps the tree; only missing pat
   f.w.document.querySelector('.ws-file-refresh').click();
   f.reply({path:'',directory:true,entries:[{name:'main.js',path:'main.js',dir:false}]});
   assert.equal(tree.textContent,'descriptionmain.js');
+});
+
+test('mouse clicks on toolbar controls return focus so Space f and Esc work',async t=>{
+ const f=fixture(t);
+ f.reply({directory:true,entries:[{name:'example.md',path:'example.md',dir:false}]});f.w.document.querySelector('.ws-file-tree').focus();f.key('Enter');
+ f.reply({path:'example.md',text:'# Title',html:'<h1>Title</h1>'});
+ const label=f.w.document.querySelector('.ws-file-render'),input=label.querySelector('input');
+ f.w.document.activeElement.dispatchEvent(new f.w.MouseEvent('mousedown',{bubbles:true}));label.dispatchEvent(new f.w.MouseEvent('click',{bubbles:true,detail:1}));
+ input.focus();await new Promise(r=>setTimeout(r));
+ assert.equal(input.checked,true);assert.equal(f.w.document.activeElement,f.w.document.querySelector('.ws-file-rendered'));
+ f.keys(' f');const tree=f.w.document.querySelector('.ws-file-tree');assert.equal(f.w.document.activeElement,tree);
+ const help=f.w.document.querySelector('.ws-file-help');tree.dispatchEvent(new f.w.MouseEvent('mousedown',{bubbles:true}));help.focus();help.click();
+ f.key('Escape');assert.equal(f.w.document.activeElement,tree);
 });
