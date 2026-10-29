@@ -120,8 +120,13 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 				hookCommand = `hook_input=$(cat); if printf '%s' "$hook_input" | grep -Eq '"agent_id"[[:space:]]*:'; then exit 0; fi; ` + hookCommand
 			}
 			if event == "Stop" {
-				// Background shells and agents wake Claude again when they finish.
-				hookCommand = "if grep -q '\"background_tasks\":\\[[^]]'; then s=working; else s=done; fi; printf '%s' \"$s\" > " + shellQuote(a.path)
+				// Running background shells and agents wake Claude again when they finish. Finished tasks,
+				// watches and unknown kinds do not; if one does, the next prompt or tool sets working again.
+				capture := ""
+				if os.Getenv("LIBRO_DEBUG_HOOKS") != "" {
+					capture = `printf '%s' "$hook_input" > ` + shellQuote(filepath.Join(dir, "stop.json")) + "; "
+				}
+				hookCommand = `hook_input=$(cat); ` + capture + `if printf '%s' "$hook_input" | tr -d '\n\r' | tr '{' '\n' | grep -E '"type"[[:space:]]*:[[:space:]]*"(shell|subagent)"' | grep -Eq '"status"[[:space:]]*:[[:space:]]*"(running|pending)"'; then s=working; else s=done; fi; printf '%s' "$s" > ` + shellQuote(a.path)
 			}
 			hooks[event] = []any{map[string]any{"hooks": []any{map[string]any{
 				"type": "command", "command": hookCommand, "timeout": 2,

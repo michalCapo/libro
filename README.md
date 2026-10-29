@@ -26,6 +26,9 @@ these attachments in private instance storage for agents to read.
 - Includes Browser, Notes, Files, Terminal, and other tools, with support for your own commands and web addresses.
 - Keeps all your projects in one place. Switch between them with one click.
 - Shows when an assistant is busy (its icon spins), or finished or waiting for your answer (green check).
+  A Claude turn that ends with a background shell or agent still running stays busy.
+  Start Libro with `LIBRO_DEBUG_HOOKS=1` to save each Claude Stop hook input as
+  `stop.json` next to the agent's status file in `/tmp/libro-agent-*`.
 - Shows agent session names or the first prompt in thread labels. Codex, Pi, and
   Claude descriptions survive reloads; older Codex UUID labels are recovered
   from local session history when the ID matches one session.
