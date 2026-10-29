@@ -259,14 +259,14 @@ func registerReleasesActions(app *r.App) {
 			return
 		}
 		result := map[string]any{"id": data.ID, "request": data.Request, "path": data.Path}
-		projects, allowed := repoProjects(data.SID, data.ID, "releases")
+		projects, allowed := repoProjects(data.SID, data.ID, "repos")
 		// A save or a single-project reread only reaches a listed project.
 		if data.Path != "" {
 			projects = slices.DeleteFunc(projects, func(p Project) bool { return p.Path != data.Path })
 		}
 		switch {
 		case !allowed:
-			result["error"] = "Open Releases in this workspace first"
+			result["error"] = "Open Repositories in this workspace first"
 		case data.Path != "" && len(projects) == 0 || data.Save && data.Path == "":
 			result["error"] = "Project not found"
 		default:
@@ -281,8 +281,4 @@ func registerReleasesActions(app *r.App) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(result)
 	})
-}
-
-func renderReleases(app Application) *r.Node {
-	return r.Widget("releases", struct{}{}, "ws-repos ws-releases").Key("releases-"+app.ID).Attr("data-releases", app.ID).Render(r.Div("ws-repos-status").Attr("role", "status").Text("Loading releases…"))
 }

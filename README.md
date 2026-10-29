@@ -135,7 +135,7 @@ One layout is saved per Libro instance. Only the first window restores it. Reloa
 
 ### Tools
 
-- Open the tool you need next to your assistants: Terminal, Browser, Notes, Files, Repositories, Releases, Nvim, Git, Database, or any tool of your own.
+- Open the tool you need next to your assistants: Terminal, Browser, Notes, Files, Repositories, Nvim, Git, Database, or any tool of your own.
 - Use whatever tool you like. Name it, add its command or web address, and it shows up next to the built-in tools.
 - On Linux, Nvim (`vime`), Git (`vimg`), and Database (`vimd`) come with Libro. If you installed your own copy, Libro uses yours. On macOS and Windows, install them yourself.
 
@@ -200,17 +200,16 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 
 - Open Repositories with `Ctrl + Shift + G` or from the tool rail to check every Git project at once.
 - Each project shows uncommitted files in its checkout and thread worktrees, branches with commits to push, branches with commits to pull, and branches whose remote was deleted. Branches without an upstream count commits that no remote has yet.
-- Opening the panel shows local state at once, then fetches all remotes. Refresh rereads local state; Fetch checks the remotes again.
+- Each project also shows its release targets, such as Installed, Stage, or Production, and whether the latest version runs there.
+- Opening the panel shows local state at once, then fetches all remotes. Refresh rereads local state and runs the release commands again; Fetch checks the remotes again. Release results are kept for five minutes when the panel reopens.
 - Projects that need attention come first. Turn on Show all to also list clean projects.
-- Move with Vim keys: `j` / `k` row, `gg` / `G` first / last, `{` / `}` project, `l` or `Enter` open a file list, `h` close it, `o` open the project. `r` refreshes, `f` fetches, `a` shows all, and `?` lists the keys.
+- Move with Vim keys: `j` / `k` row, `gg` / `G` first / last, `{` / `}` project, `l` or `Enter` open a file list or missing commits, `h` close it, `o` open the project, `e` edit release targets. `r` refreshes, `f` fetches, `a` shows all, and `?` lists the keys.
 
-### Releases
+#### Release targets
 
-- Open Releases with `Ctrl + Shift + D`, from the tool rail, or from the command palette to see, for every Git project, whether the latest version is installed, on stage, or in production.
-- Press `e` on a project, or click its edit button, to add targets such as Installed, Stage, or Production. Each target has a command that prints the version running there, for example `libro --version`, `ssh prod cat /srv/app/VERSION`, or `curl -s https://stage.example.com/version`. Commands run in the project folder, in your login shell, for up to 30 seconds.
+- Press `e` on a project, or click its rocket button, to add targets such as Installed, Stage, or Production. Each target has a command that prints the version running there, for example `libro --version`, `ssh prod cat /srv/app/VERSION`, or `curl -s https://stage.example.com/version`. Commands run in the project folder, in your login shell, for up to 30 seconds.
 - Libro matches the printed version to a Git tag (`1.2.0` finds `v1.2.0`), a commit, or `git describe` output, and compares it with the project's current branch. Each target shows **latest**, how many commits it is missing (open the row to list them), commits that are not on the branch, an unknown version, or that the command failed.
-- Projects with a target that is behind, unknown, or failing come first. Turn on Show all to also list projects without targets. Results are kept for five minutes when the panel reopens; Refresh runs the commands again.
-- Move with the same keys as Repositories: `j` / `k`, `gg` / `G`, `{` / `}`, `l` / `h`, `o` open the project, `e` edit targets, `r` refresh, `a` show all, `?` keys.
+- A target that is behind, unknown, or failing puts its project in the attention list.
 
 ### Settings
 
@@ -237,11 +236,13 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 | `Ctrl + Shift + P` | Switch project |
 | `Ctrl + 1` – `Ctrl + 9` | Go to a numbered thread |
 | `Ctrl + ;` | Thread actions |
+| `Ctrl + Shift + M` | Merge the current thread (opens the review dialog) |
+| `Ctrl + Shift + D` | Discard the current thread (asks first) |
 | `Meta + ;` | Command palette |
 | `Caps Lock` | Voice typing |
 | `Alt + ,` / `Alt + .` | Lower / raise Claude effort for this session (Codex has this built in) |
 
-New agent, Replace agent, Finish current thread, and Close project have no default shortcut. Find them in the command palette or set one in Settings.
+New agent, Replace agent, and Close project have no default shortcut. Find them in the command palette or set one in Settings.
 
 ### Panels and tools
 
@@ -256,7 +257,6 @@ New agent, Replace agent, Finish current thread, and Close project have no defau
 | `Ctrl + E` | Nvim |
 | `Ctrl + G` | Git |
 | `Ctrl + Shift + G` | Repositories |
-| `Ctrl + Shift + D` | Releases |
 | `Ctrl + D` | Database (in a terminal, `Ctrl + D` goes to the terminal) |
 | `Ctrl + Q` | Close the selected panel |
 | `Ctrl + ,` / `Ctrl + .` | Bigger / smaller panel |
@@ -291,9 +291,9 @@ You can also right-click a worktree thread or open its **⋯** menu, then choose
 **Merge thread…**, **Squash thread…**, or **Create draft PR…**. Each opens its
 own confirmation dialog. In Ctrl+;, search for “merge” and press Enter to open
 Merge thread. The command palette also has **Finish current thread…**, which
-opens Merge thread.
-You can assign a shortcut in Settings; it opens the review dialog and never
-merges immediately.
+opens Merge thread. Its shortcut is `Ctrl + Shift + M`; it opens the review
+dialog and never merges immediately. `Ctrl + Shift + D` opens Discard thread
+the same way.
 
 The dialog shows the destination branch, recent commits, and changed-file
 summary. The original branch is preselected. Older worktrees without a recorded

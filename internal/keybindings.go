@@ -19,7 +19,6 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"files", "Files", "Ctrl+F"},
 	{"notes", "Notes", "Ctrl+I"},
 	{"repos", "Repositories", "Ctrl+Shift+G"},
-	{"releases", "Releases", "Ctrl+Shift+D"},
 	{"nvim", "Nvim", "Ctrl+E"},
 	{"lazyrepo", "Git", "Ctrl+G"},
 	{"lazydata", "Database", "Ctrl+D"},
@@ -36,7 +35,8 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"new-agent", "New agent", ""},
 	{"new-agent-panel", "New agent panel", "Ctrl+Shift+A"},
 	{"new-thread", "New thread", "Ctrl+T"},
-	{"finish-thread", "Finish current thread…", ""},
+	{"finish-thread", "Finish current thread…", "Ctrl+Shift+M"},
+	{"discard-thread", "Discard current thread…", "Ctrl+Shift+D"},
 	{"thread-actions", "Thread actions", "Ctrl+;"},
 	{"replace-agent", "Replace agent", ""},
 	{"previous-agent", "Previous panel", "Ctrl+H"},
@@ -133,6 +133,13 @@ func toolKeybindings() map[string]string {
 					delete(saved, id)
 				}
 			}
+			// Releases joined Repositories, and Ctrl+Shift+D moved to
+			// discarding the current thread. Finishing the thread got
+			// Ctrl+Shift+M unless a shortcut was already set.
+			delete(saved, "releases")
+			if _, exists := saved["discard-thread"]; !exists && saved["finish-thread"] == "" {
+				delete(saved, "finish-thread")
+			}
 			// New shortcuts get their default unless the key is already taken.
 			for _, shortcut := range toolKeys {
 				if _, exists := saved[shortcut.ID]; exists {
@@ -188,9 +195,9 @@ func renderToolKeybindings() *r.Node {
 		IDs  []string
 	}{
 		{"General", []string{"command-palette", "settings", "voice"}},
-		{"Projects & threads", []string{"project-picker", "close-project", "new-thread", "finish-thread", "thread-actions", "run-project", "stop-project"}},
+		{"Projects & threads", []string{"project-picker", "close-project", "new-thread", "finish-thread", "discard-thread", "thread-actions", "run-project", "stop-project"}},
 		{"Agents", []string{"new-agent", "new-agent-panel", "replace-agent"}},
-		{"Tools", []string{"terminal", "browser", "new-browser", "new-terminal", "previous-browser", "next-browser", "files", "notes", "repos", "releases"}},
+		{"Tools", []string{"terminal", "browser", "new-browser", "new-terminal", "previous-browser", "next-browser", "files", "notes", "repos"}},
 		{"Panels", []string{"previous-agent", "next-agent", "close-panel", "panel-size-down", "panel-size-up", "panel-size-max"}},
 		{"Zoom", []string{"zoom-in", "zoom-out", "zoom-reset"}},
 	}

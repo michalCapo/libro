@@ -51,6 +51,10 @@ func saveApp(app Application) savedApp {
 }
 
 func (app savedApp) application() Application {
+	// Releases joined Repositories.
+	if app.PluginID == "releases" {
+		app.PluginID, app.Name = "repos", "Repositories"
+	}
 	return Application{
 		ID: app.ID, PluginID: app.PluginID, Dock: app.Dock, Name: app.Name,
 		Command: currentCommand(app.Command), URL: app.URL, IconURL: app.IconURL, Type: app.Type,
