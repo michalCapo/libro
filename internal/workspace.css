@@ -593,6 +593,7 @@ html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repo
 .ws-repos:focus-visible{outline:2px solid var(--ws-accent);outline-offset:-2px}
 .ws-repos-keys{margin:0 0 8px;padding:6px 10px;border-radius:8px;background:var(--ws-field);color:var(--ws-muted);font-size:12px}
 .ws-repos .is-current{border-radius:6px;box-shadow:inset 0 0 0 1px var(--ws-accent);background:color-mix(in srgb,var(--ws-accent) 10%,transparent)}
+.ws-repos .is-current:focus{outline:none}
 .ws-repos-project-head.is-current,.ws-repos-branch.is-current,.ws-repos-files li.is-current,.ws-repos-changes summary.is-current{padding:0 4px;margin:0 -4px}
 .ws-note-editor{display:flex;flex-direction:column;gap:10px}
 .ws-note-section{display:flex;flex-direction:column;gap:8px;min-width:0}
