@@ -151,7 +151,8 @@ func startAgentJS(sid, workspace, agentID string) r.Result {
 }
 
 // createProjectWorktree always branches from the original project, even when
-// the request comes from one of its existing worktrees.
+// the request comes from one of its existing worktrees. An empty branch names
+// the thread after its source branch plus a random suffix, like main-1a2b3c4d.
 func (sm *StateManager) createProjectWorktree(sid, projectID, branch string) (string, error) {
 	state := sm.Get(sid)
 	project, _ := threadProjectContext(state, projectID)
@@ -167,6 +168,15 @@ func (sm *StateManager) createProjectWorktree(sid, projectID, branch string) (st
 		}
 		if !GitIsRepo(p.Path) || GitCurrentBranch(p.Path) == "" {
 			return "", fmt.Errorf("project threads require a Git repository with a committed branch")
+		}
+		if branch == "" {
+			var random [4]byte
+			if _, err := rand.Read(random[:]); err != nil {
+				return "", err
+			}
+			// Keep the worktree folder name within file system limits.
+			base := []rune(GitCurrentBranch(p.Path))
+			branch = string(base[:min(len(base), 64)]) + "-" + hex.EncodeToString(random[:])
 		}
 		path := filepath.Join(filepath.Dir(p.Path), filepath.Base(p.Path)+"-"+strings.ReplaceAll(branch, "/", "-"))
 		if err := GitCreateWorktree(p.Path, branch, path); err != nil {
@@ -201,17 +211,17 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string, stri
 		if projectID != "" && state.thread(projectID) == nil && project == "" {
 			return r.Result{}.Run(r.Notify("error", "Project not found")), nil
 		}
-		var random [16]byte
-		if _, err := rand.Read(random[:]); err != nil {
-			return r.Result{}.Run(r.Notify("error", "Could not create thread")), nil
-		}
 		if project != "" {
-			workspace, err := sm.createProjectWorktree(sid, projectID, "thread-"+hex.EncodeToString(random[:4]))
+			workspace, err := sm.createProjectWorktree(sid, projectID, "")
 			if err != nil {
 				return r.Result{}.Run(r.Notify("error", "Could not create project thread: "+err.Error())), nil
 			}
 			response, _ := switchWorkspace(sid, workspace, agentID)
 			return response, nil
+		}
+		var random [16]byte
+		if _, err := rand.Read(random[:]); err != nil {
+			return r.Result{}.Run(r.Notify("error", "Could not create thread")), nil
 		}
 		thread := Thread{ID: "thread:" + hex.EncodeToString(random[:]), Name: name, Project: project, Path: path, AgentID: agentID}
 		// Project threads live only in the current session.

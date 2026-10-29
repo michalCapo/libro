@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"testing"
 )
@@ -147,6 +148,13 @@ func TestProjectThreadsBranchFromBase(t *testing.T) {
 	}
 	if got := git(projectPath(manager, second), "rev-parse", "HEAD"); got != base {
 		t.Fatal("new thread branched from worktree instead of base")
+	}
+	named, err := manager.createProjectWorktree("test", first, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := GitCurrentBranch(projectPath(manager, named)); !regexp.MustCompile("^" + regexp.QuoteMeta(GitCurrentBranch(repo)) + "-[0-9a-f]{8}$").MatchString(got) {
+		t.Fatalf("thread branch = %q, want source branch plus random suffix", got)
 	}
 	if _, err := manager.createProjectWorktree("test", "repo", "first"); err == nil {
 		t.Fatal("duplicate branch accepted")
