@@ -316,7 +316,7 @@ process.stdin.on('end', () => {
     window: {libroElectron: {}, __libroWebviews: {test: guest}},
     document: {querySelector: selector => selector.includes('data-app-content') ? content : frame},
     mobileViewState: {}, mobileViewportOrientation: {},
-    mobileSizes: {sm: {width:480,height:896}, md: {width:640,height:932}, xl: {width:720,height:1280}},
+    mobileSizes: {xs: {width:320,height:568}, sm: {width:480,height:896}, md: {width:640,height:932}, xl: {width:720,height:1280}},
     currentAppWidth: () => 'lg', whenReady: (id, fn) => fn(),
     ResizeObserver: class {constructor(fn) {resized = fn;} observe() {} disconnect() {disconnected = true;}},
   };
@@ -331,7 +331,7 @@ process.stdin.on('end', () => {
     assert.ok(parseFloat(guest.style.top) >= -1e-6);
     assert.ok(parseFloat(guest.style.left) >= -1e-6);
   }
-  for (const mode of ['sm', 'md', 'xl']) {
+  for (const mode of ['xs', 'sm', 'md', 'xl']) {
     for (const orientation of ['portrait', 'landscape']) {
       context.applyMobileView('test', mode, orientation);
       const size = context.mobileSizes[mode];

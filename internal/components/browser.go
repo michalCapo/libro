@@ -563,8 +563,9 @@ var devtoolsPanelSyncers = {};
 var browserModeState = {}; // appID -> 'normal' | 'insert'
 var pageToolState = {}; // appID -> '' | 'annotate' | 'area'
 var mobileViewState = {}; // appID -> viewport preview styles and resize observer
-var mobileViewportOrientation = {}; // appID -> last sm/md/xl orientation until browser instance closes
+var mobileViewportOrientation = {}; // appID -> last xs/sm/md/xl orientation until browser instance closes
 var mobileSizes = {
+	xs: {label: 'XS', width: 320, height: 568},
 	sm: {label: 'SM', width: 480, height: 896},
 	md: {label: 'MD', width: 640, height: 932},
 	xl: {label: 'XL', width: 720, height: 1280}
@@ -785,7 +786,7 @@ function currentAppWidth(appID) {
 	if (!frame) return '';
 	var active = frame.querySelector('[data-size-badges] button.bg-white\\/25, [data-size-badges] button.bg-blue-600');
 	if (active) return (active.getAttribute('data-resize-width') || active.textContent || '').trim().toLowerCase();
-	var widths = ['sm','md','lg','xl','2xl','3xl','full'];
+	var widths = ['xs','sm','md','lg','xl','2xl','3xl','full'];
 	for (var i = 0; i < widths.length; i++) {
 		var btn = frame.querySelector('[data-resize-width="' + widths[i] + '"]');
 		if (btn && (btn.className || '').indexOf('text-white') !== -1) return widths[i];
@@ -875,7 +876,8 @@ window.__libroToggleSelectedBrowserMobile = function(appID) {
 	if (!target) return;
 	var current = (mobileViewState[appID] && mobileViewState[appID].mode) || 'normal';
 	var orientation = (mobileViewState[appID] && mobileViewState[appID].orientation) || mobileViewportOrientation[appID] || 'portrait';
-	var next = current === 'normal' ? 'sm' : (current === 'sm' ? 'md' : (current === 'md' ? 'xl' : 'normal'));
+	var modes = ['normal', 'xs', 'sm', 'md', 'xl'];
+	var next = modes[(modes.indexOf(current) + 1) % modes.length];
 	// Viewport preview sizes are applied locally with inline styles. Avoid also
 	// resizing the app through the server, which causes a second layout jump when
 	// the server patch arrives.
@@ -904,7 +906,7 @@ window.__libroToggleSelectedBrowserMobile = function(appID) {
 window.__libroRotateSelectedBrowserViewport = function(appID) {
 	appID = appID || window.__libroSelectedApp || '';
 	var state = appID ? mobileViewState[appID] : null;
-	if (!state || (state.mode !== 'sm' && state.mode !== 'md' && state.mode !== 'xl')) return;
+	if (!state || !mobileSizes[state.mode]) return;
 	var nextOrientation = state.orientation === 'landscape' ? 'portrait' : 'landscape';
 	mobileViewportOrientation[appID] = nextOrientation;
 	if (!applyMobileView(appID, state.mode, nextOrientation)) return;
