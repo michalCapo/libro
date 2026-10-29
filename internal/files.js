@@ -482,7 +482,11 @@
   }
   function open(s, expandOnly = false) {
     const item = s.items[s.index]; if (!item) return;
-    if (!item.dir) { render(s);navigate(s,item.path,null,s.filter.value?0:s.parents); return; }
+    if (!item.dir) {
+      // On small screens the list slides away once a file opens, even under the pointer.
+      const sidebar=s.tree.closest('.ws-file-sidebar');if(sidebar.matches(':hover'))sidebar.dataset.closed='';
+      render(s);navigate(s,item.path,null,s.filter.value?0:s.parents); return;
+    }
     if (s.expanded.has(item.path)) {
       if (!expandOnly) s.expanded.delete(item.path);
       else s.index = Math.min(s.index + 1, s.items.length - 1);
@@ -507,6 +511,7 @@
       const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,parents:0,items:[],positions:new Map(),history:[],historyIndex:-1,recent:new Map()};
       states.set(s.id,s);
       el.addEventListener('focusout',()=>{s.leader=null;clearTimeout(s.leaderTimer);});
+      el.querySelector('.ws-file-sidebar').addEventListener('mouseleave',event=>delete event.currentTarget.dataset.closed);
       // A mouse click on a toolbar control returns focus to the tree or preview, so Space and Esc keep working.
       el.addEventListener('mousedown',()=>{s.focusBack=document.activeElement;},true);
       el.addEventListener('click',event=>{

@@ -403,14 +403,17 @@ html.dark .ws-row-grid[data-agent-status=done]::before{color:#4ade80}
 .ws-file-media{flex:1;min-height:0;overflow:auto;display:flex;align-items:center;justify-content:center}
 .ws-file-media.is-image{display:block;cursor:grab;overscroll-behavior:contain}
 .ws-file-media.is-image.is-dragging{cursor:grabbing;user-select:none}
-.ws-file-image-stage{position:relative;min-width:100%;min-height:100%;overflow:hidden}
+/* The stage sits below the media focus ring, so the ring stays visible over a large image. */
+.ws-file-media{isolation:isolate}
+.ws-file-image-stage{position:relative;z-index:-1;min-width:100%;min-height:100%;overflow:hidden}
 .ws-file-image-stage img{position:absolute;max-width:none;max-height:none;object-fit:fill;user-select:none;-webkit-user-drag:none}
 .ws-file-media[hidden],.ws-file-text[hidden]{display:none}
 .ws-file-media video{max-width:100%;max-height:100%;object-fit:contain}
 .ws-file-media audio{width:100%;margin:12px}
 .ws-file-media iframe{width:100%;height:100%;border:0}
 .ws-file-text{flex:1;overflow:auto;margin:0;padding:12px;font:12px/1.6 ui-monospace,monospace;tab-size:4}
-.ws-file-text:focus,.ws-file-text:focus-visible,.ws-file-media:focus,.ws-file-media:focus-visible,.ws-file-tree:focus,.ws-file-tree:focus-visible,.ws-file-results:focus,.ws-file-results:focus-visible{outline:none!important}
+/* Draw the focus ring inside these panes; the panel edge clips a ring drawn outside. */
+.ws-files :is(.ws-file-text,.ws-file-media,.ws-file-tree,.ws-file-results):focus-visible{outline-offset:-2px!important}
 /* The file tree sits on a sunken tone beside the preview; the cursor row uses the selection fill. */
 .ws-file-sidebar{min-width:0;display:flex;flex-direction:column;min-height:0;background:var(--ws-sunken)}
 .ws-file-filter{margin:6px;min-height:28px;padding:5px 10px;min-width:0;border:0;border-radius:8px;background:var(--ws-field);color:var(--ws-fg);font:inherit;font-size:13px}
@@ -681,6 +684,8 @@ html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repo
 .ws-file-navigation-keys{padding:10px 12px;background:var(--ws-sunken);font-size:11px;color:var(--ws-muted)}
 .ws-file-navigation .ws-file-picker-header>.ws-button,.ws-file-help-dialog .ws-file-picker-header>.ws-button{width:auto;padding:4px 8px;margin-left:auto}
 @container(max-width:520px){.ws-files{grid-template-columns:minmax(140px,38%) minmax(0,1fr)}.ws-file-toolbar{gap:8px}.ws-file-path{flex-basis:100%}.ws-file-help-dialog .ws-file-result{grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:10px}}
+/* On small screens the file list hides at the left edge; it slides in on hover, Space f, / or Esc. */
+@container(max-width:720px){.ws-files{grid-template-columns:minmax(0,1fr)}.ws-file-sidebar{position:absolute;z-index:3;inset:0 auto 0 0;width:min(260px,80%);transform:translateX(calc(-100% + 8px));transition:transform .15s ease-out}.ws-file-sidebar:is(:hover,:has(:focus-visible)):not([data-closed]:not(:has(:focus-visible))){transform:none;box-shadow:var(--ws-shadow)}}
 
 .ws-file-symbol-dialog{position:absolute;z-index:4;top:50%;left:50%;transform:translate(-50%,-50%);width:min(640px,calc(100% - 32px));max-height:calc(100% - 40px);border:0;border-radius:12px;background:var(--ws-popup);box-shadow:0 12px 36px rgb(0 0 0 / 14%);font:13px/1.7 ui-monospace,monospace}
 .ws-file-symbol-dialog .ws-file-picker-header{padding:8px}
