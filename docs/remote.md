@@ -25,7 +25,6 @@ Design: TLS pairing. Everything is inside Libro. No Vemari, no relay, no frp, no
 
 Known gaps that matter for remote:
 
-- Main HTTP listener binds `":"+Port()` (`internal/app.go`), not `127.0.0.1`.
 - Data dir is created with `0755` (`internal/db.go`).
 - Session IDs are `session-N-<random>` (`internal/state.go`). They are hard to guess but are not a security identity.
 - The terminal endpoint lets a client attach to a live PTY without an ownership check (`internal/components/terminal.go`).
@@ -73,7 +72,7 @@ Request order on the server:
 ## Server (Backend)
 
 - Start: `libro --no-desktop --listen <address:port>`. Port is optional.
-- Main HTTP listener changes to `127.0.0.1` (`internal/app.go`). Fix this even without remote mode.
+- Main HTTP listener stays on `127.0.0.1` (`internal/app.go`).
 - First start generates an ECDSA key and a self-signed certificate.
 - Keys live in a private `0700` dir, files `0600`. On Windows, restrict ACL to the user.
 - Limits: handshake timeout, max `/pair` body size, max concurrent connections, connections per IP.
@@ -201,7 +200,7 @@ This is part of the first version, not a later add-on.
 | File | Change |
 |---|---|
 | `main.go` | `--listen`, `pair` and `devices` commands |
-| `internal/app.go` | bind `127.0.0.1`, TLS listener, authorization layer, proxy, disconnect vs. stop |
+| `internal/app.go` | TLS listener, authorization layer, proxy, disconnect vs. stop |
 | `internal/remote_server.go` (new) | certificate, `VerifyConnection`, `/pair`, connection registry, revocation |
 | `internal/remote_client.go` (new) | local listeners, local token, TLS pipe, reconnect |
 | `internal/remote_proxy.go` (new) | `app-N.localhost` proxy, allowed app registry |

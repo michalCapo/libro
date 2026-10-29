@@ -59,7 +59,7 @@ func TestInvalidInstanceConfiguration(t *testing.T) {
 }
 
 func TestOccupiedPortFailsBeforeDatabase(t *testing.T) {
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,5 +78,13 @@ func TestOccupiedPortFailsBeforeDatabase(t *testing.T) {
 	entries, err := os.ReadDir(dir)
 	if err != nil || len(entries) != 0 {
 		t.Fatal("startup touched data before binding", err)
+	}
+}
+
+func TestListensOnLoopbackOnly(t *testing.T) {
+	t.Setenv("LIBRO_PORT", "8102")
+	host, port, err := net.SplitHostPort(listenAddress())
+	if err != nil || port != "8102" || !net.ParseIP(host).IsLoopback() {
+		t.Fatalf("listen address = %q, want loopback on port 8102", listenAddress())
 	}
 }

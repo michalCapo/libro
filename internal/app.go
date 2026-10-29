@@ -641,9 +641,14 @@ func installShutdownSignalHandler() {
 	})
 }
 
+// listenAddress keeps Libro on this computer: the workspace has no login.
+func listenAddress() string {
+	return net.JoinHostPort("127.0.0.1", Port())
+}
+
 // Run initializes and starts the Libro application server.
 func Run(assets embed.FS, desktop bool) error {
-	listener, err := net.Listen("tcp", ":"+Port())
+	listener, err := net.Listen("tcp", listenAddress())
 	if err != nil {
 		return fmt.Errorf("start Libro on port %s: %w", Port(), err)
 	}

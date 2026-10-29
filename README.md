@@ -85,6 +85,7 @@ Run `make dev` (or `go run . --dev`) while your installed Libro stays open.
 The development instance uses port 8101 and starts with its own empty database,
 settings, notes, and browser profile. Its data persists across restarts.
 The regular instance keeps port 8100 and its existing data.
+Libro listens on `127.0.0.1` only, so other computers cannot open it.
 
 For additional instances, choose a unique name and unused port:
 
