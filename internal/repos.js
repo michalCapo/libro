@@ -216,7 +216,7 @@
     const head = item(element('div', 'ws-repos-project-head'), 'p:' + repo.path);
     head.dataset.project = repo.name;
     const title = element('div', 'ws-repos-project-title');
-    title.append(element('span', 'ws-repos-name', folder(repo.path)), element('span', 'ws-repos-muted ws-repos-folder', repo.path));
+    title.append(element('span', 'ws-repos-name', repo.label), element('span', 'ws-repos-muted ws-repos-folder', repo.path));
     const badges = element('div', 'ws-repos-counts');
     if (counts.changed) badges.append(badge(plural(counts.changed, 'file') + ' changed', 'changed'));
     if (counts.push) badges.append(badge(plural(counts.push, 'branch', 'branches') + ' to push', 'push'));
@@ -291,7 +291,7 @@
     s.el.append(toolbar, status);
     if (s.help) s.el.append(element('div', 'ws-repos-keys', 'j/k move · gg/G first/last · {/} project · l/Enter open files or missing commits · h close · e edit release targets · o open project · r refresh · f fetch · a show all · ? keys'));
     const list = element('div', 'ws-repos-list');
-    rows.sort((a, b) => attention.includes(b) - attention.includes(a) || folder(a.repo.path).localeCompare(folder(b.repo.path)));
+    rows.sort((a, b) => attention.includes(b) - attention.includes(a) || a.repo.label.localeCompare(b.repo.label));
     rows.filter(row => s.showAll || attention.includes(row) || s.editing?.path === row.repo.path).forEach(row => list.append(project(s, row.repo, row.counts, row.release)));
     if (s.repos && !list.children.length) {
       const empty = element('div', 'ws-repos-empty');
@@ -392,5 +392,5 @@
       else releaseRequest(s);
     });
   }
-  window.libroRepos = {init, dispose};
+  window.libroRepos = {init, dispose, refresh:() => { for (const s of states.values()) if (s.el.isConnected) refresh(s); }};
 })();

@@ -118,6 +118,13 @@
   function foldState() {
     const fold = narrowWindow.matches ? 'narrow' : prefs.sidebarFolded === true ? 'user' : '';
     if (fold) root.dataset.fold = fold; else delete root.dataset.fold;
+    // The open sidebar holds the tools above its footer; a folded one hides its list, so the tools become the left rail.
+    // Moving it drops focus from its buttons, so it moves only when the fold changes and then restores focus.
+    const rail = root.querySelector('.ws-tool-rail'), body = root.querySelector('.ws-body'), footer = root.querySelector('.ws-sidebar-footer');
+    const focused = rail?.contains(document.activeElement) ? document.activeElement : null;
+    if (rail && fold && rail.parentElement !== body) body?.prepend(rail);
+    else if (rail && !fold && rail.nextElementSibling !== footer) footer?.before(rail);
+    if (focused && document.activeElement !== focused) focused.focus({preventScroll:true});
     const button = document.querySelector('[data-sidebar-fold]');
     if (!button) return;
     const label = fold ? 'Keep sidebar open' : 'Fold sidebar';

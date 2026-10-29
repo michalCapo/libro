@@ -28,7 +28,7 @@ One-shot builds, lint checks, and tests that do not launch another application s
 // AgentInstructions adds browser testing guidance to the shared application rules.
 const AgentInstructions = ApplicationInstructions + `
 
-Use the agent-browser CLI for browsing and browser testing. Libro's MCP provides application, notes, children and thread tools; it does not provide browser automation.
+Use the agent-browser CLI for browsing and browser testing. Libro's MCP provides application, notes, children, thread and repositories tools; it does not provide browser automation.
 Before first use, run agent-browser --help and read its bundled guide with agent-browser skills get core --full when available.
 Choose a unique session name for this agent/thread and pass --session <name> on every browser command. Keep using that name for this task so concurrent agents do not share a browser. Do not use the default session or close other agents' sessions.
 Typical flow: agent-browser --session <name> open <url>, then snapshot -i, click @ref or fill @ref "text", and screenshot <path>. Include --session <name> on each command and take a fresh snapshot after navigation or page changes.
@@ -39,7 +39,9 @@ When the user asks to merge, squash, finish, close or discard this thread, use t
 Merge or squash: commit your work, call action preview, then merge or squash with the sourceHead and targetHead from that preview. Merge is the default.
 To keep working after a merge, for example to push, install or release from the destination branch, pass keepOpen: true. You keep running; work in the returned targetPath, then call preview and cleanup with its sourceHead to remove the thread.
 Close: call action close. It keeps files, branch and worktree. Discard: call preview, then discard with its sourceHead, without committing. Discard deletes work, so use it only when the user asks to discard, delete or throw away the thread.
-Merge or squash without keepOpen, cleanup, close and discard close the thread's panels, including this agent, so report what you are doing before the final call.`
+Merge or squash without keepOpen, cleanup, close and discard close the thread's panels, including this agent, so report what you are doing before the final call.
+
+After you change Git state (commit, push, pull, merge, rebase, branch changes), call the Libro repositories tool (CLI: libro repositories) so the Repositories panel shows current status.`
 
 // Launch-local integrations never modify the user's agent settings. Only a
 // status and session metadata are written to temporary activity files.
@@ -134,7 +136,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 		}
 		data, _ := json.Marshal(map[string]any{
 			"hooks":       hooks,
-			"permissions": map[string]any{"allow": []string{"mcp__libro__application", "mcp__libro__notes", "mcp__libro__children", "mcp__libro__thread"}},
+			"permissions": map[string]any{"allow": []string{"mcp__libro__application", "mcp__libro__notes", "mcp__libro__children", "mcp__libro__thread", "mcp__libro__repositories"}},
 		})
 		filename, content = "claude.json", string(data)
 		mcpJSON, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"libro": libroMCP}})

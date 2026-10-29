@@ -38,7 +38,8 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 .ws-new-thread-key{padding:3px 5px;border-radius:4px;background:var(--ws-kbd);color:var(--ws-muted);font:500 10.5px/1 var(--ws-mono)}
 .ws-new-thread-key:empty{display:none}
 #workspace-thread-list{margin-top:2px}
-.ws-sidebar-footer{display:flex;align-items:center;gap:2px;margin-top:auto;padding-top:8px;border-top:1px solid var(--ws-line)}
+.ws-sidebar-bottom{position:sticky;bottom:0;margin-top:auto;background:var(--ws-chrome)}
+.ws-sidebar-footer{display:flex;align-items:center;gap:2px;padding-top:8px;border-top:1px solid var(--ws-line)}
 .ws-sidebar-footer>.ws-button{width:30px;height:30px}
 .ws-sidebar-footer small{font-size:12px}
 #workspace-all-projects[aria-expanded=true]{color:var(--ws-fg)}
@@ -595,7 +596,7 @@ html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repo
 .ws-repos:focus-visible{outline:2px solid var(--ws-accent);outline-offset:-2px}
 .ws-repos-keys{margin:0 0 8px;padding:6px 10px;border-radius:8px;background:var(--ws-field);color:var(--ws-muted);font-size:12px}
 .ws-repos .is-current{border-radius:6px;box-shadow:inset 0 0 0 1px var(--ws-accent);background:color-mix(in srgb,var(--ws-accent) 10%,transparent)}
-.ws-repos .is-current:focus{outline:none}
+.ws-repos .is-current:focus{outline:none!important}
 .ws-repos-project-head.is-current,.ws-repos-branch.is-current,.ws-repos-files li.is-current,.ws-repos-changes summary.is-current{padding:0 4px;margin:0 -4px}
 .ws-releases-inline{display:inline-flex}
 .ws-releases-version{font-family:var(--ws-mono);overflow-wrap:anywhere}
@@ -689,6 +690,8 @@ html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repo
    The sidebar floats over the rail. Its top strip holds the menu button, keeps the list open while the pointer crosses
    to it, and stays above the tools, which scroll below it. Only the strip, list, and backdrop take the pointer. */
 #libro-workspace[data-fold] .ws-body{position:relative}#libro-workspace[data-fold] .ws-tool-rail{order:-1;margin-top:38px}#libro-workspace[data-fold] .ws-sidebar{position:absolute;top:0;bottom:0;left:0;background:transparent;pointer-events:none}#libro-workspace[data-fold] .ws-sidebar::before{content:"";position:absolute;top:0;left:0;right:0;height:38px;background:var(--ws-chrome)}#libro-workspace[data-fold] .ws-sidebar>[data-sidebar-toggle]{position:relative}#libro-workspace[data-fold] .ws-sidebar::before,#libro-workspace[data-fold] .ws-sidebar>[data-sidebar-toggle],#libro-workspace[data-fold] .ws-sidebar>.ws-navigation,#libro-workspace[data-fold] .ws-sidebar::after{pointer-events:auto}#libro-workspace[data-fold] .ws-voice-status{right:auto;left:calc(var(--ws-rail-width) + 12px)}
+/* The open sidebar holds the tools above its footer: tool icons on top, then one row of size, voice, bottom terminal, and app actions spread to its width. */
+#libro-workspace:not([data-fold]) .ws-tool-rail{flex-direction:row;flex-wrap:wrap;justify-content:space-between;gap:2px 0;width:auto;padding:8px 0 4px;overflow:visible}#libro-workspace:not([data-fold]) .ws-tool-buttons{flex-direction:row;flex-wrap:wrap;flex-basis:100%;margin-bottom:4px}#libro-workspace:not([data-fold]) .ws-tool-spacer{display:none}#libro-workspace:not([data-fold]) .ws-tool-rail [data-size-trigger]{margin:0}#libro-workspace:not([data-fold]) .ws-voice-status{right:auto;left:calc(var(--ws-projects) + 12px)}
 
 #tool-key-form .ws-agent-command-row{padding:10px 16px;gap:16px}
 #tool-key-form h3{margin-top:44px;margin-bottom:12px}

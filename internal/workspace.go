@@ -85,13 +85,18 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 			),
 			r.Div("ws-project-list").ID("workspace-project-list"),
 			r.Div("ws-project-list").ID("workspace-thread-list"),
-			r.Div("ws-sidebar-footer").Render(
-				r.Button("ws-sidebar-search").ID("workspace-all-projects").Attr("type", "button").Attr("aria-expanded", "false").OnClick(r.UnsafeJS("libroWorkspace.toggleProjects()")).Render(
-					r.I("material-icons-round").Attr("aria-hidden", "true").Text("folder_open"),
-					r.Span("").Text("All projects"),
-					r.El("small", "").ID("workspace-project-count"),
+			// The tools and footer stay pinned below the scrolling lists. A folded sidebar moves the tools
+			// out to their own rail; see foldState in workspace.js.
+			r.Div("ws-sidebar-bottom").Render(
+				renderWorkspaceTools(),
+				r.Div("ws-sidebar-footer").Render(
+					r.Button("ws-sidebar-search").ID("workspace-all-projects").Attr("type", "button").Attr("aria-expanded", "false").OnClick(r.UnsafeJS("libroWorkspace.toggleProjects()")).Render(
+						r.I("material-icons-round").Attr("aria-hidden", "true").Text("folder_open"),
+						r.Span("").Text("All projects"),
+						r.El("small", "").ID("workspace-project-count"),
+					),
+					workspaceButton("Add project", "add", r.UnsafeJS("if(window.__libroOpenProjectDialogBrowse){__libroOpenProjectDialogBrowse();}else{__ws.call('project.dialog.open',{sid:el.dataset.sid});}")).Attr("data-sid", sid),
 				),
-				workspaceButton("Add project", "add", r.UnsafeJS("if(window.__libroOpenProjectDialogBrowse){__libroOpenProjectDialogBrowse();}else{__ws.call('project.dialog.open',{sid:el.dataset.sid});}")).Attr("data-sid", sid),
 			),
 		),
 	)
@@ -137,7 +142,6 @@ func renderWorkspaceStrip(state *AppState, sid, placeholderID string) *r.Node {
 func renderWorkspaceTools() *r.Node {
 	return r.El("aside", "ws-tool-rail").Attr("aria-label", "Workspace tools").Render(
 		r.Div("ws-tool-buttons").ID("workspace-tool-buttons"),
-		workspaceButton("More tools", "add", r.UnsafeJS("libroWorkspace.launcher('right')")),
 		r.Div("ws-tool-sizes").ID("workspace-tool-size").Attr("data-size-badges", ""),
 		r.Div("ws-voice-control").Attr("data-voice-control", "").Render(
 			workspaceButton("Voice typing", "mic", r.UnsafeJS("void window.libroVoice?.toggle()")).Attr("data-voice-button", "global").Attr("aria-pressed", "false"),

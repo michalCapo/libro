@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -43,6 +45,7 @@ type repoBranch struct {
 
 type repoStatus struct {
 	Name       string         `json:"name"`
+	Label      string         `json:"label"`
 	Path       string         `json:"path"`
 	Remote     bool           `json:"remote"`
 	Fetched    string         `json:"fetched"`
@@ -194,6 +197,7 @@ func readRepoStatuses(projects []Project, fetch bool) []repoStatus {
 			limit <- struct{}{}
 			defer func() { <-limit }()
 			result[i] = readRepoStatus(project.Name, project.Path, fetch)
+			result[i].Label = project.displayName()
 		})
 	}
 	wait.Wait()
@@ -261,4 +265,28 @@ func repoProjects(sid, panel, plugin string) ([]Project, bool) {
 
 func renderRepos(app Application) *r.Node {
 	return r.Widget("repos", struct{}{}, "ws-repos").Key("repos-"+app.ID).Attr("data-repos", app.ID).Render(r.Div("ws-repos-status").Attr("role", "status").Text("Loading repositories…"))
+}
+
+const reposHelp = `Refresh the Libro Repositories panel so it shows current Git status.
+Call it after you change Git state: commit, push, pull, merge, rebase, or create, switch or delete a branch.
+It reads local status only and does nothing when no Repositories panel is open.
+CLI: libro repositories.
+`
+
+func reposTool() map[string]any {
+	return map[string]any{"name": "repositories", "description": reposHelp, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}}
+}
+
+// RunReposCLI refreshes Repositories for agents without MCP support.
+func RunReposCLI(args []string, out io.Writer) error {
+	if len(args) > 0 {
+		_, err := io.WriteString(out, reposHelp)
+		return err
+	}
+	result, err := agentControlCommand(json.RawMessage(`{"action":"repositories"}`))
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(out, string(result))
+	return err
 }

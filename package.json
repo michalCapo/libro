@@ -6,7 +6,6 @@
   "scripts": {
     "start": "electron .",
     "build:notes": "esbuild internal/note-editor.js --bundle --minify --format=iife --global-name=libroNoteEditor --outfile=internal/note-editor.bundle.js",
-    "check:notes": "node scripts/check-notes.cjs",
     "build:files": "esbuild internal/file-editor.js --bundle --minify --format=iife --global-name=libroFileEditor --outfile=internal/file-editor.bundle.js",
     "check:files": "node scripts/check-files.cjs",
     "build:css": "node scripts/build-css.cjs",

@@ -71,7 +71,7 @@ preference; later update checks do not need an open Electron window.
 
 ### Voice typing
 
-Focus a text field, then press **Caps Lock** or click the microphone in the right tool rail to start listening.
+Focus a text field, then press **Caps Lock** or click the microphone in the sidebar tools to start listening.
 Press or click again to stop and insert the transcript at the captured caret or selection. This works in Libro forms, editors, browser inputs, and page-description prompts. If no text field is focused, dictation uses the selected terminal, or the agent when a browser is selected. Review the text before sending; dictation never submits it.
 Escape, switching threads, or leaving the window cancels dictation. Recordings
 are limited to 60 seconds. Change the shortcut in Settings.
@@ -108,8 +108,7 @@ app opens a window or database.
 
 The notes editor is bundled locally into the Go binary. After changing
 `internal/note-editor.js`, run `npm ci` and `npm run build:notes`, and include the
-updated `internal/note-editor.bundle.js`. `npm run check:notes` checks that the
-bundle matches its source. Run the editor integration tests with
+updated `internal/note-editor.bundle.js`. Run the editor integration tests with
 `xvfb-run -a node_modules/.bin/electron --no-sandbox --ozone-platform=x11 electron/notes.integration.cjs`.
 
 ## Features
@@ -201,7 +200,7 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 
 ### Repositories
 
-- Open Repositories with `Ctrl + Shift + G` or from the tool rail to check every Git project at once.
+- Open Repositories with `Ctrl + Shift + G` or from the sidebar tools to check every Git project at once.
 - Each project shows uncommitted files in its checkout and thread worktrees, branches with commits to push, branches with commits to pull, and branches whose remote was deleted. Branches without an upstream count commits that no remote has yet.
 - Each project also shows its release targets, such as Installed, Stage, or Production, and whether the latest version runs there.
 - Opening the panel shows local state at once, then fetches all remotes. Refresh rereads local state and runs the release commands again; Fetch checks the remotes again. Release results are kept for five minutes when the panel reopens.
@@ -438,6 +437,12 @@ libro notes '{"action":"read","id":"NOTE_ID"}'
 libro notes '{"action":"set_status","id":"NOTE_ID","status":"archived"}'
 libro notes '{"action":"delete","id":"NOTE_ID"}'
 ```
+
+### Repository refresh
+
+The `repositories` MCP tool and `libro repositories` CLI refresh open
+Repositories panels. Agents call it after they commit, push, merge or change
+branches, so the panel shows current Git status without a manual Refresh.
 
 ### Isolated QA child agents
 

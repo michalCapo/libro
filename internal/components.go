@@ -388,7 +388,6 @@ func renderMainAreaWrapper(state *AppState, sid string) *r.Node {
 			renderMainArea(state, sid),
 			renderWorkspaceSettings(),
 		),
-		renderWorkspaceTools(),
 	)
 }
 
