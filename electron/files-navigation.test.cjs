@@ -4,7 +4,7 @@ const {readFileSync}=require('node:fs');
 const {JSDOM}=require('jsdom');
 
 function fixture(t, scoped=false) {
-  const dom=new JSDOM(`<div data-workspace-project="test"><div data-files="files"><div class="ws-file-preview"><div class="ws-file-path"></div><button class="ws-file-help"></button><div class="ws-file-image-tools"><button class="ws-file-image-reset"></button></div><label class="ws-file-render"><input type="checkbox"></label><label class="ws-file-wrap"><input type="checkbox" checked></label><div class="ws-file-text"></div><div class="ws-file-context"></div><div class="ws-file-media" hidden></div></div><div class="ws-file-sidebar"><input class="ws-file-filter"><label class="ws-file-hidden"><input type="checkbox"></label><div class="ws-file-tree" tabindex="0"></div><div class="ws-file-shortcuts"><span>Copy line</span><kbd>yy</kbd></div><div role="status"></div></div></div></div>`,{url:'http://localhost',runScripts:'outside-only',pretendToBeVisual:true});
+  const dom=new JSDOM(`<div data-workspace-project="test"><div data-files="files"><div class="ws-file-preview"><div class="ws-file-path"></div><button class="ws-file-refresh"></button><button class="ws-file-help"></button><div class="ws-file-image-tools"><button class="ws-file-image-reset"></button></div><label class="ws-file-render"><input type="checkbox"></label><label class="ws-file-wrap"><input type="checkbox" checked></label><div class="ws-file-text"></div><div class="ws-file-context"></div><div class="ws-file-media" hidden></div></div><div class="ws-file-sidebar"><input class="ws-file-filter"><label class="ws-file-hidden"><input type="checkbox"></label><div class="ws-file-tree" tabindex="0"></div><div class="ws-file-shortcuts"><span>Copy line</span><kbd>yy</kbd></div><div role="status"></div></div></div></div>`,{url:'http://localhost',runScripts:'outside-only',pretendToBeVisual:true});
   const w=dom.window,calls=[],copied=[];t.after(()=>w.close());
   let refresh;const interval=w.setInterval.bind(w);w.setInterval=(fn,ms)=>{if(ms===3000)refresh=fn;return interval(fn,ms);};
   w.HTMLElement.prototype.scrollIntoView=()=>{};
@@ -240,4 +240,18 @@ test('e opens the preview or selected tree file, excluding typing and modifiers'
   f.w.document.querySelector('.ws-file-tree').focus();f.key('e');
   assert.equal(f.calls.length,count+1);
   assert.equal(f.calls.at(-1).data.editorFile,'file with spaces.js');
+});
+
+test('a refresh refused during a project switch keeps the tree; only missing paths leave it',t=>{
+  const f=fixture(t);f.open();
+  const tree=f.w.document.querySelector('.ws-file-tree'),text=()=>f.w.document.querySelector('.ws-file-text').textContent;
+  f.refresh();const [root,file]=f.calls.slice(-2);
+  f.reply({error:'Switch to this project to browse its files'},root);f.reply({error:'Switch to this project to browse its files'},file);
+  assert.equal(tree.textContent,'descriptionmain.js');assert.match(text(),/function first/);
+  f.refresh();const [root2,file2]=f.calls.slice(-2);
+  f.reply({error:'open main.js: no such file or directory',missing:true},file2);f.reply({path:'',directory:true,entries:[]},root2);
+  assert.equal(tree.textContent,'This folder is empty.');assert.equal(text(),'Select a file from the tree.');
+  f.w.document.querySelector('.ws-file-refresh').click();
+  f.reply({path:'',directory:true,entries:[{name:'main.js',path:'main.js',dir:false}]});
+  assert.equal(tree.textContent,'descriptionmain.js');
 });

@@ -3,11 +3,13 @@ package libro
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	r "github.com/michalCapo/g-sui/ui"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"io"
+	"io/fs"
 	"mime"
 	"net/http"
 	"os"
@@ -37,6 +39,7 @@ type fileResult struct {
 	Error     string      `json:"error,omitempty"`
 	Matches   []fileMatch `json:"matches,omitempty"`
 	Truncated bool        `json:"truncated,omitempty"`
+	Missing   bool        `json:"missing,omitempty"`
 }
 
 func readProjectFile(rootPath, path string) (fileResult, error) {
@@ -247,6 +250,7 @@ func registerFilesActions(app *r.App) {
 				result.Request = request
 				if err != nil {
 					result.Error = err.Error()
+					result.Missing = errors.Is(err, fs.ErrNotExist)
 				}
 			} else {
 				result.Error = "Switch to this project to browse its files"

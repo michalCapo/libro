@@ -1,5 +1,7 @@
 (function () {
   const states = new Map();
+  // Tokens are unique across mounts, so a reply to a removed panel never matches its replacement.
+  let sequence = 0;
   const shortcutHelp = [
     ['j / k', 'Move down / up'],
     ['h / l', 'Fold / open folder'],
@@ -67,6 +69,7 @@
     remember(s);
     if (history) record(s,location(s));
     if (parents===s.parents && path===s.file?.path && s.editor && !s.el.querySelector('.ws-file-text').hidden) {
+      s.previewRequest=null;
       if(position) s.editor.jump(position.line,position.column);
       if(history)record(s,location(s));
       if(focus)focusPreview(s);
@@ -95,7 +98,7 @@
     s.indexRequest=null;
     s.indexTimer=setTimeout(()=>{
       if(!s.filter.value)return;
-      const token=String(++s.sequence);s.indexRequest=token;
+      const token=String(++sequence);s.indexRequest=token;
       s.pending.set(token,{kind:'index',ignored:s.hidden.checked});s.status.textContent='Finding project files…';
       __ws.call('files.index',{sid:window.__libroWorkspaceSID,id:s.id,request:token,ignored:s.hidden.checked});
     },150);
@@ -152,7 +155,7 @@
         if(!input.value.trim()){message.textContent='Enter text to search the project.';return;}
         message.textContent='Searching…';
         s.searchTimer=setTimeout(()=>{
-          const token=String(++s.sequence);s.searchRequest=token;s.pending.set(token,{kind:'search'});
+          const token=String(++sequence);s.searchRequest=token;s.pending.set(token,{kind:'search'});
           __ws.call('files.search',{sid:window.__libroWorkspaceSID,id:s.id,request:token,query:input.value,ignored:p.ignored.checked});
         },200);return;
       }
@@ -252,7 +255,7 @@
     const origin=location(s),position=s.editor.position();
     s.navigationKind=kind;
     picker(s,'navigation');
-    const token=String(++s.sequence);s.navigationRequest=token;
+    const token=String(++sequence);s.navigationRequest=token;
     s.pending.set(token,{kind:'navigation',navigation:kind,origin});
     s.picker.loading=true;s.picker.message.textContent=navigationLoadingMessage(kind);
     __ws.call('files.navigate',{sid:window.__libroWorkspaceSID,id:s.id,request:token,path:s.file.path,parents:s.parents,kind,line:position.line,column:position.column,version:s.file.version});
@@ -389,7 +392,7 @@
     }
   }
   function request(s, path, preview = false, external = false, parents = s.parents, version = "") {
-    const token = String(++s.sequence);
+    const token = String(++sequence);
     s.pending.set(token, {path, preview, external, parents});
     if (preview) s.previewRequest = token;
     s.status.textContent = external ? 'Opening…' : 'Loading…';
@@ -398,8 +401,11 @@
   }
   // Reload loaded folders and the open text file; unchanged results are ignored.
   function refresh(s) {
-    for (const path of ['', ...s.expanded]) if (s.children.has(path)) s.pending.get(request(s,path)).refresh = true;
-    if (s.file && !s.file.mime) s.pending.get(request(s,s.file.path,true,false,s.parents,s.file.version)).refresh = true;
+    // The root always reloads, so an empty tree can recover.
+    for (const path of ['', ...s.expanded]) if (!path || s.children.has(path)) s.pending.get(request(s,path)).refresh = true;
+    // A file the user is opening wins over reloading the shown one.
+    const opening=[...s.pending.values()].some(item=>item.preview && !item.refresh);
+    if (s.file && !s.file.mime && !opening) s.pending.get(request(s,s.file.path,true,false,s.parents,s.file.version)).refresh = true;
     s.status.textContent = '';
   }
   function clearFile(s) {
@@ -468,7 +474,7 @@
     for (const s of states.values()) if (!s.el.isConnected) dispose(s.el);
     document.querySelectorAll('[data-files]').forEach(el => {
       if (states.get(el.dataset.files)?.el === el) return;
-      const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,sequence:0,parents:0,items:[],positions:new Map(),history:[],historyIndex:-1,recent:new Map()};
+      const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,parents:0,items:[],positions:new Map(),history:[],historyIndex:-1,recent:new Map()};
       states.set(s.id,s);
       el.addEventListener('focusout',()=>{s.leader=null;clearTimeout(s.leaderTimer);});
       s.preview = el.querySelector('.ws-file-render input');
@@ -525,6 +531,8 @@
       request(s,'');
       el.querySelector('.ws-file-refresh').onclick = () => refresh(s);
       s.refreshTimer=setInterval(()=>{
+        // Replies lost to a dropped connection must not stop refreshing.
+        for(const [token,item] of s.pending)if(Date.now()-(item.seen??=Date.now())>30000)s.pending.delete(token);
         if(document.hidden || !el.isConnected || !el.getClientRects().length || s.picker || s.pending.size)return;
         refresh(s);
       },3000);
@@ -610,7 +618,9 @@
     if (pending.preview && s.previewRequest !== result.request) return;
     if (pending.parents !== s.parents) s.parentRequest = false;
     if (pending.refresh && result.error) {
-      // A file or folder removed on disk leaves the view instead of showing stale content.
+      // Only a path removed on disk leaves the view. Other errors, such as a
+      // refresh that races a project switch, keep the shown content.
+      if (!result.missing) return;
       if (pending.path === s.file?.path) { clearFile(s); markOpen(s); }
       else if (s.children.delete(pending.path)) { s.expanded.delete(pending.path); render(s); }
       return;
