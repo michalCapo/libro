@@ -9,7 +9,7 @@ import (
 )
 
 func configurableTool(p Plugin) bool {
-	return p.Dock == "right" && (p.Type == AppTypeTerminal || p.Type == AppTypeURL) && p.ID != "terminal" && p.ID != "browser" && p.ID != "files" && p.ID != "notes"
+	return p.Dock == "right" && (p.Type == AppTypeTerminal || p.Type == AppTypeURL) && p.ID != "terminal" && p.ID != "browser" && p.ID != "files" && p.ID != "notes" && p.ID != "repos"
 }
 
 func editorToolID() string {

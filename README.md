@@ -134,7 +134,7 @@ One layout is saved per Libro instance. Only the first window restores it. Reloa
 
 ### Tools
 
-- Open the tool you need next to your assistants: Terminal, Browser, Notes, Files, Nvim, Git, Database, or any tool of your own.
+- Open the tool you need next to your assistants: Terminal, Browser, Notes, Files, Repositories, Nvim, Git, Database, or any tool of your own.
 - Use whatever tool you like. Name it, add its command or web address, and it shows up next to the built-in tools.
 - On Linux, Nvim (`vime`), Git (`vimg`), and Database (`vimd`) come with Libro. If you installed your own copy, Libro uses yours. On macOS and Windows, install them yourself.
 
@@ -194,6 +194,14 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 - Paste a PNG, JPEG, or GIF screenshot at the cursor, or use Insert image. Images stay in place between paragraphs when saved. Select an image and press Backspace or Delete to remove it.
 - Save keeps the editor open. Cancel discards unsaved changes. Send a saved note to the selected agent to execute it, with local paths to any attached images.
 
+### Repositories
+
+- Open Repositories with `Ctrl + Shift + G` or from the tool rail to check every Git project at once.
+- Each project shows uncommitted files in its checkout and thread worktrees, branches with commits to push, branches with commits to pull, and branches whose remote was deleted. Branches without an upstream count commits that no remote has yet.
+- Opening the panel shows local state at once, then fetches all remotes. Refresh rereads local state; Fetch checks the remotes again.
+- Projects that need attention come first. Turn on Show all to also list clean projects.
+- Move with Vim keys: `j` / `k` row, `gg` / `G` first / last, `{` / `}` project, `l` or `Enter` open a file list, `h` close it, `o` open the project. `r` refreshes, `f` fetches, `a` shows all, and `?` lists the keys.
+
 ### Settings
 
 - Light, dark, or follow your system theme.
@@ -237,6 +245,7 @@ New agent, Replace agent, Finish current thread, and Close project have no defau
 | `Ctrl + I` | Notes |
 | `Ctrl + E` | Nvim |
 | `Ctrl + G` | Git |
+| `Ctrl + Shift + G` | Repositories |
 | `Ctrl + D` | Database (in a terminal, `Ctrl + D` goes to the terminal) |
 | `Ctrl + Q` | Close the selected panel |
 | `Ctrl + ,` / `Ctrl + .` | Bigger / smaller panel |
@@ -308,11 +317,18 @@ Agents can do the same with the `thread` tool on the `libro` MCP server, or
 `libro thread`. Ask the agent to merge, squash, close, or discard its thread.
 It previews first, then finishes with the reviewed commits. Close keeps files,
 branch, and worktree, like **Close thread**. The tool only acts on the agent's
-own thread, and every action closes the thread, including the agent.
+own thread, and every finishing action closes the thread, including the agent.
+
+To push, install, or release after a merge, the agent passes `keepOpen`. The
+merge lands in the destination branch, but the thread and its agent stay open.
+The agent works in the destination checkout, then calls `cleanup` to remove the
+thread. Cleanup refuses a thread with commits made after that merge.
 
 ```bash
 libro thread '{"action":"preview"}'
 libro thread '{"action":"merge","sourceHead":"<sourceHead>","targetHead":"<targetHead>"}'
+libro thread '{"action":"merge","sourceHead":"<sourceHead>","targetHead":"<targetHead>","keepOpen":true}'
+libro thread '{"action":"cleanup","sourceHead":"<sourceHead>"}'
 libro thread '{"action":"close"}'
 libro thread '{"action":"discard","sourceHead":"<sourceHead>"}'
 ```

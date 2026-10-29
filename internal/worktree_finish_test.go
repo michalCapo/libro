@@ -264,6 +264,68 @@ func TestThreadControlFinishesOnlyTheCallersThread(t *testing.T) {
 	}
 }
 
+func TestThreadControlKeepOpenMergeThenCleanup(t *testing.T) {
+	state, root, branch := finishFixture(t)
+	oldSM, oldTM := sm, tm
+	sm, tm = NewStateManager(), components.NewTerminalManager()
+	t.Cleanup(func() { tm.StopAll(); sm, tm = oldSM, oldTM })
+	sm.states["finish"] = state
+	commitFinishFile(t, branch, "done.txt", "done\n")
+	preview := func() worktreeFinishPreview {
+		t.Helper()
+		_, info, err := controlThread("finish", branch, threadCommand{Action: "preview"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info.(worktreeFinishPreview)
+	}
+	info := preview()
+	if _, _, err := controlThread("finish", branch, threadCommand{Action: "cleanup", SourceHead: info.SourceHead}); err == nil {
+		t.Fatal("cleanup removed an unmerged thread")
+	}
+	_, result, err := controlThread("finish", branch, threadCommand{Action: "merge", SourceHead: info.SourceHead, TargetHead: info.TargetHead, KeepOpen: true})
+	if err != nil || result.(map[string]string)["targetPath"] != root {
+		t.Fatalf("keepOpen merge: %v %v", result, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "done.txt")); err != nil {
+		t.Fatal("merge did not land", err)
+	}
+	if _, err := os.Stat(branch); err != nil || state.ActiveProject != "repo/feature" {
+		t.Fatalf("keepOpen closed the thread: %v %s", err, state.ActiveProject)
+	}
+	merged, err := worktreeGit(root, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worktreeGit(root, "reset", "--hard", info.TargetHead); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := controlThread("finish", branch, threadCommand{Action: "cleanup", SourceHead: info.SourceHead}); err == nil {
+		t.Fatal("cleanup removed the only copy after the destination dropped the merge")
+	}
+	if _, err := worktreeGit(root, "reset", "--hard", merged); err != nil {
+		t.Fatal(err)
+	}
+	// Delivery may commit on the destination, for example a release version bump.
+	commitFinishFile(t, root, "VERSION", "1\n")
+	commitFinishFile(t, branch, "later.txt", "later\n")
+	if _, _, err := controlThread("finish", branch, threadCommand{Action: "cleanup", SourceHead: preview().SourceHead}); err == nil {
+		t.Fatal("cleanup dropped a commit made after the merge")
+	}
+	if _, err := worktreeGit(branch, "reset", "--hard", "HEAD~1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := controlThread("finish", branch, threadCommand{Action: "cleanup", SourceHead: preview().SourceHead}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(branch); !os.IsNotExist(err) {
+		t.Fatal("cleanup kept the worktree")
+	}
+	if _, err := worktreeGit(root, "rev-parse", "--verify", "refs/heads/feature"); err == nil {
+		t.Fatal("cleanup kept the thread branch")
+	}
+}
+
 func TestThreadControlCloseKeepsWorktree(t *testing.T) {
 	state, _, branch := finishFixture(t)
 	oldSM, oldTM := sm, tm

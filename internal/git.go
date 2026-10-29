@@ -131,6 +131,7 @@ func GitCreateWorktree(repoPath, branch, wtPath string) error {
 	if _, err := worktreeGit(repoPath, "config", "branch."+branch+".libro-base", base); err != nil {
 		return fmt.Errorf("worktree created, but could not record its source branch: %w", err)
 	}
+	_, _ = worktreeGit(repoPath, "config", "--unset", "branch."+branch+".libro-merged")
 	return nil
 }
 

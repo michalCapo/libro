@@ -351,7 +351,7 @@ func registerFinishThreadActions(app *r.App) {
 		if err != nil {
 			return finish(err, "", ""), nil
 		}
-		js, warning, url, conflict, err := finishThread(sid, info, method, sourceHead, targetHead, message, body)
+		js, warning, url, conflict, err := finishThread(sid, info, method, sourceHead, targetHead, message, body, false)
 		if conflict {
 			agentMerge = mergeAgentRequest(sid, info, method)
 		}
@@ -361,8 +361,10 @@ func registerFinishThreadActions(app *r.App) {
 
 // finishThread runs a reviewed finish. Conflict reports a failed local merge,
 // which leaves the thread open. The caller holds worktreeFinishMu.
-func finishThread(sid string, info worktreeFinishPreview, method, sourceHead, targetHead, message, body string) (js r.Result, warning, url string, conflict bool, err error) {
-	if sourceHead != info.SourceHead || method != "discard" && targetHead != info.TargetHead {
+// KeepOpen merges without cleanup, so the agent can push and deliver from the
+// destination; cleanup later removes the thread if it is still that commit.
+func finishThread(sid string, info worktreeFinishPreview, method, sourceHead, targetHead, message, body string, keepOpen bool) (js r.Result, warning, url string, conflict bool, err error) {
+	if sourceHead != info.SourceHead || method != "discard" && method != "cleanup" && targetHead != info.TargetHead {
 		return js, "", "", false, fmt.Errorf("the branches changed; refresh the preview and review again")
 	}
 	if info.Checkout {
@@ -376,9 +378,28 @@ func finishThread(sid string, info worktreeFinishPreview, method, sourceHead, ta
 		url, err = createFinishPR(info, message, body)
 		return js, "", url, false, err
 	}
-	if method != "discard" {
+	// Records "<thread commit> <destination commit after the merge>".
+	mergedKey := "branch." + info.Branch + ".libro-merged"
+	if method == "cleanup" {
+		merged, _ := worktreeGit(info.Root, "config", "--get", mergedKey)
+		source, result, _ := strings.Cut(merged, " ")
+		// The merge result must still be in the destination, or the thread holds the only copy.
+		if source != info.SourceHead || result == "" || info.Base == "" {
+			return js, "", "", false, fmt.Errorf("cleanup needs a thread merged with keepOpen and no commits since; merge it again first")
+		}
+		if _, err := worktreeGit(info.Root, "merge-base", "--is-ancestor", result, "refs/heads/"+info.Base); err != nil {
+			return js, "", "", false, fmt.Errorf("the merge is no longer in %s; merge the thread again first", info.Base)
+		}
+	} else if method != "discard" {
 		if err = integrateFinishThread(info, method, message); err != nil {
 			return js, "", "", true, err
+		}
+		if keepOpen {
+			var result string
+			if result, err = worktreeGit(info.TargetPath, "rev-parse", "HEAD"); err == nil {
+				_, err = worktreeGit(info.Root, "config", mergedKey, info.SourceHead+" "+result)
+			}
+			return js, "", "", false, err
 		}
 	}
 	js, warning, err = cleanupFinishedThread(sid, info, method == "discard")

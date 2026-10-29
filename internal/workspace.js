@@ -1019,6 +1019,7 @@
     renderThreadShortcuts();
     window.libroFiles?.init();
     window.libroNotes?.init();
+    window.libroRepos?.init();
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
       // Replacing a project's DOM can reset its hidden styles. Always reconcile
       // visibility with server state so inactive welcome screens cannot reappear.
@@ -1053,7 +1054,7 @@
     const signature = JSON.stringify(list);
     if (rail.dataset.signature === signature) return;
     rail.dataset.signature = signature; rail.replaceChildren();
-    const icons = {terminal:'terminal',browser:'language',files:'folder_open',notes:'description',nvim:'edit',lazyrepo:'account_tree',lazydata:'storage'};
+    const icons = {terminal:'terminal',browser:'language',files:'folder_open',notes:'description',repos:'fact_check',nvim:'edit',lazyrepo:'account_tree',lazydata:'storage'};
     list.forEach(p => { const entry = button(p.name, icons[p.id] || (p.type === 'url' ? 'language' : 'terminal'), () => tool(p.id)); applyToolIcon(entry, p); entry.dataset.toolId = p.id; rail.append(entry); });
     updateToolHints();
   }
@@ -1091,7 +1092,7 @@
     const all = frames(grid);
     // A selected side terminal cycles terminals; anything else cycles browsers.
     const terminals = sideTerminal(all.find(frame => frame.dataset.appId === window.__libroSelectedApp));
-    const panels = all.filter(frame => terminals ? sideTerminal(frame) : frame.dataset.appType === 'url' && !['files', 'notes'].includes(frame.dataset.plugin));
+    const panels = all.filter(frame => terminals ? sideTerminal(frame) : frame.dataset.appType === 'url' && !['files', 'notes', 'repos'].includes(frame.dataset.plugin));
     if (!panels.length) return;
     const selected = panels.findIndex(frame => frame.dataset.appId === window.__libroSelectedApp);
     const state = dockState(grid);
@@ -1109,7 +1110,7 @@
     const agents = all.filter(frame => frame.dataset.dock === 'center');
     if (agents.length < 2) return false;
     const selected = all.find(frame => frame.dataset.appId === window.__libroSelectedApp);
-    if (selected?.dataset.appType === 'url' && !['files', 'notes'].includes(selected.dataset.plugin) || sideTerminal(selected)) return false;
+    if (selected?.dataset.appType === 'url' && !['files', 'notes', 'repos'].includes(selected.dataset.plugin) || sideTerminal(selected)) return false;
     const state = dockState(grid);
     const current = Math.max(0, agents.findIndex(frame => frame.dataset.appId === state.agent));
     // Like a tab click, show the agent instead of leaving a tool over it.
@@ -1142,7 +1143,7 @@
     const customRows = document.getElementById('tool-key-custom-rows');
     if (customRows) {
       customRows.replaceChildren();
-      window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files', 'notes', 'nvim', 'lazyrepo', 'lazydata'].includes(p.id) && !p.removed).forEach(plugin => {
+      window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files', 'notes', 'repos', 'nvim', 'lazyrepo', 'lazydata'].includes(p.id) && !p.removed).forEach(plugin => {
         const row = node('div', 'ws-settings-row ws-agent-command-row');
         const label = node('label', '', plugin.name);
         const input = node('input', 'ws-agent-command');
@@ -1530,7 +1531,7 @@
         // Restoring selection on a project switch must preserve bottom visibility.
         // Explicit selection opens the terminal in select().
     }
-    if (selected?.dataset.appType === 'url' && !['files', 'notes'].includes(selected.dataset.plugin)) state.browser = selected.dataset.appId;
+    if (selected?.dataset.appType === 'url' && !['files', 'notes', 'repos'].includes(selected.dataset.plugin)) state.browser = selected.dataset.appId;
     if (selected?.dataset.dock === 'center') state.agent = selected.dataset.appId;
     grid.dataset.lastSelected = selected?.dataset.appId || '';
     // Preset sizes larger than the window shrink to fit instead of scrolling.
@@ -1813,7 +1814,7 @@
     document.querySelectorAll('#tool-key-status, [data-tool-key-status]').forEach(status => status.textContent = '');
     document.getElementById('agent-command-rows').replaceChildren();
     document.getElementById('tool-command-rows').replaceChildren();
-    window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files', 'notes'].includes(p.id) && !p.removed).forEach(p => addAgentRow(p, p.type === 'url' ? p.url : p.command, true));
+    window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files', 'notes', 'repos'].includes(p.id) && !p.removed).forEach(p => addAgentRow(p, p.type === 'url' ? p.url : p.command, true));
     fillEditorTools(editor);
     removedAgents = Object.fromEntries(window.__libroPlugins.filter(p => p.removed && p.dock === 'center' && p.type === 'terminal').map(p => [p.id, true]));
     window.__libroPlugins.filter(p => !p.removed && p.dock === 'center' && p.type === 'terminal').forEach(p => addAgentRow(p, commands[p.id] || p.command));

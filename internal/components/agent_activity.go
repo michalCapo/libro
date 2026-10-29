@@ -37,8 +37,9 @@ When finished, close only your session with agent-browser --session <name> close
 
 When the user asks to merge, squash, finish, close or discard this thread, use the Libro thread tool (CLI: libro thread; see libro thread --help), not raw git merge or worktree commands. The user's request is the confirmation.
 Merge or squash: commit your work, call action preview, then merge or squash with the sourceHead and targetHead from that preview. Merge is the default.
+To keep working after a merge, for example to push, install or release from the destination branch, pass keepOpen: true. You keep running; work in the returned targetPath, then call preview and cleanup with its sourceHead to remove the thread.
 Close: call action close. It keeps files, branch and worktree. Discard: call preview, then discard with its sourceHead, without committing. Discard deletes work, so use it only when the user asks to discard, delete or throw away the thread.
-Each of these closes the thread's panels, including this agent, so report what you are doing before the final call.`
+Merge or squash without keepOpen, cleanup, close and discard close the thread's panels, including this agent, so report what you are doing before the final call.`
 
 // Launch-local integrations never modify the user's agent settings. Only a
 // status and session metadata are written to temporary activity files.

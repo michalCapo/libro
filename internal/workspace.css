@@ -547,6 +547,53 @@ html.dark .ws-row-grid[data-agent-status=done]::before,html.dark .ws-row-grid[da
 .ws-notes-empty-text{margin:0;color:var(--ws-muted);font-size:12px}
 .ws-note-hint,.ws-notes-status{color:var(--ws-muted);font-size:12px}
 .ws-notes-status{min-height:18px}
+/* Repositories: one card per project; color marks what still needs doing. */
+.ws-repos{--ws-repos-changed:#b35c00;--ws-repos-push:#2452df;--ws-repos-pull:#7a3fd1;--ws-repos-ok:#1f7a3d;--ws-repos-problem:#c0262d;width:100%;height:100%;overflow:auto;background:var(--ws-bg);color:var(--ws-fg);padding:12px 16px;box-sizing:border-box;font-size:13px;scrollbar-width:thin}
+html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repos-pull:#c4a2ff;--ws-repos-ok:#6fd08f;--ws-repos-problem:#ff8a8f}
+.ws-repos-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ws-repos-heading{display:flex;align-items:baseline;gap:8px;min-width:0}
+.ws-repos-title{font-size:15px;font-weight:600}
+.ws-repos-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.ws-repos-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ws-muted);cursor:pointer}
+.ws-repos-button{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:8px;background:var(--ws-field);color:var(--ws-fg);padding:7px 12px;font:inherit;font-size:12px;min-height:32px}
+.ws-repos-button .material-icons-round{font-size:16px}
+.ws-repos-button:hover:not(:disabled){background:var(--ws-hover)}
+.ws-repos :is(button,input,summary):focus-visible{outline:2px solid var(--ws-accent);outline-offset:2px}
+.ws-repos button:disabled{opacity:.55;cursor:default}
+.ws-repos-status{min-height:18px;margin:4px 0 8px;color:var(--ws-muted);font-size:12px}
+.ws-repos-list{display:flex;flex-direction:column;gap:8px}
+.ws-repos-project{padding:10px 12px;border-radius:8px;background:var(--ws-sunken)}
+.ws-repos-project[data-attention=false]{background:transparent;border:1px solid var(--ws-line)}
+.ws-repos-project-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.ws-repos-project-title{display:flex;align-items:baseline;gap:8px;min-width:0;flex:1}
+.ws-repos-name{font-weight:600}
+.ws-repos-folder{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.ws-repos-muted{color:var(--ws-muted);font-size:12px}
+.ws-repos-counts{display:flex;flex-wrap:wrap;gap:6px}
+.ws-repos-badge{font-size:11px;font-weight:500;white-space:nowrap;color:var(--ws-repos-kind);background:color-mix(in srgb,var(--ws-repos-kind) 13%,transparent);border-radius:6px;padding:1px 7px}
+.ws-repos-changed{--ws-repos-kind:var(--ws-repos-changed)}
+.ws-repos-push{--ws-repos-kind:var(--ws-repos-push)}
+.ws-repos-pull{--ws-repos-kind:var(--ws-repos-pull)}
+.ws-repos-ok{--ws-repos-kind:var(--ws-repos-ok)}
+.ws-repos-problem{--ws-repos-kind:var(--ws-repos-problem)}
+.ws-repos-badge.ws-repos-muted{--ws-repos-kind:var(--ws-muted)}
+.ws-repos-error{margin:6px 0 0;color:var(--ws-repos-problem);font-size:12px;overflow-wrap:anywhere}
+.ws-repos-changes{margin-top:8px}
+.ws-repos-changes summary{cursor:pointer}
+.ws-repos-files,.ws-repos-branches{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.ws-repos-files li{display:flex;gap:10px;font-family:var(--ws-mono);font-size:12px;min-width:0}
+.ws-repos-code{flex:0 0 3ch;color:var(--ws-repos-changed)}
+.ws-repos-path{overflow-wrap:anywhere}
+.ws-repos-branch{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.ws-repos-branch-name{font-family:var(--ws-mono);font-size:12px}
+.ws-repos-fetched{margin-top:8px;font-size:11px}
+.ws-repos-empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:40px 16px;text-align:center;color:var(--ws-muted)}
+.ws-repos-empty .material-icons-round{font-size:28px}
+.ws-repos-empty p{margin:0}
+.ws-repos:focus-visible{outline:2px solid var(--ws-accent);outline-offset:-2px}
+.ws-repos-keys{margin:0 0 8px;padding:6px 10px;border-radius:8px;background:var(--ws-field);color:var(--ws-muted);font-size:12px}
+.ws-repos .is-current{border-radius:6px;box-shadow:inset 0 0 0 1px var(--ws-accent);background:color-mix(in srgb,var(--ws-accent) 10%,transparent)}
+.ws-repos-project-head.is-current,.ws-repos-branch.is-current,.ws-repos-files li.is-current,.ws-repos-changes summary.is-current{padding:0 4px;margin:0 -4px}
 .ws-note-editor{display:flex;flex-direction:column;gap:10px}
 .ws-note-section{display:flex;flex-direction:column;gap:8px;min-width:0}
 .ws-note-rich-editor{background:transparent}

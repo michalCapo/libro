@@ -671,6 +671,7 @@ func Run(assets embed.FS, desktop bool) error {
 	registerSettingsActions(app)
 	registerFilesActions(app)
 	registerNotesActions(app)
+	registerReposActions(app)
 	registerVoiceRoutes(app)
 	registerBackendAttachments(app)
 	registerWorkspaceAction(app, "app.notify", func(_ *r.Context, in actionAppNotifyInput) (r.Result, error) {

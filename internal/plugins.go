@@ -39,6 +39,7 @@ var builtinPlugins = []Plugin{
 	{ID: "lazydata", Name: "Database", Type: AppTypeTerminal, Command: "vimd", Dock: "right", Description: "Explore your data"},
 	{ID: "files", Name: "Files", Type: AppTypeURL, Dock: "right", Description: "Browse project files with Vim navigation"},
 	{ID: "notes", Name: "Notes", Type: AppTypeURL, Dock: "right", Description: "Track project notes and send them to an agent"},
+	{ID: "repos", Name: "Repositories", Type: AppTypeURL, Dock: "right", Description: "See uncommitted, unpushed and behind branches across all projects"},
 	{ID: "opencode", Name: "OpenCode", Type: AppTypeTerminal, Command: "opencode", Dock: "center", Description: "OpenCode coding agent"},
 }
 
