@@ -221,7 +221,7 @@ func switchToProjectWithAgent(sid, name, agentID string) (r.Result, bool) {
 }
 
 // Closing a thread's agent archives the thread and closes thread-local tools.
-// Notes and the project command remain available to the other project threads.
+// The project command and bottom terminals remain available to the other project threads.
 func closeWorkspaceApp(sid, appID string) r.Result {
 	target := sm.Get(sid).adjacentProjectThread()
 	apps, closedThread, err := sm.CloseThreadAgent(sid, appID)
@@ -675,7 +675,6 @@ func Run(assets embed.FS, desktop bool) error {
 
 	registerSettingsActions(app)
 	registerFilesActions(app)
-	registerNotesActions(app)
 	registerReposActions(app)
 	registerReleasesActions(app)
 	registerVoiceRoutes(app)

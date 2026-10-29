@@ -9,7 +9,7 @@ Run Codex, Claude, Pi, OpenCode, or any other CLI agent in its own thread. Open 
 Libro reopens your workspaces and resumes agents on start. Applications start when you start them. See [Restore on start](#restore-on-start).
 
 Electron remains the default frontend. The Go backend owns workspace state,
-terminals, application and child-agent tools, notes tools, and automatic updates.
+terminals, application and child-agent tools, and automatic updates.
 A frontend reload reattaches to the same workspace and replays the latest 4 MiB
 of terminal output. Application log tools still return at most 64 KiB.
 Quitting Electron stops Libro and its processes as before.
@@ -23,7 +23,7 @@ these attachments in private instance storage for agents to read.
 
 - Runs multiple agents in one project, each in its own thread.
 - Puts terminal and web applications in fixed-width tool panels beside the agent.
-- Includes Browser, Notes, Files, Terminal, and other tools, with support for your own commands and web addresses.
+- Includes Browser, Files, Terminal, and other tools, with support for your own commands and web addresses.
 - Keeps all your projects in one place. Switch between them with one click.
 - Shows when an assistant is busy (its icon spins), or finished or waiting for your answer (green check).
   A Claude turn that ends with a background shell or agent still running stays busy.
@@ -86,7 +86,7 @@ and English speech. Allow microphone access when your system asks.
 
 Run `make dev` (or `go run . --dev`) while your installed Libro stays open.
 The development instance uses port 8101 and starts with its own empty database,
-settings, notes, and browser profile. Its data persists across restarts.
+settings, and browser profile. Its data persists across restarts.
 The regular instance keeps port 8100 and its existing data.
 Libro listens on `127.0.0.1` only, so other computers cannot open it.
 
@@ -106,16 +106,11 @@ Flags must come before commands: `libro --dev application status`.
 agents and terminals launched inside Libro. An occupied port fails before the
 app opens a window or database.
 
-The notes editor is bundled locally into the Go binary. After changing
-`internal/note-editor.js`, run `npm ci` and `npm run build:notes`, and include the
-updated `internal/note-editor.bundle.js`. Run the editor integration tests with
-`xvfb-run -a node_modules/.bin/electron --no-sandbox --ozone-platform=x11 electron/notes.integration.cjs`.
-
 ## Features
 
 ### AI assistants
 
-- Agents start in the thread you have open. Each project thread has its own browser and tool state. Use `Ctrl + Shift + A` to add another agent to the same thread, or `Ctrl + Shift + N` to create a new worktree thread. Notes are shared across that project. Applications can be shared or run separately in each thread. Standalone threads are unchanged.
+- Agents start in the thread you have open. Each project thread has its own browser and tool state. Use `Ctrl + Shift + A` to add another agent to the same thread, or `Ctrl + Shift + N` to create a new worktree thread. Applications can be shared or run separately in each thread. Standalone threads are unchanged.
 - Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
@@ -137,7 +132,7 @@ One layout is saved per Libro instance. Only the first window restores it. Reloa
 
 ### Tools
 
-- Open the tool you need next to your assistants: Terminal, Browser, Notes, Files, Repositories, Nvim, Git, Database, or any tool of your own.
+- Open the tool you need next to your assistants: Terminal, Browser, Files, Repositories, Nvim, Git, Database, or any tool of your own.
 - Use whatever tool you like. Name it, add its command or web address, and it shows up next to the built-in tools.
 - On Linux, Nvim (`vime`), Git (`vimg`), and Database (`vimd`) come with Libro. If you installed your own copy, Libro uses yours. On macOS and Windows, install them yourself.
 
@@ -151,7 +146,7 @@ One layout is saved per Libro instance. Only the first window restores it. Reloa
 - Open the project list with `Ctrl + Shift + P`. Jump to a numbered thread with `Ctrl + 1` to `Ctrl + 9`. Base and worktree threads both get numbers.
 - Projects without open threads are dimmed in All projects.
 - Project-backed threads keep the project folder as their working directory.
-- Each thread remembers its own browser, files, terminal, and other thread-local tools. Threads in the same project share Notes. Project settings choose a shared application or one application per thread.
+- Each thread remembers its own browser, files, terminal, and other thread-local tools. Project settings choose a shared application or one application per thread.
 
 ![Project sidebar: projects with their running assistants listed underneath](demo/projects-sidebar.png)
 
@@ -189,14 +184,6 @@ Semantic navigation requires `gopls` for Go, `typescript-language-server` (with 
 Project search and fuzzy file discovery require `rg` (ripgrep) on PATH. Search is literal, uses smart case, skips files over 1 MB, and returns up to 500 matching lines. File discovery indexes up to 20,000 paths; the UI reports limits and errors. Clipboard access requires the desktop app or browser clipboard permission.
 
 Rebuild the bundled viewer after source changes with `npm run build:files`. Check it with `npm run check:files` and `node --test electron/files-navigation.test.cjs`.
-
-### Notes
-
-- Open Notes with `Ctrl + I`. Notes are shared across all branches, threads, and worktrees of a project.
-- Expand a note to edit it inline. Search and filters stay visible. Switch the filter to see Open, Archived, or all notes.
-- Edit formatted text in one area using Markdown shortcuts or the formatting toolbar.
-- Paste a PNG, JPEG, or GIF screenshot at the cursor, or use Insert image. Images stay in place between paragraphs when saved. Select an image and press Backspace or Delete to remove it.
-- Save keeps the editor open. Cancel discards unsaved changes. Send a saved note to the selected agent to execute it, with local paths to any attached images.
 
 ### Repositories
 
@@ -255,7 +242,6 @@ New agent, Replace agent, and Close project have no default shortcut. Find them 
 | `Ctrl + Shift + B` | New browser panel |
 | `Ctrl + [` / `Ctrl + ]` | Previous / next browser panel when a browser is focused, otherwise previous / next agent panel |
 | `Ctrl + F` | Files |
-| `Ctrl + I` | Notes |
 | `Ctrl + E` | Nvim |
 | `Ctrl + G` | Git |
 | `Ctrl + Shift + G` | Repositories |
@@ -275,7 +261,7 @@ Change shortcuts in **Settings**. **Restore defaults** resets them.
 
 New Codex, Claude (including Ollama-launched Claude), and OpenCode sessions
 register the `libro` MCP server automatically. It provides `application`,
-`notes`, `children`, and `thread` tools. Pi receives instructions for the equivalent CLI commands.
+`children`, `thread`, and `repositories` tools. Pi receives instructions for the equivalent CLI commands.
 Custom agents can register `libro mcp` as a stdio MCP server.
 Agents also receive instructions to use the separately installed `agent-browser`
 CLI for browser testing, with a unique session per agent/thread. Libro does not
@@ -405,38 +391,6 @@ A `starting` response confirms a launch request; `running` does not guarantee
 HTTP readiness. Agents must check status first and use the returned URL rather
 than starting an unmanaged server. Only the saved command can be run.
 Restart existing agent sessions to load the scoped MCP schema and instructions.
-
-### Agent note management
-
-The `notes` tool on the `libro` MCP server supports:
-
-- `list`: note summaries, with optional `status`, `limit` (default 100, max 200), and `offset`.
-- `read`: the full note, including Markdown body and saved images, by `id`.
-- `create`: requires `title`; accepts `body` and `status`.
-- `set_status`: requires `id` and `status`; preserves the description and images.
-- `delete`: permanently removes the note by `id`.
-
-Statuses are `new` (Open) and `archived`. Create defaults to `new`.
-Use full note IDs from `list` or `create`. Read/create results use `state`
-for the saved status, matching Libro's note storage.
-
-The project defaults to the agent's workspace. Agent calls stay bound to that
-workspace even when another project is selected. Outside an agent session, an
-explicit `project` path may select a registered project or worktree. No Notes or
-browser panel needs to be open. This uses the same backend bridge and enable/pause
-controls as application control. Restart existing agent sessions to discover
-the new tool. Open note lists refresh after agent changes; unsaved editor
-text is preserved.
-
-CLI fallback:
-
-```sh
-libro notes '{"action":"list"}'
-libro notes '{"action":"create","title":"Fix login","body":"Steps to reproduce"}'
-libro notes '{"action":"read","id":"NOTE_ID"}'
-libro notes '{"action":"set_status","id":"NOTE_ID","status":"archived"}'
-libro notes '{"action":"delete","id":"NOTE_ID"}'
-```
 
 ### Repository refresh
 

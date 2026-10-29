@@ -25,10 +25,10 @@ func TestMCPDiscovery(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[2]), &discovery); err != nil {
 		t.Fatal(err)
 	}
-	if len(discovery.Result.Tools) != 5 {
+	if len(discovery.Result.Tools) != 4 {
 		t.Fatalf("got %d tools", len(discovery.Result.Tools))
 	}
-	for i, name := range []string{"application", "notes", "children", "thread", "repositories"} {
+	for i, name := range []string{"application", "children", "thread", "repositories"} {
 		if discovery.Result.Tools[i].Name != name {
 			t.Fatalf("tool %d = %s, want %s", i, discovery.Result.Tools[i].Name, name)
 		}

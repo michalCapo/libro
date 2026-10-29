@@ -28,7 +28,7 @@ One-shot builds, lint checks, and tests that do not launch another application s
 // AgentInstructions adds browser testing guidance to the shared application rules.
 const AgentInstructions = ApplicationInstructions + `
 
-Use the agent-browser CLI for browsing and browser testing. Libro's MCP provides application, notes, children, thread and repositories tools; it does not provide browser automation.
+Use the agent-browser CLI for browsing and browser testing. Libro's MCP provides application, children, thread and repositories tools; it does not provide browser automation.
 Before first use, run agent-browser --help and read its bundled guide with agent-browser skills get core --full when available.
 Choose a unique session name for this agent/thread and pass --session <name> on every browser command. Keep using that name for this task so concurrent agents do not share a browser. Do not use the default session or close other agents' sessions.
 Typical flow: agent-browser --session <name> open <url>, then snapshot -i, click @ref or fill @ref "text", and screenshot <path>. Include --session <name> on each command and take a fresh snapshot after navigation or page changes.
@@ -136,7 +136,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 		}
 		data, _ := json.Marshal(map[string]any{
 			"hooks":       hooks,
-			"permissions": map[string]any{"allow": []string{"mcp__libro__application", "mcp__libro__notes", "mcp__libro__children", "mcp__libro__thread", "mcp__libro__repositories"}},
+			"permissions": map[string]any{"allow": []string{"mcp__libro__application", "mcp__libro__children", "mcp__libro__thread", "mcp__libro__repositories"}},
 		})
 		filename, content = "claude.json", string(data)
 		mcpJSON, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"libro": libroMCP}})
@@ -170,7 +170,7 @@ export default function (pi) {
   pi.on('agent_settled', () => status('done'));
   pi.on('session_shutdown', () => status('idle'));
 }`
-		args = " --extension " + shellQuote(filepath.Join(dir, filename)) + " --append-system-prompt " + shellQuote(AgentInstructions+"\nControl the saved project start command with libro application status|start|restart|stop|logs; see libro application --help. Application actions preserve the user’s active project and thread. Manage project notes with libro notes; see libro notes --help for create, list, read, set_status, and delete. Merge or discard this thread with libro thread; see libro thread --help.")
+		args = " --extension " + shellQuote(filepath.Join(dir, filename)) + " --append-system-prompt " + shellQuote(AgentInstructions+"\nControl the saved project start command with libro application status|start|restart|stop|logs; see libro application --help. Application actions preserve the user’s active project and thread. Merge or discard this thread with libro thread; see libro thread --help.")
 	case "opencode":
 		filename = "opencode.mjs"
 		content = `import { writeFileSync } from 'node:fs';

@@ -864,8 +864,6 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 	var leftSide *r.Node
 	if appDock(app) == "center" {
 		leftSide = r.Div("ws-panel-title").Render(r.Span("").Text(workspaceAppName(app)))
-	} else if app.PluginID == "notes" {
-		leftSide = r.Div("flex-1")
 	} else if app.PluginID == "files" {
 		leftSide = r.Div("ws-panel-title").Render(r.I("material-icons-round").Text("folder_open"), r.Span("").Text("Files"))
 	} else if app.PluginID == "repos" {
@@ -1033,11 +1031,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		Attr("data-dock", appDock(app)).
 		Attr("data-plugin", pluginForApp(app).ID).
 		Attr("style", appFrameStyle(app, index))
-	content := renderAppContent(app, sid, placeholder, clickOverlay)
-	if app.PluginID == "notes" {
-		return frame.Render(content)
-	}
-	return frame.Render(toolbar, content)
+	return frame.Render(toolbar, renderAppContent(app, sid, placeholder, clickOverlay))
 }
 
 func renderAppContent(app Application, sid string, placeholder bool, clickOverlay *r.Node) *r.Node {
@@ -1076,9 +1070,6 @@ func renderAppPlaceholder(app Application) *r.Node {
 }
 
 func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
-	if app.PluginID == "notes" {
-		return renderNotes(app)
-	}
 	if app.PluginID == "files" {
 		return renderFiles(app)
 	}

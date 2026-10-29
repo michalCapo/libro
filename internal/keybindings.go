@@ -17,7 +17,6 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"previous-browser", "Previous agent, browser or terminal panel", "Ctrl+["},
 	{"next-browser", "Next agent, browser or terminal panel", "Ctrl+]"},
 	{"files", "Files", "Ctrl+F"},
-	{"notes", "Notes", "Ctrl+I"},
 	{"repos", "Repositories", "Ctrl+Shift+G"},
 	{"nvim", "Nvim", "Ctrl+E"},
 	{"lazyrepo", "Git", "Ctrl+G"},
@@ -137,6 +136,8 @@ func toolKeybindings() map[string]string {
 			// discarding the current thread. Finishing the thread got
 			// Ctrl+Shift+M unless a shortcut was already set.
 			delete(saved, "releases")
+			// Notes was removed.
+			delete(saved, "notes")
 			if _, exists := saved["discard-thread"]; !exists && saved["finish-thread"] == "" {
 				delete(saved, "finish-thread")
 			}
@@ -197,7 +198,7 @@ func renderToolKeybindings() *r.Node {
 		{"General", []string{"command-palette", "settings", "voice"}},
 		{"Projects & threads", []string{"project-picker", "close-project", "new-thread", "finish-thread", "discard-thread", "thread-actions", "run-project", "stop-project"}},
 		{"Agents", []string{"new-agent", "new-agent-panel", "replace-agent"}},
-		{"Tools", []string{"terminal", "browser", "new-browser", "new-terminal", "previous-browser", "next-browser", "files", "notes", "repos"}},
+		{"Tools", []string{"terminal", "browser", "new-browser", "new-terminal", "previous-browser", "next-browser", "files", "repos"}},
 		{"Panels", []string{"previous-agent", "next-agent", "close-panel", "panel-size-down", "panel-size-up", "panel-size-max"}},
 		{"Zoom", []string{"zoom-in", "zoom-out", "zoom-reset"}},
 	}

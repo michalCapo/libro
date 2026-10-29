@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//go:embed workspace.css workspace.js voice.js files.js file-editor.bundle.js notes.js note-editor.bundle.js repos.js page_attachments.js tailwind.min.css material-icons-round.woff2
+//go:embed workspace.css workspace.js voice.js files.js file-editor.bundle.js repos.js page_attachments.js tailwind.min.css material-icons-round.woff2
 var workspaceAssets embed.FS
 
 func workspaceJS() string {
@@ -17,7 +17,7 @@ func workspaceJS() string {
 	code.WriteString(`window.__libroToolKeys=props.keys;window.__libroDefaultToolKeys=props.defaults;window.__libroPageToolsAutoExecute=props.autoexecute;window.__libroWorkspaceSID=props.sid;window.__libroPlugins=props.plugins;window.__libroAgentAutoUpdate=props.agentUpdates;`)
 	code.WriteString(`var wsStyle=document.createElement('style');wsStyle.textContent=props.css;document.head.appendChild(wsStyle);`)
 	code.WriteString(components.VoiceInputJS())
-	for _, name := range []string{"file-editor.bundle.js", "files.js", "note-editor.bundle.js", "notes.js", "repos.js", "voice.js", "page_attachments.js", "workspace.js"} {
+	for _, name := range []string{"file-editor.bundle.js", "files.js", "repos.js", "voice.js", "page_attachments.js", "workspace.js"} {
 		data, _ := workspaceAssets.ReadFile(name)
 		code.Write(data)
 	}
@@ -37,14 +37,10 @@ func registerWidgets(app *r.App) {
 	app.Widget("workspace", "function(el, props){"+workspaceJS()+"}")
 	app.Widget("terminal", "function(el){"+terminalFrameSetupJS()+`window.__libroMountTerminal(el);return function(){window.__libroDisposeTerminal(el);};}`)
 	app.Widget("files", `function(el){queueMicrotask(function(){if(el.isConnected)window.libroFiles.init();});return function(){window.libroFiles.dispose(el);};}`)
-	app.Widget("notes", `function(el){queueMicrotask(function(){if(el.isConnected)window.libroNotes.init();});return function(){window.libroNotes.dispose(el);};}`)
 	app.Widget("repos", `function(el){queueMicrotask(function(){if(el.isConnected)window.libroRepos.init();});return function(){window.libroRepos.dispose(el);};}`)
 }
 
 func workspaceAppName(app Application) string {
-	if app.PluginID == "notes" && (app.Name == "" || app.Name == "Notes") {
-		return "Notes"
-	}
 	if app.Name != "" {
 		return app.Name
 	}
@@ -114,7 +110,7 @@ func workspaceProjectLabel(state *AppState) string {
 		return ""
 	}
 	// A worktree thread shows the name of its project, not of its folder.
-	name := state.noteScope(state.ActiveProject)
+	name := state.parentProjectScope(state.ActiveProject)
 	projectLabel := filepath.Base(name)
 	for _, project := range state.Projects {
 		if project.Name == name && (project.Path != "" || project.Label != "") {
@@ -134,7 +130,7 @@ func renderWorkspaceStrip(state *AppState, sid, placeholderID string) *r.Node {
 		children = append(children, renderAppFrameBase(app, i, i == state.SelectedIndex, sid, app.ID == placeholderID))
 	}
 	node := r.Div("ws-project").ID(projectMainID(state.ActiveProject)).Render(
-		r.Div("ws-grid").ID(stripID(state.ActiveProject)).Attr("data-workspace-project", state.ActiveProject).Attr("data-project-scope", projectScope).Attr("data-note-project", state.noteScope(state.ActiveProject)).Attr("data-thread", fmt.Sprint(thread != nil)).Attr("data-managed", fmt.Sprint(thread != nil && thread.Managed)).Attr("data-project-label", projectLabel).Render(children...),
+		r.Div("ws-grid").ID(stripID(state.ActiveProject)).Attr("data-workspace-project", state.ActiveProject).Attr("data-project-scope", projectScope).Attr("data-thread", fmt.Sprint(thread != nil)).Attr("data-managed", fmt.Sprint(thread != nil && thread.Managed)).Attr("data-project-label", projectLabel).Render(children...),
 	)
 	return node.Render(centerSelectedNode(state))
 }

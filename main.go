@@ -48,8 +48,6 @@ func main() {
 	var err error
 	if len(args) > 0 {
 		switch args[0] {
-		case "notes":
-			err = libro.RunNotesCLI(args[1:], os.Stdout)
 		case "application":
 			err = libro.RunApplicationCLI(args[1:], os.Stdout)
 		case "children":

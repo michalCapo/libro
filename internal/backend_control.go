@@ -129,7 +129,6 @@ type backendCommand struct {
 	Project   string        `json:"project"`
 	Command   childCommand  `json:"command"`
 	Thread    threadCommand `json:"thread"`
-	Note      noteCommand   `json:"note"`
 	Panel     string        `json:"panel,omitempty"`
 	URL       string        `json:"url,omitempty"`
 }
@@ -169,9 +168,6 @@ func dispatchBackendCommand(sid string, command backendCommand) (r.Result, any, 
 		}
 		_, result, err = controlApplication(sid, command.Project, "status")
 		return patch, result, err
-	case "notes":
-		result, err := controlNotes(sid, command.Note)
-		return clientScript("window.libroNotes?.refresh();"), result, err
 	case "repositories":
 		return clientScript("window.libroRepos?.refresh();"), map[string]any{"refreshed": true}, nil
 	case "children":

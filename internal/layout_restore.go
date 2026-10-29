@@ -242,8 +242,8 @@ func (sm *StateManager) restoreLayout(sid string) {
 			if n, err := strconv.Atoi(strings.TrimPrefix(saved.ID, "app-")); strings.HasPrefix(saved.ID, "app-") && err == nil && n > sm.nextID {
 				sm.nextID = n
 			}
-			// Managed child agents have no command to start again.
-			if saved.PluginID == "project-command" || saved.Type == AppTypeTerminal && saved.Command == "" {
+			// Managed child agents have no command to start again. Notes panels no longer exist.
+			if saved.PluginID == "project-command" || saved.PluginID == "notes" || saved.Type == AppTypeTerminal && saved.Command == "" {
 				continue
 			}
 			if i <= workspace.SelectedIndex {

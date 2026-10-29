@@ -137,9 +137,6 @@ components:
     textColor: "{colors.muted}"
     rounded: "{rounded.badge}"
     padding: "1px 5px"
-  note-row:
-    textColor: "{colors.fg}"
-    padding: "12px 4px"
   palette-row:
     textColor: "{colors.fg}"
     rounded: "{rounded.row}"
@@ -186,17 +183,15 @@ Use the system sans-serif stack in `body`; there is no separate display font. Bo
 
 ## Layout
 
-Project agents start in the selected workspace. Ctrl+Shift+A opens the agent picker and adds the chosen agent as another panel in the current workspace. New thread (Ctrl+T) opens a project picker: General (no folder), Recent projects with the current one first, then All projects; the first recent project is selected, so Enter makes a thread there. Own worktree is ticked by default and creates a new worktree thread without opening the agent picker; cleared, it opens the project folder. The sidebar shows every thread that is not discarded as cards, grouped by project, with General threads (no project) last; closed threads fade and open again on click. All projects at the bottom also lists every project. Ctrl+Q on a thread with no panel asks to close it (Space) or discard it (Enter); Esc cancels. Ctrl+Enter opens a new terminal panel and Ctrl+Shift+Enter the Terminal. Replace agent starts a fresh session in the current thread and keeps its tools open. Notes and bottom terminal processes are shared across the project; browser and other tools belong to each thread. Project settings choose a shared application or one application per thread, with automatic ports and optional per-thread overrides. Standalone threads keep their existing behavior.
+Project agents start in the selected workspace. Ctrl+Shift+A opens the agent picker and adds the chosen agent as another panel in the current workspace. New thread (Ctrl+T) opens a project picker: General (no folder), Recent projects with the current one first, then All projects; the first recent project is selected, so Enter makes a thread there. Own worktree is ticked by default and creates a new worktree thread without opening the agent picker; cleared, it opens the project folder. The sidebar shows every thread that is not discarded as cards, grouped by project, with General threads (no project) last; closed threads fade and open again on click. All projects at the bottom also lists every project. Ctrl+Q on a thread with no panel asks to close it (Space) or discard it (Enter); Esc cancels. Ctrl+Enter opens a new terminal panel and Ctrl+Shift+Enter the Terminal. Replace agent starts a fresh session in the current thread and keeps its tools open. Bottom terminal processes are shared across the project; browser and other tools belong to each thread. Project settings choose a shared application or one application per thread, with automatic ports and optional per-thread overrides. Standalone threads keep their existing behavior.
 
 The shell has a 56px titlebar, a 28px statusbar, and left project navigation. The sidebar is 216px wide. At 760px or less its width is `min(216px, 50vw)`, so the main area keeps space. The brand and trailing status text hide, and empty-state headings become 24px.
 
-The main area is chrome. Its center, right, and bottom docks are cards with a 6px gap and a 6px bottom margin; the tool overlay check counts the gaps. Each thread has at most one center agent panel. Project-backed threads reuse the same Notes panel and bottom terminals; those panels move with the selected thread without restarting. Shared applications also move with the selected thread; per-thread application panels stay in their own workspaces. The right dock keeps multiple tools alive but shows one selected tool at a time. The agent panel has no size of its own: it fills the space the tools leave, with a 600px minimum. If the selected right tool and a 600px agent do not fit together, the tool overlays the right side. A panel size wider than the visible area shrinks to fit it, so the main row never scrolls sideways. The bottom dock can show the assigned application command below the main row. A shared tab row selects the running agent and tools. All tool panels in a thread share one width, so the row ends with one size picker for them.
+The main area is chrome. Its center, right, and bottom docks are cards with a 6px gap and a 6px bottom margin; the tool overlay check counts the gaps. Each thread has at most one center agent panel. Project-backed threads reuse the same bottom terminals; those panels move with the selected thread without restarting. Shared applications also move with the selected thread; per-thread application panels stay in their own workspaces. The right dock keeps multiple tools alive but shows one selected tool at a time. The agent panel has no size of its own: it fills the space the tools leave, with a 600px minimum. If the selected right tool and a 600px agent do not fit together, the tool overlays the right side. A panel size wider than the visible area shrinks to fit it, so the main row never scrolls sideways. The bottom dock can show the assigned application command below the main row. A shared tab row selects the running agent and tools. All tool panels in a thread share one width, so the row ends with one size picker for them.
 
 Tool width presets are XS 320px, SM 480px, MD 640px, LG 960px, XL 1280px, and 2XL 1920px. These are panel widths, not viewport breakpoints. Legacy 3XL 2560px and MAX (full strip width, formerly called FULL) remain available as steps beyond 2XL; the existing screen-width policy disables 3XL on Full HD or smaller screens. MAX uses available workspace width. Maximizing temporarily fills the workspace and hides other panels.
 
 Toolbars are at least 48px tall and allow controls to wrap. Popups are centered with viewport height limits and internal scrolling. Commands and the app launcher are at most 420px wide with a 24px viewport gutter; other existing dialogs retain their component-specific widths. At small widths, preserve the dock and tab model and overlay the selected right tool instead of stacking panels.
-
-Notes uses a single scrolling column with 16px padding at every panel width. Its toolbar and action row wrap with 8px gaps. The editor stacks fields with 16px gaps; image previews stay within the panel width and a 360px maximum height. Preserve this layout at XS (320px) as well as MD (640px).
 
 ## Elevation & Depth
 
@@ -218,18 +213,6 @@ Use the frontmatter radii by role: small keycaps and size badges, gently rounded
 - **Palettes:** commands, apps, and project results use compact rounded rows with muted icons and a 14px primary label. Command and app rows are one line, at least 36px high; the description or scope trails the label in smaller muted text and truncates. Hover uses the hover surface; the selected row uses the popup-row fill without a ring. Keyboard hints stay muted in a borderless footer; searchable lists show a no-results state.
 - **Dialogs:** form labels are 12px semibold muted text that sit close to their field. The submit action uses the accent fill; a destructive submit, such as discarding a thread, uses red.
 - **Shortcuts:** search above grouped rows; 50px minimum row height on a sunken group split by thin gaps, right-aligned filled keycaps. Long labels wrap; keycaps stay on one line.
-
-### Notes
-
-Notes extends the quiet desktop controls inside a project tool panel. Open it to a list filtered to New, with New, Archived, and All options and an Add note action. Rows are 44px rounded cards with a 2px gap, a wrapping title, and muted state text; hover uses the hover fill. Show an icon and a plain message when the filter or search has no notes. Search matches title and body.
-
-The note list header includes the project name. Lists stay bound to their project and refresh when switching projects.
-
-Selecting a row expands its inline editor in an accordion, with one note open at a time. The open card uses the sunken fill and hides its row title, so the title is not shown twice. Search and filters stay visible. Notes have no title field: the first text line of the body is the title, styled at 17px semibold in the editor. Older notes with a separate title get it as the first heading when opened. The Markdown editor is borderless, with a quiet icon toolbar, and keeps pasted images inline with the text.
-
-One action row sits below the editor: Send to agent (primary, icon and label), the destination project select, an icon Move button, the status line, and a quiet icon Delete that turns red on hover. Moving requires a saved note with no unsaved changes and a selected destination. The row wraps at narrow widths.
-
-Save note keeps the editor open and shows Saved. Cancel discards draft changes and returns to the list. Send to agent sends the saved note to the active agent in the same project; it is disabled until the note is saved and has no unsaved changes. Keep loading, unsaved, saving, sending, success, and error messages in the status area. Controls reuse filled, borderless fields and blue keyboard-focus outlines. Notes opens with Ctrl+I by default; the shortcut is configurable in Settings.
 
 ## Do's and Don'ts
 

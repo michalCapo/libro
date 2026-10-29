@@ -2,16 +2,34 @@ package libro
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	r "github.com/michalCapo/g-sui/ui"
 )
+
+// setupControlState gives a test its own database and a "test" session with two projects.
+func setupControlState(t *testing.T) {
+	t.Helper()
+	oldDB, oldSM := db, sm
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "libro.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sm = NewStateManager()
+	t.Cleanup(func() { _ = db.Close(); db, sm = oldDB, oldSM })
+	createTables()
+	path := t.TempDir()
+	sm.states["test"] = &AppState{ActiveProject: "one", Projects: []Project{{Name: "one", Path: path}, {Name: "two", Path: filepath.Join(path, "two")}}}
+}
 
 func TestBackendToolsWithoutFrontend(t *testing.T) {
 	sid, root := childFixture(t)
@@ -68,16 +86,6 @@ func TestBackendToolTransportAndScope(t *testing.T) {
 	result, err = scopedChildrenCommand(json.RawMessage(`{"action":"list"}`), root)
 	if err != nil || string(result) != "[]" {
 		t.Fatalf("children transport: %v", err)
-	}
-	sm.Get(sid).ActiveProject = ""
-	result, err = NotesCommand(json.RawMessage(`{"action":"create","title":"Backend note"}`))
-	if err != nil || !strings.Contains(string(result), `"title":"Backend note"`) {
-		t.Fatalf("notes without selection: %v", err)
-	}
-	for _, action := range []string{"list", "delete"} {
-		if _, err := NotesCommand(json.RawMessage(`{"action":"` + action + `","project":"/another-workspace"}`)); err == nil {
-			t.Fatal("notes escaped agent scope")
-		}
 	}
 	path, err := controlConnectionPath()
 	if err != nil {

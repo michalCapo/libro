@@ -17,7 +17,7 @@ import (
 )
 
 func TestAgentUpdatePreferenceMigration(t *testing.T) {
-	setupNoteControl(t)
+	setupControlState(t)
 	if agentAutoUpdate() != nil {
 		t.Fatal("missing desktop preference was treated as enabled")
 	}
@@ -161,7 +161,7 @@ func TestBackendAgentUpdatesVerifyAndContinue(t *testing.T) {
 }
 
 func TestBackendAgentUpdatesCancelWhileAwaitingMigration(t *testing.T) {
-	setupNoteControl(t)
+	setupControlState(t)
 	app := r.NewApp()
 	t.Cleanup(func() { _ = app.Close() })
 	stop := startAgentUpdates(app)

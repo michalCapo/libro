@@ -65,7 +65,7 @@ Request order on the server:
 
 1. TLS handshake. Reject without a client certificate.
 2. `VerifyConnection`: certificate fingerprint. Mark unknown certificates as unpaired. This check also runs on TLS resumption; `VerifyPeerCertificate` does not.
-3. The authorization handler wraps the **whole** mux (pages, assets, `/__ws`, terminals, notes, voice, proxy). g-sui page middleware is not enough.
+3. The authorization handler wraps the **whole** mux (pages, assets, `/__ws`, terminals, voice, proxy). g-sui page middleware is not enough.
 4. Unpaired certificate: only `POST /pair`, otherwise 403.
 5. By `Host`: `app-N.localhost` goes to the proxy, everything else to the Libro UI. Unknown `app-*` host returns 404 and must not fall through to the Libro UI.
 
@@ -178,7 +178,7 @@ Does not work for apps with hardcoded `localhost:N` in HTML/JS, CORS, or OAuth c
 
 The bridge (`internal/agent_control.go`) reads a local descriptor and calls Electron on the laptop. It does not work on a server without Electron. Remote agents need:
 
-- `notes`, `application`, `children`, `thread`, and MCP handled directly in the backend;
+- `application`, `children`, `thread`, and MCP handled directly in the backend;
 - a local authenticated endpoint on the server (also used by `libro devices remove`);
 - the same workspace restrictions as today.
 
@@ -226,7 +226,7 @@ This is part of the first version, not a later add-on.
 
 - Two concurrent `POST /pair` with the same token: exactly one succeeds.
 - Expired or used token: 403.
-- Unpaired certificate: 403 on every route except `/pair` (pages, assets, `/__ws`, terminals, notes, voice, proxy).
+- Unpaired certificate: 403 on every route except `/pair` (pages, assets, `/__ws`, terminals, voice, proxy).
 - No certificate: handshake fails.
 - Changed server `fp`: laptop rejects the connection.
 - Device revoke: open WebSocket and terminal close within 1 s. New connection fails.

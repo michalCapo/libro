@@ -12,7 +12,7 @@ import (
 )
 
 func TestBackendAttachmentStorage(t *testing.T) {
-	setupNoteControl(t)
+	setupControlState(t)
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("LIBRO_INSTANCE", "")
 	sm.Get("test").Apps = []Application{{ID: "browser", Type: AppTypeURL}}

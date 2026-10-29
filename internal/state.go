@@ -996,9 +996,6 @@ func (sm *StateManager) MoveSharedProjectApps(sessionID, target string) []Applic
 			if app.PluginID == "project-command" {
 				sameProject = applicationRoot(s, workspace) == applicationRoot(s, target)
 			}
-			if app.PluginID == "notes" {
-				sameProject = s.noteScope(workspace) == s.noteScope(target)
-			}
 			if sameProject && isSharedProjectApp(app) && !existing[sharedKey(app)] {
 				moved = append(moved, app)
 				targetSnapshot.Apps = append(targetSnapshot.Apps, app)
@@ -1143,12 +1140,6 @@ func (sm *StateManager) AddVirtualProject(sessionID, name, path, parentProject s
 	}
 	for _, p := range s.Projects {
 		if p.Name == name {
-			return false
-		}
-	}
-	if db != nil {
-		if _, err := db.Exec(`UPDATE notes SET project = ? WHERE project = ?`, parentProject, name); err != nil {
-			log.Printf("db: failed to share worktree notes: %v", err)
 			return false
 		}
 	}
