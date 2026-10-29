@@ -555,7 +555,7 @@ html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repo
 .ws-repos-title{font-size:15px;font-weight:600}
 .ws-repos-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
 .ws-repos-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ws-muted);cursor:pointer}
-.ws-repos-button{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:8px;background:var(--ws-field);color:var(--ws-fg);padding:7px 12px;font:inherit;font-size:12px;min-height:32px}
+.ws-repos-button{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:8px;background:transparent;color:var(--ws-fg);padding:7px 12px;font:inherit;font-size:12px;min-height:32px}
 .ws-repos-button .material-icons-round{font-size:16px}
 .ws-repos-button:hover:not(:disabled){background:var(--ws-hover)}
 .ws-repos :is(button,input,summary):focus-visible{outline:2px solid var(--ws-accent);outline-offset:2px}
