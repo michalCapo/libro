@@ -112,6 +112,9 @@ html.dark .ws-thread-row[data-kind=worktree] .ws-row-branch{color:#c4b5fd}
 .ws-project-item[data-panels=true]{background:var(--ws-hover)}
 /* The selected card lifts off the chrome surface instead of drawing a ring; a selected thread or project lifts even before it has panels. */
 .ws-project-item:has(>.ws-thread-row[aria-current=true]),.ws-project-group:not(:has(.ws-thread-row[aria-current=true]))>.ws-project-item:has(>.ws-project-row[aria-current=true]){background:var(--ws-raised);box-shadow:var(--ws-shadow)}
+/* Dark shadows barely show, so the selected card is lighter than the panel cards, gets a thin edge, and lifts its muted text to keep contrast. */
+html.dark .ws-project-item:has(>.ws-thread-row[aria-current=true]),html.dark .ws-project-group:not(:has(.ws-thread-row[aria-current=true]))>.ws-project-item:has(>.ws-project-row[aria-current=true]){--ws-muted:#adadb8;background:#36363e;box-shadow:inset 0 0 0 1px #4a4a54}
+.ws-thread-row[aria-current=true] .ws-row-project{color:var(--ws-fg)}
 /* Row actions sit before the shortcut badge so the number stays last; thread rows keep them on the last line. */
 .ws-project-item:has(.ws-project-shortcut)>.ws-button{position:absolute;right:31px;top:50%;translate:0 -50%}
 .ws-project-item:has(>.ws-row-grid .ws-project-shortcut)>.ws-button{top:auto;bottom:2px;translate:none}
