@@ -216,7 +216,7 @@ func registerReposActions(app *r.App) {
 			return
 		}
 		result := map[string]any{"id": data.ID, "request": data.Request}
-		projects, allowed := repoProjects(data.SID, data.ID)
+		projects, allowed := repoProjects(data.SID, data.ID, "repos")
 		if allowed {
 			if data.Fetch {
 				repoFetchMu.Lock()
@@ -231,9 +231,9 @@ func registerReposActions(app *r.App) {
 	})
 }
 
-// repoProjects lists the session's Git projects once each; worktree threads
-// are read through their parent repository.
-func repoProjects(sid, panel string) ([]Project, bool) {
+// repoProjects lists the session's Git projects once each, when the panel is
+// an open plugin tool; worktree threads are read through their parent repository.
+func repoProjects(sid, panel, plugin string) ([]Project, bool) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	state := sm.states[sid]
@@ -242,7 +242,7 @@ func repoProjects(sid, panel string) ([]Project, bool) {
 	}
 	allowed := false
 	for _, app := range state.Apps {
-		allowed = allowed || app.ID == panel && app.PluginID == "repos"
+		allowed = allowed || app.ID == panel && app.PluginID == plugin
 	}
 	if !allowed {
 		return nil, false

@@ -134,7 +134,7 @@ One layout is saved per Libro instance. Only the first window restores it. Reloa
 
 ### Tools
 
-- Open the tool you need next to your assistants: Terminal, Browser, Notes, Files, Repositories, Nvim, Git, Database, or any tool of your own.
+- Open the tool you need next to your assistants: Terminal, Browser, Notes, Files, Repositories, Releases, Nvim, Git, Database, or any tool of your own.
 - Use whatever tool you like. Name it, add its command or web address, and it shows up next to the built-in tools.
 - On Linux, Nvim (`vime`), Git (`vimg`), and Database (`vimd`) come with Libro. If you installed your own copy, Libro uses yours. On macOS and Windows, install them yourself.
 
@@ -203,6 +203,14 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 - Projects that need attention come first. Turn on Show all to also list clean projects.
 - Move with Vim keys: `j` / `k` row, `gg` / `G` first / last, `{` / `}` project, `l` or `Enter` open a file list, `h` close it, `o` open the project. `r` refreshes, `f` fetches, `a` shows all, and `?` lists the keys.
 
+### Releases
+
+- Open Releases from the tool rail or the command palette to see, for every Git project, whether the latest version is installed, on stage, or in production.
+- Press `e` on a project, or click its edit button, to add targets such as Installed, Stage, or Production. Each target has a command that prints the version running there, for example `libro --version`, `ssh prod cat /srv/app/VERSION`, or `curl -s https://stage.example.com/version`. Commands run in the project folder, in your login shell, for up to 30 seconds.
+- Libro matches the printed version to a Git tag (`1.2.0` finds `v1.2.0`), a commit, or `git describe` output, and compares it with the project's current branch. Each target shows **latest**, how many commits it is missing (open the row to list them), commits that are not on the branch, an unknown version, or that the command failed.
+- Projects with a target that is behind, unknown, or failing come first. Turn on Show all to also list projects without targets. Results are kept for five minutes when the panel reopens; Refresh runs the commands again.
+- Move with the same keys as Repositories: `j` / `k`, `gg` / `G`, `{` / `}`, `l` / `h`, `o` open the project, `e` edit targets, `r` refresh, `a` show all, `?` keys.
+
 ### Settings
 
 - Light, dark, or follow your system theme.
@@ -232,7 +240,7 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 | `Caps Lock` | Voice typing |
 | `Alt + ,` / `Alt + .` | Lower / raise Claude effort for this session (Codex has this built in) |
 
-New agent, Replace agent, Finish current thread, and Close project have no default shortcut. Find them in the command palette or set one in Settings.
+New agent, Replace agent, Finish current thread, Close project, and Releases have no default shortcut. Find them in the command palette or set one in Settings.
 
 ### Panels and tools
 

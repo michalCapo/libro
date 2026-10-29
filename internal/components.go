@@ -871,6 +871,8 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 		leftSide = r.Div("ws-panel-title").Render(r.I("material-icons-round").Text("folder_open"), r.Span("").Text("Files"))
 	} else if app.PluginID == "repos" {
 		leftSide = r.Div("ws-panel-title").Render(r.I("material-icons-round").Text("fact_check"), r.Span("").Text("Repositories"))
+	} else if app.PluginID == "releases" {
+		leftSide = r.Div("ws-panel-title").Render(r.I("material-icons-round").Text("rocket_launch"), r.Span("").Text("Releases"))
 	} else if app.Type == AppTypeURL {
 		urlInputID := fmt.Sprintf("urlinput-%s", app.ID)
 		btnCls := "flex items-center justify-center w-6 h-6 rounded-sm transition-colors duration-75 cursor-pointer shrink-0"
@@ -1085,6 +1087,9 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 	}
 	if app.PluginID == "repos" {
 		return renderRepos(app)
+	}
+	if app.PluginID == "releases" {
+		return renderReleases(app)
 	}
 	if app.Type == AppTypeURL {
 		// Render both the Electron webview and an iframe fallback for plain
@@ -1408,6 +1413,7 @@ func commandPopupJS(sid string) string {
             {id:'files',label:'Toggle files',scope:'tools',icon:'folder_open',keywords:'tree explorer files',run:function(){closePalette();libroWorkspace.tool('files');}},
             {id:'nvim',label:'Toggle Nvim',scope:'tools',icon:'edit',keywords:'editor vim',run:function(){closePalette();libroWorkspace.tool('nvim');}},
             {id:'repos',label:'Toggle repositories',scope:'tools',icon:'fact_check',keywords:'git status uncommitted unpushed pull push all projects',run:function(){closePalette();libroWorkspace.tool('repos');}},
+            {id:'releases',label:'Toggle releases',scope:'tools',icon:'rocket_launch',keywords:'deploy install installed production stage staging version published missing all projects',run:function(){closePalette();libroWorkspace.tool('releases');}},
             {id:'lazyrepo',label:'Toggle Git',scope:'tools',icon:'account_tree',keywords:'repository changes',run:function(){closePalette();libroWorkspace.tool('lazyrepo');}},
             {id:'lazydata',label:'Toggle database',scope:'tools',icon:'storage',keywords:'data sql',run:function(){closePalette();libroWorkspace.tool('lazydata');}},
             {id:'bottom-terminal',label:'Toggle bottom terminal',scope:'workspace',icon:'vertical_align_bottom',shortcut:'Ctrl+'+String.fromCharCode(96),keywords:'shell bottom',run:function(){closePalette();libroWorkspace.bottom();}},
@@ -3599,7 +3605,7 @@ func keyboardShortcutsJS(sid string) string {
 						if (!container.contains(document.activeElement)) fileTree.focus({ preventScroll: true });
 						return;
 					}
-					var repos = container.querySelector('[data-repos]');
+					var repos = container.querySelector('[data-repos], [data-releases]');
 					if (repos) {
 						if (!container.contains(document.activeElement)) (repos.querySelector('.is-current') || repos).focus({ preventScroll: true });
 						return;

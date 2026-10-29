@@ -1,6 +1,7 @@
 package components
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -58,6 +59,12 @@ func userShell() string {
 		}
 	}
 	return "bash"
+}
+
+// ShellCommand runs command once in the user's login shell, without a terminal.
+// It is not interactive, so rc-file banners do not end up in its output.
+func ShellCommand(ctx context.Context, command string) *exec.Cmd {
+	return exec.CommandContext(ctx, userShell(), "-lc", command)
 }
 
 // UserShellBase returns the basename of the user's shell (e.g. "zsh", "fish").

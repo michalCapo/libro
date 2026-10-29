@@ -19,6 +19,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"files", "Files", "Ctrl+F"},
 	{"notes", "Notes", "Ctrl+I"},
 	{"repos", "Repositories", "Ctrl+Shift+G"},
+	{"releases", "Releases", ""},
 	{"nvim", "Nvim", "Ctrl+E"},
 	{"lazyrepo", "Git", "Ctrl+G"},
 	{"lazydata", "Database", "Ctrl+D"},
@@ -189,7 +190,7 @@ func renderToolKeybindings() *r.Node {
 		{"General", []string{"command-palette", "settings", "voice"}},
 		{"Projects & threads", []string{"project-picker", "close-project", "new-thread", "finish-thread", "thread-actions", "run-project", "stop-project"}},
 		{"Agents", []string{"new-agent", "new-agent-panel", "replace-agent"}},
-		{"Tools", []string{"terminal", "browser", "new-browser", "new-terminal", "previous-browser", "next-browser", "files", "notes", "repos"}},
+		{"Tools", []string{"terminal", "browser", "new-browser", "new-terminal", "previous-browser", "next-browser", "files", "notes", "repos", "releases"}},
 		{"Panels", []string{"previous-agent", "next-agent", "close-panel", "panel-size-down", "panel-size-up", "panel-size-max"}},
 		{"Zoom", []string{"zoom-in", "zoom-out", "zoom-reset"}},
 	}

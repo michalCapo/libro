@@ -595,6 +595,15 @@ html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repo
 .ws-repos .is-current{border-radius:6px;box-shadow:inset 0 0 0 1px var(--ws-accent);background:color-mix(in srgb,var(--ws-accent) 10%,transparent)}
 .ws-repos .is-current:focus{outline:none}
 .ws-repos-project-head.is-current,.ws-repos-branch.is-current,.ws-repos-files li.is-current,.ws-repos-changes summary.is-current{padding:0 4px;margin:0 -4px}
+.ws-releases-inline{display:inline-flex}
+.ws-releases-version{font-family:var(--ws-mono);overflow-wrap:anywhere}
+.ws-releases-intro{margin:0 0 8px}
+.ws-releases-form{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.ws-releases-form p{margin:0}
+.ws-releases-row{display:grid;grid-template-columns:minmax(80px,1fr) minmax(0,3fr) auto;gap:6px;align-items:center}
+.ws-releases-input{min-width:0;padding:7px 10px;border:0;border-radius:7px;background:var(--ws-field);color:var(--ws-fg);font:12px var(--ws-mono)}
+.ws-releases-input.ws-releases-name{font-family:inherit}
+.ws-releases-form-actions{margin-left:0;justify-content:flex-end}
 .ws-note-editor{display:flex;flex-direction:column;gap:10px}
 .ws-note-section{display:flex;flex-direction:column;gap:8px;min-width:0}
 .ws-note-rich-editor{background:transparent}
