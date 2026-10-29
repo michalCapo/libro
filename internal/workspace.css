@@ -74,8 +74,12 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 .ws-project-new-thread:disabled{cursor:not-allowed}
 .ws-project-remove:hover{background:color-mix(in srgb,#c9362b 12%,transparent);color:#b42318}
 html.dark .ws-project-remove:hover{color:#ff8a80}
-.ws-project-shortcut{flex:none;min-width:18px;height:18px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;margin-left:auto;border:0;border-radius:4px;background:var(--ws-raised);color:var(--ws-muted);font:500 10.5px/1 var(--ws-mono)}
-.ws-project-row[aria-current=true] .ws-project-shortcut{background:var(--ws-accent);color:var(--ws-on-accent)}
+.ws-project-shortcut{flex:none;min-width:18px;height:18px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;margin-left:auto;border:1px solid var(--ws-status,transparent);border-radius:4px;background:var(--ws-raised);color:var(--ws-muted);font:500 10.5px/1 var(--ws-mono)}
+/* The shortcut badge border shows agent status; the selected badge fills with it. */
+.ws-project-row[data-agent-status=working]{--ws-status:var(--ws-accent)}
+.ws-project-row[data-agent-status=done]{--ws-status:#15803d}
+html.dark .ws-project-row[data-agent-status=done]{--ws-status:#4ade80}
+.ws-project-row[aria-current=true] .ws-project-shortcut{background:var(--ws-status,var(--ws-accent));color:var(--ws-on-accent)}
 .ws-project-terminal{width:16px;height:16px;flex-shrink:0;fill:none;stroke:#15803d;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 html.dark .ws-project-terminal{stroke:#4ade80}
 .ws-project-row:has(.ws-project-terminal)>span{flex:0 1 auto}
@@ -128,13 +132,11 @@ html.dark .ws-thread-row[data-agent-status=done] .ws-thread-status{color:#4ade80
 .ws-project-row[data-agent-status=working] .material-icons-round{color:var(--ws-accent);animation:ws-agent-working 1s linear infinite}
 .ws-project-row[data-agent-status=done] .material-icons-round{color:#15803d;animation:ws-agent-done .45s cubic-bezier(.22,1,.36,1)}
 html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4ade80}
-/* Card rows name the status before the corner icon, in the icon color; working and done rows tint the project name too. Both stay pinned to the right edge when the hover actions widen the badge column. */
+/* Card rows name the status before the corner icon, in the icon color; the project name keeps its default color. Both stay pinned to the right edge when the hover actions widen the badge column. */
 .ws-row-grid[data-agent-status=working]::before,.ws-row-grid[data-agent-status=done]::before{grid-area:status/status/status/icon;justify-self:end;margin-right:24px;font-size:11px;font-weight:500;line-height:14px}
 .ws-row-grid[data-agent-status=working]::before{content:"Working";color:var(--ws-accent)}
-.ws-row-grid[data-agent-status=working]>.ws-row-project{color:var(--ws-accent)}
 .ws-row-grid[data-agent-status=done]::before{content:"Done";color:#15803d}
-.ws-row-grid[data-agent-status=done]>.ws-row-project{color:#15803d}
-html.dark .ws-row-grid[data-agent-status=done]::before,html.dark .ws-row-grid[data-agent-status=done]>.ws-row-project{color:#4ade80}
+html.dark .ws-row-grid[data-agent-status=done]::before{color:#4ade80}
 @media(prefers-reduced-motion:reduce){.ws-project-row[data-agent-status] .material-icons-round{animation:none}}
 .ws-sidebar-search{display:flex;align-items:center;gap:10px;min-width:0;min-height:36px;flex:1;padding:6px 8px;color:var(--ws-muted);background:transparent;border:0;border-radius:8px;text-align:left;font:inherit}
 .ws-sidebar-search span{flex:1}.ws-sidebar-search:hover{background:var(--ws-hover)}

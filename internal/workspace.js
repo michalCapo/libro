@@ -666,7 +666,7 @@
       const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button'; row.title = thread.name; row.dataset.projectKey = thread.id; row.dataset.kind = 'thread';
       row.setAttribute('aria-current', String(thread.id === window.__libroActiveProject));
       const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
-      row.append(icon); rowLabel(row, thread.name, '', thread.project || 'General');
+      row.append(icon); rowLabel(row, thread.name, '', thread.project || 'general');
       row.onclick = () => {
         closeSettings();
         // A closed thread can still be active, so it switches to reopen.
