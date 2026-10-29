@@ -457,7 +457,7 @@
   // A removed thread lands on a project whose row then hides, so the first open thread shown takes its place.
   function threadRemoved() {
     leaveProject(window.__libroActiveProject);
-    [...document.querySelectorAll('.ws-thread-row,.ws-project-item[data-panels=true]>.ws-project-row')]
+    sidebarRows('.ws-thread-row,.ws-project-item[data-panels=true]>.ws-project-row')
       .find(row => row.dataset.closed !== 'true' && row.parentElement.dataset.archived !== 'true' && !row.closest('.ws-project-group[data-left=true]>.ws-project-item') && row.checkVisibility())?.click();
   }
   function confirmAgentMerge(state, request) {
@@ -796,6 +796,8 @@
       settings.setAttribute('aria-haspopup', 'menu');
       row.oncontextmenu = event => { event.preventDefault(); threadMenu(project, row, {x:event.clientX, y:event.clientY}); };
       settings.classList.add('ws-project-settings');
+      // Threads lists worktree cards across projects in the order they were created.
+      item.style.order = project.order || 0;
       item.append(row, settings); branches.append(item);
     });
   }
@@ -803,6 +805,8 @@
     group.dataset.projectName = name;
     row.draggable = true;
     row.ondragstart = event => {
+      // Threads orders cards by creation, so only All projects reorders projects.
+      if (root.dataset.allProjects !== 'true') { event.preventDefault(); return; }
       event.dataTransfer.effectAllowed = 'move';
       event.dataTransfer.setData('text/plain', name);
       group.classList.add('ws-project-dragging');
@@ -844,7 +848,7 @@
   function renderThreadShortcuts() {
     let index = 0;
     const open = row => row.dataset.closed !== 'true' && (row.dataset.kind !== 'thread' || row.parentElement.dataset.archived !== 'true') && !(row.dataset.kind === 'base' && row.dataset.projectKey === leftProject);
-    document.querySelectorAll('.ws-project-row').forEach(row => {
+    sidebarRows('.ws-project-row').forEach(row => {
       // A project with open panels and no thread rows of its own is numbered too.
       const available = row.dataset.kind === 'project'
         ? row.parentElement.dataset.panels === 'true' && ![...row.closest('.ws-project-group').querySelectorAll('.ws-thread-row')].some(open)
@@ -859,6 +863,13 @@
       badge.title = 'Ctrl+' + number;
       row.setAttribute('aria-keyshortcuts', 'Control+' + number);
     });
+  }
+  // Threads shows worktree cards in creation order; standalone threads follow in their own list.
+  function sidebarRows(selector) {
+    const rows = [...document.querySelectorAll(selector)];
+    if (root.dataset.allProjects === 'true') return rows;
+    const rank = row => row.closest('#workspace-project-list') ? Number(row.parentElement.style.order) || 0 : Number.MAX_SAFE_INTEGER;
+    return rows.sort((a, b) => rank(a) - rank(b));
   }
   // Each sound gets a fresh context. A long-lived one can be missing after a
   // reload or silently dead after sleep or an audio device change.

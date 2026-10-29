@@ -374,6 +374,7 @@ test('base and worktree rows are numbered without requiring agents', () => {
       assert.equal(selector, '.ws-project-row')
       return rows
     } },
+    root: { dataset: { allProjects: 'true' } },
     node: () => ({ setAttribute() {} }),
   })
   vm.runInContext(render + '\nrenderThreadShortcuts();', context)
@@ -409,7 +410,7 @@ test('an open project is numbered only while it has no thread rows', () => {
   const idle = row('project', { dataset: { panels: 'false' } })
   const worktree = row('worktree', { dataset: {} })
   let rows = [project, idle]
-  const context = vm.createContext({ document: { querySelectorAll: () => rows }, node: () => ({ setAttribute() {} }) })
+  const context = vm.createContext({ document: { querySelectorAll: () => rows }, root: { dataset: { allProjects: 'true' } }, node: () => ({ setAttribute() {} }) })
   vm.runInContext(render + ';renderThreadShortcuts()', context)
   assert.deepEqual([project.dataset.projectShortcut, idle.dataset.projectShortcut], ['1', ''])
   children.push(worktree); rows = [project, worktree, idle]
@@ -716,7 +717,7 @@ test('standalone thread numbers continue after project agent threads and skip ar
       assert.equal(selector, '.ws-project-row')
       return rows
     } },
-    leftProject: '',
+    leftProject: '', root: { dataset: { allProjects: 'true' } },
     node: () => ({ setAttribute() {} }),
   })
   vm.runInContext(render + ';renderThreadShortcuts()', context)
@@ -937,13 +938,14 @@ test('project groups contain the original branch first and number every worktree
   const shortcuts = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  // Each sound gets a fresh context.'))
   function node(tag, classes = '', text = '') {
     const el = {
-      tag, classes, textContent: text, dataset: {}, attributes: {}, children: [],
+      tag, classes, textContent: text, dataset: {}, style: {}, attributes: {}, children: [],
       classList: { add() {} },
       setAttribute(key, value) { this.attributes[key] = value },
       removeAttribute(key) { delete this.attributes[key] },
       append(...children) { children.forEach(child => { child.parentElement = this; this.children.push(child) }); this.lastElementChild = this.children.at(-1) },
       replaceChildren() { this.children = [] },
       querySelector(selector) { return this.children.find(child => child.classes.split(' ').includes(selector.slice(1))) || null },
+      closest(selector) { return selector === '#workspace-project-list' ? list : null },
     }
     return el
   }
@@ -962,7 +964,7 @@ test('project groups contain the original branch first and number every worktree
     },
     node, button: (label, icon, onclick) => Object.assign(node('button', '', label), { onclick }),
     call: (action, data) => calls.push([action, data]), closeSettings() {}, innerWidth:1000, leftProject:'',
-    newThread() {}, projectSettings() {},
+    newThread() {}, projectSettings() {}, root: { dataset: { allProjects: 'true' } },
     threadMenu: (project, trigger) => calls.push(['menu', project.name, trigger.textContent]),
   }
   vm.runInNewContext(render + shortcuts + ';renderProjects();renderThreadShortcuts();', context)
@@ -996,6 +998,22 @@ test('project groups contain the original branch first and number every worktree
   vm.runInNewContext(render + shortcuts + ';renderProjects();renderThreadShortcuts();', context)
   assert.equal(flatten(list.children[1]).find(el => el.dataset.kind === 'base').dataset.projectShortcut, '3')
   assert.equal(flatten(list).some(el => el.classes === 'ws-project-agent'), false)
+  // Threads numbers worktrees by creation, so a new thread in the first project comes last.
+  context.root.dataset.allProjects = 'false'
+  context.window.__libroProjects = [
+    { kind:'project', name:'mail', path:'/mail', isGit:true, currentBranch:'main' },
+    { kind:'worktree', name:'mail', branch:'new', path:'/mail-new', order:2 },
+    { kind:'project', name:'notes', path:'/notes', isGit:true, currentBranch:'main' },
+    { kind:'worktree', name:'notes', branch:'old', path:'/notes-old', order:1 },
+  ]
+  // A standalone thread sits in its own list below, so it is numbered after every worktree.
+  const standalone = node('button', 'ws-project-row'); standalone.dataset.kind = 'thread'; standalone.parentElement = node('div'); standalone.closest = () => null
+  const projectRows = context.document.querySelectorAll
+  context.document.querySelectorAll = selector => [standalone, ...projectRows(selector)]
+  vm.runInNewContext(render + shortcuts + ';renderProjects();renderThreadShortcuts();', context)
+  const worktrees = flatten(list).filter(el => el.dataset.kind === 'worktree' && el.tag === 'button')
+  assert.deepEqual(worktrees.map(row => [row.dataset.projectKey, row.parentElement.style.order, row.dataset.projectShortcut]), [['mail/new', 2, '2'], ['notes/old', 1, '1']])
+  assert.equal(standalone.dataset.projectShortcut, '3')
 })
 
 test('voice uses Caps Lock and leaves Tab available to the browser', () => {

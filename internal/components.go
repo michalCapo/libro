@@ -2745,6 +2745,7 @@ type jsProject struct {
 	ApplicationMode string   `json:"applicationMode"`
 	ApplicationPort int      `json:"applicationPort,omitempty"`
 	ApplicationURL  string   `json:"applicationURL,omitempty"`
+	Order           int      `json:"order,omitempty"`
 }
 
 // projectsJS publishes the list of projects (and their worktrees) into
@@ -2814,6 +2815,10 @@ func projectItems(state *AppState) []jsProject {
 		slices.SortStableFunc(wts, func(a, b Worktree) int {
 			return state.worktreeOrder[applicationPath(a.Path)] - state.worktreeOrder[applicationPath(b.Path)]
 		})
+		order := make(map[string]int, len(wts))
+		for _, wt := range wts {
+			order[wt.Path] = state.worktreeOrder[applicationPath(wt.Path)] + 1
+		}
 		sm.mu.Unlock()
 		var refs []string
 		for _, wt := range wts {
@@ -2862,6 +2867,7 @@ func projectItems(state *AppState) []jsProject {
 				IsGit:           true,
 				IsActive:        wtActive,
 				Closed:          state.closedWorkspaces[vtName],
+				Order:           order[wt.Path],
 			})
 		}
 	}
