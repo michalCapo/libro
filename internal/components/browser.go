@@ -563,10 +563,9 @@ var devtoolsPanelSyncers = {};
 var browserModeState = {}; // appID -> 'normal' | 'insert'
 var pageToolState = {}; // appID -> '' | 'annotate' | 'area'
 var mobileViewState = {}; // appID -> viewport preview styles and resize observer
-var mobileViewportOrientation = {}; // appID -> last xs/sm/md/xl orientation until browser instance closes
+var mobileViewportOrientation = {}; // appID -> last sm/md/xl orientation until browser instance closes
 var mobileSizes = {
-	xs: {label: 'XS', width: 320, height: 568},
-	sm: {label: 'SM', width: 480, height: 896},
+	sm: {label: 'SM', width: 412, height: 892},
 	md: {label: 'MD', width: 640, height: 932},
 	xl: {label: 'XL', width: 720, height: 1280, tablet: true}
 };
@@ -881,7 +880,7 @@ window.__libroToggleSelectedBrowserMobile = function(appID) {
 	if (!target) return;
 	var current = (mobileViewState[appID] && mobileViewState[appID].mode) || 'normal';
 	var orientation = (mobileViewState[appID] && mobileViewState[appID].orientation) || mobileViewportOrientation[appID] || 'portrait';
-	var modes = ['normal', 'xs', 'sm', 'md', 'xl'];
+	var modes = ['normal', 'sm', 'md', 'xl'];
 	var next = modes[(modes.indexOf(current) + 1) % modes.length];
 	// Viewport preview sizes are applied locally with inline styles. Avoid also
 	// resizing the app through the server, which causes a second layout jump when
