@@ -49,6 +49,7 @@ type Application struct {
 type Project struct {
 	Name          string
 	Path          string
+	Label         string // name shown in Libro; blank shows the folder name
 	IsGitRepo     bool   // detected at load time, not persisted
 	Virtual       bool   // true for worktree-derived projects
 	ParentProject string // name of parent project (for virtual projects)
@@ -738,6 +739,34 @@ func (sm *StateManager) AddProjectWithOptions(sessionID, name, path string, tran
 	}
 	s.Projects = append(s.Projects, p)
 	return true
+}
+
+// displayName is the name Libro shows for the project.
+func (p Project) displayName() string {
+	if p.Label != "" {
+		return p.Label
+	}
+	if p.Path != "" {
+		return filepath.Base(p.Path)
+	}
+	return p.Name
+}
+
+// RenameProject sets the name Libro shows for a saved project.
+func (sm *StateManager) RenameProject(sessionID, name, label string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	s := sm.states[sessionID]
+	if s == nil {
+		return false
+	}
+	for i, p := range s.Projects {
+		if p.Name == name && !p.Virtual {
+			s.Projects[i].Label = label
+			return true
+		}
+	}
+	return false
 }
 
 // ReorderProjects moves the named projects into the given order and returns

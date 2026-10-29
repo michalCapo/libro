@@ -112,8 +112,8 @@ func workspaceProjectLabel(state *AppState) string {
 	name := state.noteScope(state.ActiveProject)
 	projectLabel := filepath.Base(name)
 	for _, project := range state.Projects {
-		if project.Name == name && project.Path != "" {
-			projectLabel = filepath.Base(project.Path)
+		if project.Name == name && (project.Path != "" || project.Label != "") {
+			projectLabel = project.displayName()
 			break
 		}
 	}

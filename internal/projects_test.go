@@ -133,3 +133,26 @@ func TestReorderProjects(t *testing.T) {
 		t.Fatalf("saved order = %v", got)
 	}
 }
+
+func TestRenameProjectKeepsPath(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "projects.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	path := filepath.Join(t.TempDir(), "lukas")
+	DBSaveProject("lukas", path)
+	DBRenameProject("lukas", "Lukas shop")
+	DBSaveProject("lukas", path)
+	projects := DBLoadProjects()
+	if len(projects) != 1 || projects[0].Name != "lukas" || projects[0].Path != path || projects[0].displayName() != "Lukas shop" {
+		t.Fatalf("renamed project = %+v", projects)
+	}
+	DBRenameProject("lukas", "")
+	if got := DBLoadProjects()[0].displayName(); got != "lukas" {
+		t.Fatalf("blank name shows %q, want folder name", got)
+	}
+}

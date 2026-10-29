@@ -164,7 +164,8 @@ func createTables() {
 		CREATE TABLE IF NOT EXISTS projects (
 			name     TEXT PRIMARY KEY,
 			path     TEXT NOT NULL,
-			position INTEGER NOT NULL DEFAULT 0
+			position INTEGER NOT NULL DEFAULT 0,
+			label    TEXT NOT NULL DEFAULT ''
 		);
 
 	`)
@@ -181,6 +182,15 @@ func createTables() {
 			if _, err := db.Exec("ALTER TABLE threads ADD COLUMN " + column + " TEXT NOT NULL DEFAULT ''"); err != nil {
 				log.Fatalf("db: migrate threads: %v", err)
 			}
+		}
+	}
+	var count int
+	if err := db.QueryRow("SELECT count(*) FROM pragma_table_info('projects') WHERE name = 'label'").Scan(&count); err != nil {
+		log.Fatalf("db: inspect projects: %v", err)
+	}
+	if count == 0 {
+		if _, err := db.Exec("ALTER TABLE projects ADD COLUMN label TEXT NOT NULL DEFAULT ''"); err != nil {
+			log.Fatalf("db: migrate projects: %v", err)
 		}
 	}
 }
@@ -223,7 +233,7 @@ func DBLoadProjects() []Project {
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
-	rows, err := db.Query("SELECT name, path FROM projects ORDER BY position, rowid")
+	rows, err := db.Query("SELECT name, path, label FROM projects ORDER BY position, rowid")
 	if err != nil {
 		log.Printf("db: load projects: %v", err)
 		return nil
@@ -233,7 +243,7 @@ func DBLoadProjects() []Project {
 	var projects []Project
 	for rows.Next() {
 		var p Project
-		if err := rows.Scan(&p.Name, &p.Path); err != nil {
+		if err := rows.Scan(&p.Name, &p.Path, &p.Label); err != nil {
 			continue
 		}
 		projects = append(projects, p)
@@ -260,7 +270,7 @@ func DBSaveProject(name, path string) {
 	}
 
 	_, err = db.Exec(
-		"INSERT OR REPLACE INTO projects (name, path, position) VALUES (?, ?, ?)",
+		"INSERT INTO projects (name, path, position) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET path = excluded.path",
 		name, path, position,
 	)
 	if err != nil {
@@ -287,6 +297,16 @@ func DBReorderProjects(names []string) {
 	}
 	if err = tx.Commit(); err != nil {
 		log.Printf("db: reorder projects: %v", err)
+	}
+}
+
+// DBRenameProject stores the name Libro shows for a project. Blank shows its folder name.
+func DBRenameProject(name, label string) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	if _, err := db.Exec("UPDATE projects SET label = ? WHERE name = ?", label, name); err != nil {
+		log.Printf("db: rename project %s: %v", name, err)
 	}
 }
 

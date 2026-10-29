@@ -151,8 +151,9 @@ test('thread menu and palette share actions bound to the chosen worktree', () =>
     call:(action, data) => calls.push([action, data.name]),
     finishThread:(name, discard = false, method = 'merge') => calls.push([discard ? 'discard' : method, name]),
     projectSettings:name => calls.push(['settings', name]),
+    renameProject:name => calls.push(['rename', name]),
   })
-  assert.deepEqual(calls, [['project.close','repo/feature'], ['merge','repo/feature'], ['squash','repo/feature'], ['pr','repo/feature'], ['settings','repo/feature'], ['discard','repo/feature']])
+  assert.deepEqual(calls, [['project.close','repo/feature'], ['merge','repo/feature'], ['squash','repo/feature'], ['pr','repo/feature'], ['settings','repo/feature'], ['rename','repo'], ['discard','repo/feature']])
 })
 
 
@@ -241,7 +242,7 @@ test('branch menu targets its own workspace and disables new threads without a c
     })
     const menu = root.children[0]
     assert.equal(menu.attributes['aria-label'], 'Thread actions')
-    assert.deepEqual(menu.children.map(item => item.textContent), ['Close thread', 'New thread', 'Thread settings', ...(isGit ? ['Discard thread…'] : [])])
+    assert.deepEqual(menu.children.map(item => item.textContent), ['Close thread', 'New thread', 'Thread settings', 'Rename project…', ...(isGit ? ['Discard thread…'] : [])])
     assert.equal(!!menu.children[1].disabled, !isGit)
     menu.children[0].onclick()
     if (isGit) menu.children[1].onclick()

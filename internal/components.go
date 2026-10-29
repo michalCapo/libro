@@ -2776,7 +2776,7 @@ func projectItems(state *AppState) []jsProject {
 		entry := jsProject{
 			Kind:        "project",
 			Name:        p.Name,
-			DisplayName: displayProjectName(p.Name, p.Path),
+			DisplayName: p.displayName(),
 			Path:        p.Path,
 			Title:       state.workspaceTitle(p.Name, p.Path),
 			IsGit:       p.IsGitRepo,

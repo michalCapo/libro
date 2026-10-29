@@ -154,6 +154,12 @@ type actionProjectRemoveInput struct {
 	SID  string `json:"sid"`
 }
 
+type actionProjectRenameInput struct {
+	Label string `json:"label"`
+	Name  string `json:"name"`
+	SID   string `json:"sid"`
+}
+
 type actionProjectReorderInput struct {
 	Names []string `json:"names"`
 	SID   string   `json:"sid"`

@@ -1401,6 +1401,16 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 		return resp, nil
 	})
+	// Rename a project inside Libro; its folder and key stay the same.
+	registerWorkspaceAction(app, "project.rename", func(_ *r.Context, in actionProjectRenameInput) (r.Result, error) {
+		sid := inputSID(in.SID)
+		label := strings.TrimSpace(in.Label)
+		if !sm.RenameProject(sid, in.Name, label) {
+			return r.Result{}.Run(r.Notify("error", "Project not found")), nil
+		}
+		DBRenameProject(in.Name, label)
+		return projectsJS(sm.Get(sid)), nil
+	})
 	// Reorder projects in the sidebar
 	registerWorkspaceAction(app, "project.reorder", func(_ *r.Context, in actionProjectReorderInput) (r.Result, error) {
 		sid := inputSID(in.SID)

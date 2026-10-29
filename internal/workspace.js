@@ -324,6 +324,27 @@
     dialogKeys(dialog, form, submit, cancel);
     dialog.append(heading, form); root.append(dialog); dialog.showModal(); input.focus();
   }
+  // Renaming changes only the name Libro shows; the folder and its path stay the same.
+  function renameProject(name) {
+    const project = (window.__libroProjects || []).find(p => p.kind === 'project' && p.name === name);
+    if (!project) return;
+    document.getElementById('project-rename-dialog')?.remove();
+    const dialog = node('dialog', 'ws-plugin-dialog ws-project-command-dialog'); dialog.id = 'project-rename-dialog';
+    dialog.setAttribute('aria-labelledby', 'project-rename-title');
+    const heading = node('h2', '', 'Rename project'); heading.id = 'project-rename-title';
+    const form = node('form', '');
+    const label = node('label', '', 'Name'); label.htmlFor = 'project-rename-input';
+    const input = node('input', 'ws-agent-command'); input.id = 'project-rename-input'; input.value = project.displayName || project.name; input.autocomplete = 'off'; input.spellcheck = false;
+    const help = node('p', 'ws-settings-status', 'Only changes the name in Libro. The folder stays at ' + project.path + '. Leave blank to use the folder name.'); help.id = 'project-rename-help'; input.setAttribute('aria-describedby', help.id);
+    const actions = node('div', 'ws-agent-actions');
+    const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
+    const submit = node('button', 'ws-launch', 'Rename'); submit.type = 'submit';
+    actions.append(cancel, submit); form.append(label, input, help, actions);
+    form.onsubmit = event => { event.preventDefault(); dialog.close(); call('project.rename', {name, label:input.value}); };
+    dialog.addEventListener('close', () => dialog.remove());
+    dialogKeys(dialog, form, submit, cancel);
+    dialog.append(heading, form); root.append(dialog); dialog.showModal(); input.select();
+  }
   let finishDialog = null;
   // A removed thread lands on its project. That project row stays hidden until the project is opened again.
   function closedWorkspace(id) {
@@ -479,6 +500,7 @@
       {label:'Squash thread…', icon:'compress', run:() => finishThread(name, false, 'squash')},
       {label:'Create draft PR…', icon:'open_in_new', run:() => finishThread(name, false, 'pr')},
       {label:'Thread settings', icon:'settings', run:() => projectSettings(name)},
+      {label:'Rename project…', icon:'edit', run:() => renameProject(project.name)},
       {label:'Discard thread…', icon:'delete_outline', run:() => finishThread(name, true), danger:true},
     ];
   }
@@ -506,7 +528,7 @@
     const project = (window.__libroProjects || []).find(p => (p.kind === 'worktree' ? p.name + '/' + p.branch : p.name) === window.__libroActiveProject);
     const thread = !project && (window.__libroThreads || []).find(thread => thread.id === window.__libroActiveProject);
     if (!project && !thread) { window.__libroShowToast?.('Select a thread first', '', 'error'); return; }
-    const actions = thread ? agentThreadActions(thread) : project.kind === 'worktree' ? threadActions(project) : [{label:'Thread settings', icon:'settings', run:() => projectSettings(project.name)}];
+    const actions = thread ? agentThreadActions(thread) : project.kind === 'worktree' ? threadActions(project) : [{label:'Thread settings', icon:'settings', run:() => projectSettings(project.name)}, {label:'Rename project…', icon:'edit', run:() => renameProject(project.name)}];
     const name = project ? project.name : thread.project;
     actions.unshift({label:'New thread', icon:'add', description:name ? 'Create a new thread in ' + name : 'Create a new thread', run:() => newThread(name || undefined)});
     if (project && project.kind !== 'worktree') {
@@ -609,6 +631,7 @@
       {label:'Close thread', run:() => call('project.close', {name:project.name})},
       {label:'New thread', run:() => newThread(project.name)},
       {label:'Thread settings', run:() => projectSettings(project.name)},
+      {label:'Rename project…', run:() => renameProject(project.name)},
       ...(project.isGit && project.currentBranch ? [{label:'Discard thread…', run:() => finishThread(project.name, true), danger:true}] : []),
     ];
     actions.forEach(action => add(action.label, action.run, action.danger));
