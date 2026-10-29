@@ -568,7 +568,7 @@ var mobileSizes = {
 	xs: {label: 'XS', width: 320, height: 568},
 	sm: {label: 'SM', width: 480, height: 896},
 	md: {label: 'MD', width: 640, height: 932},
-	xl: {label: 'XL', width: 720, height: 1280}
+	xl: {label: 'XL', width: 720, height: 1280, tablet: true}
 };
 
 function applyBrowserMode(appID, mode) {
@@ -836,8 +836,10 @@ function applyMobileView(appID, mode, orientation) {
 	mobileViewportOrientation[appID] = state.orientation;
 	var width = state.orientation === 'landscape' ? size.height : size.width;
 	var height = state.orientation === 'landscape' ? size.width : size.height;
-	frame.style.width = width + 'px';
-	frame.style.flex = '0 0 ' + width + 'px';
+	// Device bezel drawn as a box shadow, so it scales with the guest.
+	var bezel = size.tablet ? 20 : 14, room = 2 * (bezel + 16);
+	frame.style.width = (width + room) + 'px';
+	frame.style.flex = '0 0 ' + (width + room) + 'px';
 	frame.style.maxWidth = '100%';
 	frame.style.height = '100%';
 	frame.style.maxHeight = '100%';
@@ -850,7 +852,10 @@ function applyMobileView(appID, mode, orientation) {
 	state.fit = function() {
 		var host = guest.parentElement;
 		if (!host.clientWidth || !host.clientHeight) return;
-		var scale = Math.min(1, host.clientWidth / width, host.clientHeight / height);
+		var scale = Math.min(1, host.clientWidth / (width + room), host.clientHeight / (height + room));
+		guest.style.borderRadius = (size.tablet ? 24 : 40) + 'px';
+		guest.style.overflow = 'hidden';
+		guest.style.boxShadow = '0 0 0 ' + bezel + 'px #1c1c1e, 0 0 0 ' + (bezel + 2) + 'px #48484a, 0 24px 48px ' + bezel + 'px rgba(0,0,0,.35)';
 		guest.style.position = 'absolute';
 		guest.style.width = width + 'px';
 		guest.style.height = height + 'px';
