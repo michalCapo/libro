@@ -557,6 +557,12 @@ html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repo
 .ws-repos-path{overflow-wrap:anywhere}
 .ws-repos-branch{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
 .ws-repos-branch-name{font-family:var(--ws-mono);font-size:12px}
+.ws-repos-file-actions{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-top:6px}
+.ws-repos-row-actions{display:flex;flex-wrap:wrap;gap:2px;margin-left:auto}
+.ws-repos-button.ws-repos-small{padding:2px 8px;min-height:24px}
+.ws-repos-button.ws-repos-danger{color:var(--ws-repos-problem)}
+.ws-repos-files input{margin:0}
+.ws-repos-change-line{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .ws-repos-fetched{margin-top:8px;font-size:11px}
 .ws-repos-empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:40px 16px;text-align:center;color:var(--ws-muted)}
 .ws-repos-empty .material-icons-round{font-size:28px}
