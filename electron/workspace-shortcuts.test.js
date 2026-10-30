@@ -938,7 +938,8 @@ test('project groups contain the original branch first and number every worktree
   const shortcuts = source.slice(source.indexOf('  function renderThreadShortcuts()'), source.indexOf('  // Each sound gets a fresh context.'))
   function node(tag, classes = '', text = '') {
     const el = {
-      tag, classes, textContent: text, dataset: {}, style: {}, attributes: {}, children: [],
+      tag, classes, textContent: text, dataset: {}, attributes: {}, children: [],
+      style: { setProperty(key, value) { this[key] = value }, getPropertyValue(key) { return this[key] } },
       classList: { add() {} },
       setAttribute(key, value) { this.attributes[key] = value },
       removeAttribute(key) { delete this.attributes[key] },
@@ -1012,7 +1013,7 @@ test('project groups contain the original branch first and number every worktree
   context.document.querySelectorAll = selector => [standalone, ...projectRows(selector)]
   vm.runInNewContext(render + shortcuts + ';renderProjects();renderThreadShortcuts();', context)
   const worktrees = flatten(list).filter(el => el.dataset.kind === 'worktree' && el.tag === 'button')
-  assert.deepEqual(worktrees.map(row => [row.dataset.projectKey, row.parentElement.style.order, row.dataset.projectShortcut]), [['mail/new', 2, '2'], ['notes/old', 1, '1']])
+  assert.deepEqual(worktrees.map(row => [row.dataset.projectKey, row.parentElement.style['--order'], row.dataset.projectShortcut]), [['mail/new', 2, '2'], ['notes/old', 1, '1']])
   assert.equal(standalone.dataset.projectShortcut, '3')
 })
 

@@ -798,7 +798,7 @@
       row.oncontextmenu = event => { event.preventDefault(); threadMenu(project, row, {x:event.clientX, y:event.clientY}); };
       settings.classList.add('ws-project-settings');
       // Threads lists worktree cards across projects in the order they were created.
-      item.style.order = project.order || 0;
+      item.style.setProperty('--order', project.order || 0);
       item.append(row, settings); branches.append(item);
     });
   }
@@ -869,7 +869,7 @@
   function sidebarRows(selector) {
     const rows = [...document.querySelectorAll(selector)];
     if (root.dataset.allProjects === 'true') return rows;
-    const rank = row => row.closest('#workspace-project-list') ? Number(row.parentElement.style.order) || 0 : Number.MAX_SAFE_INTEGER;
+    const rank = row => row.closest('#workspace-project-list') ? Number(row.parentElement.style.getPropertyValue('--order')) || 0 : Number.MAX_SAFE_INTEGER;
     return rows.sort((a, b) => rank(a) - rank(b));
   }
   // Each sound gets a fresh context. A long-lived one can be missing after a
@@ -1046,26 +1046,34 @@
     });
   }
   // The folded rail repeats each numbered card as its digit, at the card's height and spacing; clicking it opens that card. It follows the card lists as they change.
+  // Digits follow the cards top to bottom, and working ones sit at the rail's bottom like their cards.
   function renderRailThreads() {
     const rail = document.getElementById('workspace-rail-threads'); if (!rail) return;
-    const rows = sidebarRows('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])');
-    const boxes = rows.map(row => row.parentElement.getBoundingClientRect());
+    const cards = sidebarRows('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])')
+      .map(row => [row, row.parentElement.getBoundingClientRect()]).sort((a, b) => a[1].top - b[1].top);
+    const rows = cards.map(card => card[0]), boxes = cards.map(card => card[1]);
+    const bottom = root.dataset.allProjects === 'true' ? -1 : rows.findIndex(row => row.dataset.agentStatus === 'working');
     const sizes = boxes.map((box, i) => [Math.round(box.height), i ? Math.round(box.top - boxes[i - 1].bottom) : 0]);
     const signature = JSON.stringify(rows.map((row, i) => [...sizes[i], row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus, row.getAttribute('aria-current'), row.querySelector(':scope > span')?.textContent]));
-    if (rail.dataset.signature === signature) return;
-    rail.dataset.signature = signature; rail.replaceChildren();
-    rows.forEach((row, i) => {
-      const number = row.dataset.projectShortcut, label = row.querySelector(':scope > span')?.textContent || row.dataset.projectKey;
-      const entry = node('button', 'ws-rail-thread'); entry.type = 'button'; entry.append(node('span', '', number));
-      entry.title = label + ' (Ctrl+' + number + ')'; entry.setAttribute('aria-label', row.getAttribute('aria-label') || label);
-      entry.setAttribute('aria-current', row.getAttribute('aria-current') || 'false');
-      if (row.dataset.agentStatus) entry.dataset.agentStatus = row.dataset.agentStatus;
-      if (sizes[i][0]) { entry.style.height = sizes[i][0] + 'px'; entry.style.marginTop = Math.max(0, sizes[i][1]) + 'px'; }
-      entry.onclick = () => row.click(); rail.append(entry);
-    });
+    if (rail.dataset.signature !== signature) {
+      rail.dataset.signature = signature; rail.replaceChildren();
+      rows.forEach((row, i) => {
+        const number = row.dataset.projectShortcut, label = row.querySelector(':scope > span')?.textContent || row.dataset.projectKey;
+        const entry = node('button', 'ws-rail-thread'); entry.type = 'button'; entry.append(node('span', '', number));
+        entry.title = label + ' (Ctrl+' + number + ')'; entry.setAttribute('aria-label', row.getAttribute('aria-label') || label);
+        entry.setAttribute('aria-current', row.getAttribute('aria-current') || 'false');
+        if (row.dataset.agentStatus) entry.dataset.agentStatus = row.dataset.agentStatus;
+        if (sizes[i][0]) { entry.style.height = sizes[i][0] + 'px'; entry.style.marginTop = i === bottom ? 'auto' : Math.max(0, sizes[i][1]) + 'px'; }
+        entry.onclick = () => row.click(); rail.append(entry);
+      });
+    }
+    // The rail keeps its tools below the digits, so the folded sidebar lifts its working cards to end where the digits end.
+    const list = root.querySelector('.ws-thread-cards');
+    if (root.dataset.fold && bottom >= 0) list.style.marginBottom = Math.max(0, root.querySelector('.ws-sidebar-bottom').getBoundingClientRect().top - rail.getBoundingClientRect().bottom) + 'px';
+    else list.style.marginBottom = '';
   }
   new MutationObserver(() => requestAnimationFrame(renderRailThreads)).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current']});
-  new ResizeObserver(() => requestAnimationFrame(renderRailThreads)).observe(document.getElementById('workspace-project-list'));
+  new ResizeObserver(() => requestAnimationFrame(renderRailThreads)).observe(root.querySelector('.ws-thread-cards'));
   let queued = false;
   const observer = new MutationObserver(records => {
     if (records.some(record => (record.type === 'attributes' && record.target.matches('[data-app-id]')) || [...record.addedNodes, ...record.removedNodes].some(n => n.nodeType === 1 && (n.matches('[data-app-id], [data-workspace-project], .ws-project, #top-bar') || n.querySelector('[data-app-id], [data-workspace-project]'))))) schedule();

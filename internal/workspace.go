@@ -78,8 +78,11 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 				r.Span("").Text("New thread"),
 				r.El("kbd", "ws-new-thread-key").Attr("aria-hidden", "true"),
 			),
-			r.Div("ws-project-list").ID("workspace-project-list"),
-			r.Div("ws-project-list").ID("workspace-thread-list"),
+			// Threads moves cards with working agents to the bottom; see workspace.css.
+			r.Div("ws-thread-cards").Render(
+				r.Div("ws-project-list").ID("workspace-project-list"),
+				r.Div("ws-project-list").ID("workspace-thread-list"),
+			),
 			// The tools and footer stay pinned below the scrolling lists. A folded sidebar moves the tools
 			// out to their own rail; see foldState in workspace.js.
 			r.Div("ws-sidebar-bottom").Render(
