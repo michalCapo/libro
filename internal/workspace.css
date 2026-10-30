@@ -145,6 +145,8 @@ html.dark .ws-row-grid[data-agent-status=done]::before{color:#4ade80}
 .ws-project-item .ws-row-grid>.ws-project-shortcut{grid-area:badge;align-self:stretch;width:16px;height:auto;margin:0 0 0 -2px;padding:0;border:0;border-radius:0;background:none;color:var(--ws-muted);font-family:inherit;font-size:76px;font-weight:300;line-height:58px;transform:scaleX(.6)}
 .ws-project-item .ws-row-grid[aria-current=true]>.ws-project-shortcut{background:none;color:var(--ws-fg)}
 .ws-project-item .ws-row-grid:is([data-agent-status=working],[data-agent-status=done])>.ws-project-shortcut{color:var(--ws-status)}
+/* The folded rail shows the numbers, so folded list cards drop theirs but keep their height. */
+#libro-workspace[data-fold] .ws-project-item .ws-row-grid:has(>.ws-project-shortcut){min-height:58px;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"project status icon" "title title title" "meta meta end"}#libro-workspace[data-fold] .ws-project-item .ws-row-grid>.ws-project-shortcut{display:none}
 /* The thread actions button takes the badge's old corner; a running terminal moves aside for it. */
 .ws-project-item:has(>.ws-row-grid .ws-project-shortcut)>.ws-button{right:3px}
 .ws-project-item:is(:hover,:focus-within)>.ws-row-grid>.ws-project-terminal{margin-right:24px}
@@ -335,9 +337,10 @@ html.dark .ws-row-grid[data-agent-status=done]::before{color:#4ade80}
 .ws-tool-rail .ws-button{width:32px;height:32px}
 .ws-tool-rail .ws-button[aria-pressed=true]{background:var(--ws-raised);color:var(--ws-fg);box-shadow:var(--ws-shadow)}
 .ws-tool-rail .ws-tool-sizes:empty{display:none}
-/* Folded rail thread numbers match the rail icons in size and color; agent status colors them, the current one looks pressed. */
+/* Folded rail thread numbers use the big card digit; agent status colors them, the current one looks pressed. */
 .ws-rail-threads,.ws-rail-numbers{display:flex;flex-direction:column;align-items:center;gap:2px}.ws-rail-threads{margin-bottom:8px}#libro-workspace:not([data-fold]) .ws-rail-threads{display:none}
-.ws-rail-thread{width:32px;height:32px;padding:0;border:0;border-radius:8px;background:none;color:var(--ws-muted);font-family:inherit;font-size:22px;font-weight:400;line-height:32px;cursor:pointer}
+.ws-rail-thread{width:32px;height:58px;padding:0;border:0;border-radius:8px;background:none;color:var(--ws-muted);font-family:inherit;font-size:76px;font-weight:300;line-height:58px;overflow:hidden;cursor:pointer}
+.ws-rail-thread>span{display:inline-block;transform:scaleX(.6)}
 .ws-rail-thread:hover,.ws-rail-thread:focus-visible{background:var(--ws-hover)}
 /* The open folded list covers the rail and draws its new thread icon in the rail column; thread cards keep their big numbers. */
 #libro-workspace[data-fold] .ws-navigation .ws-new-thread{position:relative}#libro-workspace[data-fold] .ws-navigation .ws-new-thread>.material-icons-round{position:absolute;left:calc(-1 * var(--ws-rail-width) - 1px);width:32px;text-align:center;color:var(--ws-muted)}

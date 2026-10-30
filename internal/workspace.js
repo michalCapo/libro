@@ -1054,7 +1054,7 @@
     rail.dataset.signature = signature; rail.replaceChildren();
     rows.forEach(row => {
       const number = row.dataset.projectShortcut, label = row.querySelector(':scope > span')?.textContent || row.dataset.projectKey;
-      const entry = node('button', 'ws-rail-thread'); entry.type = 'button'; entry.textContent = number;
+      const entry = node('button', 'ws-rail-thread'); entry.type = 'button'; entry.append(node('span', '', number));
       entry.title = label + ' (Ctrl+' + number + ')'; entry.setAttribute('aria-label', row.getAttribute('aria-label') || label);
       entry.setAttribute('aria-current', row.getAttribute('aria-current') || 'false');
       if (row.dataset.agentStatus) entry.dataset.agentStatus = row.dataset.agentStatus;
