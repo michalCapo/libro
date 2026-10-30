@@ -12,7 +12,7 @@
     ['o', 'Tree: open externally'],
     ['e', 'Open in editor'],
     ['Space Space', 'Find project files in tree'],
-    ['Space f / Esc', 'Back to file tree (Esc outside source)'],
+    ['Space f / Esc', 'Back to file tree'],
     ['h j k l', 'Rendered preview and image: scroll'],
     ['+ / - / 0', 'Image: zoom in / out / reset'],
     ['h j k l / w b', 'Source movement'],
@@ -306,20 +306,23 @@
   };
   // Capture only Files commands before workspace shortcuts (not text entry or other tools).
   window.addEventListener('keydown',event=>{
-    const el=event.target.closest?.('[data-files]'),s=el&&states.get(el.dataset.files);
+    // Find the panel by element, so a stale or reused panel ID cannot swallow its keys.
+    const s=event.target.nodeType===1&&[...states.values()].find(item=>item.el.contains(event.target));
     if(!s || event.isComposing)return;
     const typing=event.libroTyping || event.target.matches('input,textarea,select') || event.target.closest('.cm-vim-panel');
     const source=event.target.closest('.cm-content');
     const frame=event.target.matches('.ws-file-rendered'),image=event.target===s.imageView?.media;
     const navigation=source || event.target===s.tree || event.target.matches('.ws-file-text') || event.target.closest('.ws-file-media');
+    // Vim keeps keys while it waits for more, such as f<Space> or an Esc that ends a selection.
+    const vimBusy=source && s.editor?.pending();
     let action,scroll;
     if(navigation && !typing && !event.metaKey && !event.altKey){
       // In source, e only opens the editor when Vim is not waiting for more keys (ye, ge, fe).
-      if(!event.ctrlKey && !event.shiftKey && event.key==='e' && s.leader==null && !(source && s.editor?.pending()))action=()=>{if(!event.repeat)openEditor(s);};
+      if(!event.ctrlKey && !event.shiftKey && event.key==='e' && s.leader==null && !vimBusy)action=()=>{if(!event.repeat)openEditor(s);};
       // Workspace shortcuts win over Vim's Ctrl+O and Ctrl+I; Tab still moves forward in source.
       else if(event.ctrlKey && event.key.toLowerCase()==='o' && !window.libroWorkspace?.bound('Ctrl+O'))action=()=>historyMove(s,-1);
       else if((event.ctrlKey && event.key.toLowerCase()==='i' && !window.libroWorkspace?.bound('Ctrl+I')) || source && event.key==='Tab'&&!event.shiftKey)action=()=>historyMove(s,1);
-      else if(!event.ctrlKey && (event.key===' ' || s.leader!=null)){
+      else if(!event.ctrlKey && (event.key===' ' && !vimBusy || s.leader!=null)){
         if(s.leader==null)s.leader='';else s.leader+=event.key;
         clearTimeout(s.leaderTimer);
         const command=leaderActions[s.leader];
@@ -328,8 +331,8 @@
         else {s.status.textContent='Space '+s.leader+' …';s.leaderTimer=setTimeout(()=>{s.leader=null;s.status.textContent='';},1500);action=()=>{};}
       }
       else if((frame || image) && (scroll=scrollPreview(s,event)))action=()=>frame?event.target.contentWindow?.postMessage({libroFilesScroll:scroll},'*'):event.target.scrollBy(scroll[0],scroll[1]+scroll[2]*event.target.clientHeight);
-      // Esc leaves previews for the tree; in source Vim keeps it.
-      else if(!source && event.target!==s.tree && event.key==='Escape' && !event.ctrlKey)action=()=>focusTree(s);
+      // Esc goes back to the tree once Vim has nothing left to cancel.
+      else if(!vimBusy && event.target!==s.tree && event.key==='Escape' && !event.ctrlKey)action=()=>focusTree(s);
     }
     if(action){event.preventDefault();event.stopImmediatePropagation();action();}
   },true);
@@ -510,7 +513,7 @@
       if (states.get(el.dataset.files)?.el === el) return;
       const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,parents:0,items:[],positions:new Map(),history:[],historyIndex:-1,recent:new Map()};
       states.set(s.id,s);
-      el.addEventListener('focusout',()=>{s.leader=null;clearTimeout(s.leaderTimer);});
+      el.addEventListener('focusout',event=>{if(!el.contains(event.relatedTarget)){s.leader=null;s.status.textContent='';clearTimeout(s.leaderTimer);}});
       el.querySelector('.ws-file-sidebar').addEventListener('mouseleave',event=>delete event.currentTarget.dataset.closed);
       // A mouse click on a toolbar control returns focus to the tree or preview, so Space and Esc keep working.
       el.addEventListener('mousedown',()=>{s.focusBack=document.activeElement;},true);

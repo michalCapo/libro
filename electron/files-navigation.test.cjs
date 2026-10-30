@@ -291,3 +291,11 @@ test('mouse clicks on toolbar controls return focus so Space f and Esc work',asy
  const help=f.w.document.querySelector('.ws-file-help');tree.dispatchEvent(new f.w.MouseEvent('mousedown',{bubbles:true}));help.focus();help.click();
  f.key('Escape');assert.equal(f.w.document.activeElement,tree);
 });
+
+test('Esc and Space leave source only when Vim is idle',t=>{
+  const f=fixture(t);f.open();const d=f.w.document,tree=d.querySelector('.ws-file-tree');
+  f.keys('vj');f.key('Escape');assert.ok(d.activeElement.classList.contains('cm-content'));
+  f.key('Escape');assert.equal(d.activeElement,tree);
+  f.key('Enter');f.keys('gg');f.keys('f ');assert.equal(f.editor.position().column,2);assert.ok(d.activeElement.classList.contains('cm-content'));
+  f.keys(' f');assert.equal(d.activeElement,tree);
+});
