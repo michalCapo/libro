@@ -1049,7 +1049,7 @@
   function renderRailThreads() {
     const rail = document.getElementById('workspace-rail-threads'); if (!rail) return;
     const rows = sidebarRows('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])');
-    const signature = JSON.stringify(rows.map(row => [row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus, row.getAttribute('aria-current'), row.querySelector(':scope > span')?.textContent]));
+    const signature = JSON.stringify(rows.map(row => [row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus, row.getAttribute('aria-current'), row.parentElement.dataset.panels, row.querySelector(':scope > span')?.textContent]));
     if (rail.dataset.signature === signature) return;
     rail.dataset.signature = signature; rail.replaceChildren();
     rows.forEach(row => {
@@ -1058,10 +1058,11 @@
       entry.title = label + ' (Ctrl+' + number + ')'; entry.setAttribute('aria-label', row.getAttribute('aria-label') || label);
       entry.setAttribute('aria-current', row.getAttribute('aria-current') || 'false');
       if (row.dataset.agentStatus) entry.dataset.agentStatus = row.dataset.agentStatus;
+      if (row.parentElement.dataset.panels) entry.dataset.panels = row.parentElement.dataset.panels;
       entry.onclick = () => row.click(); rail.append(entry);
     });
   }
-  new MutationObserver(() => requestAnimationFrame(renderRailThreads)).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current']});
+  new MutationObserver(() => requestAnimationFrame(renderRailThreads)).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current', 'data-panels']});
   let queued = false;
   const observer = new MutationObserver(records => {
     if (records.some(record => (record.type === 'attributes' && record.target.matches('[data-app-id]')) || [...record.addedNodes, ...record.removedNodes].some(n => n.nodeType === 1 && (n.matches('[data-app-id], [data-workspace-project], .ws-project, #top-bar') || n.querySelector('[data-app-id], [data-workspace-project]'))))) schedule();
@@ -2112,7 +2113,6 @@
   // A closed list ignores hover until the pointer leaves the sidebar, so it does not reopen under the mouse.
   function projectMenu(open = root.dataset.sidebar !== 'open') {
     root.dataset.sidebar = open ? 'open' : 'closed';
-    document.querySelector('[data-sidebar-toggle]')?.setAttribute('aria-expanded', String(open));
   }
   // Wide windows fold the sidebar only when the user asks; the choice is remembered.
   function foldSidebar(folded = !prefs.sidebarFolded) {
