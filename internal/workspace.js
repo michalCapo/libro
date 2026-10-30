@@ -124,7 +124,7 @@
     const focused = rail?.contains(document.activeElement) ? document.activeElement : null;
     if (rail && fold && rail.parentElement !== body) body?.prepend(rail);
     else if (rail && !fold && rail.nextElementSibling !== footer) footer?.before(rail);
-    // A tool hidden in the open sidebar, or the tools toggle hidden in the folded rail, hands focus to a visible rail button.
+    // A tool hidden in the open sidebar hands focus to a visible rail button.
     const target = !focused || focused.checkVisibility() ? focused : [...rail.querySelectorAll('button')].find(button => button.checkVisibility());
     if (target && document.activeElement !== target) target.focus({preventScroll:true});
     const button = document.querySelector('[data-sidebar-fold]');
@@ -227,6 +227,7 @@
     const entries = node('div', 'ws-plugin-list');
     list.forEach(plugin => {
       const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; const icon = node('i', 'material-icons-round', plugin.type === 'url' ? 'language' : 'terminal'); icon.setAttribute('aria-hidden', 'true'); const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', plugin.name), node('small', '', plugin.description || plugin.command || 'Browser app')); entry.append(icon, copy); applyToolIcon(entry, plugin);
+      if (toolKeys[plugin.id]) { const key = node('kbd', 'ws-plugin-key', toolKeys[plugin.id]); key.setAttribute('aria-hidden', 'true'); entry.append(key); entry.setAttribute('aria-keyshortcuts', toolKeys[plugin.id].replace(/Ctrl/g, 'Control')); }
       entry.onclick = () => { dialog.close(); openPlugin(plugin.id, dock, entry, replace, add); onLaunch?.(); }; entries.append(entry);
     });
     dialog.append(entries);
@@ -935,10 +936,6 @@
     refresh();
     return true;
   }
-  // The open sidebar lists tools only after the user shows them; the choice is remembered.
-  function toggleTools(show = !prefs.showTools) {
-    prefs.showTools = show; save(); refresh();
-  }
   function toggleProjects(show = !prefs.allProjects) {
     prefs.allProjects = show; save(); refresh();
   }
@@ -1065,8 +1062,6 @@
     root.dataset.allProjects = String(!!prefs.allProjects);
     document.getElementById('workspace-all-projects')?.setAttribute('aria-expanded', String(!!prefs.allProjects));
     root.dataset.voiceTyping = String(prefs.voiceTyping !== false);
-    root.dataset.showTools = String(!!prefs.showTools);
-    document.getElementById('workspace-tools-toggle')?.setAttribute('aria-expanded', String(!!prefs.showTools));
     foldState();
     renderToolRail();
     renderProjects();
@@ -1113,11 +1108,10 @@
     if (rail.dataset.signature === signature) return;
     rail.dataset.signature = signature; rail.replaceChildren();
     const icons = {terminal:'terminal',browser:'language',files:'folder_open',repos:'fact_check',nvim:'edit',lazyrepo:'account_tree',lazydata:'storage'};
-    // The name and shortcut show only in the open sidebar; the folded rail keeps the icon alone.
+    // Only the folded rail shows these; the open sidebar reaches tools through Apps & plugins.
     list.forEach(p => {
       const entry = button(p.name, icons[p.id] || (p.type === 'url' ? 'language' : 'terminal'), () => tool(p.id)); applyToolIcon(entry, p); entry.dataset.toolId = p.id;
-      const key = node('kbd', 'ws-tool-key'); key.setAttribute('aria-hidden', 'true');
-      entry.append(node('span', 'ws-tool-label', p.name), key); rail.append(entry);
+      rail.append(entry);
     });
     updateToolHints();
   }
@@ -1225,7 +1219,7 @@
     document.querySelectorAll('.ws-tool-rail button, .ws-sidebar button:is(.ws-button, .ws-new-thread)').forEach(button => {
       const name = button.getAttribute('aria-label');
       const plugin = window.__libroPlugins.find(plugin => plugin.id === button.dataset.toolId);
-      if (plugin) { button.title = name + (toolKeys[plugin.id] ? ' (' + toolKeys[plugin.id] + ')' : ''); const key = button.querySelector('.ws-tool-key'); if (key) key.textContent = toolKeys[plugin.id] || ''; }
+      if (plugin) button.title = name + (toolKeys[plugin.id] ? ' (' + toolKeys[plugin.id] + ')' : '');
       else if (name === 'New thread') button.title = name + (toolKeys['new-thread'] ? ' (' + toolKeys['new-thread'] + ')' : '');
     });
   }
@@ -2136,7 +2130,7 @@
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects')) delete root.dataset.sidebar; });
   narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleTools, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name})};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name})};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }
