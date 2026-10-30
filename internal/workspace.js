@@ -866,11 +866,11 @@
     });
   }
   // Threads shows worktree cards in creation order; standalone threads follow in their own list.
-  // Cards with a working agent sit below the others (see .ws-thread-cards), so numbers follow what the user sees.
+  // With the setting on, cards with a working agent sit below the others (see .ws-thread-cards), so numbers follow what the user sees.
   function sidebarRows(selector) {
     const rows = [...document.querySelectorAll(selector)];
     if (root.dataset.allProjects === 'true') return rows;
-    const rank = row => (row.closest('#workspace-project-list') ? Number(row.parentElement.style.getPropertyValue('--order')) || 0 : 100000) + (row.dataset.agentStatus === 'working' ? 300000 : 0);
+    const rank = row => (row.closest('#workspace-project-list') ? Number(row.parentElement.style.getPropertyValue('--order')) || 0 : 100000) + (root.dataset.moveWorking === 'true' && row.dataset.agentStatus === 'working' ? 300000 : 0);
     return rows.sort((a, b) => rank(a) - rank(b));
   }
   // Each sound gets a fresh context. A long-lived one can be missing after a
@@ -919,6 +919,20 @@
       status.textContent = 'Could not save. Please try again.';
       return false;
     }
+  }
+  function saveMoveWorkingThreads(value) {
+    const enabled = value === 'on';
+    try {
+      const updated = {...prefs, moveWorkingThreads:enabled};
+      localStorage.setItem('libro.workspace', JSON.stringify(updated));
+      prefs = updated;
+    } catch (_) {
+      document.getElementById('move-working-threads').value = prefs.moveWorkingThreads === true ? 'on' : 'off';
+      return false;
+    }
+    root.dataset.moveWorking = String(enabled);
+    renderThreadShortcuts(); requestAnimationFrame(renderRailThreads);
+    return true;
   }
   function saveVoiceTyping(value) {
     const enabled = value === 'on';
@@ -1057,7 +1071,7 @@
     const cards = sidebarRows('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])')
       .map(row => [row, row.parentElement.getBoundingClientRect()]).sort((a, b) => a[1].top - b[1].top);
     const rows = cards.map(card => card[0]), boxes = cards.map(card => card[1]);
-    const bottom = root.dataset.allProjects === 'true' ? -1 : rows.findIndex(row => row.dataset.agentStatus === 'working');
+    const bottom = root.dataset.allProjects === 'true' || root.dataset.moveWorking !== 'true' ? -1 : rows.findIndex(row => row.dataset.agentStatus === 'working');
     const sizes = boxes.map((box, i) => [Math.round(box.height), i ? Math.round(box.top - boxes[i - 1].bottom) : 0]);
     const signature = JSON.stringify(rows.map((row, i) => [...sizes[i], row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus, row.getAttribute('aria-current'), row.querySelector(':scope > span')?.textContent]));
     if (rail.dataset.signature !== signature) {
@@ -1094,6 +1108,7 @@
     root.dataset.allProjects = String(!!prefs.allProjects);
     document.getElementById('workspace-all-projects')?.setAttribute('aria-expanded', String(!!prefs.allProjects));
     root.dataset.voiceTyping = String(prefs.voiceTyping !== false);
+    root.dataset.moveWorking = String(prefs.moveWorkingThreads === true);
     foldState();
     renderProjects();
     renderThreads();
@@ -1867,7 +1882,7 @@
     const key = document.getElementById('openrouter-key');
     key.value = ''; key.dataset.clear = '1'; key.placeholder = 'Key will be removed on Save';
   }
-  function showSettings(width, commands = {}, bindings = toolKeys, threadAgent = '', pageToolsAutoExecute = false, environment = [], editor = 'nvim', voice = {savedKey:false}, agentUpdates = window.__libroAgentAutoUpdate) {
+  function showSettings(width, commands = {}, bindings = toolKeys, threadAgent = '', pageToolsAutoExecute = false, environment = [], voice = {savedKey:false}, agentUpdates = window.__libroAgentAutoUpdate) {
     window.__libroAgentAutoUpdate = agentUpdates;
     window.__libroPageToolsAutoExecute = !!pageToolsAutoExecute;
     savedThreadAgent = threadAgent;
@@ -1877,6 +1892,7 @@
     document.getElementById('notification-sound-status').textContent = '';
     fillVoice(voice);
     document.getElementById('voice-typing').value = prefs.voiceTyping === false ? 'off' : 'on';
+    document.getElementById('move-working-threads').value = prefs.moveWorkingThreads === true ? 'on' : 'off';
     document.getElementById('voice-status').textContent = '';
     document.getElementById('agent-auto-update').value = agentUpdates === false ? 'off' : 'on';
     document.getElementById('agent-auto-update-status').textContent = '';
@@ -1891,7 +1907,6 @@
     document.getElementById('agent-command-rows').replaceChildren();
     document.getElementById('tool-command-rows').replaceChildren();
     window.__libroPlugins.filter(p => p.dock === 'right' && ['terminal', 'url'].includes(p.type) && !['terminal', 'browser', 'files', 'repos'].includes(p.id) && !p.removed).forEach(p => addAgentRow(p, p.type === 'url' ? p.url : p.command, true));
-    fillEditorTools(editor);
     removedAgents = Object.fromEntries(window.__libroPlugins.filter(p => p.removed && p.dock === 'center' && p.type === 'terminal').map(p => [p.id, true]));
     window.__libroPlugins.filter(p => !p.removed && p.dock === 'center' && p.type === 'terminal').forEach(p => addAgentRow(p, commands[p.id] || p.command));
     document.querySelector('#agent-commands-form [role=status]').textContent = '';
@@ -1921,7 +1936,7 @@
     for (const form of page.querySelectorAll('form')) if (!form.reportValidity()) return;
     const value = id => document.getElementById(id).value;
     const agent = value('default-thread-agent'), width = value('default-panel-width');
-    const theme = value('workspace-theme'), sound = value('notification-sound'), voiceTyping = value('voice-typing'), pageTools = value('page-tools-autoexecute') === 'on';
+    const theme = value('workspace-theme'), sound = value('notification-sound'), voiceTyping = value('voice-typing'), moveWorkingThreads = value('move-working-threads'), pageTools = value('page-tools-autoexecute') === 'on';
     settingsSaveSteps = [
       () => saveAgentCommand(document.getElementById('agent-commands-form')),
       () => saveTools(document.getElementById('tool-commands-form')),
@@ -1932,8 +1947,8 @@
       () => savePageTools(pageTools),
       () => saveSettings(width),
       () => {
-        const ok = saveTheme(theme) && saveNotificationSound(sound) && saveVoiceTyping(voiceTyping);
-        settingsSaveFinished(ok, 'Could not save appearance, sound, or voice typing. Please try again.');
+        const ok = saveTheme(theme) && saveNotificationSound(sound) && saveVoiceTyping(voiceTyping) && saveMoveWorkingThreads(moveWorkingThreads);
+        settingsSaveFinished(ok, 'Could not save appearance, sound, voice typing, or thread order. Please try again.');
       },
     ];
     page.querySelector('.ws-settings-content').inert = true;
@@ -1970,7 +1985,7 @@
     toggle.append(checkbox);
     const remove = button(toolRow ? 'Remove tool' : 'Remove agent', 'delete_outline', () => {
       if (checkbox.checked) return;
-      if (toolRow) { if (!window.__libroPlugins.some(p => p.id === plugin.id)) { row.remove(); fillEditorTools(); return; } row.dataset.removed = 'true'; row.hidden = true; row.querySelectorAll('input').forEach(input => input.required = false); fillEditorTools(); return; }
+      if (toolRow) { if (!window.__libroPlugins.some(p => p.id === plugin.id)) { row.remove(); return; } row.dataset.removed = 'true'; row.hidden = true; row.querySelectorAll('input').forEach(input => input.required = false); return; }
       if (window.__libroPlugins.some(p => p.id === plugin.id)) removedAgents[plugin.id] = true;
       row.remove();
       updateAgentOrderButtons();
@@ -1978,9 +1993,7 @@
     remove.hidden = checkbox.checked;
     checkbox.onchange = () => {
       remove.hidden = checkbox.checked;
-      if (toolRow) fillEditorTools();
     };
-    if (toolRow) name.oninput = () => fillEditorTools();
     row.prepend(toggle, name, input); row.append(remove); document.getElementById(toolRow ? 'tool-command-rows' : 'agent-command-rows').append(row);
     if (toolRow) {
       const field = node('div', 'ws-tool-shortcut');
@@ -2061,16 +2074,6 @@
   function addCustomTool(type = 'terminal') {
     addAgentRow({id:'custom-tool-' + crypto.randomUUID(), name:'', custom:true, type}, '', true).querySelector('[data-agent-name]').focus();
   }
-  function fillEditorTools(selected = document.getElementById('editor-tool').value) {
-    const select = document.getElementById('editor-tool');
-    select.replaceChildren(new Option('Off', ''));
-    document.querySelectorAll('#tool-command-rows [data-agent-id]').forEach(row => {
-      if (row.dataset.toolType === 'terminal' && row.dataset.removed !== 'true' && row.querySelector('[data-agent-enabled]').checked) {
-        select.add(new Option(row.querySelector('[data-agent-name]').value.trim() || 'Custom tool', row.dataset.agentId));
-      }
-    });
-    select.value = [...select.options].some(option => option.value === selected) ? selected : '';
-  }
   function saveTools(form) {
     const tools = window.__libroPlugins.filter(p => p.dock === 'right' && p.removed);
     form.querySelectorAll('[data-agent-id]').forEach(row => tools.push({id:row.dataset.agentId, name:row.querySelector('[data-agent-name]').value.trim(), [row.dataset.toolType === 'url' ? 'url' : 'command']:row.querySelector('[data-agent-command]').value, type:row.dataset.toolType, dock:'right', custom:row.dataset.custom === 'true', disabled:!row.querySelector('[data-agent-enabled]').checked, removed:row.dataset.removed === 'true'}));
@@ -2080,7 +2083,7 @@
       bindings[input.dataset.toolKey] = input.value;
     });
     form.querySelectorAll('[data-agent-id][data-removed=true] [data-tool-key]').forEach(input => bindings[input.dataset.toolKey] = '');
-    call('settings.tools', {tools, bindings, editor:document.getElementById('editor-tool').value});
+    call('settings.tools', {tools, bindings});
   }
   function toolsSaved(plugins, message, bindings) {
     const form = document.getElementById('tool-commands-form');

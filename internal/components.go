@@ -3591,9 +3591,9 @@ func keyboardShortcutsJS(sid string) string {
 						allWebviews[j].blur();
 					}
 
-					var fileTree = container.querySelector('.ws-file-tree');
-					if (fileTree) {
-						if (!container.contains(document.activeElement)) fileTree.focus({ preventScroll: true });
+					var files = container.querySelector('[data-files]');
+					if (files) {
+						if (!container.contains(document.activeElement)) window.libroFiles.focus(files);
 						return;
 					}
 					var repos = container.querySelector('[data-repos]');

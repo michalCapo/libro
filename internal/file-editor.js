@@ -2,6 +2,7 @@ import {EditorState, Compartment, StateEffect, StateField} from '@codemirror/sta
 import {EditorView, Decoration, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection} from '@codemirror/view';
 import {syntaxTree, ensureSyntaxTree, StreamLanguage, syntaxHighlighting, HighlightStyle, bracketMatching} from '@codemirror/language';
 import {search} from '@codemirror/search';
+import {history, undoDepth, redoDepth} from '@codemirror/commands';
 import {tags, highlightTree, classHighlighter} from '@lezer/highlight';
 import {vim, Vim, getCM} from '@replit/codemirror-vim';
 import {javascript} from '@codemirror/lang-javascript';
@@ -135,7 +136,7 @@ export function create({element,path,source,wrap,onSymbols,onNavigate,onChange,o
   const wrapping = new Compartment(),editing=new Compartment();
   let saved,symbols,mode='normal';
   const view = new EditorView({parent:element,state:EditorState.create({doc:source,extensions:[
-    vim({status:false}), editing.of(locked),
+    vim({status:false}), editing.of(locked), history(),
     lineNumbers(),highlightActiveLine(),highlightActiveLineGutter(),drawSelection(),bracketMatching(),search(),
     languageFor(path),fallback,syntaxHighlighting(colors),wrapping.of(wrap ? EditorView.lineWrapping : []),
     EditorView.contentAttributes.of({'aria-label':'Source'}),
@@ -180,6 +181,12 @@ export function create({element,path,source,wrap,onSymbols,onNavigate,onChange,o
     setEditable:value=>{if(!value && cm.state.vim.insertMode)Vim.exitInsertMode(cm);view.dispatch({effects:editing.reconfigure(value ? [] : locked)});onChange?.(false);},
     mode:()=>view.state.readOnly ? 'view' : mode,
     inserting:()=>!!cm.state.vim.insertMode,
+    // u or Ctrl+R, also after a count, with a change to undo or redo.
+    history:event=>{
+      const vim=cm.state.vim,input=vim.inputState;
+      if(digit || vim.visualMode || input.operator || input.keyBuffer.some(key=>!/^\d$/.test(key)) || event.altKey || event.metaKey || event.shiftKey)return false;
+      return event.key==='u' && !event.ctrlKey ? undoDepth(view.state)>0 : event.ctrlKey && event.key==='r' && redoDepth(view.state)>0;
+    },
     doc:()=>view.state.doc,
     dirty:()=>!view.state.doc.eq(saved),
     // A save keeps typing done while it ran as a change.

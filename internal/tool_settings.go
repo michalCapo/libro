@@ -12,21 +12,7 @@ func configurableTool(p Plugin) bool {
 	return p.Dock == "right" && (p.Type == AppTypeTerminal || p.Type == AppTypeURL) && p.ID != "terminal" && p.ID != "browser" && p.ID != "files" && p.ID != "repos"
 }
 
-func editorToolID() string {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-	value := "nvim"
-	if db != nil {
-		_ = db.QueryRow(`SELECT value FROM settings WHERE key = 'editor_tool'`).Scan(&value)
-	}
-	return value
-}
-
-func editorTool(p Plugin) bool {
-	return configurableTool(p) && p.Type == AppTypeTerminal && !p.Disabled && !p.Removed
-}
-
-func saveToolsWithEditor(list []Plugin, editor string, saveEditor bool, shortcuts ...map[string]string) error {
+func saveTools(list []Plugin, shortcuts ...map[string]string) error {
 	known := map[string]bool{}
 	for _, p := range plugins() {
 		if configurableTool(p) {
@@ -55,17 +41,6 @@ func saveToolsWithEditor(list []Plugin, editor string, saveEditor bool, shortcut
 			p.URL = ""
 		}
 		seen[p.ID] = true
-	}
-	if saveEditor && editor != "" {
-		valid := false
-		for _, p := range list {
-			if p.ID == editor && editorTool(p) {
-				valid = true
-			}
-		}
-		if !valid {
-			return fmt.Errorf("select an enabled CLI tool as the editor")
-		}
 	}
 	var keys []byte
 	if len(shortcuts) > 0 {
@@ -97,18 +72,12 @@ func saveToolsWithEditor(list []Plugin, editor string, saveEditor bool, shortcut
 			return err
 		}
 	}
-	if saveEditor {
-		if _, err = tx.Exec(`INSERT INTO settings (key,value) VALUES ('editor_tool',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, editor); err != nil {
-			return err
-		}
-	}
 	return tx.Commit()
 }
 
 func registerToolSettings(app *r.App) {
 	registerWorkspaceAction(app, "settings.tools", func(_ *r.Context, in actionSettingsToolsInput) (r.Result, error) {
-		editor, saveEditor := inputField(in.Editor)
-		err := saveToolsWithEditor(in.Tools, editor, saveEditor, in.Bindings)
+		err := saveTools(in.Tools, in.Bindings)
 		if err != nil {
 			return clientScript("libroWorkspace.toolsSaved(null,props[0]);", err.Error()), nil
 		}
@@ -132,16 +101,5 @@ func renderToolSettings() *r.Node {
 				),
 			), r.P("ws-settings-status").Attr("role", "status"),
 		),
-	)
-}
-
-func renderEditorSettings() *r.Node {
-	return r.El("section", "").Render(
-		r.El("h2", "ws-shortcut-heading").Text("Editor"),
-		r.Div("ws-settings-group").Render(r.Div("ws-settings-row").Render(
-			r.Div("ws-settings-copy").Render(
-				r.El("label", "").Attr("for", "editor-tool").Text("File editor"),
-				r.P("").ID("editor-tool-help").Text("Press e in Files to open the current file in this tool. The file path is passed to its CLI command.")),
-			r.El("select", "ws-settings-select").ID("editor-tool").Attr("aria-describedby", "editor-tool-help"))),
 	)
 }

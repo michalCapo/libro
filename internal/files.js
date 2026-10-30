@@ -11,11 +11,11 @@
     ['Enter', 'Preview file'],
     ['o', 'Tree: open externally'],
     ['a / r / d', 'Tree: add / rename / delete (end a new name with / for a folder)'],
-    ['e / Space e', 'Open in editor (e in tree and view mode)'],
     ['Space Space', 'Find project files in tree'],
     ['Space f / Esc', 'Back to file tree (Esc in view mode)'],
     ['i / a / o / I / A / O', 'Source: start editing in insert mode'],
     ['Esc', 'Insert: back to normal mode'],
+    ['u / Ctrl+R', 'Source: undo / redo'],
     [':w / Ctrl+S / :w!', 'Save / overwrite changes made on disk'],
     [':q / :q!', 'Back to view mode / and discard changes'],
     [':wq / :x', 'Save and back to view mode'],
@@ -103,7 +103,8 @@
     const form=document.createElement('form');form.className='ws-file-ask';
     const input=document.createElement('input');input.className='ws-file-filter';input.value=value;input.placeholder=label;input.setAttribute('aria-label',label);
     form.append(input);s.filter.after(form);s.ask=form;
-    const close=()=>{form.remove();if(s.ask===form)s.ask=null;};
+    // Removing the focused input fires blur, which would close the form twice.
+    const close=()=>{input.onblur=null;form.remove();if(s.ask===form)s.ask=null;};
     form.onsubmit=event=>{event.preventDefault();const path=input.value.trim();close();s.tree.focus();if(path)submit(path);};
     input.onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();s.tree.focus();}};
     input.onblur=close;
@@ -393,13 +394,6 @@
     s.picker.loading=true;s.picker.message.textContent=navigationLoadingMessage(kind);
     __ws.call('files.navigate',{sid:window.__libroWorkspaceSID,id:s.id,request:token,path:s.file.path,parents:s.parents,kind,line:position.line,column:position.column,version:s.file.version});
   }
-  function openEditor(s) {
-    const tree = document.activeElement === s.tree;
-    const file = tree ? s.items[s.index] : s.file;
-    if (!file || file.dir) return;
-    if (!tree) { guard(s,()=>__ws.call('app.start', {sid:window.__libroWorkspaceSID, editorFile:file.path, filesPanel:s.id, parents:s.parents})); return; }
-    __ws.call('app.start', {sid:window.__libroWorkspaceSID, editorFile:file.path, filesPanel:s.id, parents:tree && s.filter.value ? 0 : s.parents});
-  }
   function focusTree(s,filter=false) {
     if(filter){s.filter.focus();s.filter.select();return;}
     const index=s.items.findIndex(item=>!item.dir && item.path===s.file?.path);
@@ -424,7 +418,6 @@
     'yy':s=>{if(s.file)copy(s,s.file.path+':'+(s.editor?.position().line || 1));},
     'yl':s=>leaderActions.yy(s),
     'w':s=>{s.wrap.checked=!s.wrap.checked;s.wrap.onchange();},
-    'e':s=>openEditor(s),
   };
   // Capture only Files commands before workspace shortcuts (not text entry or other tools).
   window.addEventListener('keydown',event=>{
@@ -442,10 +435,8 @@
     // Insert mode keeps every key, such as Space, Tab and Ctrl+O.
     else if(editing && s.editor.inserting()){}
     else if(navigation && !typing && !event.metaKey && !event.altKey){
-      // View mode starts editing like Vim; the key then runs on the editable buffer.
-      if(source && !editing && !vimBusy && !event.ctrlKey && s.leader==null && /^[iaoIAO]$/.test(event.key))startEditing(s);
-      // In view mode, e only opens the editor when Vim is not waiting for more keys (ye, ge, fe). Editing keeps Vim's e.
-      else if(!event.ctrlKey && !event.shiftKey && event.key==='e' && s.leader==null && !vimBusy && !editing)action=()=>{if(!event.repeat)openEditor(s);};
+      // View mode starts editing like Vim; the key then runs on the editable buffer. u, 2u and Ctrl+R reach changes kept from editing.
+      if(source && !editing && s.leader==null && (!vimBusy && !event.ctrlKey && /^[iaoIAO]$/.test(event.key) || s.editor.history(event)))startEditing(s);
       // Workspace shortcuts win over Vim's Ctrl+O and Ctrl+I; Tab still moves forward in source.
       else if(event.ctrlKey && event.key.toLowerCase()==='o' && !window.libroWorkspace?.bound('Ctrl+O'))action=()=>historyMove(s,-1);
       else if((event.ctrlKey && event.key.toLowerCase()==='i' && !window.libroWorkspace?.bound('Ctrl+I')) || source && event.key==='Tab'&&!event.shiftKey)action=()=>historyMove(s,1);
@@ -656,6 +647,8 @@
       if (states.get(el.dataset.files)?.el === el) return;
       const s = {id:el.dataset.files,el,tree:el.querySelector('.ws-file-tree'),filter:el.querySelector('.ws-file-filter'),hidden:el.querySelector('.ws-file-hidden input'),status:el.querySelector('[role=status]'),children:new Map(),expanded:new Set(),pending:new Map(),index:0,parents:0,items:[],positions:new Map(),history:[],historyIndex:-1,recent:new Map()};
       states.set(s.id,s);
+      // Panel selection returns focus here, such as the editor line, not always the tree.
+      el.addEventListener('focusin',event=>{s.focused=event.target;s.focusedPreview=!!event.target.closest('.ws-file-preview');});
       el.addEventListener('focusout',event=>{if(!el.contains(event.relatedTarget)){s.leader=null;s.status.textContent='';clearTimeout(s.leaderTimer);}});
       el.querySelector('.ws-file-sidebar').addEventListener('mouseleave',event=>delete event.currentTarget.dataset.closed);
       // A mouse click on a toolbar control returns focus to the tree or preview, so Space and Esc keep working.
@@ -916,5 +909,13 @@
     const {typing,...init}=key,replay=new KeyboardEvent('keydown', {...init, bubbles:true, cancelable:true});
     replay.libroTyping=typing;frame?.dispatchEvent(replay);
   });
-  window.libroFiles = {init,receive,dispose};
+  function focus(el) {
+    const s=states.get(el.dataset.files),saved=s?.el===el && s.focused;
+    if(saved?.isConnected && el.contains(saved))saved.focus({preventScroll:true});
+    // A reloaded file replaces its editor; return to the new one.
+    else if(saved && s.focusedPreview)focusPreview(s);
+    // A disabled or hidden target cannot take focus.
+    if(!el.contains(document.activeElement))el.querySelector('.ws-file-tree').focus({preventScroll:true});
+  }
+  window.libroFiles = {init,receive,dispose,focus};
 })();

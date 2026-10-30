@@ -35,11 +35,8 @@ type actionAppStartInput struct {
 	AutolaunchProject *string `json:"autolaunchProject"`
 	Command           string  `json:"command"`
 	Dock              string  `json:"dock"`
-	EditorFile        *string `json:"editorFile"`
-	FilesPanel        string  `json:"filesPanel"`
 	IconUrl           string  `json:"iconUrl"`
 	Name              string  `json:"name"`
-	Parents           float64 `json:"parents"`
 	Plugin            string  `json:"plugin"`
 	ReplaceAgent      bool    `json:"replaceAgent"`
 	SID               string  `json:"sid"`
@@ -294,7 +291,6 @@ type actionWorktreeTitleInput struct {
 
 type actionSettingsToolsInput struct {
 	Bindings map[string]string `json:"bindings"`
-	Editor   *string           `json:"editor"`
 	SID      string            `json:"sid"`
 	Tools    []Plugin          `json:"tools"`
 }

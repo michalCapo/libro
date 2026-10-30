@@ -383,7 +383,7 @@ func registerSettingsActions(app *r.App) {
 				commands[plugin.ID] = agentCommand(plugin)
 			}
 		}
-		return clientScript("window.__libroPlugins=props[0];libroWorkspace.showSettings(props[1],props[2],props[3],props[4],props[5],props[6],props[7],props[8],props[9]);", plugins(), string(DBDefaultPanelWidth()), commands, toolKeybindings(), defaultThreadAgent(), browserPageToolsAutoExecute(), agentEnvironmentNames(), editorToolID(), voiceSettingsState(), agentAutoUpdate()), nil
+		return clientScript("window.__libroPlugins=props[0];libroWorkspace.showSettings(props[1],props[2],props[3],props[4],props[5],props[6],props[7],props[8]);", plugins(), string(DBDefaultPanelWidth()), commands, toolKeybindings(), defaultThreadAgent(), browserPageToolsAutoExecute(), agentEnvironmentNames(), voiceSettingsState(), agentAutoUpdate()), nil
 	})
 	registerWorkspaceAction(app, "settings.width", func(_ *r.Context, in actionSettingsWidthInput) (r.Result, error) {
 		if err := DBSetDefaultPanelWidth(Width(in.Width)); err != nil {
@@ -494,13 +494,22 @@ func renderWorkspaceSettings() *r.Node {
 					),
 					r.El("select", "ws-settings-select").ID("default-thread-agent").Attr("aria-describedby", "default-thread-agent-help"),
 				),
+				r.Div("ws-settings-row").Render(
+					r.Div("ws-settings-copy").Render(
+						r.El("label", "").Attr("for", "move-working-threads").Text("Move working threads down"),
+						r.P("").ID("move-working-threads-help").Text("Move threads with a working agent to the bottom of the list."),
+					),
+					r.El("select", "ws-settings-select").ID("move-working-threads").Attr("aria-describedby", "move-working-threads-help").Render(
+						r.El("option", "").Attr("value", "on").Text("On"),
+						r.El("option", "").Attr("value", "off").Text("Off"),
+					),
+				),
 			),
 			r.P("ws-settings-status").ID("default-thread-agent-status").Attr("role", "status"),
 			r.El("h2", "ws-shortcut-heading").Text("Agent commands"),
 			r.P("ws-settings-status").Text("CLI commands used to start agents in new threads. Drag the handles or use the arrows to reorder agents, then save. The first three enabled agents appear on the welcome screen. Include any flags you need. Running sessions are unchanged."),
 			renderAgentCommands(),
 			renderToolSettings(),
-			renderEditorSettings(),
 			renderToolKeybindings(),
 		),
 		r.Div("ws-settings-footer").Render(

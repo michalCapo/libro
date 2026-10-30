@@ -251,22 +251,6 @@ test('go opens compact symbols with short names and two-stage Escape',t=>{
  f.keys('go');f.key('Escape');f.key('Escape');assert.equal(f.w.document.querySelector('.ws-file-symbol-dialog'),null);
 });
 
-test('e opens the preview or selected tree file, excluding typing and modifiers',t=>{
-  const f=fixture(t);f.open('file with spaces.js');
-  f.key('e');
-  assert.equal(f.calls.at(-1).action,'app.start');
-  assert.equal(f.calls.at(-1).data.editorFile,'file with spaces.js');
-  assert.equal(f.calls.at(-1).data.filesPanel,'files');
-  const count=f.calls.length;
-  f.key('e',{repeat:true});f.key('e',{ctrlKey:true});
-  assert.equal(f.calls.length,count);
-  f.w.document.querySelector('.ws-file-filter').focus();f.key('e');
-  assert.equal(f.calls.length,count);
-  f.w.document.querySelector('.ws-file-tree').focus();f.key('e');
-  assert.equal(f.calls.length,count+1);
-  assert.equal(f.calls.at(-1).data.editorFile,'file with spaces.js');
-});
-
 test('a refresh refused during a project switch keeps the tree; only missing paths leave it',t=>{
   const f=fixture(t);f.open();
   const tree=f.w.document.querySelector('.ws-file-tree'),text=()=>f.w.document.querySelector('.ws-file-text').textContent;

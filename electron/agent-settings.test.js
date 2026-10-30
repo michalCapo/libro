@@ -30,7 +30,7 @@ test('saving a new agent excludes removed tools and preserves removed agents', (
       { id: 'custom-old', dock: 'center', type: 'terminal', removed: true },
     ] },
     document: { getElementById: () => element, querySelector: () => element, querySelectorAll: () => [] },
-    fillThreadAgents() {}, fillToolKeys() {}, updateToolHints() {}, themePreference() {}, addAgentRow() {}, fillAgentEnvironment() {}, fillAutolaunchAgents() {}, fillEditorTools() {},
+    fillThreadAgents() {}, fillToolKeys() {}, updateToolHints() {}, themePreference() {}, addAgentRow() {}, fillAgentEnvironment() {}, fillAutolaunchAgents() {},
     call(action, data) { assert.equal(action, 'settings.agent-command'); payload = JSON.parse(JSON.stringify(data)) },
   })
   assert.deepEqual(payload.removed, { 'custom-old': true })
@@ -95,6 +95,7 @@ function settingsHarness(valid = true) {
     saveTheme: () => { calls.push('theme'); return true },
     saveNotificationSound: () => { calls.push('sound'); return true },
     saveVoiceTyping: () => { calls.push('voice-typing'); return true },
+    saveMoveWorkingThreads: () => { calls.push('move-working-threads'); return true },
   })
   vm.runInContext(saveAutoUpdate + saveAll + close + voice, context)
   return { get, content, calls, toasts, context, stored: () => stored, run: code => vm.runInContext(code, context) }
@@ -108,7 +109,7 @@ test('one Save waits for every section before showing a toast and keeps settings
   assert.equal(h.content.inert, true)
   assert.deepEqual(h.toasts, [])
   for (let i = 0; i < 8; i++) h.run('settingsSaveFinished(true)')
-  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', {key:'openrouter-key', clearKey:false}, {enabled:false}, 'default-thread-agent', 'page-tools', 'width', 'theme', 'sound', 'voice-typing'])
+  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', {key:'openrouter-key', clearKey:false}, {enabled:false}, 'default-thread-agent', 'page-tools', 'width', 'theme', 'sound', 'voice-typing', 'move-working-threads'])
   assert.equal(h.get('workspace-settings').hidden, false)
   assert.deepEqual(h.toasts, [['Settings saved', '', 'success']])
   assert.equal(h.get('settings-save').disabled, false)
@@ -163,36 +164,4 @@ test('automatic update preference waits for the backend and leaves local setting
   assert.equal(h.run("saveAgentAutoUpdate('on')"), false)
   assert.equal(h.get('agent-auto-update').value, 'off')
   assert.match(h.get('agent-auto-update-status').textContent, /Could not save/)
-})
-
-test('editor choices follow enabled CLI tool rows and keep the selected tool', () => {
-  const { JSDOM } = require('jsdom')
-  const dom = new JSDOM('<select id="editor-tool"></select><div id="tool-command-rows"></div>', {runScripts:'outside-only'})
-  try {
-    const w = dom.window
-    const rows = w.document.getElementById('tool-command-rows')
-    for (const [id, type, checked, removed] of [
-      ['nvim', 'terminal', true, false],
-      ['custom-tool-editor', 'terminal', true, false],
-      ['site', 'url', true, false],
-      ['disabled', 'terminal', false, false],
-      ['removed', 'terminal', true, true],
-    ]) {
-      const row = w.document.createElement('div')
-      Object.assign(row.dataset, {agentId:id, toolType:type, removed:String(removed)})
-      row.innerHTML = '<input data-agent-enabled type="checkbox"><input data-agent-name>'
-      row.querySelector('[data-agent-enabled]').checked = checked
-      row.querySelector('[data-agent-name]').value = id
-      rows.append(row)
-    }
-    const start = workspace.indexOf('  function fillEditorTools(')
-    w.eval(workspace.slice(start, workspace.indexOf('  function saveTools(', start)) + ';window.fillEditorTools=fillEditorTools')
-    w.fillEditorTools('custom-tool-editor')
-    const select = w.document.getElementById('editor-tool')
-    assert.deepEqual(Array.from(select.options, option => option.value), ['', 'nvim', 'custom-tool-editor'])
-    assert.equal(select.value, 'custom-tool-editor')
-    rows.children[1].querySelector('[data-agent-enabled]').checked = false
-    w.fillEditorTools()
-    assert.equal(select.value, '')
-  } finally { dom.window.close() }
 })

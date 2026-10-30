@@ -119,7 +119,7 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	keys = toolKeybindings()
 	keys["custom-tool-monitor"] = "Ctrl+Alt+M"
 	keys["custom-tool-docs"] = "Ctrl+Alt+D"
-	if err := saveToolsWithEditor(tools, "", false, keys); err != nil {
+	if err := saveTools(tools, keys); err != nil {
 		t.Fatal(err)
 	}
 	if got := toolKeybindings(); got["custom-tool-docs"] != "Ctrl+Alt+D" || got["nvim"] != keys["nvim"] {
@@ -127,7 +127,7 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 	}
 	keys["custom-tool-docs"] = keys["terminal"]
 	tools[0].Name = "Should not save"
-	if err := saveToolsWithEditor(tools, "", false, keys); err == nil {
+	if err := saveTools(tools, keys); err == nil {
 		t.Fatal("accepted duplicate tool shortcut")
 	}
 	for _, p := range plugins() {
@@ -135,7 +135,7 @@ func TestDefaultPanelWidthPersistence(t *testing.T) {
 			t.Fatal("saved tool despite invalid shortcut")
 		}
 	}
-	if err := saveToolsWithEditor([]Plugin{{ID: "codex", Name: "Bad", Command: "bad", Dock: "right", Type: AppTypeTerminal}}, "", false); err == nil {
+	if err := saveTools([]Plugin{{ID: "codex", Name: "Bad", Command: "bad", Dock: "right", Type: AppTypeTerminal}}); err == nil {
 		t.Fatal("allowed tool to replace agent")
 	}
 	if err := db.Close(); err != nil {
@@ -332,63 +332,15 @@ func TestDefaultThreadAgent(t *testing.T) {
 
 func TestWebsiteToolValidation(t *testing.T) {
 	for _, address := range []string{"", "example.com", "https://", "javascript:alert(1)", "file:///tmp/test", "https://bad host"} {
-		err := saveToolsWithEditor([]Plugin{{ID: "custom-tool-website", Name: "Website", Type: AppTypeURL, Dock: "right", URL: address}}, "", false)
+		err := saveTools([]Plugin{{ID: "custom-tool-website", Name: "Website", Type: AppTypeURL, Dock: "right", URL: address}})
 		if err == nil || !strings.Contains(err.Error(), "valid website URL") {
 			t.Errorf("URL %q: got %v", address, err)
 		}
 	}
 	for _, id := range []string{"browser", "files", "terminal", "codex"} {
-		if err := saveToolsWithEditor([]Plugin{{ID: id, Name: "Website", Type: AppTypeURL, Dock: "right", URL: "https://example.com"}}, "", false); err == nil {
+		if err := saveTools([]Plugin{{ID: id, Name: "Website", Type: AppTypeURL, Dock: "right", URL: "https://example.com"}}); err == nil {
 			t.Errorf("allowed replacing %s", id)
 		}
-	}
-}
-
-func TestEditorToolPersistenceAndValidation(t *testing.T) {
-	original := db
-	t.Cleanup(func() { _ = db.Close(); db = original })
-	var err error
-	path := filepath.Join(t.TempDir(), "settings.db")
-	db, err = sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	createTables()
-	if editorToolID() != "nvim" {
-		t.Fatal("expected Nvim by default")
-	}
-	tools := []Plugin{
-		{ID: "custom-tool-editor", Name: "Editor", Command: "nvim -u NONE", Dock: "right", Type: AppTypeTerminal, Custom: true},
-		{ID: "custom-tool-site", Name: "Website", URL: "https://example.com", Dock: "right", Type: AppTypeURL, Custom: true},
-	}
-	if err := saveToolsWithEditor(tools, tools[0].ID, true); err != nil {
-		t.Fatal(err)
-	}
-	_ = db.Close()
-	db, err = sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if editorToolID() != tools[0].ID {
-		t.Fatal("editor did not persist")
-	}
-	for _, id := range []string{"missing", tools[1].ID} {
-		if err := saveToolsWithEditor(tools, id, true); err == nil {
-			t.Fatalf("accepted %s as editor", id)
-		}
-	}
-	tools[0].Disabled = true
-	if err := saveToolsWithEditor(tools, tools[0].ID, true); err == nil {
-		t.Fatal("accepted disabled editor")
-	}
-	if editorToolID() != tools[0].ID {
-		t.Fatal("invalid save changed editor")
-	}
-	if err := saveToolsWithEditor(tools, "", true); err != nil {
-		t.Fatal(err)
-	}
-	if editorToolID() != "" {
-		t.Fatal("editor did not turn off")
 	}
 }
 

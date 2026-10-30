@@ -52,14 +52,14 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 #libro-workspace:not([data-all-projects=true]) :is(.ws-project-group,.ws-project-group>.ws-project-threads){display:contents}
 /* Thread cards need room to read as separate cards. */
 #libro-workspace:not([data-all-projects=true]) .ws-project-list{gap:8px}
-/* Threads is one column of cards: worktree cards by creation, then general threads. Cards with a working agent
-   drop to the bottom, below a spacer, so the top shows the threads that need the user. */
+/* Threads is one column of cards: worktree cards by creation, then general threads. When the setting is on, cards with a
+   working agent drop to the bottom, below a spacer, so the top shows the threads that need the user. */
 .ws-thread-cards{display:flex;flex-direction:column;flex:1 0 auto}.ws-project-item{order:var(--order,0)}
 #libro-workspace:not([data-all-projects=true]) .ws-thread-cards{gap:8px}#libro-workspace:not([data-all-projects=true]) .ws-thread-cards>.ws-project-list{display:contents}
 #libro-workspace:not([data-all-projects=true]) .ws-thread-cards::after{content:"";flex:1;order:200000}
 #libro-workspace:not([data-all-projects=true]) #workspace-thread-list>.ws-project-item{order:100000}
-#libro-workspace:not([data-all-projects=true]) .ws-project-item:has(>.ws-project-row[data-agent-status=working]){order:calc(var(--order,0) + 300000)}
-#libro-workspace:not([data-all-projects=true]) #workspace-thread-list>.ws-project-item:has(>.ws-project-row[data-agent-status=working]){order:400000}
+#libro-workspace[data-move-working=true]:not([data-all-projects=true]) .ws-project-item:has(>.ws-project-row[data-agent-status=working]){order:calc(var(--order,0) + 300000)}
+#libro-workspace[data-move-working=true]:not([data-all-projects=true]) #workspace-thread-list>.ws-project-item:has(>.ws-project-row[data-agent-status=working]){order:400000}
 .ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;min-height:28px;padding:0 2px 0 10px;margin:4px 0 2px;color:var(--ws-muted);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
 .ws-sidebar-heading>.ws-button{width:26px;height:26px}
 /* Narrow windows always fold, so they hide the fold button. */
@@ -345,7 +345,7 @@ html.dark .ws-row-grid[data-agent-status=done]::before{color:#4ade80}
 .ws-tool-rail .ws-button[aria-pressed=true]{background:var(--ws-raised);color:var(--ws-fg);box-shadow:var(--ws-shadow)}
 .ws-tool-rail .ws-tool-sizes:empty{display:none}
 /* The folded rail draws new thread and the thread cards as narrow cards at the same height as the sidebar ones; each card shows its big digit. */
-.ws-rail-threads,.ws-rail-numbers{display:flex;flex-direction:column;align-items:center;gap:8px}#libro-workspace:not([data-all-projects=true]) .ws-tool-rail:has(.ws-rail-thread[data-agent-status=working]) :is(.ws-rail-threads,.ws-rail-numbers){flex:1 0 auto}#libro-workspace:not([data-all-projects=true]) .ws-tool-rail:has(.ws-rail-thread[data-agent-status=working])>.ws-tool-spacer{display:none}.ws-rail-threads{margin-bottom:8px}.ws-rail-threads,.ws-rail-numbers:has(>[style]){gap:0}#libro-workspace:not([data-fold]) .ws-rail-threads{display:none}
+.ws-rail-threads,.ws-rail-numbers{display:flex;flex-direction:column;align-items:center;gap:8px}#libro-workspace[data-move-working=true]:not([data-all-projects=true]) .ws-tool-rail:has(.ws-rail-thread[data-agent-status=working]) :is(.ws-rail-threads,.ws-rail-numbers){flex:1 0 auto}#libro-workspace[data-move-working=true]:not([data-all-projects=true]) .ws-tool-rail:has(.ws-rail-thread[data-agent-status=working])>.ws-tool-spacer{display:none}.ws-rail-threads{margin-bottom:8px}.ws-rail-threads,.ws-rail-numbers:has(>[style]){gap:0}#libro-workspace:not([data-fold]) .ws-rail-threads{display:none}
 .ws-rail-threads>.ws-button{width:32px;height:36px;margin-bottom:10px;border:1px solid var(--ws-control-line);background:var(--ws-raised);box-shadow:var(--ws-shadow)}.ws-rail-threads>.ws-button:hover{background:var(--ws-hover)}.ws-rail-threads>.ws-button>.material-icons-round{font-size:18px;color:var(--ws-accent)}
 .ws-rail-thread{display:flex;flex-shrink:0;align-items:center;justify-content:center;width:32px;height:58px;padding:0;border:0;border-radius:8px;background:none;color:var(--ws-muted);font-family:inherit;font-size:76px;font-weight:300;line-height:58px;overflow:hidden;cursor:pointer}
 .ws-rail-thread>span{display:inline-block;transform:scaleX(.6)}

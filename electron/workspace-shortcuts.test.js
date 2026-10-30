@@ -778,7 +778,7 @@ test('shared panel focus moves from an agent to Files and preserves file input f
   const container = {
     getAttribute: () => 'files',
     contains: el => el === tree || el === filter,
-    querySelector: selector => selector === '.ws-file-tree' ? tree : null,
+    querySelector: selector => selector === '[data-files]' ? files : null,
   }
   const strip = { closest: () => ({ style: {}, getAttribute: () => null }) }
   const document = {
@@ -786,7 +786,8 @@ test('shared panel focus moves from an agent to Files and preserves file input f
     querySelector: () => null,
     querySelectorAll: selector => selector === '[id^="app-strip-"]' ? [strip] : [],
   }
-  const window = { __libroSelectedApp: 'files', __libroSortedApps: () => [container], focus() {} }
+  const files = {}
+  const window = { __libroSelectedApp: 'files', __libroSortedApps: () => [container], focus() {}, libroFiles: { focus: el => { assert.equal(el, files); tree.focus() } } }
   vm.runInNewContext(handler, { window, document, setTimeout: fn => pending.push(fn) })
   window.__libroFocusApp(0)
   assert.equal(document.activeElement, tree)

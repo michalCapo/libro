@@ -162,10 +162,11 @@ One layout is saved per Libro instance. Only the first window restores it. Reloa
 
 ### Files
 
-Files has a read-only Vim source viewer. Shortcuts apply while the tree or preview has focus.
+Files has a Vim source editor. Files open in view mode. Shortcuts apply while the tree or preview has focus.
 
 - `Enter` previews the selected file.
-- `e` opens the previewed file, or the selected tree file, in the configured editor. `o` in the tree opens a file with its system default application.
+- `i/a/o/I/A/O` or the Edit box start editing. `Esc` returns to normal mode, `u` / `Ctrl+R` undo and redo, and `:w` or `Ctrl+S` saves. `:q` goes back to view mode, `:q!` drops changes, `:e!` reloads from disk.
+- `a`, `r` and `d` in the tree add, rename and delete files and folders. End a new name with `/` to make a folder. `o` in the tree opens a file with its system default application.
 - `Space Space` focuses the existing tree filter. It fuzzy-matches project file paths, including unopened folders; `Esc` clears the filter.
 - Use Vim motions and counts (`h/j/k/l`, `w/b`, `10j`, `gg/G`, `{`/`}`). `00` jumps to the first nonblank character, `44` to line end, `gb` to file end, and `5` to the matching bracket. `Ctrl+d/u` moves 15 lines.
 - `/` searches the file; `n/N` repeats the search. `ff/fb` searches the cursor word forward/backward.
@@ -175,9 +176,7 @@ Files has a read-only Vim source viewer. Shortcuts apply while the tree or previ
 - `Space ss` searches project text; `Space sw` searches the word or selection. Search respects ignore files by default. Results show paths and line numbers; arrows or `j/k` in the results select a match, `Enter` opens it, and `Esc` returns to the preview.
 - `Ctrl+o` goes back through file/symbol/result jumps; `Tab` or `Ctrl+i` goes forward. `Space ,` opens recent previews. Cursor and scroll positions are remembered while the Files tool is open.
 - `Space p` toggles Preview; `Space w` toggles wrapping; `Space sk` searches shortcut help. Image previews also accept `h/j/k/l` to pan and `+/-/0` to zoom/reset.
-- Visible text previews refresh after external changes, preserving position. Source files cannot be edited through this viewer.
-
-Choose the editor in **Settings → Editor → File editor** and save. Nvim is the default. The list includes enabled CLI tools from the Tools section; add a custom CLI tool there to use another editor. Websites are excluded. Choose Off to clear the editor selection. The setting applies across projects. Pressing `e` starts the selected tool in the right dock, with the full file path passed as one argument to its configured command. The command must accept a file path and be installed on PATH. In source previews, `e` replaces Vim’s end-of-word motion; in navigation results, `e` still opens the selected result.
+- Visible text previews refresh after external changes, preserving position. Unsaved edits are kept and marked when the file changes on disk.
 
 Semantic navigation requires `gopls` for Go, `typescript-language-server` (with TypeScript) for JS/TS, or `clangd` for C/C++/Objective-C on PATH. Commands supported by each language server may differ; missing tools and unsupported actions show a message. Servers start on demand and reuse project analysis for later requests. They stop after 10 idle minutes or when Libro exits. Use `Space lr` to restart the current file’s server. Previously opened source buffers are refreshed from disk before navigation.
 
@@ -206,9 +205,9 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 - Play a sound when an assistant finishes.
 - Set the default width for new tool panels. Agent panels fill the rest.
 - Choose one agent to start on its own when you open a project that has no agents open.
+- Move threads with a working agent to the bottom of Threads. Off by default.
 - Choose if browser prompts run right away, or are only pasted in.
 - Change how assistants and tools start, rename them, add your own.
-- Select an enabled CLI tool as the file editor under Editor. Nvim is the default; Off clears the selection. Use `e` in Files to open a file in it.
 - Change keyboard shortcuts and restore the defaults anytime.
 
 ![Settings page: theme and notification options](demo/settings.png)
