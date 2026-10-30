@@ -1051,7 +1051,7 @@
     const rows = sidebarRows('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])');
     const boxes = rows.map(row => row.parentElement.getBoundingClientRect());
     const sizes = boxes.map((box, i) => [Math.round(box.height), i ? Math.round(box.top - boxes[i - 1].bottom) : 0]);
-    const signature = JSON.stringify(rows.map((row, i) => [...sizes[i], row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus, row.getAttribute('aria-current'), row.parentElement.dataset.panels, row.querySelector(':scope > span')?.textContent]));
+    const signature = JSON.stringify(rows.map((row, i) => [...sizes[i], row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus, row.getAttribute('aria-current'), row.querySelector(':scope > span')?.textContent]));
     if (rail.dataset.signature === signature) return;
     rail.dataset.signature = signature; rail.replaceChildren();
     rows.forEach((row, i) => {
@@ -1060,12 +1060,11 @@
       entry.title = label + ' (Ctrl+' + number + ')'; entry.setAttribute('aria-label', row.getAttribute('aria-label') || label);
       entry.setAttribute('aria-current', row.getAttribute('aria-current') || 'false');
       if (row.dataset.agentStatus) entry.dataset.agentStatus = row.dataset.agentStatus;
-      if (row.parentElement.dataset.panels) entry.dataset.panels = row.parentElement.dataset.panels;
       if (sizes[i][0]) { entry.style.height = sizes[i][0] + 'px'; entry.style.marginTop = Math.max(0, sizes[i][1]) + 'px'; }
       entry.onclick = () => row.click(); rail.append(entry);
     });
   }
-  new MutationObserver(() => requestAnimationFrame(renderRailThreads)).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current', 'data-panels']});
+  new MutationObserver(() => requestAnimationFrame(renderRailThreads)).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current']});
   new ResizeObserver(() => requestAnimationFrame(renderRailThreads)).observe(document.getElementById('workspace-project-list'));
   let queued = false;
   const observer = new MutationObserver(records => {
