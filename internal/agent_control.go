@@ -70,7 +70,7 @@ func agentControlCommand(command json.RawMessage) (json.RawMessage, error) {
 	return reply.Result, nil
 }
 
-// RunMCP exposes application, child, thread and repository tools over stdio.
+// RunMCP exposes application, child, thread, repository and restart tools over stdio.
 func RunMCP(in io.Reader, out io.Writer) error {
 	applicationScope := os.Getenv("LIBRO_APPLICATION_PATH")
 	if applicationScope == "" {
@@ -100,11 +100,11 @@ func RunMCP(in io.Reader, out io.Writer) error {
 		reply := map[string]any{"jsonrpc": "2.0", "id": request.ID}
 		switch request.Method {
 		case "initialize":
-			reply["result"] = map[string]any{"protocolVersion": "2024-11-05", "capabilities": map[string]any{"tools": map[string]any{}}, "serverInfo": map[string]any{"name": "libro", "version": "1.0.0"}, "instructions": applicationHelp + "\n" + childrenHelp + "\n" + threadHelp + "\n" + reposHelp}
+			reply["result"] = map[string]any{"protocolVersion": "2024-11-05", "capabilities": map[string]any{"tools": map[string]any{}}, "serverInfo": map[string]any{"name": "libro", "version": "1.0.0"}, "instructions": applicationHelp + "\n" + childrenHelp + "\n" + threadHelp + "\n" + reposHelp + "\n" + restartHelp}
 		case "ping":
 			reply["result"] = map[string]any{}
 		case "tools/list":
-			reply["result"] = map[string]any{"tools": []any{map[string]any{"name": "application", "description": applicationHelp, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "start", "restart", "stop", "logs"}}}, "required": []string{"action"}, "additionalProperties": false}}, childrenTool(), threadTool(), reposTool()}}
+			reply["result"] = map[string]any{"tools": []any{map[string]any{"name": "application", "description": applicationHelp, "inputSchema": map[string]any{"type": "object", "properties": map[string]any{"action": map[string]any{"type": "string", "enum": []string{"status", "start", "restart", "stop", "logs"}}}, "required": []string{"action"}, "additionalProperties": false}}, childrenTool(), threadTool(), reposTool(), restartTool()}}
 		case "tools/call":
 			var result json.RawMessage
 			var err error
@@ -117,6 +117,8 @@ func RunMCP(in io.Reader, out io.Writer) error {
 				result, err = scopedApplicationCommand(request.Params.Arguments, applicationScope)
 			case "repositories":
 				result, err = agentControlCommand(json.RawMessage(`{"action":"repositories"}`))
+			case "restart":
+				result, err = agentControlCommand(json.RawMessage(`{"action":"restart"}`))
 			default:
 				err = errors.New("unknown tool")
 			}

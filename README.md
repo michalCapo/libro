@@ -262,7 +262,7 @@ Change shortcuts in **Settings**. **Restore defaults** resets them.
 
 New Codex, Claude (including Ollama-launched Claude), and OpenCode sessions
 register the `libro` MCP server automatically. It provides `application`,
-`children`, `thread`, and `repositories` tools. Pi receives instructions for the equivalent CLI commands.
+`children`, `thread`, `repositories`, and `restart` tools. Pi receives instructions for the equivalent CLI commands.
 Custom agents can register `libro mcp` as a stdio MCP server.
 Agents also receive instructions to use the separately installed `agent-browser`
 CLI for browser testing, with a unique session per agent/thread. Libro does not
@@ -398,6 +398,12 @@ Restart existing agent sessions to load the scoped MCP schema and instructions.
 The `repositories` MCP tool and `libro repositories` CLI refresh open
 Repositories panels. Agents call it after they commit, push, merge or change
 branches, so the panel shows current Git status without a manual Refresh.
+
+### Restart Libro
+
+The `restart` MCP tool and `libro restart` CLI restart the Libro desktop app,
+for example after an agent installs a new Libro build. Every terminal and agent
+stops, including the caller.
 
 ### Isolated QA child agents
 

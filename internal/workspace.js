@@ -1045,24 +1045,28 @@
       row.parentElement.dataset.panels = String(!card && open.has(row.dataset.projectKey));
     });
   }
-  // The folded rail repeats each numbered card as its digit; clicking it opens that card. It follows the card lists as they change.
+  // The folded rail repeats each numbered card as its digit, at the card's height and spacing; clicking it opens that card. It follows the card lists as they change.
   function renderRailThreads() {
     const rail = document.getElementById('workspace-rail-threads'); if (!rail) return;
     const rows = sidebarRows('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])');
-    const signature = JSON.stringify(rows.map(row => [row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus, row.getAttribute('aria-current'), row.parentElement.dataset.panels, row.querySelector(':scope > span')?.textContent]));
+    const boxes = rows.map(row => row.parentElement.getBoundingClientRect());
+    const sizes = boxes.map((box, i) => [Math.round(box.height), i ? Math.round(box.top - boxes[i - 1].bottom) : 0]);
+    const signature = JSON.stringify(rows.map((row, i) => [...sizes[i], row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus, row.getAttribute('aria-current'), row.parentElement.dataset.panels, row.querySelector(':scope > span')?.textContent]));
     if (rail.dataset.signature === signature) return;
     rail.dataset.signature = signature; rail.replaceChildren();
-    rows.forEach(row => {
+    rows.forEach((row, i) => {
       const number = row.dataset.projectShortcut, label = row.querySelector(':scope > span')?.textContent || row.dataset.projectKey;
       const entry = node('button', 'ws-rail-thread'); entry.type = 'button'; entry.append(node('span', '', number));
       entry.title = label + ' (Ctrl+' + number + ')'; entry.setAttribute('aria-label', row.getAttribute('aria-label') || label);
       entry.setAttribute('aria-current', row.getAttribute('aria-current') || 'false');
       if (row.dataset.agentStatus) entry.dataset.agentStatus = row.dataset.agentStatus;
       if (row.parentElement.dataset.panels) entry.dataset.panels = row.parentElement.dataset.panels;
+      if (sizes[i][0]) { entry.style.height = sizes[i][0] + 'px'; entry.style.marginTop = Math.max(0, sizes[i][1]) + 'px'; }
       entry.onclick = () => row.click(); rail.append(entry);
     });
   }
   new MutationObserver(() => requestAnimationFrame(renderRailThreads)).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current', 'data-panels']});
+  new ResizeObserver(() => requestAnimationFrame(renderRailThreads)).observe(document.getElementById('workspace-project-list'));
   let queued = false;
   const observer = new MutationObserver(records => {
     if (records.some(record => (record.type === 'attributes' && record.target.matches('[data-app-id]')) || [...record.addedNodes, ...record.removedNodes].some(n => n.nodeType === 1 && (n.matches('[data-app-id], [data-workspace-project], .ws-project, #top-bar') || n.querySelector('[data-app-id], [data-workspace-project]'))))) schedule();

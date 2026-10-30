@@ -700,6 +700,16 @@ function createWindow() {
     })
   })
 
+  // An agent asked to restart Libro, for example after installing a new build.
+  ipcMain.on('libro-restart', (event) => {
+    if (event.sender !== mainWindow?.webContents) return
+    app.relaunch()
+    quitApp().catch((err) => {
+      console.error('Failed to restart cleanly:', err.message)
+      app.exit()
+    })
+  })
+
   ipcMain.on('libro-toggle-devtools', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return
     const contents = mainWindow.webContents

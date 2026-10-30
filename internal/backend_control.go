@@ -170,6 +170,8 @@ func dispatchBackendCommand(sid string, command backendCommand) (r.Result, any, 
 		return patch, result, err
 	case "repositories":
 		return clientScript("window.libroRepos?.refresh();"), map[string]any{"refreshed": true}, nil
+	case "restart":
+		return clientScript("window.libroElectron?.restart();"), map[string]any{"restarting": true}, nil
 	case "children":
 		return controlChildren(sid, command.Project, command.Command)
 	case "thread":

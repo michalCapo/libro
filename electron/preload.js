@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('libroElectron', {
   forceClose: function () {
     ipcRenderer.send('libro-force-close')
   },
+  restart: function () {
+    ipcRenderer.send('libro-restart')
+  },
   toggleDevTools: function () {
     ipcRenderer.send('libro-toggle-devtools')
   },

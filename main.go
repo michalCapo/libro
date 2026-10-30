@@ -58,6 +58,8 @@ func main() {
 			err = libro.RunOpenCLI(args[1:], os.Stdout)
 		case "repositories":
 			err = libro.RunReposCLI(args[1:], os.Stdout)
+		case "restart":
+			err = libro.RunRestartCLI(args[1:], os.Stdout)
 		case "mcp":
 			err = libro.RunMCP(os.Stdin, os.Stdout)
 		default:
