@@ -1,4 +1,4 @@
-import {EditorState, Compartment} from '@codemirror/state';
+import {EditorState, Compartment, StateEffect, StateField} from '@codemirror/state';
 import {EditorView, Decoration, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection} from '@codemirror/view';
 import {syntaxTree, ensureSyntaxTree, StreamLanguage, syntaxHighlighting, HighlightStyle, bracketMatching} from '@codemirror/language';
 import {search} from '@codemirror/search';
@@ -45,8 +45,11 @@ export function languageFor(path) {
   return ({xml,svg:xml,yaml,yml:yaml,sql,php,vue,less,scss:sass,sass,jsonc:json,jsonl:json,ndjson:json,cxx:cpp,pyi:python,mdx:markdown}[ext]?.() || languages[ext]?.()) || (/^[cm][jt]s$/.test(ext) ? javascript({typescript:ext.endsWith('ts')}) : []);
 }
 // Keep the bundled Highlight.js coverage for formats without a CM parser.
+// Marks follow edits; new text stays plain until the file reopens.
 let fallbackHighlighter;
-function fallbackSyntax(view,path,source,compartment) {
+const fallbackMarks=StateEffect.define();
+const fallback=StateField.define({create:()=>Decoration.none,update:(marks,tr)=>tr.effects.find(e=>e.is(fallbackMarks))?.value ?? marks.map(tr.changes),provide:field=>EditorView.decorations.from(field)});
+function fallbackSyntax(view,path,source) {
   const name=path.split('/').pop().toLowerCase(),ext=name.split('.').pop();
   const language=/^(gnu)?makefile$/.test(name)?'makefile':({gql:'graphql',graphql:'graphql',svelte:'xml'})[ext];
   if(!language || source.length>256*1024 || source.split('\n').some(line=>line.length>1000))return;
@@ -65,7 +68,7 @@ function fallbackSyntax(view,path,source,compartment) {
       if(classes.length && node.length)marks.push(Decoration.mark({class:classes.join(' ')}).range(offset,offset+node.length));
       offset+=node.length;
     }
-    view.dispatch({effects:compartment.reconfigure(EditorView.decorations.of(Decoration.set(marks)))});
+    if(view.state.doc.toString()===source)view.dispatch({effects:fallbackMarks.of(Decoration.set(marks))});
   }).catch(()=>{});
 }
 const symbolKinds = /^(FunctionDeclaration|FunctionDecl|MethodDecl|MethodDeclaration|MethodDefinition|FunctionDefinition|ClassDeclaration|ClassDefinition|ClassSpecifier|InterfaceDeclaration|TypeAliasDeclaration|TypeSpec|StructItem|EnumItem|TraitItem|FunctionItem)$/;
@@ -115,6 +118,11 @@ Vim.defineOperator('yank', (cm,args,ranges,anchor) => {
   editors.get(cm)?.copy(value);
   return cm.state.vim.visualMode ? cm.getCursor('start') : anchor;
 });
+// Ex commands go to the panel that owns the editor.
+for(const [name,prefix] of [['write','w'],['wq','wq'],['xit','x'],['quit','q'],['edit','e']])
+  Vim.defineEx(name,prefix,(cm,params)=>editors.get(cm)?.onCommand(name,params.argString?.trim()==='!'));
+// View mode rejects every change, also programmatic Vim/IME/paste changes.
+const locked=[EditorState.readOnly.of(true),EditorState.changeFilter.of(()=>false),EditorView.contentAttributes.of({'aria-readonly':'true'})];
 const colors = HighlightStyle.define([
   {tag:[tags.keyword,tags.operator],color:'var(--ws-code-keyword)'},
   {tag:[tags.string,tags.regexp],color:'var(--ws-code-string)'},
@@ -123,19 +131,20 @@ const colors = HighlightStyle.define([
   {tag:[tags.function(tags.variableName),tags.className,tags.heading],color:'var(--ws-code-title)'},
   {tag:[tags.propertyName,tags.attributeName],color:'var(--ws-code-property)'},
 ]);
-export function create({element,path,source,wrap,onSymbols,onNavigate,onChange,copy}) {
-  const wrapping = new Compartment(),fallback=new Compartment();
+export function create({element,path,source,wrap,onSymbols,onNavigate,onChange,onCommand,copy}) {
+  const wrapping = new Compartment(),editing=new Compartment();
+  let saved,symbols,mode='normal';
   const view = new EditorView({parent:element,state:EditorState.create({doc:source,extensions:[
-    vim({status:false}), EditorState.readOnly.of(true),
-    // Also reject programmatic Vim/IME/paste changes. Refresh replaces the state instead.
-    EditorState.changeFilter.of(()=>false),
+    vim({status:false}), editing.of(locked),
     lineNumbers(),highlightActiveLine(),highlightActiveLineGutter(),drawSelection(),bracketMatching(),search(),
-    languageFor(path),fallback.of([]),syntaxHighlighting(colors),wrapping.of(wrap ? EditorView.lineWrapping : []),
-    EditorView.contentAttributes.of({'aria-label':'Source preview','aria-readonly':'true'}),
-    EditorView.updateListener.of(update=>{if(update.selectionSet) onChange?.();}),
+    languageFor(path),fallback,syntaxHighlighting(colors),wrapping.of(wrap ? EditorView.lineWrapping : []),
+    EditorView.contentAttributes.of({'aria-label':'Source'}),
+    EditorView.updateListener.of(update=>{if(update.docChanged)symbols=null;if(update.selectionSet || update.docChanged) onChange?.(update.docChanged);}),
     EditorView.theme({'&':{height:'100%',backgroundColor:'var(--ws-bg)',color:'var(--ws-fg)'},'.cm-scroller':{overflow:'auto',fontFamily:'ui-monospace,monospace',fontSize:'12px',lineHeight:'1.6'},'.cm-gutters':{backgroundColor:'var(--ws-chrome)',color:'var(--ws-muted)',borderRight:'1px solid var(--ws-line)'},'.cm-activeLine, .cm-activeLineGutter':{backgroundColor:'var(--ws-hover)'},'.cm-cursor':{borderLeftColor:'var(--ws-fg)'},'&.cm-focused .cm-selectionBackground, .cm-selectionBackground':{backgroundColor:'color-mix(in srgb, var(--ws-accent) 25%, transparent)'},'.cm-panels':{backgroundColor:'var(--ws-chrome)',color:'var(--ws-fg)'}})
   ]})});
+  saved=view.state.doc;
   const cm = getCM(view);
+  cm.on('vim-mode-change',event=>{mode=event.mode;onChange?.(false);});
   // Vim treats digits as counts before consulting mappings. Handle these personal
   // numeric mappings first, while keeping counts such as 10j and 40j intact.
   let digit='', digitTimer;
@@ -157,9 +166,8 @@ export function create({element,path,source,wrap,onSymbols,onNavigate,onChange,c
     }
   },true);
   view.contentDOM.addEventListener('blur',()=>{digit='';clearTimeout(digitTimer);});
-  let symbols;
   const api = {
-    view,onSymbols,onNavigate,copy,
+    view,onSymbols,onNavigate,onCommand,copy,
     symbols:()=>symbols ||= symbolsFor(view.state),
     position:()=>{const pos=view.state.selection.main.head,line=view.state.doc.lineAt(pos);return {line:line.number,column:pos-line.from,top:view.scrollDOM.scrollTop,left:view.scrollDOM.scrollLeft};},
     jump:(line,column=0)=>{const target=view.state.doc.line(Math.max(1,Math.min(view.state.doc.lines,line))); const pos=Math.min(target.to,target.from+column);Vim.exitVisualMode(cm); view.dispatch({selection:{anchor:pos},effects:EditorView.scrollIntoView(pos,{y:'center'})});},
@@ -168,10 +176,19 @@ export function create({element,path,source,wrap,onSymbols,onNavigate,onChange,c
     focus:()=>view.focus(),
     pending:()=>{const vim=cm.state.vim,input=vim.inputState;return !!digit || vim.insertMode || vim.visualMode || !!input.operator || input.keyBuffer.length>0 || input.prefixRepeat.length>0 || input.motionRepeat.length>0;},
     wrap:value=>view.dispatch({effects:wrapping.reconfigure(value ? EditorView.lineWrapping : [])}),
+    editable:()=>!view.state.readOnly,
+    setEditable:value=>{if(!value && cm.state.vim.insertMode)Vim.exitInsertMode(cm);view.dispatch({effects:editing.reconfigure(value ? [] : locked)});onChange?.(false);},
+    mode:()=>view.state.readOnly ? 'view' : mode,
+    inserting:()=>!!cm.state.vim.insertMode,
+    doc:()=>view.state.doc,
+    dirty:()=>!view.state.doc.eq(saved),
+    // A save keeps typing done while it ran as a change.
+    saved:doc=>{saved=doc;onChange?.(false);},
+    revert:()=>{if(!view.state.readOnly)view.dispatch({changes:{from:0,to:view.state.doc.length,insert:saved}});api.setEditable(false);},
     destroy:()=>{clearTimeout(digitTimer);editors.delete(cm);view.destroy();},
   };
   editors.set(cm,api);
-  fallbackSyntax(view,path,source,fallback);
+  fallbackSyntax(view,path,source);
   return api;
 }
 

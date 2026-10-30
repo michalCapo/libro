@@ -242,6 +242,9 @@ func DBLoadProjects() []Project {
 		}
 		projects = append(projects, p)
 	}
+	if err := rows.Err(); err != nil {
+		log.Printf("db: load projects: %v", err)
+	}
 	return projects
 }
 

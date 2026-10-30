@@ -458,6 +458,8 @@ func codexAgentsRunning(home, threadID string) bool {
 			return true
 		}
 	}
+	// A failed read finds no running child, like an empty one.
+	_ = rows.Err()
 	return false
 }
 

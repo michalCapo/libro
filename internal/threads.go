@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -41,6 +42,9 @@ func loadThreads() []Thread {
 		if rows.Scan(&thread.ID, &thread.Name, &thread.Archived, &thread.Project, &thread.Path, &thread.SessionID, &thread.AgentID, &thread.AgentCommand, &thread.AgentModel, &thread.AgentEffort) == nil {
 			threads = append(threads, thread)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("db: load threads: %v", err)
 	}
 	_ = rows.Close()
 	codexHome := agentEnvironment()["CODEX_HOME"]

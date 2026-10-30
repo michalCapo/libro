@@ -664,6 +664,8 @@ func Run(assets embed.FS, desktop bool) error {
 	backendSessionID()
 	app := r.NewApp()
 	app.Title = "Libro"
+	// Files saves send whole text files up to the 1 MB preview limit.
+	app.MessageLimit = func(*http.Request) int64 { return 8 << 20 }
 	if name := os.Getenv("LIBRO_INSTANCE"); name != "" {
 		app.Title += " (" + name + ")"
 	}

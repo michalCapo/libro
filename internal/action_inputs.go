@@ -194,17 +194,20 @@ type actionChildrenControlInput struct {
 }
 
 type actionFilesInput struct {
-	Column  float64 `json:"column"`
-	ID      string  `json:"id"`
-	Ignored bool    `json:"ignored"`
-	Kind    string  `json:"kind"`
-	Line    float64 `json:"line"`
-	Parents float64 `json:"parents"`
-	Path    string  `json:"path"`
-	Query   string  `json:"query"`
-	Request string  `json:"request"`
-	SID     string  `json:"sid"`
-	Version string  `json:"version"`
+	Column    float64 `json:"column"`
+	Directory bool    `json:"directory"`
+	ID        string  `json:"id"`
+	Ignored   bool    `json:"ignored"`
+	Kind      string  `json:"kind"`
+	Line      float64 `json:"line"`
+	Parents   float64 `json:"parents"`
+	Path      string  `json:"path"`
+	Query     string  `json:"query"`
+	Request   string  `json:"request"`
+	SID       string  `json:"sid"`
+	Target    string  `json:"target"`
+	Text      string  `json:"text"`
+	Version   string  `json:"version"`
 }
 
 type actionSettingsToolKeysInput struct {

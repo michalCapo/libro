@@ -10,9 +10,16 @@
     ['/', 'Tree: filter files'],
     ['Enter', 'Preview file'],
     ['o', 'Tree: open externally'],
-    ['e', 'Open in editor'],
+    ['a / r / d', 'Tree: add / rename / delete (end a new name with / for a folder)'],
+    ['e / Space e', 'Open in editor (e in tree and view mode)'],
     ['Space Space', 'Find project files in tree'],
-    ['Space f / Esc', 'Back to file tree'],
+    ['Space f / Esc', 'Back to file tree (Esc in view mode)'],
+    ['i / a / o / I / A / O', 'Source: start editing in insert mode'],
+    ['Esc', 'Insert: back to normal mode'],
+    [':w / Ctrl+S / :w!', 'Save / overwrite changes made on disk'],
+    [':q / :q!', 'Back to view mode / and discard changes'],
+    [':wq / :x', 'Save and back to view mode'],
+    [':e!', 'Reload file from disk'],
     ['h j k l', 'Rendered preview and image: scroll'],
     ['+ / - / 0', 'Image: zoom in / out / reset'],
     ['h j k l / w b', 'Source movement'],
@@ -49,17 +56,126 @@
   function context(s) {
     if (!s.editor) return;
     const position=s.editor.position(), symbol=s.editor.symbols().filter(item=>item.from<=s.editor.view.state.selection.main.head && item.to>=s.editor.view.state.selection.main.head).pop();
-    s.el.querySelector('.ws-file-context').textContent=`${position.line}:${position.column+1}` + (symbol ? ' · '+symbol.label : '') + ' · Read only';
+    const mode=s.editor.mode(),badge=document.createElement('span');
+    badge.className='ws-file-mode';badge.dataset.mode=mode;badge.textContent=mode.toUpperCase();
+    const notes=[s.editor.dirty()&&'Modified',saving(s)&&'Saving…',s.diskChanged,s.notice].filter(Boolean);
+    s.el.querySelector('.ws-file-context').replaceChildren(badge,` ${position.line}:${position.column+1}` + (symbol ? ' · '+symbol.label : '') + notes.map(note=>' · '+note).join(''));
+    s.edit.checked=mode!=='view';
+  }
+  // Unsaved changes are kept until the user agrees to drop them.
+  function guard(s,run) {
+    if(!s.editor?.dirty()){run();return;}
+    window.__libroConfirmAction('Discard changes?','“'+s.file.path+'” has unsaved changes. Discard them?',()=>{remember(s);showText(s,s.file.path,s.file.text);run();});
+  }
+  function startEditing(s) {
+    if(!s.editor){
+      // Rendered previews have no editor; edit the source instead.
+      if(!s.file || s.file.mime)return;
+      s.preview.checked=false;s.preview.onchange();
+    }
+    s.editor?.setEditable(true);
+  }
+  // A save belongs to its editor; a dropped or replaced one no longer blocks saving.
+  const saving=s=>[...s.pending.values()].some(item=>item.kind==='save' && item.editor===s.editor);
+  function save(s,force=false,quit=false) {
+    if(!s.editor?.editable())return;
+    if(saving(s)){s.notice='Already saving';context(s);return;}
+    const doc=s.editor.doc(),token=String(++sequence);
+    s.notice='';
+    s.pending.set(token,{kind:'save',editor:s.editor,doc,quit});
+    context(s);
+    // The editor splits lines on any break; keep a file's Windows line breaks.
+    const text=/\r\n/.test(s.file.text || '') ? doc.toString().replace(/\n/g,'\r\n') : doc.toString();
+    __ws.call('files.save',{sid:window.__libroWorkspaceSID,id:s.id,request:token,path:s.file.path,parents:s.parents,text,version:force?'':s.file.version});
+  }
+  function command(s,name,force) {
+    const dirty=s.editor.dirty();
+    s.notice='';
+    if(name==='write' || name==='wq' || name==='xit' && dirty)save(s,force,name!=='write');
+    else if(name==='xit' || name==='quit' && (force || !dirty))(force?s.editor.revert:s.editor.setEditable)(false);
+    else if(name==='edit' && (force || !dirty)){const token=request(s,s.file.path,true,false,s.parents);Object.assign(s.pending.get(token),{edit:s.editor.editable(),focus:true});}
+    else s.notice='No write since last change (add ! to override)';
+    context(s);
+  }
+  // Tree changes ask for a path in a row above the tree.
+  function ask(s,label,value,submit) {
+    s.ask?.remove();
+    const form=document.createElement('form');form.className='ws-file-ask';
+    const input=document.createElement('input');input.className='ws-file-filter';input.value=value;input.placeholder=label;input.setAttribute('aria-label',label);
+    form.append(input);s.filter.after(form);s.ask=form;
+    const close=()=>{form.remove();if(s.ask===form)s.ask=null;};
+    form.onsubmit=event=>{event.preventDefault();const path=input.value.trim();close();s.tree.focus();if(path)submit(path);};
+    input.onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();s.tree.focus();}};
+    input.onblur=close;
+    input.focus();
+    // Select the name, so typing replaces it and keeps the folder.
+    const name=value.replace(/\/$/,'').lastIndexOf('/')+1;input.setSelectionRange(value.endsWith('/')?value.length:name,value.length);
+  }
+  function change(s,action,args,done) {
+    const token=String(++sequence);
+    s.pending.set(token,{kind:'change',done});
+    __ws.call(action,{sid:window.__libroWorkspaceSID,id:s.id,request:token,parents:s.filter.value?0:s.parents,...args});
+  }
+  // Show a changed path: open its folders, select it and reload the tree.
+  function reveal(s,path,parents) {
+    if(parents!==s.parents){s.indexed=null;if(s.filter.value)indexFiles(s);return;}
+    const parts=path.split('/');
+    for(let i=1;i<parts.length;i++){const dir=parts.slice(0,i).join('/');if(!s.expanded.has(dir)){s.expanded.add(dir);if(!s.children.has(dir))request(s,dir);}}
+    s.select=path;s.indexed=null;
+    if(s.filter.value)indexFiles(s);
+    refresh(s);
+  }
+  // A path is affected when it is the open file or a folder above it.
+  const affects=(s,path,parents)=>s.file && parents===s.parents && (s.file.path===path || s.file.path.startsWith(path+'/'));
+  function addEntry(s,item) {
+    const parents=s.filter.value?0:s.parents;
+    const folder=!item ? '' : item.dir ? item.path : item.path.split('/').slice(0,-1).join('/');
+    ask(s,'New file, or folder ending with /',folder?folder+'/':'',value=>{
+      const directory=value.endsWith('/'),path=value.replace(/\/+$/,'');
+      if(!path)return;
+      change(s,'files.create',{path,directory},()=>{
+        reveal(s,path,parents);
+        if(directory){s.expanded.add(path);request(s,path);}
+        else navigate(s,path,null,parents,true,true,true);
+      });
+    });
+  }
+  function renameEntry(s,item) {
+    const parents=s.filter.value?0:s.parents;
+    ask(s,'Rename '+item.path,item.path,target=>{
+      target=target.replace(/\/+$/,'');
+      if(!target || target===item.path)return;
+      const run=()=>change(s,'files.rename',{path:item.path,target},()=>{
+        reveal(s,target,parents);
+        if(!affects(s,item.path,parents))return;
+        // Reopen the file at its new path and place.
+        const path=target+s.file.path.slice(item.path.length),position=s.editor?.position(),edit=s.editor?.editable();
+        navigate(s,path,position,parents,false,false,edit);
+      });
+      if(affects(s,item.path,parents))guard(s,run);else run();
+    });
+  }
+  function deleteEntry(s,item) {
+    const parents=s.filter.value?0:s.parents;
+    window.__libroConfirmAction(item.dir?'Delete folder?':'Delete file?','Delete “'+item.path+'”'+(item.dir?' and everything in it':'')+'? This cannot be undone.',()=>{
+      s.tree.focus();
+      change(s,'files.delete',{path:item.path},()=>{
+        if(affects(s,item.path,parents)){clearFile(s);markOpen(s);}
+        s.indexed=null;if(s.filter.value)indexFiles(s);
+        refresh(s);
+      });
+    });
   }
   function showText(s, path, source) {
     const text=s.el.querySelector('.ws-file-text');
-    s.editor?.destroy(); s.editor=null;
+    s.editor?.destroy(); s.editor=null;s.diskChanged='';s.notice='';
     text.replaceChildren();
     // The editor is the tab stop; a focused wrapper would ignore Vim keys.
     text.tabIndex=path?-1:0;
     if (!path) { text.textContent=source; return; }
     s.editor=libroFileEditor.create({element:text,path,source,wrap:s.wrap.checked,
-      onSymbols:()=>picker(s,'symbols'),onNavigate:kind=>codeNavigation(s,kind),onChange:()=>context(s),copy:value=>copy(s,value)});
+      onSymbols:()=>picker(s,'symbols'),onNavigate:kind=>codeNavigation(s,kind),onChange:edited=>{if(edited)s.notice='';context(s);},
+      onCommand:(name,force)=>command(s,name,force),copy:value=>copy(s,value)});
     const pos=s.positions.get(s.parents+':'+path);
     if (pos) { s.editor.jump(pos.line,pos.column);const editor=s.editor;requestAnimationFrame(()=>{if(s.editor===editor && !s.jumpPending){editor.view.scrollDOM.scrollTop=pos.top;editor.view.scrollDOM.scrollLeft=pos.left;}}); }
     context(s);
@@ -73,18 +189,20 @@
     if(s.history.length>100) s.history.shift();
     s.historyIndex=s.history.length-1;
   }
-  function navigate(s,path,position,parents=s.parents,history=true,focus=true) {
+  function navigate(s,path,position,parents=s.parents,history=true,focus=true,edit=false) {
+    if((parents!==s.parents || path!==s.file?.path) && s.editor?.dirty()){guard(s,()=>navigate(s,path,position,parents,history,focus,edit));return;}
     remember(s);
     if (history) record(s,location(s));
     if (parents===s.parents && path===s.file?.path && s.editor && !s.el.querySelector('.ws-file-text').hidden) {
       s.previewRequest=null;
       if(position) s.editor.jump(position.line,position.column);
+      if(edit)s.editor.setEditable(true);
       if(history)record(s,location(s));
       if(focus)focusPreview(s);
       return;
     }
     const token=request(s,path,true,false,parents);
-    Object.assign(s.pending.get(token),{position,history,focus});
+    Object.assign(s.pending.get(token),{position,history,focus,edit});
   }
   function historyMove(s,direction) {
     const next=s.historyIndex+direction;
@@ -265,6 +383,8 @@
   function navigationLoadingMessage(kind){return kind==='restart'?'Restarting language server…':'Finding '+navigationTitles[kind].toLowerCase()+'… First use may take longer while the language server initializes.';}
   function codeNavigation(s,kind){
     if(!s.editor || !s.file)return;
+    // The language server reads the file from disk.
+    if(s.editor.dirty()){s.notice='Save the file (:w) to use code navigation';context(s);return;}
     const origin=location(s),position=s.editor.position();
     s.navigationKind=kind;
     picker(s,'navigation');
@@ -277,6 +397,7 @@
     const tree = document.activeElement === s.tree;
     const file = tree ? s.items[s.index] : s.file;
     if (!file || file.dir) return;
+    if (!tree) { guard(s,()=>__ws.call('app.start', {sid:window.__libroWorkspaceSID, editorFile:file.path, filesPanel:s.id, parents:s.parents})); return; }
     __ws.call('app.start', {sid:window.__libroWorkspaceSID, editorFile:file.path, filesPanel:s.id, parents:tree && s.filter.value ? 0 : s.parents});
   }
   function focusTree(s,filter=false) {
@@ -303,6 +424,7 @@
     'yy':s=>{if(s.file)copy(s,s.file.path+':'+(s.editor?.position().line || 1));},
     'yl':s=>leaderActions.yy(s),
     'w':s=>{s.wrap.checked=!s.wrap.checked;s.wrap.onchange();},
+    'e':s=>openEditor(s),
   };
   // Capture only Files commands before workspace shortcuts (not text entry or other tools).
   window.addEventListener('keydown',event=>{
@@ -314,11 +436,16 @@
     const frame=event.target.matches('.ws-file-rendered'),image=event.target===s.imageView?.media;
     const navigation=source || event.target===s.tree || event.target.matches('.ws-file-text') || event.target.closest('.ws-file-media');
     // Vim keeps keys while it waits for more, such as f<Space> or an Esc that ends a selection.
-    const vimBusy=source && s.editor?.pending();
+    const vimBusy=source && s.editor?.pending(),editing=source && s.editor?.editable();
     let action,scroll;
-    if(navigation && !typing && !event.metaKey && !event.altKey){
-      // In source, e only opens the editor when Vim is not waiting for more keys (ye, ge, fe).
-      if(!event.ctrlKey && !event.shiftKey && event.key==='e' && s.leader==null && !vimBusy)action=()=>{if(!event.repeat)openEditor(s);};
+    if(editing && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase()==='s')action=()=>save(s);
+    // Insert mode keeps every key, such as Space, Tab and Ctrl+O.
+    else if(editing && s.editor.inserting()){}
+    else if(navigation && !typing && !event.metaKey && !event.altKey){
+      // View mode starts editing like Vim; the key then runs on the editable buffer.
+      if(source && !editing && !vimBusy && !event.ctrlKey && s.leader==null && /^[iaoIAO]$/.test(event.key))startEditing(s);
+      // In view mode, e only opens the editor when Vim is not waiting for more keys (ye, ge, fe). Editing keeps Vim's e.
+      else if(!event.ctrlKey && !event.shiftKey && event.key==='e' && s.leader==null && !vimBusy && !editing)action=()=>{if(!event.repeat)openEditor(s);};
       // Workspace shortcuts win over Vim's Ctrl+O and Ctrl+I; Tab still moves forward in source.
       else if(event.ctrlKey && event.key.toLowerCase()==='o' && !window.libroWorkspace?.bound('Ctrl+O'))action=()=>historyMove(s,-1);
       else if((event.ctrlKey && event.key.toLowerCase()==='i' && !window.libroWorkspace?.bound('Ctrl+I')) || source && event.key==='Tab'&&!event.shiftKey)action=()=>historyMove(s,1);
@@ -332,7 +459,8 @@
       }
       else if((frame || image) && (scroll=scrollPreview(s,event)))action=()=>frame?event.target.contentWindow?.postMessage({libroFilesScroll:scroll},'*'):event.target.scrollBy(scroll[0],scroll[1]+scroll[2]*event.target.clientHeight);
       // Esc goes back to the tree once Vim has nothing left to cancel.
-      else if(!vimBusy && event.target!==s.tree && event.key==='Escape' && !event.ctrlKey)action=()=>focusTree(s);
+      // Editing keeps an extra Esc in the editor, like Vim.
+      else if(!vimBusy && !editing && event.target!==s.tree && event.key==='Escape' && !event.ctrlKey)action=()=>focusTree(s);
     }
     if(action){event.preventDefault();event.stopImmediatePropagation();action();}
   },true);
@@ -426,7 +554,7 @@
   }
   function request(s, path, preview = false, external = false, parents = s.parents, version = "") {
     const token = String(++sequence);
-    s.pending.set(token, {path, preview, external, parents});
+    s.pending.set(token, {path, preview, external, parents, doc:s.editor?.doc()});
     if (preview) s.previewRequest = token;
     s.status.textContent = external ? 'Opening…' : 'Loading…';
     __ws.call(external ? 'files.open' : 'files.read', {sid:window.__libroWorkspaceSID, id:s.id, path, parents, request:token,version});
@@ -450,6 +578,7 @@
     s.el.querySelector('.ws-file-media').hidden = true;
     clearImageView(s);
     s.wrap.disabled = false;
+    s.edit.disabled = true; s.edit.checked = false;
     if (s.url) { URL.revokeObjectURL(s.url); s.url = null; }
   }
   function visible(s) {
@@ -466,6 +595,8 @@
   }
   function render(s) {
     s.items = visible(s);
+    const selected = s.select ? s.items.findIndex(item => item.path === s.select) : -1;
+    if (selected >= 0) { s.index = selected; s.select = null; requestAnimationFrame(() => s.tree.querySelector('[aria-selected=true]')?.scrollIntoView({block:'nearest'})); }
     s.index = Math.max(0, Math.min(s.index, s.items.length - 1));
     s.tree.replaceChildren();
     s.items.forEach((item, index) => {
@@ -499,9 +630,21 @@
     }
     render(s);
   }
+  // A closed or rebuilt panel keeps its unsaved text until the file opens again.
+  const drafts=new Map(),draftKey=(s,path)=>s.project+'\n'+s.parents+'\n'+path;
+  function restoreDraft(s) {
+    const key=draftKey(s,s.file.path),draft=drafts.get(key);
+    if(!draft || !s.editor)return;
+    drafts.delete(key);
+    startEditing(s);s.editor.view.dispatch({changes:{from:0,to:s.editor.doc().length,insert:draft.text}});
+    // Saving checks the version the text was based on.
+    if(draft.version!==s.file.version){s.file={...s.file,version:draft.version};s.diskChanged='Changed on disk';}
+    s.notice='Restored unsaved changes';context(s);
+  }
   function dispose(el) {
     const s = states.get(el.dataset.files);
     if (!s || s.el !== el) return;
+    if (s.file && s.editor?.dirty()) drafts.set(draftKey(s,s.file.path),{text:s.editor.doc().toString(),version:s.file.version});
     if (s.url) URL.revokeObjectURL(s.url);
     s.editor?.destroy();s.imageResizeObserver?.disconnect();
     clearInterval(s.refreshTimer);clearTimeout(s.indexTimer);clearTimeout(s.searchTimer);clearTimeout(s.leaderTimer);
@@ -526,12 +669,21 @@
         });
       });
       s.preview = el.querySelector('.ws-file-render input');
-      const preferenceKey = 'libro.files.preview:' + el.closest('[data-workspace-project]').dataset.workspaceProject;
+      s.project = el.closest('[data-workspace-project]').dataset.workspaceProject;
+      const preferenceKey = 'libro.files.preview:' + s.project;
       try { s.preview.checked = localStorage.getItem(preferenceKey) === 'true'; } catch (_) {}
       s.preview.onchange = () => {
-        remember(s);s.jumpPending=false;
         try { localStorage.setItem(preferenceKey, String(s.preview.checked)); } catch (_) {}
-        if (s.file) showFile(s);
+        if (!s.file || !previewable(s.file.path)) return;
+        if (s.editor?.dirty()) { const checked=s.preview.checked;s.preview.checked=!checked;guard(s,()=>{s.preview.checked=checked;s.preview.onchange();});return; }
+        remember(s);s.jumpPending=false;
+        showFile(s);
+      };
+      s.edit = el.querySelector('.ws-file-edit input');
+      s.edit.onchange = () => {
+        if (s.edit.checked) { startEditing(s); return; }
+        s.edit.checked = true;
+        guard(s,() => { s.editor?.setEditable(false); focusPreview(s); });
       };
       s.wrap = el.querySelector('.ws-file-wrap input');
       s.wrap.onchange = () => {el.querySelector('.ws-file-text').classList.toggle('is-wrapped', s.wrap.checked);s.editor?.wrap(s.wrap.checked);};
@@ -552,16 +704,19 @@
       s.tree.onkeydown = event => {
         if (event.ctrlKey || event.altKey || event.metaKey) return;
         const key = event.key, item = s.items[s.index];
-        if (!['j','k','h','l','g','G','o','/','Enter','Backspace','ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End','Escape'].includes(key)) return;
+        if (!['j','k','h','l','g','G','o','a','r','d','/','Enter','Backspace','ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End','Escape'].includes(key)) return;
         event.preventDefault(); event.stopPropagation();
         if(key==='Escape'){if(s.filter.value)clearFilter(s);else focusPreview(s);return;}
         if (key === 'Backspace') {
-          if (!event.repeat && !s.parentRequest && s.parents < 1024) {
+          if (!event.repeat && !s.parentRequest && s.parents < 1024) guard(s,() => {
             s.parentRequest = true;
             request(s,'',false,false,s.parents + 1);
-          }
+          });
           return;
         }
+        if (event.repeat && ['a','r','d'].includes(key)) return;
+        if (key === 'a') { addEntry(s,item); return; }
+        if (key === 'r' || key === 'd') { if (item) (key === 'r' ? renameEntry : deleteEntry)(s,item); return; }
         if (key === '/') { focusTree(s,true); return; }
         if (key === 'o') { if (item && !item.dir && !event.repeat) request(s,item.path,false,true,s.filter.value?0:s.parents); return; }
         if (key !== 'g') s.lastG = 0;
@@ -590,6 +745,7 @@
   function markOpen(s) {
     s.tree.querySelectorAll('.ws-file-row').forEach((row, index) => row.setAttribute('aria-current', String(!s.items[index].dir && s.items[index].path === s.file?.path)));
   }
+  const previewable = path => /\.(html?|md|markdown)$/i.test(path);
   function showFile(s) {
     markOpen(s);
     const result = s.file;
@@ -607,7 +763,8 @@
     text.hidden = !!result.mime;
     media.hidden = !result.mime;
     s.wrap.disabled = !!result.mime;
-    if (!result.mime && s.preview.checked && /\.(html?|md|markdown)$/i.test(result.path)) {
+    s.edit.disabled = !!result.mime; s.edit.checked = false;
+    if (!result.mime && s.preview.checked && previewable(result.path)) {
       s.editor?.destroy();s.editor=null;s.el.querySelector('.ws-file-context').textContent='';
       text.hidden = true;
       media.hidden = false;
@@ -640,7 +797,17 @@
     const pending = s.pending.get(result.request); if (!pending) return;
     s.pending.delete(result.request);
     if(pending.kind){
-      if(pending.kind==='navigation'){
+      if(pending.kind==='save'){
+        // The buffer was replaced while saving.
+        if(s.editor!==pending.editor){s.status.textContent=result.error || '';return;}
+        if(result.error){s.notice=result.error;context(s);return;}
+        s.file=result;s.diskChanged='';s.notice='Written';s.editor.saved(pending.doc);
+        if(pending.quit && !s.editor.dirty())s.editor.setEditable(false);
+        context(s);
+      }else if(pending.kind==='change'){
+        s.status.textContent=result.error || '';
+        if(!result.error)pending.done();
+      }else if(pending.kind==='navigation'){
         if(s.navigationRequest!==result.request || s.picker?.kind!=='navigation')return;
         if(s.file?.path!==pending.origin.path || s.parents!==pending.origin.parents){closePicker(s,false);return;}
         s.picker.loading=false;
@@ -671,13 +838,21 @@
       // Only a path removed on disk leaves the view. Other errors, such as a
       // refresh that races a project switch, keep the shown content.
       if (!result.missing) return;
-      if (pending.path === s.file?.path) { clearFile(s); markOpen(s); }
+      if (pending.path === s.file?.path && s.editor?.editable()) { s.diskChanged='Deleted on disk'; context(s); }
+      else if (pending.path === s.file?.path) { clearFile(s); markOpen(s); }
       else if (s.children.delete(pending.path)) { s.expanded.delete(pending.path); render(s); }
+      return;
+    }
+    // Refresh never replaces an edited buffer; :e! reloads it.
+    if (pending.refresh && !result.directory && !result.error && s.editor?.editable()) {
+      if (!result.unchanged && result.version !== s.file?.version) { s.diskChanged='Changed on disk (:e! reloads)'; context(s); }
       return;
     }
     s.status.textContent = result.error || '';
     if (result.error || pending.external || result.unchanged) return;
-    if(pending.refresh && s.file?.path===result.path && s.file.text===result.text && s.file.mime===result.mime)return;
+    if(pending.refresh && s.file?.path===result.path && s.file.text===result.text && s.file.mime===result.mime){s.file=result;return;}
+    // Text typed while a file or folder loaded stays; the reply is dropped.
+    if((!result.directory || pending.parents!==s.parents) && s.editor?.dirty() && s.editor.doc()!==pending.doc){s.notice='Kept unsaved changes';context(s);return;}
     if(!result.directory && pending.parents!==s.parents){
       remember(s);s.editor?.destroy();s.editor=null;s.pending.clear();
       s.parents=pending.parents;s.children.clear();s.expanded.clear();s.index=0;request(s,'');
@@ -703,6 +878,8 @@
       s.file = result;
       s.jumpPending=!!pending.position;showFile(s);
       if(pending.position && s.editor)s.editor.jump(pending.position.line,pending.position.column);
+      if(pending.edit)startEditing(s);
+      restoreDraft(s);
       if(pending.history!==false && !pending.refresh)record(s,location(s));
       const key=s.parents+':'+result.path;s.recent.delete(key);s.recent.set(key,location(s));
       if(s.recent.size>100)s.recent.delete(s.recent.keys().next().value);

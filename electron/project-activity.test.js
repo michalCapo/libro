@@ -18,6 +18,7 @@ test('interaction acknowledges only its project and a new completion restores th
     window: { __libroAgentStatuses: { 0: 'done', 1: 'done' }, addEventListener(type, fn) { listeners[type] = fn } },
     document: { querySelectorAll(selector) { return selector === '.ws-project-agent' ? [] : selector === '.ws-project-row:not([data-kind=project])' ? rows : grids }, addEventListener(type, fn) { listeners[type] = fn } },
     frames: grid => grid.frames,
+    renderThreadShortcuts() {},
   })
   vm.runInContext(source, context)
   const render = () => listeners['libro-agent-status']()

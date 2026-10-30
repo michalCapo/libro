@@ -412,8 +412,8 @@ html.dark .ws-row-grid[data-agent-status=done]::before{color:#4ade80}
 .ws-file-image-zoom:last-child{border-radius:0 6px 6px 0}
 .ws-file-image-zoom+.ws-file-image-zoom{margin-left:1px}
 .ws-file-image-reset{min-width:48px}
-.ws-file-wrap,.ws-file-render,.ws-file-hidden{display:flex;align-items:center;gap:6px;flex-shrink:0;color:var(--ws-muted);font-size:12px;cursor:pointer}
-.ws-file-wrap:has(:checked),.ws-file-render:has(:checked),.ws-file-hidden:has(:checked){color:var(--ws-fg)}
+.ws-file-edit,.ws-file-wrap,.ws-file-render,.ws-file-hidden{display:flex;align-items:center;gap:6px;flex-shrink:0;color:var(--ws-muted);font-size:12px;cursor:pointer}
+.ws-file-edit:has(:checked),.ws-file-wrap:has(:checked),.ws-file-render:has(:checked),.ws-file-hidden:has(:checked){color:var(--ws-fg)}
 .ws-file-text.is-wrapped{white-space:pre-wrap;overflow-wrap:anywhere}
 .ws-file-text .hljs-comment,.ws-file-text .hljs-quote{color:var(--ws-code-comment);font-style:italic}
 .ws-file-text .hljs-keyword,.ws-file-text .hljs-selector-tag,.ws-file-text .hljs-doctag{color:var(--ws-code-keyword)}
@@ -676,6 +676,10 @@ html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repo
 .ws-file-text .cm-fat-cursor{background:var(--ws-fg);color:var(--ws-bg)}
 
 .ws-file-context:empty{display:none}
+/* The mode badge shows whether the source can change; editing modes use the accent. */
+.ws-file-mode{font-weight:600;color:var(--ws-fg)}.ws-file-mode:not([data-mode=view]){color:var(--ws-accent)}
+.ws-file-edit:has(:disabled){opacity:.5;cursor:default}
+.ws-file-ask{display:flex}.ws-file-ask>input{flex:1}
 
 /* Navigation is a dedicated buffer in the preview pane. */
 .ws-file-preview{position:relative}

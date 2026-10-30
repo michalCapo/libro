@@ -96,7 +96,7 @@ func readProjectFileVersion(rootPath, path, version string) (fileResult, error) 
 	if !info.Mode().IsRegular() {
 		return result, fmt.Errorf("only regular files can be previewed")
 	}
-	result.Version = fmt.Sprintf("%d:%d", info.ModTime().UnixNano(), info.Size())
+	result.Version = fileVersion(info)
 	if version != "" && version == result.Version {
 		result.Unchanged = true
 		return result, nil
@@ -148,6 +148,10 @@ func readProjectFileVersion(rootPath, path, version string) (fileResult, error) 
 	return result, nil
 }
 
+func fileVersion(info fs.FileInfo) string {
+	return fmt.Sprintf("%d:%d", info.ModTime().UnixNano(), info.Size())
+}
+
 func projectFileToOpen(rootPath, path string) (string, error) {
 	if !filepath.IsLocal(path) {
 		return "", fmt.Errorf("path must stay inside the files root")
@@ -192,7 +196,7 @@ func filesRoot(projectPath string, parents int) string {
 }
 
 func registerFilesActions(app *r.App) {
-	for _, action := range []string{"files.read", "files.open", "files.index", "files.search", "files.navigate"} {
+	for _, action := range []string{"files.read", "files.open", "files.index", "files.search", "files.navigate", "files.save", "files.create", "files.rename", "files.delete"} {
 		registerWorkspaceAction(app, action, func(_ *r.Context, in actionFilesInput) (r.Result, error) {
 			sid := inputSID(in.SID)
 			id := in.ID
@@ -233,6 +237,14 @@ func registerFilesActions(app *r.App) {
 					column := in.Column
 
 					value, err = navigateProjectFile(sm.GetActiveProjectPath(sid), path, kind, version, int(parents), int(line), int(column))
+				case "files.save":
+					value, err = saveProjectFile(root, path, in.Text, in.Version)
+				case "files.create":
+					err = createProjectEntry(root, path, in.Directory)
+				case "files.rename":
+					err = renameProjectEntry(root, path, in.Target)
+				case "files.delete":
+					err = deleteProjectEntry(root, path)
 				case "files.index", "files.search":
 					query := in.Query
 
@@ -273,6 +285,7 @@ func renderFiles(app Application) *r.Node {
 					r.Button("ws-file-image-zoom").Attr("type", "button").Attr("data-image-zoom", "out").Attr("aria-label", "Zoom out").Text("−"),
 					r.Button("ws-file-image-zoom ws-file-image-reset").Attr("type", "button").Attr("data-image-zoom", "reset").Attr("aria-label", "Reset zoom").Text("100%"),
 					r.Button("ws-file-image-zoom").Attr("type", "button").Attr("data-image-zoom", "in").Attr("aria-label", "Zoom in").Text("+")),
+				r.El("label", "ws-file-edit").Attr("title", "Edit the file (i, a or o in the source)").Render(r.Input("").Attr("type", "checkbox").Attr("disabled", "disabled"), r.Span("").Text("Edit")),
 				r.El("label", "ws-file-render").Attr("title", "Preview HTML and Markdown").Render(r.Input("").Attr("type", "checkbox"), r.Span("").Text("Preview")),
 				r.El("label", "ws-file-wrap").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Word wrap")),
 				r.El("label", "ws-file-hidden").Render(r.Input("").Attr("type", "checkbox").Attr("checked", "checked"), r.Span("").Text("Hidden files")),

@@ -4,7 +4,7 @@ const {readFileSync}=require('node:fs');
 const {JSDOM}=require('jsdom');
 
 function fixture(t, scoped=false) {
-  const dom=new JSDOM(`<div data-workspace-project="test"><div data-files="files"><div class="ws-file-sidebar"><input class="ws-file-filter"><label class="ws-file-hidden"><input type="checkbox"></label><div class="ws-file-tree" tabindex="0"></div><div class="ws-file-shortcuts"><span>Copy line</span><kbd>yy</kbd></div><div role="status"></div></div><div class="ws-file-preview"><div class="ws-file-toolbar"><div class="ws-file-path"></div><button class="ws-file-refresh"></button><button class="ws-file-help"></button><div class="ws-file-image-tools"><button class="ws-file-image-reset"></button></div><label class="ws-file-render"><input type="checkbox"></label><label class="ws-file-wrap"><input type="checkbox" checked></label></div><div class="ws-file-text"></div><div class="ws-file-context"></div><div class="ws-file-media" hidden></div></div></div></div>`,{url:'http://localhost',runScripts:'outside-only',pretendToBeVisual:true});
+  const dom=new JSDOM(`<div data-workspace-project="test"><div data-files="files"><div class="ws-file-sidebar"><input class="ws-file-filter"><label class="ws-file-hidden"><input type="checkbox"></label><div class="ws-file-tree" tabindex="0"></div><div class="ws-file-shortcuts"><span>Copy line</span><kbd>yy</kbd></div><div role="status"></div></div><div class="ws-file-preview"><div class="ws-file-toolbar"><div class="ws-file-path"></div><button class="ws-file-refresh"></button><button class="ws-file-help"></button><div class="ws-file-image-tools"><button class="ws-file-image-reset"></button></div><label class="ws-file-edit"><input type="checkbox" disabled></label><label class="ws-file-render"><input type="checkbox"></label><label class="ws-file-wrap"><input type="checkbox" checked></label></div><div class="ws-file-text"></div><div class="ws-file-context"></div><div class="ws-file-media" hidden></div></div></div></div>`,{url:'http://localhost',runScripts:'outside-only',pretendToBeVisual:true});
   const w=dom.window,calls=[],copied=[];t.after(()=>w.close());
   let refresh;const interval=w.setInterval.bind(w);w.setInterval=(fn,ms)=>{if(ms===3000)refresh=fn;return interval(fn,ms);};
   w.HTMLElement.prototype.scrollIntoView=()=>{};
@@ -12,6 +12,7 @@ function fixture(t, scoped=false) {
   w.Range.prototype.getBoundingClientRect=()=>({left:0,right:0,top:0,bottom:0,width:0,height:0});
   Object.defineProperty(w.navigator,'clipboard',{value:{writeText:async text=>copied.push(text)}});
   w.__ws={call:(action,data)=>calls.push({action,data})};
+  const confirms=[];w.__libroConfirmAction=(title,body,run)=>confirms.push({title,run});
   w.eval(readFileSync('internal/file-editor.bundle.js','utf8'));
   const create=w.libroFileEditor.create;
   let editor;
@@ -28,10 +29,10 @@ function fixture(t, scoped=false) {
   function keys(value){for(const keyName of value)key(keyName);}
   const source='// function fake() {}\nfunction first(a) {\n  return a + 1;\n}\n\nconst second = () => {\n  return 2;\n};\n'+Array.from({length:40},(_,i)=>'// line '+i).join('\n');
   function open(path='main.js',text=source){reply({directory:true,entries:[{name:path,path,dir:false}]});w.document.querySelector('.ws-file-tree').focus();key('Enter');reply({path,text});}
-  return {w,calls,copied,reply,key,keys,open,refresh:()=>{w.document.querySelector('[data-files]').getClientRects=()=>[{}];refresh();},get editor(){return editor;}};
+  return {w,calls,copied,confirms,reply,key,keys,open,refresh:()=>{w.document.querySelector('[data-files]').getClientRects=()=>[{}];refresh();},get editor(){return editor;}};
 }
 
-test('read-only Vim motions, counts, selections, clipboard, brackets and symbols',t=>{
+test('view mode Vim motions, counts, selections, clipboard, brackets and symbols',t=>{
   const f=fixture(t);f.open();
   assert.equal(f.editor.position().line,1);
   f.keys('10j');assert.equal(f.editor.position().line,11);
@@ -44,9 +45,10 @@ test('read-only Vim motions, counts, selections, clipboard, brackets and symbols
   f.keys('yy');assert.equal(f.copied.at(-1),'function first(a) {\n');
   f.keys('vj');f.keys('y');assert.match(f.copied.at(-1),/function first/);
   const original=f.editor.view.state.doc.toString();
-  f.keys('gg');f.keys('dd');f.keys('i');f.keys('text');f.key('Escape');
+  f.keys('gg');f.keys('dd');f.keys('x');
   f.editor.view.dispatch({changes:{from:0,to:3,insert:'edited'}});
   assert.equal(f.editor.view.state.doc.toString(),original);
+  assert.equal(f.editor.mode(),'view');
   f.keys('gg');f.keys('go');assert.ok(f.w.document.querySelector('.ws-file-picker'));
 });
 
@@ -298,4 +300,69 @@ test('Esc and Space leave source only when Vim is idle',t=>{
   f.key('Escape');assert.equal(d.activeElement,tree);
   f.key('Enter');f.keys('gg');f.keys('f ');assert.equal(f.editor.position().column,2);assert.ok(d.activeElement.classList.contains('cm-content'));
   f.keys(' f');assert.equal(d.activeElement,tree);
+});
+
+test('i starts editing; Ctrl+S saves; refresh keeps edits; leaving asks first',t=>{
+  const f=fixture(t);f.open();const d=f.w.document,context=()=>d.querySelector('.ws-file-context').textContent;
+  f.editor.view.dispatch({changes:{from:0,insert:'x'}});assert.equal(f.editor.dirty(),false);
+  f.keys('i');assert.equal(f.editor.mode(),'insert');assert.equal(d.querySelector('.ws-file-edit input').checked,true);
+  f.keys(' f');assert.ok(d.activeElement.classList.contains('cm-content'));
+  f.editor.view.dispatch({changes:{from:0,insert:'x'}});assert.match(context(),/^INSERT .* · Modified$/);
+  f.key('Escape');f.key('Escape');assert.equal(f.editor.mode(),'normal');assert.ok(d.activeElement.classList.contains('cm-content'));
+  f.key('s',{ctrlKey:true});const save=f.calls.at(-1);
+  assert.equal(save.action,'files.save');assert.match(save.data.text,/^x\/\//);
+  f.editor.view.dispatch({changes:{from:0,insert:'y'}});
+  f.reply({path:'main.js',text:save.data.text,version:'2'});
+  assert.equal(f.editor.dirty(),true,'typing during a save stays unsaved');assert.match(context(),/Written/);
+  f.refresh();f.reply({path:'main.js',text:'changed elsewhere',version:'3'});
+  assert.match(f.editor.view.state.doc.toString(),/^yx/);assert.match(context(),/Changed on disk/);
+  const count=f.calls.length;d.querySelector('.ws-file-tree').focus();f.key('Backspace');
+  assert.equal(f.calls.length,count);assert.equal(f.confirms.at(-1).title,'Discard changes?');
+  f.confirms.at(-1).run();assert.equal(f.calls.at(-1).data.parents,1);assert.equal(f.editor.mode(),'view');
+});
+
+test('tree adds, renames and deletes files and folders',t=>{
+  const f=fixture(t);f.open();const d=f.w.document,tree=d.querySelector('.ws-file-tree');
+  const answer=value=>{const input=d.activeElement;assert.equal(input.closest('form').className,'ws-file-ask');input.value=value;input.closest('form').requestSubmit();};
+  tree.focus();f.key('a');answer('src/new.go');
+  assert.deepEqual([f.calls.at(-1).action,f.calls.at(-1).data.path,f.calls.at(-1).data.directory],['files.create','src/new.go',false]);
+  f.reply({});const open=f.calls.find(call=>call.action==='files.read'&&call.data.path==='src/new.go');
+  f.reply({path:'src/new.go',text:''},open);assert.equal(f.editor.editable(),true);
+  tree.focus();f.key('a');answer('docs/');assert.equal(f.calls.at(-1).data.directory,true);assert.equal(f.calls.at(-1).data.path,'docs');
+  f.reply({directory:true,entries:[{name:'main.js',path:'main.js',dir:false}]},f.calls.findLast(call=>call.action==='files.read'&&call.data.path===''));
+  tree.focus();d.querySelector('.ws-file-row').click();tree.focus();f.key('r');answer('lib/main.ts');
+  assert.deepEqual([f.calls.at(-1).action,f.calls.at(-1).data.path,f.calls.at(-1).data.target],['files.rename','main.js','lib/main.ts']);
+  tree.focus();f.key('d');assert.equal(f.confirms.at(-1).title,'Delete file?');f.confirms.at(-1).run();
+  assert.deepEqual([f.calls.at(-1).action,f.calls.at(-1).data.path],['files.delete','main.js']);
+});
+
+test('Vim :q, :w, :wq, :q!, :w! and :e! drive editing',t=>{
+  const f=fixture(t);f.open();
+  const ex=command=>{f.keys(':');const input=f.w.document.activeElement;input.value=command;input.dispatchEvent(new f.w.KeyboardEvent('keydown',{key:'Enter',keyCode:13,bubbles:true,cancelable:true}));};
+  f.keys('o');f.editor.view.dispatch({changes:{from:0,insert:'z'}});f.key('Escape');
+  ex('q');assert.equal(f.editor.mode(),'normal');assert.match(f.w.document.querySelector('.ws-file-context').textContent,/No write since last change/);
+  ex('w');assert.equal(f.calls.at(-1).action,'files.save');f.reply({path:'main.js',text:'z',version:'9'});
+  f.editor.view.dispatch({changes:{from:0,insert:'q'}});ex('wq');f.reply({path:'main.js',text:'qz',version:'10'});assert.equal(f.editor.mode(),'view');
+  const before=f.editor.view.state.doc.toString();
+  f.keys('A');f.editor.view.dispatch({changes:{from:0,insert:'k'}});f.key('Escape');ex('q!');
+  assert.equal(f.editor.mode(),'view');assert.equal(f.editor.view.state.doc.toString(),before);
+  f.keys('i');f.key('Escape');ex('w!');assert.equal(f.calls.at(-1).data.version,'');f.reply({path:'main.js',text:'qz',version:'11'});
+  ex('e!');assert.equal(f.calls.at(-1).action,'files.read');f.reply({path:'main.js',text:'disk',version:'12'});
+  assert.equal(f.editor.mode(),'normal');assert.equal(f.editor.view.state.doc.toString(),'disk');
+});
+
+test('saves keep Windows line breaks; replies never replace newer edits; closed panels keep unsaved text',t=>{
+  const f=fixture(t);f.open('win.txt','one\r\ntwo\r\n');
+  f.keys('i');f.editor.view.dispatch({changes:{from:0,insert:'x'}});f.key('s',{ctrlKey:true});
+  assert.equal(f.calls.at(-1).data.text,'xone\r\ntwo\r\n');f.reply({path:'win.txt',text:'xone\r\ntwo\r\n',version:'2'});f.key('Escape');
+  f.keys(':');const input=f.w.document.activeElement;input.value='e';input.dispatchEvent(new f.w.KeyboardEvent('keydown',{key:'Enter',keyCode:13,bubbles:true,cancelable:true}));
+  const reload=f.calls.at(-1);assert.equal(reload.action,'files.read');f.editor.view.dispatch({changes:{from:0,insert:'typed '}});
+  f.reply({path:'win.txt',text:'from disk',version:'3'},reload);
+  assert.match(f.editor.view.state.doc.toString(),/^typed xone/);
+  const panel=f.w.document.querySelector('[data-files]'),parent=panel.parentElement;
+  panel.remove();f.w.libroFiles.init();parent.append(panel);f.w.libroFiles.init();
+  f.reply({directory:true,entries:[{name:'win.txt',path:'win.txt',dir:false}]});
+  f.w.document.querySelector('.ws-file-tree').focus();f.key('Enter');f.reply({path:'win.txt',text:'xone\r\ntwo\r\n',version:'2'});
+  assert.match(f.editor.view.state.doc.toString(),/^typed xone/);assert.equal(f.editor.dirty(),true);
+  assert.match(f.w.document.querySelector('.ws-file-context').textContent,/Restored unsaved changes/);
 });

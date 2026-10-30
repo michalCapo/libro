@@ -866,10 +866,11 @@
     });
   }
   // Threads shows worktree cards in creation order; standalone threads follow in their own list.
+  // Cards with a working agent sit below the others (see .ws-thread-cards), so numbers follow what the user sees.
   function sidebarRows(selector) {
     const rows = [...document.querySelectorAll(selector)];
     if (root.dataset.allProjects === 'true') return rows;
-    const rank = row => row.closest('#workspace-project-list') ? Number(row.parentElement.style.getPropertyValue('--order')) || 0 : Number.MAX_SAFE_INTEGER;
+    const rank = row => (row.closest('#workspace-project-list') ? Number(row.parentElement.style.getPropertyValue('--order')) || 0 : 100000) + (row.dataset.agentStatus === 'working' ? 300000 : 0);
     return rows.sort((a, b) => rank(a) - rank(b));
   }
   // Each sound gets a fresh context. A long-lived one can be missing after a
@@ -1003,14 +1004,18 @@
         states.includes('done') && states.every(state => state === 'done' || state === 'idle') ? 'done' : '');
     });
     // Project rows keep their folder icon; their threads show agent activity.
+    let moved = false;
     document.querySelectorAll('.ws-project-row:not([data-kind=project])').forEach(row => {
       const state = projects.get(row.dataset.projectKey) || '';
       if (row.dataset.agentStatus === state) return;
+      moved ||= row.dataset.agentStatus === 'working' || state === 'working';
       row.dataset.agentStatus = state;
       row.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle_outline' : row.dataset.kind === 'worktree' ? 'account_tree' : 'chat_bubble_outline';
       const label = row.querySelector('span').textContent;
       row.setAttribute('aria-label', label + (state === 'working' ? ': agents working' : state === 'done' ? ': all agents done' : ''));
     });
+    // A card that starts or stops working moves, so the numbers follow it.
+    if (moved) renderThreadShortcuts();
   }
   window.addEventListener('libro-agent-status', renderProjectActivity);
   function renderProjectTerminals() {
