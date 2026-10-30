@@ -339,10 +339,8 @@ html.dark .ws-row-grid[data-agent-status=done]::before{color:#4ade80}
 .ws-rail-threads,.ws-rail-numbers{display:flex;flex-direction:column;align-items:center;gap:2px}.ws-rail-threads{margin-bottom:8px}#libro-workspace:not([data-fold]) .ws-rail-threads{display:none}
 .ws-rail-thread{width:32px;height:32px;padding:0;border:0;border-radius:8px;background:none;color:var(--ws-muted);font-family:inherit;font-size:22px;font-weight:400;line-height:32px;cursor:pointer}
 .ws-rail-thread:hover,.ws-rail-thread:focus-visible{background:var(--ws-hover)}
-/* The open folded list covers the rail and draws its new thread icon and thread numbers in the rail column, beside their rows, looking like the rail. */
+/* The open folded list covers the rail and draws its new thread icon in the rail column; thread cards keep their big numbers. */
 #libro-workspace[data-fold] .ws-navigation .ws-new-thread{position:relative}#libro-workspace[data-fold] .ws-navigation .ws-new-thread>.material-icons-round{position:absolute;left:calc(-1 * var(--ws-rail-width) - 1px);width:32px;text-align:center;color:var(--ws-muted)}
-#libro-workspace[data-fold] .ws-navigation .ws-project-shortcut{position:absolute;left:calc(-1 * var(--ws-rail-width));top:50%;translate:0 -50%;width:32px;height:32px;margin:0;padding:0;border:0;border-radius:8px;background:none;color:var(--ws-status,var(--ws-muted));font-family:inherit;font-size:22px;font-weight:400;line-height:32px;transform:none}
-#libro-workspace[data-fold] .ws-navigation [aria-current=true] .ws-project-shortcut{background:var(--ws-raised);box-shadow:var(--ws-shadow)}
 .ws-rail-thread[aria-current=true]{background:var(--ws-raised);box-shadow:var(--ws-shadow)}.ws-rail-thread:is([data-agent-status=working],[data-agent-status=done]){color:var(--ws-status)}
 .ws-tool-spacer{flex:1}
 .ws-tool-rail [data-size-trigger]{min-width:28px;height:22px;margin-top:2px;padding:0 6px;border:0;border-radius:5px;background:var(--ws-kbd);color:var(--ws-fg);font:600 10px/1 var(--ws-mono);cursor:pointer}
