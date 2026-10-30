@@ -45,10 +45,13 @@ test('view mode Vim motions, counts, selections, clipboard, brackets and symbols
   f.keys('yy');assert.equal(f.copied.at(-1),'function first(a) {\n');
   f.keys('vj');f.keys('y');assert.match(f.copied.at(-1),/function first/);
   const original=f.editor.view.state.doc.toString();
-  f.keys('gg');f.keys('dd');f.keys('x');
   f.editor.view.dispatch({changes:{from:0,to:3,insert:'edited'}});
   assert.equal(f.editor.view.state.doc.toString(),original);
   assert.equal(f.editor.mode(),'view');
+  f.keys('gg');f.keys('2dd');f.keys('x');
+  assert.equal(f.editor.view.state.doc.toString(),original.split('\n').slice(2).join('\n').replace('return','eturn'));
+  assert.equal(f.editor.mode(),'normal');
+  f.editor.setEditable(false);f.keys('u');assert.equal(f.editor.mode(),'normal');assert.match(f.editor.view.state.doc.toString(),/^  return/);
   f.keys('gg');f.keys('go');assert.ok(f.w.document.querySelector('.ws-file-picker'));
 });
 
@@ -109,7 +112,7 @@ test('refresh preserves source position without stealing tree focus; recent file
   assert.equal(request.action,'files.read');
   f.w.document.querySelector('.ws-file-tree').focus();
   f.reply({path:'main.js',text:f.editor.view.state.doc.toString()+'\n// changed'},request);
-  assert.equal(f.w.document.activeElement,tree);
+  assert.ok(f.w.document.activeElement===tree);
   assert.equal(f.editor.position().line,11);
   f.key('Enter');assert.equal(f.editor.position().line,11);
   f.keys(' ,');assert.match(f.w.document.querySelector('.ws-file-results').textContent,/main.js/);
@@ -219,20 +222,20 @@ test('rendered preview scrolls with Vim keys and returns to the tree',t=>{
  f.reply({directory:true,entries:[{name:'example.md',path:'example.md',dir:false}]});f.w.document.querySelector('.ws-file-tree').focus();f.key('Enter');
  f.reply({path:'example.md',text:'# Title',html:'<h1>Title</h1>'});f.keys(' p');
  const frame=f.w.document.querySelector('.ws-file-rendered'),tree=f.w.document.querySelector('.ws-file-tree');
- assert.equal(f.w.document.activeElement,frame);
+ assert.ok(f.w.document.activeElement===frame);
  const sent=[];frame.contentWindow.postMessage=data=>sent.push(Array.from(data.libroFilesScroll));
  f.keys('jGgg');f.key('d',{ctrlKey:true});
  assert.deepEqual(sent,[[0,40,0],[0,1e9,0],[0,0,0],[0,-1e9,0],[0,0,0.5]]);
  f.keys(' l');assert.equal(sent.length,5);f.key('Escape');
- f.key('Escape');assert.equal(f.w.document.activeElement,tree);
- f.key('Escape');assert.equal(f.w.document.activeElement,frame);
- f.keys(' p');f.reply({path:'example.md',text:'# Title'});f.keys(' f');assert.equal(f.w.document.activeElement,tree);
+ f.key('Escape');assert.ok(f.w.document.activeElement===tree);
+ f.key('Escape');assert.ok(f.w.document.activeElement===frame);
+ f.keys(' p');f.reply({path:'example.md',text:'# Title'});f.keys(' f');assert.ok(f.w.document.activeElement===tree);
 });
 
 test('pending Vim commands keep e, pickers restore their opener and buttons keep Enter',t=>{
  const f=fixture(t);f.open();const count=f.calls.length,tree=f.w.document.querySelector('.ws-file-tree');
  f.keys('ge');f.keys('ye');assert.equal(f.calls.length,count);
- tree.focus();f.keys(' sk');f.key('Escape');assert.equal(f.w.document.activeElement,tree);
+ tree.focus();f.keys(' sk');f.key('Escape');assert.ok(f.w.document.activeElement===tree);
  f.keys(' sk');f.w.document.querySelector('.ws-file-picker .ws-button').focus();f.key('Enter');
  assert.ok(f.w.document.querySelector('.ws-file-help-dialog'));
 });
@@ -243,8 +246,8 @@ test('go opens compact symbols with short names and two-stage Escape',t=>{
  assert.equal(dialog.getAttribute('role'),'dialog');
  const rows=dialog.querySelectorAll('.ws-file-result');
  assert.equal(rows[0].textContent,'const timestamp');assert.equal(rows[1].textContent,'func makeCommon');
- f.key('Escape');assert.equal(f.w.document.activeElement,dialog.querySelector('.ws-file-results'));
- f.key('/');assert.equal(f.w.document.activeElement,dialog.querySelector('input'));
+ f.key('Escape');assert.ok(f.w.document.activeElement===dialog.querySelector('.ws-file-results'));
+ f.key('/');assert.ok(f.w.document.activeElement===dialog.querySelector('input'));
  const input=f.w.document.activeElement;input.value='make';input.dispatchEvent(new f.w.Event('input'));
  assert.equal(dialog.querySelectorAll('.ws-file-result').length,1);
  f.key('Enter');assert.equal(f.editor.position().line,2);assert.equal(f.w.document.querySelector('.ws-file-symbol-dialog'),null);
@@ -272,18 +275,18 @@ test('mouse clicks on toolbar controls return focus so Space f and Esc work',asy
  const label=f.w.document.querySelector('.ws-file-render'),input=label.querySelector('input');
  f.w.document.activeElement.dispatchEvent(new f.w.MouseEvent('mousedown',{bubbles:true}));label.dispatchEvent(new f.w.MouseEvent('click',{bubbles:true,detail:1}));
  input.focus();await new Promise(r=>setTimeout(r));
- assert.equal(input.checked,true);assert.equal(f.w.document.activeElement,f.w.document.querySelector('.ws-file-rendered'));
- f.keys(' f');const tree=f.w.document.querySelector('.ws-file-tree');assert.equal(f.w.document.activeElement,tree);
+ assert.equal(input.checked,true);assert.ok(f.w.document.activeElement===f.w.document.querySelector('.ws-file-rendered'));
+ f.keys(' f');const tree=f.w.document.querySelector('.ws-file-tree');assert.ok(f.w.document.activeElement===tree);
  const help=f.w.document.querySelector('.ws-file-help');tree.dispatchEvent(new f.w.MouseEvent('mousedown',{bubbles:true}));help.focus();help.click();
- f.key('Escape');assert.equal(f.w.document.activeElement,tree);
+ f.key('Escape');assert.ok(f.w.document.activeElement===tree);
 });
 
 test('Esc and Space leave source only when Vim is idle',t=>{
   const f=fixture(t);f.open();const d=f.w.document,tree=d.querySelector('.ws-file-tree');
   f.keys('vj');f.key('Escape');assert.ok(d.activeElement.classList.contains('cm-content'));
-  f.key('Escape');assert.equal(d.activeElement,tree);
+  f.key('Escape');assert.ok(d.activeElement===tree);
   f.key('Enter');f.keys('gg');f.keys('f ');assert.equal(f.editor.position().column,2);assert.ok(d.activeElement.classList.contains('cm-content'));
-  f.keys(' f');assert.equal(d.activeElement,tree);
+  f.keys(' f');assert.ok(d.activeElement===tree);
 });
 
 test('i starts editing; Ctrl+S saves; refresh keeps edits; leaving asks first',t=>{

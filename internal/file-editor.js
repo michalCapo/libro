@@ -2,7 +2,7 @@ import {EditorState, Compartment, StateEffect, StateField} from '@codemirror/sta
 import {EditorView, Decoration, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection} from '@codemirror/view';
 import {syntaxTree, ensureSyntaxTree, StreamLanguage, syntaxHighlighting, HighlightStyle, bracketMatching} from '@codemirror/language';
 import {search} from '@codemirror/search';
-import {history, undoDepth, redoDepth} from '@codemirror/commands';
+import {history} from '@codemirror/commands';
 import {tags, highlightTree, classHighlighter} from '@lezer/highlight';
 import {vim, Vim, getCM} from '@replit/codemirror-vim';
 import {javascript} from '@codemirror/lang-javascript';
@@ -122,8 +122,6 @@ Vim.defineOperator('yank', (cm,args,ranges,anchor) => {
 // Ex commands go to the panel that owns the editor.
 for(const [name,prefix] of [['write','w'],['wq','wq'],['xit','x'],['quit','q'],['edit','e']])
   Vim.defineEx(name,prefix,(cm,params)=>editors.get(cm)?.onCommand(name,params.argString?.trim()==='!'));
-// View mode rejects every change, also programmatic Vim/IME/paste changes.
-const locked=[EditorState.readOnly.of(true),EditorState.changeFilter.of(()=>false),EditorView.contentAttributes.of({'aria-readonly':'true'})];
 const colors = HighlightStyle.define([
   {tag:[tags.keyword,tags.operator],color:'var(--ws-code-keyword)'},
   {tag:[tags.string,tags.regexp],color:'var(--ws-code-string)'},
@@ -134,18 +132,29 @@ const colors = HighlightStyle.define([
 ]);
 export function create({element,path,source,wrap,onSymbols,onNavigate,onChange,onCommand,copy}) {
   const wrapping = new Compartment(),editing=new Compartment();
-  let saved,symbols,mode='normal';
+  let saved,symbols,mode='normal',editable=false,cm;
+  // View mode rejects every change, also IME and paste. A Vim command that edits
+  // (dd, x, p, cw, >>, ., :d) or enters insert mode starts editing first, like i/a/o.
+  const unlock=()=>{if(!editable){editable=true;queueMicrotask(()=>editable && api.setEditable(true));}return true;};
+  const locked=[EditorState.changeFilter.of(tr=>editable || tr.changes.empty || cm?.curOp?.$d>0 && unlock()),EditorView.contentAttributes.of({'aria-readonly':'true'})];
   const view = new EditorView({parent:element,state:EditorState.create({doc:source,extensions:[
     vim({status:false}), editing.of(locked), history(),
     lineNumbers(),highlightActiveLine(),highlightActiveLineGutter(),drawSelection(),bracketMatching(),search(),
     languageFor(path),fallback,syntaxHighlighting(colors),wrapping.of(wrap ? EditorView.lineWrapping : []),
     EditorView.contentAttributes.of({'aria-label':'Source'}),
-    EditorView.updateListener.of(update=>{if(update.docChanged)symbols=null;if(update.selectionSet || update.docChanged) onChange?.(update.docChanged);}),
+    // Undo and redo skip change filters; a change they make in view mode starts editing too.
+    EditorView.updateListener.of(update=>{if(update.docChanged){symbols=null;unlock();}if(update.selectionSet || update.docChanged) onChange?.(update.docChanged);}),
     EditorView.theme({'&':{height:'100%',backgroundColor:'var(--ws-bg)',color:'var(--ws-fg)'},'.cm-scroller':{overflow:'auto',fontFamily:'ui-monospace,monospace',fontSize:'12px',lineHeight:'1.6'},'.cm-gutters':{backgroundColor:'var(--ws-chrome)',color:'var(--ws-muted)',borderRight:'1px solid var(--ws-line)'},'.cm-activeLine, .cm-activeLineGutter':{backgroundColor:'var(--ws-hover)'},'.cm-cursor':{borderLeftColor:'var(--ws-fg)'},'&.cm-focused .cm-selectionBackground, .cm-selectionBackground':{backgroundColor:'color-mix(in srgb, var(--ws-accent) 25%, transparent)'},'.cm-panels':{backgroundColor:'var(--ws-chrome)',color:'var(--ws-fg)'}})
   ]})});
   saved=view.state.doc;
-  const cm = getCM(view);
-  cm.on('vim-mode-change',event=>{mode=event.mode;onChange?.(false);});
+  cm = getCM(view);
+  cm.on('vim-mode-change',event=>{mode=event.mode;if(mode==='insert' || mode==='replace')unlock();onChange?.(false);});
+  // Clipboard paste ("+p) and :s///c edit after the Vim command ends; keep them Vim edits.
+  for(const name of ['replaceRange','replaceSelection','replaceSelections']){const run=cm[name];cm[name]=(...args)=>cm.operation(()=>run.apply(cm,args));}
+  const searchCursor=cm.getSearchCursor;
+  cm.getSearchCursor=(...args)=>{const cursor=searchCursor.apply(cm,args),replace=cursor.replace;cursor.replace=text=>cm.operation(()=>replace(text));return cursor;};
+  // A browser paste would enter Vim insert mode; view mode ignores it like typing.
+  view.dom.addEventListener('paste',event=>{if(!editable){event.preventDefault();event.stopPropagation();}},true);
   // Vim treats digits as counts before consulting mappings. Handle these personal
   // numeric mappings first, while keeping counts such as 10j and 40j intact.
   let digit='', digitTimer;
@@ -177,21 +186,15 @@ export function create({element,path,source,wrap,onSymbols,onNavigate,onChange,o
     focus:()=>view.focus(),
     pending:()=>{const vim=cm.state.vim,input=vim.inputState;return !!digit || vim.insertMode || vim.visualMode || !!input.operator || input.keyBuffer.length>0 || input.prefixRepeat.length>0 || input.motionRepeat.length>0;},
     wrap:value=>view.dispatch({effects:wrapping.reconfigure(value ? EditorView.lineWrapping : [])}),
-    editable:()=>!view.state.readOnly,
-    setEditable:value=>{if(!value && cm.state.vim.insertMode)Vim.exitInsertMode(cm);view.dispatch({effects:editing.reconfigure(value ? [] : locked)});onChange?.(false);},
-    mode:()=>view.state.readOnly ? 'view' : mode,
+    editable:()=>editable,
+    setEditable:value=>{if(!value && cm.state.vim.insertMode)Vim.exitInsertMode(cm);editable=value;view.dispatch({effects:editing.reconfigure(value ? [] : locked)});onChange?.(false);},
+    mode:()=>editable ? mode : 'view',
     inserting:()=>!!cm.state.vim.insertMode,
-    // u or Ctrl+R, also after a count, with a change to undo or redo.
-    history:event=>{
-      const vim=cm.state.vim,input=vim.inputState;
-      if(digit || vim.visualMode || input.operator || input.keyBuffer.some(key=>!/^\d$/.test(key)) || event.altKey || event.metaKey || event.shiftKey)return false;
-      return event.key==='u' && !event.ctrlKey ? undoDepth(view.state)>0 : event.ctrlKey && event.key==='r' && redoDepth(view.state)>0;
-    },
     doc:()=>view.state.doc,
     dirty:()=>!view.state.doc.eq(saved),
     // A save keeps typing done while it ran as a change.
     saved:doc=>{saved=doc;onChange?.(false);},
-    revert:()=>{if(!view.state.readOnly)view.dispatch({changes:{from:0,to:view.state.doc.length,insert:saved}});api.setEditable(false);},
+    revert:()=>{if(editable)view.dispatch({changes:{from:0,to:view.state.doc.length,insert:saved}});api.setEditable(false);},
     destroy:()=>{clearTimeout(digitTimer);editors.delete(cm);view.destroy();},
   };
   editors.set(cm,api);

@@ -790,17 +790,17 @@ test('shared panel focus moves from an agent to Files and preserves file input f
   const window = { __libroSelectedApp: 'files', __libroSortedApps: () => [container], focus() {}, libroFiles: { focus: el => { assert.equal(el, files); tree.focus() } } }
   vm.runInNewContext(handler, { window, document, setTimeout: fn => pending.push(fn) })
   window.__libroFocusApp(0)
-  assert.equal(document.activeElement, tree)
+  assert.ok(document.activeElement===tree)
   assert.equal(focused, 1)
   document.activeElement = filter
   pending.splice(0).forEach(fn => fn())
-  assert.equal(document.activeElement, filter)
+  assert.ok(document.activeElement===filter)
   assert.equal(focused, 1)
   document.activeElement = agent
   window.__libroSelectedApp = 'agent'
   window.__libroFocusApp(0)
   pending.splice(0).forEach(fn => fn())
-  assert.equal(document.activeElement, agent)
+  assert.ok(document.activeElement===agent)
   assert.equal(focused, 1)
 })
 

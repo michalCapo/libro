@@ -14,6 +14,11 @@
     ['Space Space', 'Find project files in tree'],
     ['Space f / Esc', 'Back to file tree (Esc in view mode)'],
     ['i / a / o / I / A / O', 'Source: start editing in insert mode'],
+    ['dd / 3dd / dw / d$ / dG / D / x / X', 'Source: delete lines, words, to line end / file end, letters (starts editing)'],
+    ['cc / cw / ciw / ci" / C / s / S / R', 'Source: change text and type (starts editing)'],
+    ['p / P / J / >> / << / r / ~', 'Source: paste after / before, join lines, indent, replace or switch case of a letter'],
+    ['.', 'Source: repeat the last change'],
+    ['v / V then d / c / > / <', 'Source: delete, change or indent the selection'],
     ['Esc', 'Insert: back to normal mode'],
     ['u / Ctrl+R', 'Source: undo / redo'],
     [':w / Ctrl+S / :w!', 'Save / overwrite changes made on disk'],
@@ -435,10 +440,8 @@
     // Insert mode keeps every key, such as Space, Tab and Ctrl+O.
     else if(editing && s.editor.inserting()){}
     else if(navigation && !typing && !event.metaKey && !event.altKey){
-      // View mode starts editing like Vim; the key then runs on the editable buffer. u, 2u and Ctrl+R reach changes kept from editing.
-      if(source && !editing && s.leader==null && (!vimBusy && !event.ctrlKey && /^[iaoIAO]$/.test(event.key) || s.editor.history(event)))startEditing(s);
       // Workspace shortcuts win over Vim's Ctrl+O and Ctrl+I; Tab still moves forward in source.
-      else if(event.ctrlKey && event.key.toLowerCase()==='o' && !window.libroWorkspace?.bound('Ctrl+O'))action=()=>historyMove(s,-1);
+      if(event.ctrlKey && event.key.toLowerCase()==='o' && !window.libroWorkspace?.bound('Ctrl+O'))action=()=>historyMove(s,-1);
       else if((event.ctrlKey && event.key.toLowerCase()==='i' && !window.libroWorkspace?.bound('Ctrl+I')) || source && event.key==='Tab'&&!event.shiftKey)action=()=>historyMove(s,1);
       else if(!event.ctrlKey && (event.key===' ' && !vimBusy || s.leader!=null)){
         if(s.leader==null)s.leader='';else s.leader+=event.key;
