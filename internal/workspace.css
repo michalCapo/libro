@@ -133,7 +133,7 @@ html.dark .ws-project-item:has(>.ws-thread-row[aria-current=true]),html.dark .ws
 .ws-thread-row[data-agent-status=working] .ws-thread-status{color:var(--ws-accent)}
 .ws-thread-row[data-agent-status=done] .ws-thread-status{color:#15803d}
 html.dark .ws-thread-row[data-agent-status=done] .ws-thread-status{color:#4ade80}
-.ws-project-row[data-agent-status=working] .material-icons-round{color:var(--ws-accent);animation:ws-agent-working 1s linear infinite}
+.ws-project-row[data-agent-status=working] .material-icons-round{color:var(--ws-accent)}
 .ws-project-row[data-agent-status=done] .material-icons-round{color:#15803d;animation:ws-agent-done .45s cubic-bezier(.22,1,.36,1)}
 html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4ade80}
 /* Card rows name the status before the corner icon, in the icon color; the project name keeps its default color. Both stay pinned to the right edge when the hover actions widen the badge column. */
@@ -145,13 +145,11 @@ html.dark .ws-row-grid[data-agent-status=done]::before{color:#4ade80}
 .ws-project-item .ws-row-grid>.ws-project-shortcut{grid-area:badge;align-self:stretch;width:16px;height:auto;margin:0 0 0 -2px;padding:0;border:0;border-radius:0;background:none;color:var(--ws-muted);font-family:inherit;font-size:76px;font-weight:300;line-height:58px;transform:scaleX(.6)}
 .ws-project-item .ws-row-grid[aria-current=true]>.ws-project-shortcut{background:none;color:var(--ws-fg)}
 .ws-project-item .ws-row-grid:is([data-agent-status=working],[data-agent-status=done])>.ws-project-shortcut{color:var(--ws-status)}
-.ws-project-item .ws-row-grid[data-agent-status=working]>.ws-project-shortcut{animation:ws-number-working 1.6s ease-in-out infinite}
-@keyframes ws-number-working{50%{opacity:.4}}
 /* The thread actions button takes the badge's old corner; a running terminal moves aside for it. */
 .ws-project-item:has(>.ws-row-grid .ws-project-shortcut)>.ws-button{right:3px}
 .ws-project-item:is(:hover,:focus-within)>.ws-row-grid>.ws-project-terminal{margin-right:24px}
 @media(hover:none){.ws-project-item>.ws-row-grid>.ws-project-terminal{margin-right:24px}}
-@media(prefers-reduced-motion:reduce){.ws-project-row[data-agent-status] .material-icons-round,.ws-project-item .ws-row-grid>.ws-project-shortcut{animation:none}}
+@media(prefers-reduced-motion:reduce){.ws-project-row[data-agent-status] .material-icons-round{animation:none}}
 .ws-sidebar-search{display:flex;align-items:center;gap:10px;min-width:0;min-height:36px;flex:1;padding:6px 8px;color:var(--ws-muted);background:transparent;border:0;border-radius:8px;text-align:left;font:inherit}
 .ws-sidebar-search span{flex:1}.ws-sidebar-search:hover{background:var(--ws-hover)}
 .ws-sidebar-search .material-icons-round{font-size:17px;flex-shrink:0;color:var(--ws-muted)}
@@ -163,7 +161,6 @@ html.dark .ws-row-grid[data-agent-status=done]::before{color:#4ade80}
 .ws-project-command-dialog .ws-agent-actions{margin-top:12px}
 .ws-project-command-dialog .ws-agent-command{min-width:0;width:100%;box-sizing:border-box}
 .ws-project-command-dialog .ws-agent-actions{justify-content:flex-end}
-@keyframes ws-agent-working{to{transform:rotate(360deg)}}
 @keyframes ws-agent-done{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
 #main-area{min-width:0;background:var(--ws-chrome)}.ws-project{flex:1;min-width:0;min-height:0;display:flex;overflow:hidden}.ws-grid{display:flex;flex:1;min-width:0;min-height:0;overflow-x:auto;overflow-y:hidden;gap:0;padding:0;position:relative;overscroll-behavior-x:contain;container-type:inline-size}
 #libro-workspace .ws-grid{scrollbar-width:thin;scrollbar-color:var(--ws-line) var(--ws-bg)}
@@ -637,7 +634,7 @@ html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repo
 #libro-workspace[data-fold] .ws-body{position:relative}#libro-workspace[data-fold] .ws-tool-rail{order:-1;margin-top:38px}#libro-workspace[data-fold] .ws-sidebar{position:absolute;top:0;bottom:0;left:0;background:transparent;pointer-events:none}#libro-workspace[data-fold] .ws-sidebar::before{content:"";position:absolute;top:0;left:0;right:0;height:38px;background:var(--ws-chrome)}#libro-workspace[data-fold] .ws-sidebar>[data-sidebar-toggle]{position:relative}#libro-workspace[data-fold] .ws-sidebar::before,#libro-workspace[data-fold] .ws-sidebar>[data-sidebar-toggle],#libro-workspace[data-fold] .ws-sidebar>.ws-navigation,#libro-workspace[data-fold] .ws-sidebar::after{pointer-events:auto}#libro-workspace[data-fold] .ws-voice-status{right:auto;left:calc(var(--ws-rail-width) + 12px)}
 /* The open sidebar holds the tools above its footer: a labeled row per tool, then one row of size, voice, bottom terminal, and app actions. */
 .ws-tool-label,.ws-tool-key{display:none}
-#libro-workspace:not([data-fold]) .ws-tool-rail{flex-direction:row;flex-wrap:wrap;justify-content:space-between;gap:2px 0;width:auto;padding:8px 0 4px;overflow:visible}#libro-workspace:not([data-fold]) .ws-tool-buttons{align-items:stretch;flex-basis:100%;margin-bottom:4px}#libro-workspace:not([data-fold]) .ws-tool-buttons>.ws-button{justify-content:flex-start;gap:10px;width:auto;height:32px;padding:0 8px;font:inherit;font-size:13px;text-align:left}#libro-workspace:not([data-fold]) .ws-tool-buttons .ws-tool-label{display:block;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#libro-workspace:not([data-fold]) .ws-tool-buttons .ws-tool-key:not(:empty){display:block;padding:3px 5px;border-radius:4px;background:var(--ws-kbd);color:var(--ws-muted);font:500 10.5px/1 var(--ws-mono)}#libro-workspace:not([data-fold]) .ws-tool-spacer{display:none}#libro-workspace:not([data-fold]) .ws-tool-rail [data-size-trigger]{margin:0}#libro-workspace:not([data-fold]) .ws-voice-status{right:auto;left:calc(var(--ws-projects) + 12px)}
+#libro-workspace:not([data-fold]) .ws-tool-rail{flex-direction:row;flex-wrap:wrap;justify-content:space-between;gap:2px 0;width:auto;padding:8px 0 4px;overflow:visible}#libro-workspace:not([data-fold]) .ws-tool-buttons{align-items:stretch;flex-basis:100%;margin-bottom:4px}#libro-workspace:not([data-fold]) .ws-tool-buttons>.ws-button{justify-content:flex-start;gap:10px;width:auto;height:32px;padding:0 8px;font:inherit;font-size:13px;text-align:left}#libro-workspace:not([data-fold]) .ws-tool-buttons .ws-tool-label{display:block;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#libro-workspace:not([data-fold]) .ws-tool-buttons .ws-tool-key:not(:empty){display:block;padding:3px 5px;border-radius:4px;background:var(--ws-kbd);color:var(--ws-muted);font:500 10.5px/1 var(--ws-mono)}#libro-workspace:not([data-fold]) .ws-tool-spacer{display:none}#libro-workspace:not([data-fold]):not([data-show-tools=true]) .ws-tool-buttons,#libro-workspace[data-fold] #workspace-tools-toggle{display:none}#workspace-tools-toggle[aria-expanded=true]{color:var(--ws-fg)}#libro-workspace:not([data-fold]) .ws-tool-rail [data-size-trigger]{margin:0}#libro-workspace:not([data-fold]) .ws-voice-status{right:auto;left:calc(var(--ws-projects) + 12px)}
 
 #tool-key-form .ws-agent-command-row{padding:10px 16px;gap:16px}
 #tool-key-form h3{margin-top:44px;margin-bottom:12px}

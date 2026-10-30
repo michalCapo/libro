@@ -124,7 +124,9 @@
     const focused = rail?.contains(document.activeElement) ? document.activeElement : null;
     if (rail && fold && rail.parentElement !== body) body?.prepend(rail);
     else if (rail && !fold && rail.nextElementSibling !== footer) footer?.before(rail);
-    if (focused && document.activeElement !== focused) focused.focus({preventScroll:true});
+    // A tool hidden in the open sidebar, or the tools toggle hidden in the folded rail, hands focus to a visible rail button.
+    const target = !focused || focused.checkVisibility() ? focused : [...rail.querySelectorAll('button')].find(button => button.checkVisibility());
+    if (target && document.activeElement !== target) target.focus({preventScroll:true});
     const button = document.querySelector('[data-sidebar-fold]');
     if (!button) return;
     const label = fold ? 'Keep sidebar open' : 'Fold sidebar';
@@ -933,6 +935,10 @@
     refresh();
     return true;
   }
+  // The open sidebar lists tools only after the user shows them; the choice is remembered.
+  function toggleTools(show = !prefs.showTools) {
+    prefs.showTools = show; save(); refresh();
+  }
   function toggleProjects(show = !prefs.allProjects) {
     prefs.allProjects = show; save(); refresh();
   }
@@ -1059,6 +1065,8 @@
     root.dataset.allProjects = String(!!prefs.allProjects);
     document.getElementById('workspace-all-projects')?.setAttribute('aria-expanded', String(!!prefs.allProjects));
     root.dataset.voiceTyping = String(prefs.voiceTyping !== false);
+    root.dataset.showTools = String(!!prefs.showTools);
+    document.getElementById('workspace-tools-toggle')?.setAttribute('aria-expanded', String(!!prefs.showTools));
     foldState();
     renderToolRail();
     renderProjects();
@@ -2128,7 +2136,7 @@
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects')) delete root.dataset.sidebar; });
   narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name})};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleTools, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name})};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }

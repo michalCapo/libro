@@ -145,6 +145,7 @@ func renderWorkspaceTools() *r.Node {
 		),
 		workspaceButton("Toggle bottom terminal (Ctrl+`)", "vertical_align_bottom", r.UnsafeJS("libroWorkspace.bottom()")),
 		r.Div("ws-tool-spacer"),
+		workspaceButton("Show tools", "construction", r.UnsafeJS("libroWorkspace.toggleTools()")).ID("workspace-tools-toggle").Attr("aria-expanded", "false"),
 		workspaceButton("Commands", "tune", r.UnsafeJS("if(window.__libroOpenCommandPalette)__libroOpenCommandPalette()")),
 		workspaceButton("Apps & plugins", "apps", r.UnsafeJS("libroWorkspace.launcher()")),
 		workspaceButton("Settings", "settings", r.UnsafeJS("libroWorkspace.settings()")),
