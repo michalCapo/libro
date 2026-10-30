@@ -93,13 +93,12 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 /* Projects without open threads fade until hovered or focused. */
 .ws-project-group:not(:has(.ws-project-threads .ws-project-item))>.ws-project-item:not([data-panels=true],:is(:hover,:focus-within,:has(.ws-project-row[aria-current=true])))>*{opacity:.52}
 .ws-thread-row{min-height:30px}
-/* Thread rows use up to three lines: project name with the status icon in the corner, label when set, and details with the branch. */
-.ws-row-grid{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"project status icon" "title title title" "meta end badge";gap:2px 8px;align-items:center}
+/* Thread rows lead with a tall shortcut number, then use up to three lines: project name with the status icon in the corner, label when set, and details with the branch. */
+.ws-row-grid{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"badge project status icon" "badge title title title" "badge meta meta end";gap:2px 8px;align-items:center}
 .ws-row-grid>.material-icons-round{grid-area:icon;justify-self:end}
 .ws-row-grid>span{grid-area:title;font-size:11px;line-height:14px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
 .ws-row-grid>span:empty{display:none}
 .ws-row-grid>.ws-project-terminal{grid-area:end;justify-self:end}
-.ws-row-grid>.ws-project-shortcut{grid-area:badge}
 .ws-row-project{grid-area:project;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:18px;line-height:24px;color:var(--ws-muted)}
 .ws-row-meta{grid-area:meta;min-width:0;min-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;line-height:16px;color:var(--ws-muted)}
 .ws-row-branch{font:11px/16px var(--ws-mono)}
@@ -142,7 +141,17 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-row-grid[data-agent-status=working]::before{content:"Working";color:var(--ws-accent)}
 .ws-row-grid[data-agent-status=done]::before{content:"Done";color:#15803d}
 html.dark .ws-row-grid[data-agent-status=done]::before{color:#4ade80}
-@media(prefers-reduced-motion:reduce){.ws-project-row[data-agent-status] .material-icons-round{animation:none}}
+/* Card numbers are one tall condensed digit of the same size on every card, so short cards grow to fit it; their color shows the agent status. */
+.ws-project-item .ws-row-grid>.ws-project-shortcut{grid-area:badge;align-self:stretch;width:16px;height:auto;margin:0 0 0 -2px;padding:0;border:0;border-radius:0;background:none;color:var(--ws-muted);font-family:inherit;font-size:76px;font-weight:300;line-height:58px;transform:scaleX(.6)}
+.ws-project-item .ws-row-grid[aria-current=true]>.ws-project-shortcut{background:none;color:var(--ws-fg)}
+.ws-project-item .ws-row-grid:is([data-agent-status=working],[data-agent-status=done])>.ws-project-shortcut{color:var(--ws-status)}
+.ws-project-item .ws-row-grid[data-agent-status=working]>.ws-project-shortcut{animation:ws-number-working 1.6s ease-in-out infinite}
+@keyframes ws-number-working{50%{opacity:.4}}
+/* The thread actions button takes the badge's old corner; a running terminal moves aside for it. */
+.ws-project-item:has(>.ws-row-grid .ws-project-shortcut)>.ws-button{right:3px}
+.ws-project-item:is(:hover,:focus-within)>.ws-row-grid>.ws-project-terminal{margin-right:24px}
+@media(hover:none){.ws-project-item>.ws-row-grid>.ws-project-terminal{margin-right:24px}}
+@media(prefers-reduced-motion:reduce){.ws-project-row[data-agent-status] .material-icons-round,.ws-project-item .ws-row-grid>.ws-project-shortcut{animation:none}}
 .ws-sidebar-search{display:flex;align-items:center;gap:10px;min-width:0;min-height:36px;flex:1;padding:6px 8px;color:var(--ws-muted);background:transparent;border:0;border-radius:8px;text-align:left;font:inherit}
 .ws-sidebar-search span{flex:1}.ws-sidebar-search:hover{background:var(--ws-hover)}
 .ws-sidebar-search .material-icons-round{font-size:17px;flex-shrink:0;color:var(--ws-muted)}
