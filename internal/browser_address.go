@@ -9,21 +9,23 @@ func urlPopupJS(_ string) string {
   var input=document.getElementById('url-popup-input');
   if(!dialog||!input)return;
   var results=document.getElementById('url-popup-results');
-  var historyKey='libro.browser.history';
   var matches=[], selected=-1;
   var focusRequest=0;
   var showAll=false;
   var autofill=false;
+  // Each project keeps its own history.
+  function historyKey(){return 'libro.browser.history:'+(window.__libroHistoryProject||'');}
+  function origin(url){var match=/^[a-z][a-z0-9+.-]*:\/\/[^\/?#]+/i.exec(url);return match?match[0].toLowerCase():'';}
   function history(){
     try {
-      var entries=JSON.parse(localStorage.getItem(historyKey)||'[]');
+      var entries=JSON.parse(localStorage.getItem(historyKey())||'[]');
       return Array.isArray(entries)?entries.filter(function(e){return e&&typeof e.url==='string'&&Number.isFinite(e.time)&&e.time>Date.now()-30*86400000;}).slice(0,200):[];
     }catch(_){return [];}
   }
   window.__libroRememberURL=function(url){
     var entries=history().filter(function(e){return e.url!==url;});
     entries.unshift({url:url,time:Date.now()});
-    try{localStorage.setItem(historyKey,JSON.stringify(entries.slice(0,200)));}catch(_){}
+    try{localStorage.setItem(historyKey(),JSON.stringify(entries.slice(0,200)));}catch(_){}
   };
   function render(){
     results.replaceChildren();
@@ -49,7 +51,12 @@ func urlPopupJS(_ string) string {
     var urls=window.__libroApplicationURLs||[window.__libroApplicationURL||''];
     urls=urls.filter(function(url,index){return url&&urls.indexOf(url)===index;});
     var applications=urls.map(function(url){return {url:url,application:true};});
-    var entries=history().filter(function(e){return !urls.some(function(url){return e.url.replace(/\/$/,'')===url.replace(/\/$/,'');});});
+    // Local addresses are offered only while a running application still uses their port.
+    var live=urls.map(origin);
+    var entries=history().filter(function(e){
+      if(/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\])(:|\/|$)/i.test(e.url)&&live.indexOf(origin(e.url))<0)return false;
+      return !urls.some(function(url){return e.url.replace(/\/$/,'')===url.replace(/\/$/,'');});
+    });
     matches=applications.filter(function(e){return e.url.toLowerCase().includes(query);});
     matches=matches.concat(entries.filter(function(e){return e.url.toLowerCase().includes(query);}).slice(0,Math.max(0,8-matches.length)));
     selected=query&&matches.length?0:-1;

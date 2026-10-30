@@ -2886,7 +2886,7 @@ func projectScriptNodes(state *AppState) []*r.Node {
 	if url == "" {
 		url = applicationURL(settings.Port)
 	}
-	return []*r.Node{clientScriptNode("window.__libroThreads=props[0];", state.Threads), clientScriptNode("window.__libroActiveProject=props[0];window.__libroApplicationURL=props[1];window.__libroProjects=props[2];window.__libroApplicationURLs=props[3];window.__libroPanels=props[4];if(window.libroWorkspace)libroWorkspace.refresh();", state.ActiveProject, url, all, applicationBrowserURLs(state), workspacesWithPanels(state))}
+	return []*r.Node{clientScriptNode("window.__libroThreads=props[0];", state.Threads), clientScriptNode("window.__libroActiveProject=props[0];window.__libroApplicationURL=props[1];window.__libroProjects=props[2];window.__libroApplicationURLs=props[3];window.__libroPanels=props[4];window.__libroHistoryProject=props[5];if(window.libroWorkspace)libroWorkspace.refresh();", state.ActiveProject, url, all, applicationBrowserURLs(state), workspacesWithPanels(state), state.parentProjectScope(state.ActiveProject))}
 }
 
 // workspacesWithPanels lists open workspaces that have at least one panel.

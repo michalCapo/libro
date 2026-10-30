@@ -23,13 +23,16 @@ let script='';process.stdin.on('data',d=>script+=d);process.stdin.on('end',async
   vm.runInNewContext(script,{window,__ws:{call(action,data){request={action,data}}},__gsui:{show:()=>{dialog.hidden=false;dialog.classList.remove('hidden');}},document:{getElementById(id){return nodes[id]},createElement:element},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},Date});
   return {window,input,results,dialog};
  }
- let app=boot();app.window.__libroRememberURL('http://localhost:1411/');app.window.__libroRememberURL('https://example.com/');app.window.__libroRememberURL('http://localhost:1411/');
- assert.equal(JSON.parse(storage.get('libro.browser.history')).length,2);
- app=boot();app.window.__libroOpenURLPopupFor('a');assert.ok(focused);assert.equal(app.input.value,'http://localhost:1411/');
- app.input.value='1411';app.input.input();assert.equal(app.results.children.length,1);
- app.input.keydown({key:'Enter',preventDefault(){},stopImmediatePropagation(){}});assert.equal(navigated,'http://localhost:1411/');
- storage.set('libro.browser.history',JSON.stringify([{url:'http://old/',time:Date.now()-31*86400000}]));app.input.value='';app.input.input();assert.equal(app.results.children.length,0);
- storage.set('libro.browser.history','broken');app.input.input();assert.equal(app.results.children.length,0);
+ let app=boot();app.window.__libroRememberURL('https://one.test/');app.window.__libroRememberURL('https://example.com/');app.window.__libroRememberURL('https://one.test/');
+ assert.equal(JSON.parse(storage.get('libro.browser.history:')).length,2);
+ app=boot();app.window.__libroOpenURLPopupFor('a');assert.ok(focused);assert.equal(app.input.value,'https://one.test/');
+ app.input.value='one';app.input.input();assert.equal(app.results.children.length,1);
+ app.input.keydown({key:'Enter',preventDefault(){},stopImmediatePropagation(){}});assert.equal(navigated,'https://one.test/');
+ // Each project keeps its own history.
+ app.window.__libroHistoryProject='other';app.input.input();assert.equal(app.results.children.length,0);
+ app.window.__libroHistoryProject='';
+ storage.set('libro.browser.history:',JSON.stringify([{url:'http://old/',time:Date.now()-31*86400000}]));app.input.value='';app.input.input();assert.equal(app.results.children.length,0);
+ storage.set('libro.browser.history:','broken');app.input.input();assert.equal(app.results.children.length,0);
  // The current application comes first, even without history, and duplicates are hidden.
  app.window.__libroApplicationURL='http://localhost:43327';
  app.window.__libroRememberURL('http://localhost:43327/');
@@ -61,6 +64,11 @@ let script='';process.stdin.on('data',d=>script+=d);process.stdin.on('end',async
  assert.equal(app.results.children[1].children[1].textContent,'http://localhost:43657/');
  const many=Array.from({length:12},(_,i)=>'http://localhost:'+(6000+i));
  app.window.__libroSetApplicationURLs('project','a',many);assert.equal(app.results.children.length,12);
+ // Local history is offered only for ports a running application still uses.
+ app.window.__libroRememberURL('http://localhost:38799/');app.window.__libroRememberURL('http://localhost:6000/page');
+ app.input.value='6000/page';app.input.input();assert.equal(app.results.children.length,1);
+ app.input.value='38799';app.input.input();assert.equal(app.results.children.length,0);
+ app.window.__libroOpenURLPopupFor('a','http://localhost:43655/link/');app.window.__libroSetApplicationURLs('project','a',many);
  assert.equal(app.input.value,'http://localhost:43655/link/');
  app.window.__libroSetApplicationURLs('other','a',['http://localhost:9999']);assert.equal(app.window.__libroApplicationURLs.length,12);
  app.window.__libroSetApplicationURLs('project','b',['http://localhost:9999']);assert.equal(app.window.__libroApplicationURLs.length,12);

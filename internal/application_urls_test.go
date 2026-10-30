@@ -54,12 +54,12 @@ func TestBrowserURLsIncludeAllApplicationTerminals(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	want := []string{"http://localhost:3000/app/", "http://localhost:3001/admin/", "http://localhost:4000/", "http://localhost:5000/"}
+	want := []string{"http://localhost:3000/app/", "http://localhost:3001/admin/", "http://localhost:5000/"}
 	if got := applicationBrowserURLs(state); !reflect.DeepEqual(got, want) {
 		t.Fatalf("browser URLs = %v, want %v", got, want)
 	}
 	tm.Stop("custom")
-	want = []string{"http://localhost:4000/", "http://localhost:5000/", "http://localhost:3001/admin/"}
+	want = []string{"http://localhost:5000/", "http://localhost:3001/admin/"}
 	if got := applicationBrowserURLs(state); !reflect.DeepEqual(got, want) {
 		t.Fatalf("stopped application still suggested: %v, want %v", got, want)
 	}

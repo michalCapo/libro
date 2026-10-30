@@ -177,7 +177,8 @@ func applicationBrowserURLs(state *AppState) []string {
 				}
 				assigned = applicationURL(panel.ApplicationPort)
 			} else {
-				if panel.Type != AppTypeTerminal || !tm.IsRunning(panel.ID) {
+				// Agent output quotes old addresses and redraws text, so only application terminals count.
+				if panel.Type != AppTypeTerminal || isAgentApp(panel) || !tm.IsRunning(panel.ID) {
 					continue
 				}
 				if workspace != state.ActiveProject && (!isSharedProjectApp(panel) || state.projectScope(workspace) != state.projectScope(state.ActiveProject)) {
