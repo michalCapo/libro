@@ -137,14 +137,18 @@ func renderWorkspaceStrip(state *AppState, sid, placeholderID string) *r.Node {
 
 func renderWorkspaceTools() *r.Node {
 	return r.El("aside", "ws-tool-rail").Attr("aria-label", "Workspace tools").Render(
-		r.Div("ws-tool-buttons").ID("workspace-tool-buttons"),
+		// Only the folded rail shows these: new thread, then one number per thread card.
+		r.Div("ws-rail-threads").Render(
+			workspaceButton("New thread", "add", r.UnsafeJS("libroWorkspace.newThread()")),
+			r.Div("ws-rail-numbers").ID("workspace-rail-threads"),
+		),
 		r.Div("ws-tool-sizes").ID("workspace-tool-size").Attr("data-size-badges", ""),
 		r.Div("ws-voice-control").Attr("data-voice-control", "").Render(
 			workspaceButton("Voice typing", "mic", r.UnsafeJS("void window.libroVoice?.toggle()")).Attr("data-voice-button", "global").Attr("aria-pressed", "false"),
 			r.Span("ws-voice-status").Attr("role", "status").Attr("popover", "manual").Attr("hidden", "hidden"),
 		),
-		workspaceButton("Toggle bottom terminal (Ctrl+`)", "vertical_align_bottom", r.UnsafeJS("libroWorkspace.bottom()")),
 		r.Div("ws-tool-spacer"),
+		workspaceButton("Toggle bottom terminal (Ctrl+`)", "vertical_align_bottom", r.UnsafeJS("libroWorkspace.bottom()")),
 		workspaceButton("Commands", "tune", r.UnsafeJS("if(window.__libroOpenCommandPalette)__libroOpenCommandPalette()")),
 		workspaceButton("Apps & plugins", "apps", r.UnsafeJS("libroWorkspace.launcher()")),
 		workspaceButton("Settings", "settings", r.UnsafeJS("libroWorkspace.settings()")),

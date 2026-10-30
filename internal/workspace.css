@@ -78,9 +78,9 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 html.dark .ws-project-remove:hover{color:#ff8a80}
 .ws-project-shortcut{flex:none;min-width:18px;height:18px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;margin-left:auto;border:1px solid var(--ws-status,transparent);border-radius:4px;background:var(--ws-raised);color:var(--ws-muted);font:500 10.5px/1 var(--ws-mono)}
 /* The shortcut badge border shows agent status; the selected badge fills with it. */
-.ws-project-row[data-agent-status=working]{--ws-status:var(--ws-accent)}
-.ws-project-row[data-agent-status=done]{--ws-status:#15803d}
-html.dark .ws-project-row[data-agent-status=done]{--ws-status:#4ade80}
+.ws-project-row[data-agent-status=working],.ws-rail-thread[data-agent-status=working]{--ws-status:var(--ws-accent)}
+.ws-project-row[data-agent-status=done],.ws-rail-thread[data-agent-status=done]{--ws-status:#15803d}
+html.dark :is(.ws-project-row,.ws-rail-thread)[data-agent-status=done]{--ws-status:#4ade80}
 .ws-project-row[aria-current=true] .ws-project-shortcut{background:var(--ws-status,var(--ws-accent));color:var(--ws-on-accent)}
 .ws-project-terminal{width:16px;height:16px;flex-shrink:0;fill:none;stroke:#15803d;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 html.dark .ws-project-terminal{stroke:#4ade80}
@@ -334,9 +334,13 @@ html.dark .ws-row-grid[data-agent-status=done]::before{color:#4ade80}
 .ws-tool-rail{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;background:var(--ws-chrome);flex-shrink:0}
 .ws-tool-rail .ws-button{width:32px;height:32px}
 .ws-tool-rail .ws-button[aria-pressed=true]{background:var(--ws-raised);color:var(--ws-fg);box-shadow:var(--ws-shadow)}
-.ws-tool-buttons{display:flex;flex-direction:column;align-items:center;gap:2px;margin-bottom:8px}
-.ws-tool-buttons:empty{display:none}
 .ws-tool-rail .ws-tool-sizes:empty{display:none}
+/* Folded rail thread numbers match the card digits: tall, condensed, colored by agent status. */
+.ws-rail-threads,.ws-rail-numbers{display:flex;flex-direction:column;align-items:center;gap:2px}.ws-rail-threads{margin-bottom:8px}#libro-workspace:not([data-fold]) .ws-rail-threads{display:none}
+.ws-rail-thread{width:32px;height:40px;padding:0;border:0;border-radius:6px;background:none;color:var(--ws-muted);font-family:inherit;font-size:40px;font-weight:300;line-height:1;cursor:pointer}
+.ws-rail-thread>span{display:inline-block;transform:scaleX(.6)}
+.ws-rail-thread:hover,.ws-rail-thread:focus-visible{background:var(--ws-hover)}
+.ws-rail-thread[aria-current=true]{color:var(--ws-fg)}.ws-rail-thread:is([data-agent-status=working],[data-agent-status=done]){color:var(--ws-status)}
 .ws-tool-spacer{flex:1}
 .ws-tool-rail [data-size-trigger]{min-width:28px;height:22px;margin-top:2px;padding:0 6px;border:0;border-radius:5px;background:var(--ws-kbd);color:var(--ws-fg);font:600 10px/1 var(--ws-mono);cursor:pointer}
 .ws-tool-rail .ws-size-custom{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:9px}
@@ -634,8 +638,8 @@ html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repo
    The sidebar floats over the rail. Its top strip holds the menu button, keeps the list open while the pointer crosses
    to it, and stays above the tools, which scroll below it. Only the strip, list, and backdrop take the pointer. */
 #libro-workspace[data-fold] .ws-body{position:relative}#libro-workspace[data-fold] .ws-tool-rail{order:-1;margin-top:38px}#libro-workspace[data-fold] .ws-sidebar{position:absolute;top:0;bottom:0;left:0;background:transparent;pointer-events:none}#libro-workspace[data-fold] .ws-sidebar::before{content:"";position:absolute;top:0;left:0;right:0;height:38px;background:var(--ws-chrome)}#libro-workspace[data-fold] .ws-sidebar>[data-sidebar-toggle]{position:relative}#libro-workspace[data-fold] .ws-sidebar::before,#libro-workspace[data-fold] .ws-sidebar>[data-sidebar-toggle],#libro-workspace[data-fold] .ws-sidebar>.ws-navigation,#libro-workspace[data-fold] .ws-sidebar::after{pointer-events:auto}#libro-workspace[data-fold] .ws-voice-status{right:auto;left:calc(var(--ws-rail-width) + 12px)}
-/* The open sidebar shows one row of size, voice, bottom terminal, and app actions above its footer; tools stay in Apps & plugins. */
-#libro-workspace:not([data-fold]) .ws-tool-rail{flex-direction:row;flex-wrap:wrap;justify-content:space-between;gap:2px 0;width:auto;padding:8px 0 4px;overflow:visible}#libro-workspace:not([data-fold]) :is(.ws-tool-buttons,.ws-tool-spacer){display:none}#libro-workspace:not([data-fold]) .ws-tool-rail [data-size-trigger]{margin:0}#libro-workspace:not([data-fold]) .ws-voice-status{right:auto;left:calc(var(--ws-projects) + 12px)}
+/* The open sidebar shows one row of size, voice, bottom terminal, and app actions above its footer; tools live in Apps & plugins. */
+#libro-workspace:not([data-fold]) .ws-tool-rail{flex-direction:row;flex-wrap:wrap;justify-content:space-between;gap:2px 0;width:auto;padding:8px 0 4px;overflow:visible}#libro-workspace:not([data-fold]) .ws-tool-spacer{display:none}#libro-workspace:not([data-fold]) .ws-tool-rail [data-size-trigger]{margin:0}#libro-workspace:not([data-fold]) .ws-voice-status{right:auto;left:calc(var(--ws-projects) + 12px)}
 
 #tool-key-form .ws-agent-command-row{padding:10px 16px;gap:16px}
 #tool-key-form h3{margin-top:44px;margin-bottom:12px}

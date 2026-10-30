@@ -124,9 +124,7 @@
     const focused = rail?.contains(document.activeElement) ? document.activeElement : null;
     if (rail && fold && rail.parentElement !== body) body?.prepend(rail);
     else if (rail && !fold && rail.nextElementSibling !== footer) footer?.before(rail);
-    // A tool hidden in the open sidebar hands focus to a visible rail button.
-    const target = !focused || focused.checkVisibility() ? focused : [...rail.querySelectorAll('button')].find(button => button.checkVisibility());
-    if (target && document.activeElement !== target) target.focus({preventScroll:true});
+    if (focused && document.activeElement !== focused) focused.focus({preventScroll:true});
     const button = document.querySelector('[data-sidebar-fold]');
     if (!button) return;
     const label = fold ? 'Keep sidebar open' : 'Fold sidebar';
@@ -1047,6 +1045,23 @@
       row.parentElement.dataset.panels = String(!card && open.has(row.dataset.projectKey));
     });
   }
+  // The folded rail repeats each numbered card as its digit; clicking it opens that card. It follows the card lists as they change.
+  function renderRailThreads() {
+    const rail = document.getElementById('workspace-rail-threads'); if (!rail) return;
+    const rows = sidebarRows('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])');
+    const signature = JSON.stringify(rows.map(row => [row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus, row.getAttribute('aria-current'), row.querySelector(':scope > span')?.textContent]));
+    if (rail.dataset.signature === signature) return;
+    rail.dataset.signature = signature; rail.replaceChildren();
+    rows.forEach(row => {
+      const number = row.dataset.projectShortcut, label = row.querySelector(':scope > span')?.textContent || row.dataset.projectKey;
+      const entry = node('button', 'ws-rail-thread'); entry.type = 'button'; entry.append(node('span', '', number));
+      entry.title = label + ' (Ctrl+' + number + ')'; entry.setAttribute('aria-label', row.getAttribute('aria-label') || label);
+      entry.setAttribute('aria-current', row.getAttribute('aria-current') || 'false');
+      if (row.dataset.agentStatus) entry.dataset.agentStatus = row.dataset.agentStatus;
+      entry.onclick = () => row.click(); rail.append(entry);
+    });
+  }
+  new MutationObserver(() => requestAnimationFrame(renderRailThreads)).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current']});
   let queued = false;
   const observer = new MutationObserver(records => {
     if (records.some(record => (record.type === 'attributes' && record.target.matches('[data-app-id]')) || [...record.addedNodes, ...record.removedNodes].some(n => n.nodeType === 1 && (n.matches('[data-app-id], [data-workspace-project], .ws-project, #top-bar') || n.querySelector('[data-app-id], [data-workspace-project]'))))) schedule();
@@ -1063,7 +1078,6 @@
     document.getElementById('workspace-all-projects')?.setAttribute('aria-expanded', String(!!prefs.allProjects));
     root.dataset.voiceTyping = String(prefs.voiceTyping !== false);
     foldState();
-    renderToolRail();
     renderProjects();
     renderThreads();
     renderProjectActivity();
@@ -1100,20 +1114,6 @@
       layoutDocks(grid, all, full);
     });
     observer.observe(document.getElementById('main-area'), {childList:true, subtree:true, attributes:true, attributeFilter:['style', 'data-dock', 'data-task-title', 'data-app-name']});
-  }
-  function renderToolRail() {
-    const rail = document.getElementById('workspace-tool-buttons'); if (!rail) return;
-    const list = window.__libroPlugins.filter(p => p.dock === 'right' && !p.disabled && !p.removed);
-    const signature = JSON.stringify(list);
-    if (rail.dataset.signature === signature) return;
-    rail.dataset.signature = signature; rail.replaceChildren();
-    const icons = {terminal:'terminal',browser:'language',files:'folder_open',repos:'fact_check',nvim:'edit',lazyrepo:'account_tree',lazydata:'storage'};
-    // Only the folded rail shows these; the open sidebar reaches tools through Apps & plugins.
-    list.forEach(p => {
-      const entry = button(p.name, icons[p.id] || (p.type === 'url' ? 'language' : 'terminal'), () => tool(p.id)); applyToolIcon(entry, p); entry.dataset.toolId = p.id;
-      rail.append(entry);
-    });
-    updateToolHints();
   }
   function restorePanelFocus() {
     const grid = activeGrid();
@@ -1218,9 +1218,7 @@
     document.querySelectorAll('.ws-new-thread-key').forEach(key => key.textContent = toolKeys['new-thread'] || '');
     document.querySelectorAll('.ws-tool-rail button, .ws-sidebar button:is(.ws-button, .ws-new-thread)').forEach(button => {
       const name = button.getAttribute('aria-label');
-      const plugin = window.__libroPlugins.find(plugin => plugin.id === button.dataset.toolId);
-      if (plugin) button.title = name + (toolKeys[plugin.id] ? ' (' + toolKeys[plugin.id] + ')' : '');
-      else if (name === 'New thread') button.title = name + (toolKeys['new-thread'] ? ' (' + toolKeys['new-thread'] + ')' : '');
+      if (name === 'New thread') button.title = name + (toolKeys['new-thread'] ? ' (' + toolKeys['new-thread'] + ')' : '');
     });
   }
   function saveToolKeys() {
@@ -1610,7 +1608,6 @@
     if (selected?.dataset.dock === 'bottom') state.bottomID = selected.dataset.appId;
     const terminal = terminals.find(frame => frame.dataset.appId === state.bottomID) || terminals[0];
     const bottomVisible = terminal && state.bottom && !full;
-    if (grid === activeGrid()) document.querySelectorAll('#workspace-tool-buttons [data-tool-id]').forEach(entry => entry.setAttribute('aria-pressed', String(!full && entry.dataset.toolId === right[0]?.dataset.plugin)));
     // Tools overlay agents when both cannot fit.
     const agentMin = Math.min(agentMinWidth, grid.clientWidth);
     // Cards sit apart by the grid gap; one gap per agent column plus the tool column.
