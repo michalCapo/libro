@@ -25,8 +25,9 @@ import (
 
 var chatApp *r.App
 
-// chatAgent reports whether an agent can run as a chat.
-func chatAgent(pluginID string) bool { return pluginID == "claude" }
+// chatAgent reports whether an agent command can run as a chat: built-in
+// Claude and custom agents whose command runs Claude.
+func chatAgent(command string) bool { return components.ChatCommand(command) }
 
 // claudeChatView reports whether new Claude panels open as a chat. It is on
 // unless the user chose the terminal in Settings.

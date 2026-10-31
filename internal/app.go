@@ -891,7 +891,7 @@ func Run(assets embed.FS, desktop bool) error {
 			appID := sm.NextAppID()
 			sm.InsertTerminalPlaceholder(sid, appID, width, command, writable, name, iconURL, insertIdx)
 			sm.SetAppPlugin(sid, appID, pluginID, dock)
-			if dock == "center" && chatAgent(pluginID) && claudeChatView() && components.ChatCommand(command) {
+			if dock == "center" && claudeChatView() && chatAgent(command) {
 				sm.setAppChat(sid, appID)
 			}
 

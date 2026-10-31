@@ -61,7 +61,7 @@ func (app savedApp) application() Application {
 		Command: currentCommand(app.Command), URL: app.URL, IconURL: app.IconURL, Type: app.Type,
 		Width: app.Width, PreviousWidth: app.PreviousWidth, Writable: app.Writable,
 		ApplicationPath: app.ApplicationPath, ApplicationPerThread: app.ApplicationPerThread,
-		SessionID: app.SessionID, AgentModel: app.AgentModel, AgentEffort: app.AgentEffort, Chat: app.Chat && chatAgent(app.PluginID),
+		SessionID: app.SessionID, AgentModel: app.AgentModel, AgentEffort: app.AgentEffort, Chat: app.Chat && chatAgent(app.Command),
 	}
 }
 
