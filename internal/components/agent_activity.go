@@ -3,6 +3,7 @@ package components
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"database/sql"
 	"encoding/json"
 	"io/fs"
@@ -685,8 +686,10 @@ func configString(value string) string {
 }
 
 // RecoverAgentSettings reads only model metadata from the exact agent session.
-// Missing files and unsupported agents leave the launch command unchanged.
-func RecoverAgentSettings(command, sessionID, codexHome string) (string, string) {
+// environment is Libro's agent environment; it can move CODEX_HOME and
+// CLAUDE_CONFIG_DIR. Missing files and unsupported agents leave the launch
+// command unchanged.
+func RecoverAgentSettings(command, sessionID string, environment map[string]string) (string, string) {
 	parts := agentCommandPattern.FindStringSubmatch(strings.TrimSpace(command))
 	if parts == nil || !agentSessionPattern.MatchString(sessionID) {
 		return "", ""
@@ -695,6 +698,7 @@ func RecoverAgentSettings(command, sessionID, codexHome string) (string, string)
 	kind := filepath.Base(parts[1])
 	switch kind {
 	case "codex":
+		codexHome := environment["CODEX_HOME"]
 		if codexHome == "" {
 			codexHome = os.Getenv("CODEX_HOME")
 		}
@@ -717,8 +721,12 @@ func RecoverAgentSettings(command, sessionID, codexHome string) (string, string)
 			})
 		}
 	case "claude":
-		home, _ := os.UserHomeDir()
-		paths, _ := filepath.Glob(filepath.Join(home, ".claude", "projects", "*", sessionID+".jsonl"))
+		dir := cmp.Or(environment["CLAUDE_CONFIG_DIR"], os.Getenv("CLAUDE_CONFIG_DIR"))
+		if dir == "" {
+			home, _ := os.UserHomeDir()
+			dir = filepath.Join(home, ".claude")
+		}
+		paths, _ := filepath.Glob(filepath.Join(dir, "projects", "*", sessionID+".jsonl"))
 		if len(paths) == 1 {
 			path = paths[0]
 		}

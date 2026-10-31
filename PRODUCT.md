@@ -10,7 +10,7 @@ desktop (Go + Electron), with a browser fallback
 
 Libro is an agent workspace with strong keyboard support, built around terminal and web applications. One project holds multiple agents and fixed-width tool panels. Comparable to T3 Code or the OpenAI and Anthropic desktop apps, but built with a different approach.
 
-The Go and Electron desktop app runs Codex, Pi, Claude, OpenCode, or another CLI in a native terminal, with one agent per thread. Tools run terminal commands or open web addresses beside the agent. Projects retain their running apps when the user switches context.
+The Go and Electron desktop app runs Codex, Pi, Claude, OpenCode, or another CLI in a native terminal, with one agent per thread. Claude opens as a chat by default; see Chat view. Tools run terminal commands or open web addresses beside the agent. Projects retain their running apps when the user switches context.
 
 ## Capabilities and Constraints
 
@@ -47,3 +47,7 @@ Focus a text field, then press Caps Lock or click the shared microphone in the s
 ## Files and editor
 
 Files provides a read-only Vim source preview. Press `e` with the tree or preview focused to open the selected tree file or current preview in the configured editor. Settings → Editor selects an enabled CLI tool from Tools, including custom tools; websites are excluded. Nvim is the default, and Off clears the selection. The choice persists across projects. Libro opens the tool in the right dock and passes the full file path as one argument to its command. In source previews, `e` replaces Vim’s end-of-word motion; navigation results keep `e` for opening the selected result. The tree’s `o` shortcut continues to open files with their system default application.
+
+## Chat view
+
+Claude panels show a chat instead of a terminal. Claude runs in the background (`claude -p` with stream-json input and output) in the panel's workspace, with Libro's MCP tools and agent instructions. Messages stream in; tool steps show as short lines that open to the end of their result. Permission requests, Claude's questions and plans show as cards with Allow, Always allow (when Claude suggests a rule), Deny, choices, or a typed reply. Enter sends, Shift+Enter starts a new line, and Stop interrupts the turn. The sidebar state, finish sound, thread names and session resume work as for terminal agents. After a restart the panel resumes the session and shows its earlier messages. If Claude stops, the next message starts it again. Page tools and voice typing insert into the message box. Settings → Claude view switches new Claude panels back to the terminal; open panels keep their view. Other agents still run in the terminal.

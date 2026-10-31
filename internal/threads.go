@@ -493,7 +493,7 @@ func (sm *StateManager) saveThreadSession(sid, _ string, appID, agentID, command
 }
 
 func (sm *StateManager) recordAgentSession(sid, appID, agentID, command, sessionID string, shutdown bool) bool {
-	model, effort := components.RecoverAgentSettings(command, sessionID, agentEnvironment()["CODEX_HOME"])
+	model, effort := components.RecoverAgentSettings(command, sessionID, agentEnvironment())
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if !shutdown && sm.layoutClosed.Load() {

@@ -43,6 +43,7 @@ type Application struct {
 	SessionID            string // agent resume metadata, including project workspaces
 	AgentModel           string
 	AgentEffort          string
+	Chat                 bool // the agent runs in the background and shows as a chat
 }
 
 // Project represents a named working directory

@@ -682,19 +682,19 @@ test('new thread shortcut opens the project picker and ignores repeats', () => {
 
 test('backend title updates rename their own thread, worktree, or base project, including hidden workspaces', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/components.go'), 'utf8')
-  const start = source.indexOf('function updateAgentTitle(task, fallback)')
-  const handler = source.slice(start, source.indexOf('term.onData(function(data)', start))
-  assert.ok(source.includes("if (msg.type === 'agent-title') { updateAgentTitle(msg.data || '', !!msg.fallback); return; }"))
+  const start = source.indexOf('window.__libroAgentMessage = function(appID, sid, msg)')
+  const handler = source.slice(start, source.indexOf('var assetPromise = null;', start))
+  assert.ok(source.includes("if (msg.type === 'agent-title' || msg.type === 'agent-status') { window.__libroAgentMessage(appID, sid, msg); return; }"))
   assert.ok(!source.includes('term.onTitleChange('), 'raw terminal titles must not bypass backend validation')
   for (const dock of ['center', 'right', 'bottom']) for (const project of ['thread:test', 'project/branch', 'project']) {
     const calls = []
     const frame = { dataset: { dock }, closest: () => ({ dataset: { workspaceProject: project } }) }
     const ws = { call(action, data) { calls.push([action, data.sid, data.id || data.project, data.name, data.fallback]) } }
     const context = vm.createContext({
-      sid: 'session-7', appID: 'agent', window: { __ws: ws, __libroActiveProject: 'another-project' }, __ws: ws,
+      window: { __ws: ws, __libroActiveProject: 'another-project' }, __ws: ws,
       document: { getElementById: () => frame },
     })
-    vm.runInContext(handler + "updateAgentTitle('Fix login', true); updateAgentTitle('', false);", context)
+    vm.runInContext(handler + "const update = (data, fallback) => window.__libroAgentMessage('agent', 'session-7', {type: 'agent-title', data, fallback}); update('Fix login', true); update('', false);", context)
     const action = project.startsWith('thread:') ? 'thread.rename' : 'worktree.title'
     assert.deepEqual(calls, dock === 'center' ? [[action, 'session-7', project, 'Fix login', true], [action, 'session-7', project, '', false]] : [])
     if (dock === 'center') assert.equal(frame.dataset.taskTitle, '')

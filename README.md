@@ -22,6 +22,8 @@ these attachments in private instance storage for agents to read.
 ## What It Does
 
 - Runs multiple agents in one project, each in its own thread.
+- Shows Claude as a chat, with tool steps, approvals and questions, while Claude runs in the background.
+  Switch back to the terminal in **Settings → Claude view**.
 - Puts terminal and web applications in fixed-width tool panels beside the agent.
 - Includes Browser, Files, Terminal, and other tools, with support for your own commands and web addresses.
 - Keeps all your projects in one place. Switch between them with one click.

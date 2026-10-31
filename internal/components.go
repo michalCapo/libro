@@ -1058,6 +1058,9 @@ func renderAppPlaceholder(app Application) *r.Node {
 		label = "Starting terminal"
 		hint = "If it stalls, close this panel and start the command again."
 	}
+	if app.Chat {
+		icon, label = "forum", "Starting Claude"
+	}
 	return r.Div("w-full h-full flex items-center justify-center bg-gray-50 dark:bg-zinc-950").
 		Attr("data-app-placeholder", app.ID).
 		Render(
@@ -1144,6 +1147,9 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			)
 		}
 		return container
+	}
+	if app.Chat {
+		return renderChat(app, sid)
 	}
 	// Pending terminal — show placeholder
 	if app.Type == AppTypeTerminal && app.Command == "" {
@@ -3004,6 +3010,32 @@ func terminalFrameSetupJS() string {
 			if (window.__libroTerminalFramesRegistered) return;
 			window.__libroTerminalFramesRegistered = true;
 
+			// Agent state and description messages from terminal and chat panels.
+			// An empty task clears the description when the agent starts a new session.
+			window.__libroAgentMessage = function(appID, sid, msg) {
+				if (msg.type === 'agent-status') {
+					window.__libroAgentStatuses = window.__libroAgentStatuses || {};
+					window.__libroAgentStatuses[appID] = msg.data;
+					window.dispatchEvent(new Event('libro-agent-status'));
+					return;
+				}
+				if (msg.type === 'closed') {
+					if (window.__libroAgentStatuses) delete window.__libroAgentStatuses[appID];
+					window.dispatchEvent(new Event('libro-agent-status'));
+					return;
+				}
+				if (msg.type !== 'agent-title') return;
+				var task = msg.data || '', fallback = !!msg.fallback;
+				var frame = document.getElementById('frame-' + appID);
+				if (!frame || frame.dataset.dock !== 'center') return;
+				frame.dataset.taskTitle = task;
+				var grid = frame.closest('[data-workspace-project]');
+				var threadId = grid && grid.dataset.workspaceProject;
+				if (!threadId || !window.__ws) return;
+				if (threadId.indexOf('thread:') === 0) __ws.call('thread.rename', {sid:sid, appId:appID, id:threadId, name:task, fallback:fallback});
+				else __ws.call('worktree.title', {sid:sid, appId:appID, project:threadId, name:task, fallback:fallback});
+			};
+
 			var assetPromise = null;
 			var observed = new WeakSet();
 			var terminals = new Map();
@@ -3368,13 +3400,7 @@ func terminalFrameSetupJS() string {
                                 window.dispatchEvent(new Event('libro-process-status'));
                                 return;
                             }
-                            if (msg.type === 'agent-title') { updateAgentTitle(msg.data || '', !!msg.fallback); return; }
-							if (msg.type === 'agent-status') {
-								window.__libroAgentStatuses = window.__libroAgentStatuses || {};
-								window.__libroAgentStatuses[appID] = msg.data;
-								window.dispatchEvent(new Event('libro-agent-status'));
-								return;
-							}
+                            if (msg.type === 'agent-title' || msg.type === 'agent-status') { window.__libroAgentMessage(appID, sid, msg); return; }
 							if (msg.type === 'output') term.write(msg.data || '');
 							else if (msg.type === 'exit') {
                                 delete el.dataset.processStatus;
@@ -3408,18 +3434,6 @@ func terminalFrameSetupJS() string {
 						};
 						ws.onerror = function() { try { ws.close(); } catch (err) {} };
 					}
-
-                    // An empty task clears the description when the agent starts a new session.
-                    function updateAgentTitle(task, fallback) {
-                        const frame = document.getElementById('frame-' + appID);
-                        if (!frame || frame.dataset.dock !== 'center') return;
-                        frame.dataset.taskTitle = task;
-                        const grid = frame.closest('[data-workspace-project]');
-                        const threadId = grid && grid.dataset.workspaceProject;
-                        if (!threadId || !window.__ws) return;
-                        if (threadId.indexOf('thread:') === 0) __ws.call('thread.rename', {sid:sid, appId:appID, id:threadId, name:task, fallback:fallback});
-                        else __ws.call('worktree.title', {sid:sid, appId:appID, project:threadId, name:task, fallback:fallback});
-                    }
 
 					term.onData(function(data) {
 						data = stripTerminalFocusReports(data);
@@ -3465,6 +3479,7 @@ func terminalFrameSetupJS() string {
 					el = document.querySelector('[data-terminal-app="' + frameOrAppID.replace(/"/g, '\\"') + '"]');
 				}
 				if (!el) return;
+				if (el.hasAttribute('data-chat')) { window.libroChat.focus(el); return; }
 				focusTerminal(el);
 			};
 
@@ -3484,6 +3499,7 @@ func terminalFrameSetupJS() string {
 
 			window.__libroRestartTerminal = function(appID) {
 				var el = document.querySelector('[data-terminal-app="' + String(appID).replace(/"/g, '\\"') + '"]');
+				if (el && el.hasAttribute('data-chat')) { window.libroChat.reconnect(el); return; }
 				var controller = el && terminals.get(el);
 				if (controller && controller.restart) controller.restart();
 			};
@@ -3495,6 +3511,7 @@ func terminalFrameSetupJS() string {
 					var fallback = document.querySelector('[data-workspace-project]:not([aria-hidden="true"]) [data-dock="center"] [data-terminal-app]');
 					el = fallback || null;
 				}
+				if (el && el.hasAttribute('data-chat')) return window.libroChat.paste(el, prompt, execute);
 				var controller = el && terminals.get(el);
 				if (!controller || !controller.ws || controller.ws.readyState !== WebSocket.OPEN) return false;
 				var pasted = '\x1b[200~' + String(prompt || '') + '\x1b[201~';
@@ -3606,6 +3623,12 @@ func keyboardShortcutsJS(sid string) string {
 					var webview = container.querySelector('webview');
 					if (webview && window.libroElectron) {
 						try { webview.focus(); } catch(err) {}
+						return;
+					}
+
+					var chat = container.querySelector('[data-chat]');
+					if (chat) {
+						window.libroChat.focus(chat);
 						return;
 					}
 

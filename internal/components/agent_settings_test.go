@@ -42,19 +42,31 @@ func TestRecoverAgentSettings(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = os.Remove(test.path) })
-			model, effort := RecoverAgentSettings(test.command, session, codexHome)
+			model, effort := RecoverAgentSettings(test.command, session, map[string]string{"CODEX_HOME": codexHome})
 			if model != test.model || effort != test.effort {
 				t.Fatalf("got %q %q, want %q %q", model, effort, test.model, test.effort)
 			}
 		})
 	}
 	for _, command := range []string{"codex", "claude", "pi", "opencode", "ollama launch claude"} {
-		if model, effort := RecoverAgentSettings(command, "missing-session", codexHome); model != "" || effort != "" {
+		if model, effort := RecoverAgentSettings(command, "missing-session", map[string]string{"CODEX_HOME": codexHome}); model != "" || effort != "" {
 			t.Fatalf("missing session: %q %q", model, effort)
 		}
 	}
-	if model, effort := RecoverAgentSettings("claude", "../session", ""); model != "" || effort != "" {
+	if model, effort := RecoverAgentSettings("claude", "../session", nil); model != "" || effort != "" {
 		t.Fatal("path traversal accepted")
+	}
+	// Claude sessions live under CLAUDE_CONFIG_DIR when Libro's agent environment sets it.
+	claudeDir := filepath.Join(home, "claude-custom")
+	path := filepath.Join(claudeDir, "projects", "-repo-path", session+".jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"type":"assistant","message":{"model":"custom","effort":"low"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if model, effort := RecoverAgentSettings("claude", session, map[string]string{"CLAUDE_CONFIG_DIR": claudeDir}); model != "custom" || effort != "low" {
+		t.Fatalf("CLAUDE_CONFIG_DIR: got %q %q", model, effort)
 	}
 }
 

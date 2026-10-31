@@ -38,6 +38,7 @@ type savedApp struct {
 	ApplicationPath                                 string
 	ApplicationPerThread                            bool
 	SessionID, AgentModel, AgentEffort              string
+	Chat                                            bool `json:",omitempty"`
 }
 
 func saveApp(app Application) savedApp {
@@ -46,7 +47,7 @@ func saveApp(app Application) savedApp {
 		Command: app.Command, URL: app.URL, IconURL: app.IconURL, Type: app.Type,
 		Width: app.Width, PreviousWidth: app.PreviousWidth, Writable: app.Writable,
 		ApplicationPath: app.ApplicationPath, ApplicationPerThread: app.ApplicationPerThread,
-		SessionID: app.SessionID, AgentModel: app.AgentModel, AgentEffort: app.AgentEffort,
+		SessionID: app.SessionID, AgentModel: app.AgentModel, AgentEffort: app.AgentEffort, Chat: app.Chat,
 	}
 }
 
@@ -60,7 +61,7 @@ func (app savedApp) application() Application {
 		Command: currentCommand(app.Command), URL: app.URL, IconURL: app.IconURL, Type: app.Type,
 		Width: app.Width, PreviousWidth: app.PreviousWidth, Writable: app.Writable,
 		ApplicationPath: app.ApplicationPath, ApplicationPerThread: app.ApplicationPerThread,
-		SessionID: app.SessionID, AgentModel: app.AgentModel, AgentEffort: app.AgentEffort,
+		SessionID: app.SessionID, AgentModel: app.AgentModel, AgentEffort: app.AgentEffort, Chat: app.Chat && chatAgent(app.PluginID),
 	}
 }
 

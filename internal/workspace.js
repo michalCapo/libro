@@ -1828,6 +1828,20 @@
     if (status) status.textContent = ok ? 'Saved.' : 'Could not save. Try again.';
     settingsSaveFinished(ok);
   }
+  function saveClaudeView(chat) {
+    const select = document.getElementById('claude-view');
+    const status = document.getElementById('claude-view-status');
+    if (select) select.disabled = true;
+    if (status) status.textContent = 'Saving…';
+    call('settings.claude-view', {chat: !!chat});
+  }
+  function claudeViewSaved(ok, chat) {
+    const select = document.getElementById('claude-view');
+    const status = document.getElementById('claude-view-status');
+    if (select) { select.disabled = false; select.value = chat ? 'chat' : 'terminal'; }
+    if (status) status.textContent = ok ? 'Saved.' : 'Could not save. Try again.';
+    settingsSaveFinished(ok);
+  }
   function addAgentEnvironment(name = '', saved = false) {
     const row = node('div', 'ws-settings-row ws-agent-command-row ws-environment-row');
     const key = node('input', 'ws-agent-command');
@@ -1882,7 +1896,7 @@
     const key = document.getElementById('openrouter-key');
     key.value = ''; key.dataset.clear = '1'; key.placeholder = 'Key will be removed on Save';
   }
-  function showSettings(width, commands = {}, bindings = toolKeys, threadAgent = '', pageToolsAutoExecute = false, environment = [], voice = {savedKey:false}, agentUpdates = window.__libroAgentAutoUpdate) {
+  function showSettings(width, commands = {}, bindings = toolKeys, threadAgent = '', pageToolsAutoExecute = false, environment = [], voice = {savedKey:false}, agentUpdates = window.__libroAgentAutoUpdate, claudeChat = true) {
     window.__libroAgentAutoUpdate = agentUpdates;
     window.__libroPageToolsAutoExecute = !!pageToolsAutoExecute;
     savedThreadAgent = threadAgent;
@@ -1897,6 +1911,8 @@
     document.getElementById('agent-auto-update').value = agentUpdates === false ? 'off' : 'on';
     document.getElementById('agent-auto-update-status').textContent = '';
     document.getElementById('page-tools-autoexecute').value = pageToolsAutoExecute ? 'on' : 'off';
+    document.getElementById('claude-view').value = claudeChat ? 'chat' : 'terminal';
+    document.getElementById('claude-view-status').textContent = '';
     document.getElementById('page-tools-autoexecute-status').textContent = '';
     document.getElementById('workspace-theme').value = themePreference();
     document.getElementById('workspace-theme-status').textContent = '';
@@ -1945,6 +1961,7 @@
       () => settingsSaveFinished(saveAgentAutoUpdate(value('agent-auto-update')), 'Could not save automatic updates. Please try again.'),
       () => saveThreadAgent(agent),
       () => savePageTools(pageTools),
+      () => saveClaudeView(value('claude-view') === 'chat'),
       () => saveSettings(width),
       () => {
         const ok = saveTheme(theme) && saveNotificationSound(sound) && saveVoiceTyping(voiceTyping) && saveMoveWorkingThreads(moveWorkingThreads);
@@ -2146,7 +2163,7 @@
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects')) delete root.dataset.sidebar; });
   narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name})};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, claudeViewSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name})};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }
@@ -2175,7 +2192,8 @@
   window.addEventListener('resize', schedule);
   root.addEventListener('pointerdown', event => {
     const frame = event.target.closest('[data-app-id]');
-    if (frame?.querySelector('[data-terminal-app]') && !event.target.closest('[data-app-toolbar], button, a, input, select, [contenteditable=true]')) {
+    // Clicks in a chat's history select text; they leave the message box alone.
+    if (frame?.querySelector('[data-terminal-app]') && !event.target.closest('[data-app-toolbar], button, a, input, select, textarea, [contenteditable=true], [data-chat-scroll]')) {
       requestAnimationFrame(() => {
         if (window.__libroSelectedApp === frame.dataset.appId) window.__libroFocusTerminalFrame?.(frame.dataset.appId);
       });

@@ -84,7 +84,7 @@ func hydrateApp(sid, appID string, openURL bool) r.Result {
 			environment = append(agentEnvironmentList(), "LIBRO_APPLICATION_PATH="+pwd)
 		}
 		command, reportSession := agentLaunchInWorkspace(sid, workspace, panel)
-		session, err := tm.StartWithSessionReporter(generation, panel.ID, command, pwd, panel.Writable, environment, reportSession)
+		session, err := startAgentSession(generation, panel, command, pwd, environment, reportSession)
 		// Libro is quitting; keep the panel so the final layout still has it.
 		if errors.Is(err, components.ErrTerminalsStopped) {
 			return r.Result{}
@@ -237,6 +237,7 @@ func closeWorkspaceApp(sid, appID string) r.Result {
 	for _, app := range apps {
 		if app.Type == AppTypeTerminal {
 			tm.Stop(app.ID)
+			forgetChat(app.ID)
 		}
 		js = r.Merge(js, removeAppJS(app.ID))
 	}
@@ -287,6 +288,7 @@ func closeOtherPanels(sid, keepID string) r.Result {
 	for _, app := range closed {
 		if app.Type == AppTypeTerminal {
 			tm.Stop(app.ID)
+			forgetChat(app.ID)
 		}
 		js = js.Add(removeAppJS(app.ID))
 	}
@@ -325,7 +327,7 @@ func agentLaunchInWorkspace(sid, workspace string, term Application) (string, fu
 	}
 	sm.mu.RUnlock()
 	// The session file has the model last chosen inside the agent, even after a crash.
-	m, e := components.RecoverAgentSettings(baseCommand, sessionID, agentEnvironment()["CODEX_HOME"])
+	m, e := components.RecoverAgentSettings(baseCommand, sessionID, agentEnvironment())
 	model, effort = cmp.Or(m, model), cmp.Or(e, effort)
 	command := components.ResumeAgentCommand(baseCommand, sessionID, model, effort)
 	return command, func(id string) {
@@ -676,6 +678,7 @@ func Run(assets embed.FS, desktop bool) error {
 	registerWidgets(app)
 
 	registerSettingsActions(app)
+	registerChatActions(app)
 	registerFilesActions(app)
 	registerReposActions(app)
 	registerReleasesActions(app)
@@ -888,6 +891,9 @@ func Run(assets embed.FS, desktop bool) error {
 			appID := sm.NextAppID()
 			sm.InsertTerminalPlaceholder(sid, appID, width, command, writable, name, iconURL, insertIdx)
 			sm.SetAppPlugin(sid, appID, pluginID, dock)
+			if dock == "center" && chatAgent(pluginID) && claudeChatView() && components.ChatCommand(command) {
+				sm.setAppChat(sid, appID)
+			}
 
 			state := sm.Get(sid)
 			newApp := &state.Apps[state.SelectedIndex]
@@ -985,7 +991,7 @@ func Run(assets embed.FS, desktop bool) error {
 		// Stopping saves the final session ID, which the resume command needs.
 		tm.Stop(term.ID)
 		command, reportSession := agentLaunch(sid, *term)
-		if _, err := tm.StartWithSessionReporter(generation, term.ID, command, pwd, term.Writable, environment, reportSession); err != nil {
+		if _, err := startAgentSession(generation, *term, command, pwd, environment, reportSession); err != nil {
 			return r.Result{}.Run(r.Notify("error", "Failed to restart terminal: "+err.Error())), nil
 		}
 		// Keep a resumed project's description; only fresh agents clear it.

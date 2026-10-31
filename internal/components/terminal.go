@@ -91,10 +91,11 @@ type TerminalManager struct {
 	mu           sync.Mutex
 	sessions     map[string]*TerminalSession
 	logs         map[string]*terminalLog
-	replayOutput bool       // replay recent output when a browser reconnects
-	launchMu     sync.Mutex // serializes launches with StopAll
-	stopped      bool       // set by StopAll, guarded by launchMu
-	stops        uint64     // StopAll count, guarded by launchMu
+	endedChats   map[string]*TerminalSession // chats whose process ended, kept until their panel closes
+	replayOutput bool                        // replay recent output when a browser reconnects
+	launchMu     sync.Mutex                  // serializes launches with StopAll
+	stopped      bool                        // set by StopAll, guarded by launchMu
+	stops        uint64                      // StopAll count, guarded by launchMu
 }
 
 // TerminalSession is one PTY process plus its connected browser clients.
@@ -134,6 +135,7 @@ type TerminalSession struct {
 	agentMu            sync.Mutex
 	processStatus      string
 	managed            *managedTerminal
+	chat               *chatState // set for chat panels, which have no PTY
 }
 
 type terminalClient struct {
@@ -169,7 +171,7 @@ const (
 
 // NewTerminalManager creates a PTY terminal manager.
 func NewTerminalManager() *TerminalManager {
-	return &TerminalManager{sessions: make(map[string]*TerminalSession), logs: make(map[string]*terminalLog)}
+	return &TerminalManager{sessions: make(map[string]*TerminalSession), logs: make(map[string]*terminalLog), endedChats: make(map[string]*TerminalSession)}
 }
 
 // SetReplayOutput enables bounded recent output replay for frontend reconnects.
@@ -492,10 +494,20 @@ func (tm *TerminalManager) waitLoop(s *TerminalSession) {
 		code = s.cmd.ProcessState.ExitCode()
 	}
 	s.waitForOutputFlush(terminalOutputExitFlushTimeout)
+	if s.chat != nil {
+		s.chatExited(code)
+	}
 	if s.managed != nil {
 		s.managed.finish(code)
 	}
 	s.broadcast(terminalWSMessage{Type: "exit", Code: code})
+	if s.chat != nil {
+		tm.mu.Lock()
+		if tm.sessions[s.ID] == s {
+			tm.endedChats[s.ID] = s
+		}
+		tm.mu.Unlock()
+	}
 	tm.removeSession(s.ID, s)
 	s.close(false)
 	log.Printf("terminal process for app %s exited with code %d", s.ID, code)
@@ -514,6 +526,7 @@ func (tm *TerminalManager) Stop(appID string) {
 	tm.mu.Lock()
 	s := tm.sessions[appID]
 	delete(tm.logs, appID)
+	delete(tm.endedChats, appID)
 	if s != nil {
 		delete(tm.sessions, appID)
 	}
