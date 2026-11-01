@@ -59,6 +59,9 @@ contextBridge.exposeInMainWorld('libroElectron', {
   pathForFile: function (file) {
     return webUtils.getPathForFile(file)
   },
+  openLink: function (target) {
+    return ipcRenderer.invoke('libro-open-link', target)
+  },
   copyToClipboard: function (text) {
     ipcRenderer.send('libro-copy-clipboard', text)
   },

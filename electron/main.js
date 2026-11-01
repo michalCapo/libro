@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Menu, session, ipcMain, clipboard, webContents, WebContentsView, nativeImage, powerMonitor, nativeTheme } = require('electron')
+const { app, BrowserWindow, Menu, session, ipcMain, clipboard, webContents, WebContentsView, nativeImage, powerMonitor, nativeTheme, shell } = require('electron')
 const { spawn } = require('child_process')
+const url = require('url')
 const fs = require('fs')
 const path = require('path')
 const http = require('http')
@@ -268,6 +269,53 @@ const allowedPermissions = new Set([
   'pointerLock',
   'openExternal',
 ])
+
+// Programs and launchers would run instead of opening, so only plain files open.
+const runnableExtensions = new Set([
+  '.app', '.appimage', '.application', '.appref-ms', '.bat', '.cmd', '.com', '.command', '.cpl', '.desktop', '.exe',
+  '.gadget', '.hta', '.inf', '.jar', '.js', '.jse', '.lnk', '.msc', '.msi', '.msp', '.pif', '.pkg', '.ps1', '.psm1', '.py', '.pyc', '.pyo', '.pyw', '.pyz', '.pyzw',
+  '.reg', '.scf', '.scr', '.sh', '.terminal', '.tool', '.url', '.vb', '.vbe', '.vbs', '.workflow', '.ws', '.wsf', '.wsh',
+])
+
+function isNetworkPath(file) {
+  return /^[\\/]{2}/.test(file)
+}
+
+// Opens a terminal link in the default application. Returns an error message.
+async function openLink(target) {
+  target = String(target || '').trim()
+  if (/^(https?|mailto):/i.test(target)) {
+    try {
+      await shell.openExternal(target)
+      return ''
+    } catch (err) {
+      return 'Could not open link: ' + err.message
+    }
+  }
+  let file = target
+  if (/^file:/i.test(file)) {
+    try { file = url.fileURLToPath(file) } catch (err) { return 'Invalid file link' }
+  } else if (file === '~' || file.startsWith('~/')) {
+    file = path.join(os.homedir(), file.slice(1))
+  }
+  // Network paths would send the Windows login to another computer.
+  if (isNetworkPath(file)) return 'Will not open network paths'
+  if (!path.isAbsolute(file)) return 'Unsupported link'
+  let stat
+  // Check the real file, so a link named like a picture cannot point at a program.
+  try {
+    file = fs.realpathSync(file)
+    stat = fs.statSync(file)
+  } catch (err) {
+    return 'File not found: ' + file
+  }
+  if (isNetworkPath(file)) return 'Will not open network paths'
+  // macOS apps are folders, so check the extension for folders too.
+  if (runnableExtensions.has(path.extname(file).toLowerCase()) || (!stat.isDirectory() && process.platform !== 'win32' && (stat.mode & 0o111))) {
+    return 'Will not open a program: ' + file
+  }
+  return shell.openPath(file)
+}
 
 function isAllowedPermission(permission) {
   return allowedPermissions.has(permission)
@@ -795,6 +843,11 @@ function createWindow() {
     const target = withWebContents(targetId)
     if (!target || target.hostWebContents !== event.sender) throw new Error('Invalid browser')
     return require('./page-area').pageToolImages(images)
+  })
+
+  ipcMain.handle('libro-open-link', (event, target) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return 'Invalid sender'
+    return openLink(target)
   })
 
   ipcMain.on('libro-copy-clipboard', (event, text) => {

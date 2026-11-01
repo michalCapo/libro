@@ -3123,6 +3123,96 @@ func terminalFrameSetupJS() string {
 				return true;
 			}
 
+			// Finds web addresses and absolute file paths in one logical terminal line.
+			function findTerminalLinks(text) {
+				var links = [];
+				var path = '(?:(?:file:\\/\\/|~)?\\/|[A-Za-z]:[\\\\/])';
+				var patterns = [
+					// Quoted paths may contain spaces.
+					{ re: new RegExp('(["\'\\x60])(' + path + '[^"\'\\x60\\n]*?)\\1', 'g'), file: true, quoted: true },
+					{ re: /https?:\/\/[^\s'"<>\x60]+/g },
+					{ re: new RegExp('(^|[\\s(\\[{\'"=\\x60])(' + path + '[^\\s\'"<>\\x60]+)', 'g'), file: true }
+				];
+				patterns.forEach(function(p) {
+					var m;
+					while ((m = p.re.exec(text))) {
+						var start = p.file ? m.index + m[1].length : m.index;
+						var shown = p.quoted ? m[2] : trimLinkEnd(p.file ? m[2] : m[0]);
+						var target = p.file ? shown.replace(/:\d+(?::\d+)?$/, '') : shown;
+						if (p.file && !/[^\\/~:.]/.test(target.replace(/^file:\/\//, ''))) continue;
+						if (links.some(function(l) { return start < l.start + l.shown.length && l.start < start + shown.length; })) continue;
+						links.push({ start: start, text: target, shown: shown });
+					}
+				});
+				return links;
+			}
+
+			// Drops sentence punctuation and closing brackets that were never opened.
+			function trimLinkEnd(text) {
+				var pairs = { ')': '(', ']': '[', '}': '{' };
+				for (;;) {
+					var last = text.charAt(text.length - 1);
+					if ('.,;:!?'.indexOf(last) >= 0) text = text.slice(0, -1);
+					else if (pairs[last] && text.split(pairs[last]).length < text.split(last).length) text = text.slice(0, -1);
+					else return text;
+				}
+			}
+
+			function openTerminalLink(target) {
+				if (window.libroElectron && window.libroElectron.openLink) {
+					window.libroElectron.openLink(target).then(function(error) {
+						if (error && window.__libroShowToast) window.__libroShowToast(error, '', 'error');
+					});
+				} else if (/^https?:\/\//i.test(target)) {
+					window.open(target, '_blank', 'noopener');
+				}
+			}
+
+			// Wrapped rows form one logical line, so long paths stay one link.
+			function terminalLinkProvider(term) {
+				return {
+					provideLinks: function(y, callback) {
+						var buffer = term.buffer.active;
+						var cols = term.cols;
+						var first = y - 1;
+						while (first > 0 && buffer.getLine(first) && buffer.getLine(first).isWrapped) first--;
+						var last = y - 1;
+						while (buffer.getLine(last + 1) && buffer.getLine(last + 1).isWrapped) last++;
+						// Wide characters and emoji take more cells than text characters,
+						// so remember the cell of every character.
+						var text = '';
+						var cells = [];
+						for (var row = first; row <= last; row++) {
+							var line = buffer.getLine(row);
+							for (var x = 0; x < cols; x++) {
+								var cell = line.getCell(x);
+								if (!cell || cell.getWidth() === 0) continue;
+								// A wide character that did not fit leaves an empty cell before the wrap.
+								if (!cell.getChars() && x === cols - 1 && row < last && buffer.getLine(row + 1).getCell(0).getWidth() === 2) continue;
+								var chars = cell.getChars() || ' ';
+								text += chars;
+								for (var c = 0; c < chars.length; c++) cells.push({ x: x + cell.getWidth() - 1, y: row, start: x });
+							}
+						}
+						var links = [];
+						findTerminalLinks(text).forEach(function(link) {
+							var from = cells[link.start];
+							var to = cells[link.start + link.shown.length - 1];
+							if (!from || !to || y - 1 < from.y || y - 1 > to.y) return;
+							links.push({
+								text: link.text,
+								range: {
+									start: { x: from.start + 1, y: from.y + 1 },
+									end: { x: to.x + 1, y: to.y + 1 }
+								},
+								activate: function() { openTerminalLink(link.text); }
+							});
+						});
+						callback(links.length ? links : undefined);
+					}
+				};
+			}
+
 			function isVisibleProject(project) {
 				return !project || (project.style.display !== 'none' && project.style.visibility !== 'hidden' && project.getAttribute('aria-hidden') !== 'true');
 			}
@@ -3285,8 +3375,10 @@ func terminalFrameSetupJS() string {
 						cursorBlink: cursorBlink,
 						theme: termTheme(initialDark),
 						scrollback: scrollback,
-						smoothScrollDuration: 0
+						smoothScrollDuration: 0,
+						linkHandler: { allowNonHttpProtocols: true, activate: function(ev, uri) { openTerminalLink(uri); } }
 					});
+					if (term.registerLinkProvider) term.registerLinkProvider(terminalLinkProvider(term));
 					var fit = new Fit();
 					term.loadAddon(fit);
 					term.open(el);
