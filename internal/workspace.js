@@ -2133,7 +2133,8 @@
     settingsSaveFinished(ok);
   }
   // A folded sidebar shows the project list over the panels; picking a row or tool, clicking outside, or Escape closes it.
-  // A closed list ignores hover until the pointer leaves the sidebar, so it does not reopen under the mouse.
+  // A closed list ignores hover until the pointer leaves the sidebar and the rail digits that open it, so it does not reopen under the mouse.
+  // Switching threads redraws the digits under the pointer, which must not count as leaving.
   function projectMenu(open = root.dataset.sidebar !== 'open') {
     root.dataset.sidebar = open ? 'open' : 'closed';
   }
@@ -2148,7 +2149,7 @@
     if (root.dataset.fold && (event.target.id === 'workspace-projects' || event.target.closest?.('.ws-project-row, .ws-tool-rail'))) projectMenu(false);
   });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
-  document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects')) delete root.dataset.sidebar; });
+  document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects, .ws-rail-threads')) delete root.dataset.sidebar; });
   narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
   window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name})};
   if (window.__libroAgentAutoUpdate == null) {
