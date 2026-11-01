@@ -28,6 +28,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"panel-size-down", "Decrease panel size", "Ctrl+."},
 	{"panel-size-up", "Increase panel size", "Ctrl+,"},
 	{"panel-size-max", "Toggle panel size to MAX", "Ctrl+M"},
+	{"panel-full", "Full screen panel (toggle)", "Ctrl+Shift+F"},
 	{"settings", "Settings", "Ctrl+Shift+S"},
 	{"voice", "Voice typing (toggle)", "CapsLock"},
 	{"project-picker", "Switch project", "Ctrl+Shift+P"},
@@ -205,7 +206,7 @@ func renderToolKeybindings() *r.Node {
 		{"Projects & threads", []string{"project-picker", "close-project", "new-thread", "finish-thread", "discard-thread", "thread-actions", "run-project", "stop-project"}},
 		{"Agents", []string{"new-agent", "new-agent-panel", "replace-agent"}},
 		{"Tools", []string{"terminal", "browser", "new-browser", "new-terminal", "previous-browser", "next-browser", "files", "repos"}},
-		{"Panels", []string{"previous-agent", "next-agent", "close-panel", "panel-size-down", "panel-size-up", "panel-size-max"}},
+		{"Panels", []string{"previous-agent", "next-agent", "close-panel", "panel-size-down", "panel-size-up", "panel-size-max", "panel-full"}},
 		{"Zoom", []string{"zoom-in", "zoom-out", "zoom-reset"}},
 	}
 	content := []*r.Node{}

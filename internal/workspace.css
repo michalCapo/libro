@@ -197,6 +197,9 @@ html.dark .ws-row-grid[data-agent-status=done]::before{color:#4ade80}
 .ws-grid [data-click-overlay]{display:none!important}
 .ws-grid[data-maximized]:not([data-maximized=""])>[data-app-id]{display:none}
 .ws-grid[data-maximized]:not([data-maximized=""])>[data-maximized=true]{display:flex;width:100%!important;flex:0 0 100%!important}
+#libro-workspace[data-panel-full] :is(.ws-sidebar,.ws-tool-rail,.ws-tool-tabs){display:none!important}
+#libro-workspace[data-panel-full] .ws-project{padding-bottom:0}
+#libro-workspace[data-panel-full] .ws-grid{margin-top:0!important}
 .ws-grid:has(>[data-app-id])>.ws-empty{display:none}
 .ws-grid>.ws-empty{flex:1}
 .ws-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;min-width:0;min-height:0;overflow:auto;background:var(--ws-bg);text-align:center}.ws-empty h1{overflow-wrap:anywhere;max-width:100%;font-size:28px;font-weight:500;letter-spacing:-.025em;margin:0}.ws-empty h2{font-size:15px;font-weight:550;margin:0}.ws-empty p{font-size:14px;line-height:1.65;color:var(--ws-muted);margin:0;max-width:46ch}.ws-agent-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:10px}.ws-launch{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:7px 14px;border:0;border-radius:9px;background:var(--ws-field);color:var(--ws-fg)}.ws-launch:hover{background:var(--ws-hover)}.ws-launch:disabled{opacity:.6;cursor:wait}

@@ -1119,6 +1119,9 @@
     renderThreadShortcuts();
     window.libroFiles?.init();
     window.libroRepos?.init();
+    // A full screen panel also hides the sidebar, rail and tabs; set it before docks measure the grid.
+    const fullGrid = activeGrid();
+    root.toggleAttribute('data-panel-full', !!fullGrid && frames(fullGrid).some(frame => frame.dataset.appId === maximized));
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
       // Replacing a project's DOM can reset its hidden styles. Always reconcile
       // visibility with server state so inactive welcome screens cannot reappear.
@@ -1366,6 +1369,11 @@
     if (binding && binding === toolKeys['panel-size-max']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat && window.__libroSelectedApp) call('app.resize.max.toggle', {maxPixel: window.__libroAppWidthMaxPixel()});
+      return;
+    }
+    if (binding && binding === toolKeys['panel-full']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat && window.__libroSelectedApp) maximize(window.__libroSelectedApp);
       return;
     }
     if (binding && binding === toolKeys['command-palette']) {
