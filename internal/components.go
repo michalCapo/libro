@@ -3158,14 +3158,29 @@ func terminalFrameSetupJS() string {
 				}
 			}
 
-			function openTerminalLink(target) {
+			// fallback opens instead when target is a file that does not exist.
+			function openTerminalLink(target, fallback) {
 				if (window.libroElectron && window.libroElectron.openLink) {
 					window.libroElectron.openLink(target).then(function(error) {
+						if (error && fallback && error.indexOf('File not found') === 0) return openTerminalLink(fallback);
 						if (error && window.__libroShowToast) window.__libroShowToast(error, '', 'error');
 					});
 				} else if (/^https?:\/\//i.test(target)) {
 					window.open(target, '_blank', 'noopener');
 				}
+			}
+
+			function isBlankCell(cell) {
+				return !cell || !cell.getChars() || cell.getChars() === ' ';
+			}
+
+			// Claude Code breaks long words itself: the row fills to the right edge
+			// and the rest continues on the next, indented row.
+			function isHardWrapped(buffer, cols, row) {
+				var line = buffer.getLine(row);
+				var prev = row > 0 && buffer.getLine(row - 1);
+				if (!line || !prev || line.isWrapped || !isBlankCell(line.getCell(0)) || !line.translateToString(true).trim()) return false;
+				return isBlankCell(prev.getCell(cols - 1)) ? !isBlankCell(prev.getCell(cols - 2)) : true;
 			}
 
 			// Wrapped rows form one logical line, so long paths stay one link.
@@ -3174,17 +3189,31 @@ func terminalFrameSetupJS() string {
 					provideLinks: function(y, callback) {
 						var buffer = term.buffer.active;
 						var cols = term.cols;
+						var joins = function(row) {
+							var line = buffer.getLine(row);
+							return line && (line.isWrapped || isHardWrapped(buffer, cols, row));
+						};
 						var first = y - 1;
-						while (first > 0 && buffer.getLine(first) && buffer.getLine(first).isWrapped) first--;
+						while (first > 0 && joins(first)) first--;
 						var last = y - 1;
-						while (buffer.getLine(last + 1) && buffer.getLine(last + 1).isWrapped) last++;
+						while (joins(last + 1)) last++;
 						// Wide characters and emoji take more cells than text characters,
 						// so remember the cell of every character.
 						var text = '';
 						var cells = [];
+						var breaks = [];
 						for (var row = first; row <= last; row++) {
 							var line = buffer.getLine(row);
-							for (var x = 0; x < cols; x++) {
+							var from = 0;
+							var to = cols;
+							if (row > first && isHardWrapped(buffer, cols, row)) {
+								breaks.push(text.length);
+								while (isBlankCell(line.getCell(from))) from++;
+							}
+							if (row < last && isHardWrapped(buffer, cols, row + 1)) {
+								while (isBlankCell(line.getCell(to - 1))) to--;
+							}
+							for (var x = from; x < to; x++) {
 								var cell = line.getCell(x);
 								if (!cell || cell.getWidth() === 0) continue;
 								// A wide character that did not fit leaves an empty cell before the wrap.
@@ -3199,13 +3228,17 @@ func terminalFrameSetupJS() string {
 							var from = cells[link.start];
 							var to = cells[link.start + link.shown.length - 1];
 							if (!from || !to || y - 1 < from.y || y - 1 > to.y) return;
+							// A row that only happened to end at the edge was not broken by
+							// Claude Code, so a missing file falls back to the text before the break.
+							var cut = breaks.filter(function(b) { return b > link.start && b < link.start + link.shown.length; })[0];
+							var fallback = cut && trimLinkEnd(text.slice(link.start, cut)).replace(/:\d+(?::\d+)?$/, '');
 							links.push({
 								text: link.text,
 								range: {
 									start: { x: from.start + 1, y: from.y + 1 },
 									end: { x: to.x + 1, y: to.y + 1 }
 								},
-								activate: function() { openTerminalLink(link.text); }
+								activate: function() { openTerminalLink(link.text, fallback); }
 							});
 						});
 						callback(links.length ? links : undefined);
