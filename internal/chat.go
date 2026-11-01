@@ -92,21 +92,21 @@ func chatRequestsID(appID string) string { return "chat-requests-" + appID }
 const (
 	chatFocus         = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ws-accent)"
 	chatCard          = "rounded-2xl bg-(--ws-raised) ring-1 ring-(--ws-line)"
-	chatEyebrow       = "font-mono text-[11px] uppercase tracking-[0.08em]"
+	chatEyebrow       = "font-mono text-[12px] uppercase tracking-[0.08em]"
 	chatMuted         = "text-(--ws-muted)"
-	chatText          = "mt-1 whitespace-pre-wrap text-[14px] leading-relaxed [overflow-wrap:anywhere]"
-	chatButton        = "inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full border-0 px-4 text-[13px] font-medium transition-colors disabled:cursor-default disabled:opacity-50 " + chatFocus
+	chatText          = "mt-1 whitespace-pre-wrap text-[15px] leading-relaxed [overflow-wrap:anywhere]"
+	chatButton        = "inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full border-0 px-4 text-[14px] font-medium transition-colors disabled:cursor-default disabled:opacity-50 " + chatFocus
 	chatSolid         = chatButton + " bg-(--ws-fg) text-(--ws-bg) hover:bg-(--ws-fg)/85"
 	chatOutline       = chatButton + " bg-transparent text-(--ws-fg) ring-1 ring-inset ring-(--ws-control-line) hover:bg-(--ws-hover)"
-	chatGhostIcon     = "flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--ws-muted) transition-colors hover:bg-(--ws-hover) hover:text-(--ws-fg) disabled:cursor-default disabled:opacity-50 " + chatFocus
+	chatGhostIcon     = "flex shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--ws-muted) transition-colors hover:bg-(--ws-hover) hover:text-(--ws-fg) disabled:cursor-default disabled:opacity-50 " + chatFocus
 	chatRound         = "flex shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-(--ws-fg) text-(--ws-bg) transition-colors hover:bg-(--ws-fg)/85 disabled:cursor-default disabled:opacity-40 " + chatFocus
-	chatField         = "h-10 w-full min-w-0 rounded-full border-0 bg-(--ws-raised) px-4 text-[14px] text-(--ws-fg) outline-none ring-1 ring-inset ring-(--ws-control-line) placeholder:text-(--ws-muted) focus:ring-2 focus:ring-(--ws-accent)"
-	chatMarkdownClass = "ws-chat-markdown mt-1 text-[14px] leading-relaxed [overflow-wrap:anywhere] " +
+	chatField         = "h-10 w-full min-w-0 rounded-full border-0 bg-(--ws-raised) px-4 text-[15px] text-(--ws-fg) outline-none ring-1 ring-inset ring-(--ws-control-line) placeholder:text-(--ws-muted) focus:ring-2 focus:ring-(--ws-accent)"
+	chatMarkdownClass = "ws-chat-markdown mt-1 text-[15px] leading-relaxed [overflow-wrap:anywhere] " +
 		"[&>:first-child]:mt-0 [&>:last-child]:mb-0 [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 " +
-		"[&_h1]:mb-1.5 [&_h1]:mt-4 [&_h1]:text-[17px] [&_h1]:font-semibold [&_h2]:mb-1.5 [&_h2]:mt-4 [&_h2]:text-[15px] [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:font-semibold [&_h4]:mt-3 [&_h4]:font-semibold [&_strong]:font-semibold " +
-		"[&_a]:text-(--ws-accent) [&_a]:underline [&_code]:rounded [&_code]:bg-(--ws-sunken) [&_code]:px-1 [&_code]:font-mono [&_code]:text-[12.5px] " +
+		"[&_h1]:mb-1.5 [&_h1]:mt-4 [&_h1]:text-[18px] [&_h1]:font-semibold [&_h2]:mb-1.5 [&_h2]:mt-4 [&_h2]:text-[16px] [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:font-semibold [&_h4]:mt-3 [&_h4]:font-semibold [&_strong]:font-semibold " +
+		"[&_a]:text-(--ws-accent) [&_a]:underline [&_code]:rounded [&_code]:bg-(--ws-sunken) [&_code]:px-1 [&_code]:font-mono [&_code]:text-[13.5px] " +
 		"[&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-(--ws-sunken) [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 " +
-		"[&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[13px] [&_th]:border-b [&_th]:border-(--ws-line) [&_th]:py-1.5 [&_th]:pr-4 [&_th]:text-left [&_th]:align-bottom [&_th]:font-semibold " +
+		"[&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[14px] [&_th]:border-b [&_th]:border-(--ws-line) [&_th]:py-1.5 [&_th]:pr-4 [&_th]:text-left [&_th]:align-bottom [&_th]:font-semibold " +
 		"[&_td]:border-b [&_td]:border-(--ws-line) [&_td]:py-1.5 [&_td]:pr-4 [&_td]:align-top [&_hr]:my-4 [&_hr]:border-(--ws-line) " +
 		"[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-(--ws-control-line) [&_blockquote]:pl-3 [&_blockquote]:text-(--ws-muted) " +
 		"[&_li:has(>input)]:list-none [&_li>input]:mr-1.5 [&_li>input]:align-middle"
@@ -209,27 +209,24 @@ func renderChat(app Application, sid string) *r.Node {
 // chatComposer is Kodri's message box: added images and the text on top,
 // the buttons in a row under them. Images are pasted, dropped or picked.
 func chatComposer() *r.Node {
-	field := r.Textarea("block max-h-[40vh] min-h-10 w-full min-w-0 resize-none border-0 bg-transparent px-3 py-2 text-[14px] leading-6 text-(--ws-fg) outline-none [field-sizing:content] placeholder:text-(--ws-muted)").
+	field := r.Textarea("block max-h-[40vh] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-3 py-2 text-[16px] leading-6 text-(--ws-fg) outline-none [field-sizing:content] placeholder:text-(--ws-muted)").
 		Attr("rows", "1").
 		Attr("placeholder", "Message Claude").
 		Attr("aria-label", "Message Claude").
 		Attr("data-chat-input", "")
 	pick := r.Input("sr-only").Attr("type", "file").Attr("accept", "image/*").Attr("multiple", "").
 		Attr("aria-label", "Add images").Attr("data-chat-pick", "")
-	return r.Form("@container mx-auto flex w-full max-w-3xl flex-col gap-1.5").Attr("data-chat-form", "").Render(
-		r.P("px-4 text-[12px] text-red-700 empty:hidden dark:text-red-400").Attr("role", "alert").Attr("data-chat-error", ""),
-		r.Div("flex w-full min-w-0 flex-col gap-0.5 rounded-[22px] bg-(--ws-raised) p-1.5 shadow-sm ring-1 ring-(--ws-line) transition-shadow focus-within:ring-2 focus-within:ring-(--ws-accent) data-[drop]:ring-2 data-[drop]:ring-(--ws-accent)").Attr("data-chat-box", "").Render(
+	return r.Form("mx-auto flex w-full max-w-3xl flex-col gap-2").Attr("data-chat-form", "").Render(
+		r.P("px-5 text-[13px] text-red-700 empty:hidden dark:text-red-400").Attr("role", "alert").Attr("data-chat-error", ""),
+		r.Div("flex w-full min-w-0 flex-col gap-1 rounded-[28px] bg-(--ws-raised) p-2 shadow-sm ring-1 ring-(--ws-line) transition-shadow focus-within:ring-2 focus-within:ring-(--ws-accent) data-[drop]:ring-2 data-[drop]:ring-(--ws-accent)").Attr("data-chat-box", "").Render(
 			r.Div("flex flex-wrap gap-2 px-1.5 pt-1.5 empty:hidden").Attr("data-chat-tray", ""),
 			field,
-			r.Div("flex items-center gap-0.5").Render(
-				r.Label(chatGhostIcon+" focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-(--ws-accent)").Attr("title", "Add images").Render(chatIcon("add_photo_alternate", "text-[20px]"), pick),
-				r.Button(chatGhostIcon).Attr("type", "button").Attr("title", "Voice typing").Attr("aria-label", "Voice typing").
-					Attr("data-chat-mic", "").Attr("data-voice-control", "").Render(chatIcon("mic", "text-[20px]")),
-				r.Div("ml-auto flex items-center gap-3").Render(
-					r.Span("hidden text-[11px] "+chatMuted+" @md:inline").Text("Enter sends · Shift+Enter new line"),
-					r.Button(chatRound+" h-9 w-9").Attr("type", "submit").Attr("aria-label", "Send").Attr("title", "Send (Enter)").
-						Attr("data-chat-send", "").Render(chatIcon("arrow_upward", "text-[20px]")),
-				),
+			r.Div("flex items-center gap-1").Render(
+				r.Label(chatGhostIcon+" h-11 w-11 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-(--ws-accent)").Attr("title", "Add images").Render(chatIcon("add_photo_alternate", "text-2xl"), pick),
+				r.Button(chatGhostIcon+" h-11 w-11").Attr("type", "button").Attr("title", "Voice typing").Attr("aria-label", "Voice typing").
+					Attr("data-chat-mic", "").Attr("data-voice-control", "").Render(chatIcon("mic", "text-2xl")),
+				r.Button(chatRound+" ml-auto h-11 w-11").Attr("type", "submit").Attr("aria-label", "Send").Attr("title", "Send (Enter)").
+					Attr("data-chat-send", "").Render(chatIcon("arrow_upward", "text-2xl")),
 			),
 		),
 	)
@@ -277,7 +274,7 @@ func renderChatBody(appID string, snapshot components.ChatSnapshot) *r.Node {
 	working := snapshot.Running && snapshot.Status == "working" && len(snapshot.Requests) == 0
 	last := &turns[len(turns)-1]
 	if working && !chatToolRunning(snapshot.Items) {
-		last.items = append(last.items, chatRow("chat-working", chatLiveDot, r.P("pb-4 font-mono text-[12px] text-(--ws-accent)").Text("Thinking…")))
+		last.items = append(last.items, chatRow("chat-working", chatLiveDot, r.P("pb-4 font-mono text-[13px] text-(--ws-accent)").Text("Thinking…")))
 	}
 	body := r.Div("flex flex-col gap-5").ID(chatBodyID(appID)).Attr("aria-live", "polite")
 	if len(last.items) == 0 {
@@ -306,7 +303,7 @@ func chatWindowBar(dir string, state *r.Node) *r.Node {
 	dot := r.Span("h-2.5 w-2.5 rounded-full bg-(--ws-control-line)")
 	return r.Div("flex min-h-10 items-center gap-3 rounded-t-[inherit] border-b border-(--ws-line) bg-(--ws-sunken)/60 px-4 py-2").Render(
 		r.Span("flex gap-1.5").Attr("aria-hidden", "true").Render(dot, dot, dot),
-		r.Span("min-w-0 flex-1 truncate text-center font-mono text-[11px] "+chatMuted).Attr("aria-hidden", "true").Text(dir),
+		r.Span("min-w-0 flex-1 truncate text-center font-mono text-[12px] "+chatMuted).Attr("aria-hidden", "true").Text(dir),
 		state,
 	)
 }
@@ -326,7 +323,7 @@ func chatState(snapshot components.ChatSnapshot) *r.Node {
 	case snapshot.Status == "error":
 		label, dot, text = "Failed", "bg-red-600", "text-red-700 dark:text-red-400"
 	}
-	return r.Span("inline-flex min-w-0 shrink-0 items-center gap-1.5 font-mono text-[11px] "+text).Attr("role", "status").Render(
+	return r.Span("inline-flex min-w-0 shrink-0 items-center gap-1.5 font-mono text-[12px] "+text).Attr("role", "status").Render(
 		r.Span("h-1.5 w-1.5 shrink-0 rounded-full "+dot).Attr("aria-hidden", "true"),
 		r.Span("truncate").Text(label),
 	)
@@ -343,7 +340,7 @@ func chatEmpty(dir string) *r.Node {
 		r.Div("pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_60%_60%_at_50%_0%,color-mix(in_srgb,var(--ws-accent)_14%,transparent),transparent_70%)]").Attr("aria-hidden", "true"),
 		r.Span("flex h-12 w-12 items-center justify-center rounded-full bg-(--ws-accent)/10 text-(--ws-accent) ring-1 ring-(--ws-accent)/20").Render(chatIcon("forum", "text-[24px]")),
 		r.H3("mt-5 text-[20px] font-medium tracking-tight text-balance").Text("What should Claude do?"),
-		r.P("mt-2 max-w-md text-[14px] leading-6 text-balance "+chatMuted).Text(text),
+		r.P("mt-2 max-w-md text-[15px] leading-6 text-balance "+chatMuted).Text(text),
 	)
 }
 
@@ -374,8 +371,8 @@ func chatRow(id, dot string, content *r.Node) *r.Node {
 // chatHead is who wrote a message and when.
 func chatHead(who string, at, now time.Time) *r.Node {
 	return r.Div("flex items-baseline justify-between gap-3").Render(
-		r.Strong("text-[14px] font-semibold").Text(who),
-		r.If(!at.IsZero(), r.El("time", "shrink-0 font-mono text-[11px] "+chatMuted).Attr("datetime", at.UTC().Format(time.RFC3339)).Text(chatTime(at, now))),
+		r.Strong("text-[15px] font-semibold").Text(who),
+		r.If(!at.IsZero(), r.El("time", "shrink-0 font-mono text-[12px] "+chatMuted).Attr("datetime", at.UTC().Format(time.RFC3339)).Text(chatTime(at, now))),
 	)
 }
 
@@ -408,7 +405,7 @@ func chatItem(item components.ChatItem, now time.Time) *r.Node {
 		return chatRow(id, chatUserDot, r.Div("pb-6").Render(
 			chatHead("You", item.At, now),
 			r.If(item.Text != "", r.P(chatText).Text(item.Text)),
-			r.If(images != "", r.Span("mt-2 inline-flex h-7 items-center gap-1.5 rounded-full bg-(--ws-sunken) px-3 text-[12px] ring-1 ring-(--ws-line) "+chatMuted).
+			r.If(images != "", r.Span("mt-2 inline-flex h-7 items-center gap-1.5 rounded-full bg-(--ws-sunken) px-3 text-[13px] ring-1 ring-(--ws-line) "+chatMuted).
 				Render(chatIcon("image", "text-[16px]"), r.Span("").Text(images))),
 		))
 	case "assistant":
@@ -431,7 +428,7 @@ func chatItem(item components.ChatItem, now time.Time) *r.Node {
 		if item.Text != "" {
 			label += " · " + item.Text
 		}
-		line := r.Span("block min-w-0 truncate font-mono text-[12px] leading-5 "+class).Attr("title", label+suffix).Render(
+		line := r.Span("block min-w-0 truncate font-mono text-[13px] leading-5 "+class).Attr("title", label+suffix).Render(
 			r.Span("font-semibold").Text(item.Tool),
 			r.If(item.Text != "", r.Span("").Text(" "+item.Text)),
 			r.If(suffix != "", r.Span("").Text(suffix)),
@@ -444,12 +441,12 @@ func chatItem(item components.ChatItem, now time.Time) *r.Node {
 				line,
 				chatIcon("expand_more", "shrink-0 text-[16px] "+chatMuted+" transition-transform group-open/step:rotate-180"),
 			),
-			r.El("pre", "mb-1 mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap rounded-xl bg-(--ws-sunken) p-3 font-mono text-[12px] leading-normal [overflow-wrap:anywhere] "+chatMuted).Text(item.Detail),
+			r.El("pre", "mb-1 mt-1.5 max-h-60 overflow-auto whitespace-pre-wrap rounded-xl bg-(--ws-sunken) p-3 font-mono text-[13px] leading-normal [overflow-wrap:anywhere] "+chatMuted).Text(item.Detail),
 		))
 	case "notice":
-		return chatRow(id, "h-2 w-2 bg-amber-500", r.P("pb-5 whitespace-pre-wrap text-[13px] [overflow-wrap:anywhere] "+chatMuted).Text(item.Text))
+		return chatRow(id, "h-2 w-2 bg-amber-500", r.P("pb-5 whitespace-pre-wrap text-[14px] [overflow-wrap:anywhere] "+chatMuted).Text(item.Text))
 	case "error":
-		return chatRow(id, "h-2 w-2 bg-red-600", r.P("pb-5 whitespace-pre-wrap text-[13px] text-red-700 [overflow-wrap:anywhere] dark:text-red-400").Text(item.Text))
+		return chatRow(id, "h-2 w-2 bg-red-600", r.P("pb-5 whitespace-pre-wrap text-[14px] text-red-700 [overflow-wrap:anywhere] dark:text-red-400").Text(item.Text))
 	}
 	return nil
 }
@@ -520,12 +517,12 @@ func chatRequestCard(request components.ChatRequest) *r.Node {
 			}
 			options = append(options, r.Label("flex cursor-pointer flex-col gap-0.5 rounded-xl bg-(--ws-raised) px-4 py-2.5 text-left ring-1 ring-inset ring-(--ws-control-line) transition-colors hover:bg-(--ws-hover) has-[:checked]:ring-2 has-[:checked]:ring-(--ws-accent) has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-(--ws-accent)").Render(
 				input,
-				r.Span("text-[14px] font-medium [overflow-wrap:anywhere]").Text(option.Label),
-				r.If(option.Description != "", r.Span("text-[12.5px] leading-snug "+chatMuted).Text(option.Description)),
+				r.Span("text-[15px] font-medium [overflow-wrap:anywhere]").Text(option.Label),
+				r.If(option.Description != "", r.Span("text-[13.5px] leading-snug "+chatMuted).Text(option.Description)),
 			))
 		}
 		card.Render(r.Fieldset("m-0 flex min-w-0 flex-col gap-2.5 border-0 p-0").Attr("data-question", question.Question).Render(
-			r.Legend("mb-2.5 p-0 text-[14px] font-medium leading-relaxed [overflow-wrap:anywhere]").Text(question.Question),
+			r.Legend("mb-2.5 p-0 text-[15px] font-medium leading-relaxed [overflow-wrap:anywhere]").Text(question.Question),
 			r.Div("flex flex-col gap-2").Render(options...),
 			r.Input(chatField).Attr("type", "text").Attr("name", name+"-other").Attr("placeholder", "Or type your own answer").Attr("aria-label", "Your own answer").Attr("autocomplete", "off"),
 		))

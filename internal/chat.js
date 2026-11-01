@@ -65,6 +65,7 @@
     for (const file of files.slice(0, maxImages - chat.images.length)) {
       try {
         const blob = await toPNG(file);
+        if (chat.closed) return false;
         if (chat.images.length >= maxImages) break;
         chat.images.push({blob, url: URL.createObjectURL(blob)});
       } catch { showError(chat, 'Could not read one of the images.'); }
@@ -74,16 +75,17 @@
   }
 
   async function submit(el, chat) {
-    const text = chat.field.value.trim();
-    if ((!text && !chat.images.length) || chat.busy) return;
+    const draft = chat.field.value, text = draft.trim(), sent = chat.images.slice();
+    if ((!text && !sent.length) || chat.busy) return;
     chat.busy = true; chat.send.disabled = true;
     showError(chat, '');
     try {
-      const images = chat.images.length ? await upload(el, chat.images.map(image => image.blob)) : [];
+      const images = sent.length ? await upload(el, sent.map(image => image.blob)) : [];
       send(el, 'chat.send', {text, images});
-      chat.images.forEach(image => URL.revokeObjectURL(image.url));
-      chat.images = []; renderTray(chat);
-      chat.field.value = '';
+      // Only what was sent goes: text and images added during the upload stay.
+      sent.forEach(image => URL.revokeObjectURL(image.url));
+      chat.images = chat.images.filter(image => !sent.includes(image)); renderTray(chat);
+      chat.field.value = chat.field.value.startsWith(draft) ? chat.field.value.slice(draft.length).trimStart() : chat.field.value;
       chat.stick = true; chat.scroll.scrollTop = chat.scroll.scrollHeight;
     } catch (error) {
       showError(chat, error.message);
@@ -114,7 +116,7 @@
     send(el, 'chat.answer', data);
   }
 
-  function nearBottom(scroll) { return scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 48; }
+  function atBottom(scroll) { return scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 4; }
 
   function mount(el) {
     if (chats.has(el)) return;
@@ -126,10 +128,42 @@
     };
     const {scroll, field, form, box} = chat;
     chats.set(el, chat);
+    // The chat follows new content while the reader is at the bottom. The
+    // reader's own scrolling up stops it at once, before new content can pull
+    // the chat back down; scrolling down to the very end starts it again.
+    // Scroll events alone can't tell: one that comes after more content was
+    // added looks like scrolling up and would leave a fast reply behind.
+    const follow = () => { if (chat.stick && !chat.held) scroll.scrollTop = scroll.scrollHeight; };
+    const leave = () => { chat.stick = false; };
     scroll.scrollTop = scroll.scrollHeight;
-    scroll.addEventListener('scroll', () => { chat.stick = nearBottom(scroll); }, {passive: true});
-    chat.observer = new MutationObserver(() => { if (chat.stick) scroll.scrollTop = scroll.scrollHeight; });
+    let last = scroll.scrollTop;
+    scroll.addEventListener('scroll', () => {
+      const top = scroll.scrollTop;
+      if (top > last && atBottom(scroll)) chat.stick = true;
+      else if (top < last && !atBottom(scroll)) leave();
+      last = top;
+    }, {passive: true});
+    scroll.addEventListener('wheel', event => { if (event.deltaY < 0) leave(); }, {passive: true});
+    scroll.addEventListener('keydown', event => {
+      if (['ArrowUp', 'PageUp', 'Home'].includes(event.key) && !event.target.closest('input,textarea')) leave();
+    });
+    // A finger or the scroll bar holds the chat still until let go. A touch
+    // that scrolls cancels its pointer, so touches end only with touchend.
+    const hold = kind => { chat.held = kind; leave(); };
+    const release = event => {
+      if (chat.held !== (event.type.startsWith('touch') ? 'touch' : 'pointer')) return;
+      chat.held = false; chat.stick = atBottom(scroll);
+    };
+    scroll.addEventListener('pointerdown', event => { if (event.pointerType === 'mouse' && event.target === scroll) hold('pointer'); });
+    scroll.addEventListener('touchstart', () => hold('touch'), {passive: true});
+    chat.release = release;
+    for (const type of ['pointerup', 'touchend', 'pointercancel', 'touchcancel']) window.addEventListener(type, release);
+    chat.observer = new MutationObserver(follow);
     chat.observer.observe(scroll, {childList: true, subtree: true, characterData: true});
+    // A taller message box, a resized panel or a loaded picture moves the end too.
+    chat.resize = new ResizeObserver(follow);
+    chat.resize.observe(scroll);
+    scroll.addEventListener('load', follow, true);
     form.addEventListener('submit', event => { event.preventDefault(); submit(el, chat); });
     field.addEventListener('keydown', event => {
       if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return;
@@ -218,6 +252,8 @@
     chat.closed = true;
     clearTimeout(chat.timer);
     chat.observer.disconnect();
+    chat.resize.disconnect();
+    for (const type of ['pointerup', 'touchend', 'pointercancel', 'touchcancel']) window.removeEventListener(type, chat.release);
     chat.images.forEach(image => URL.revokeObjectURL(image.url));
     if (chat.ws) { chat.ws.onclose = null; chat.ws.close(); }
     chats.delete(el);
