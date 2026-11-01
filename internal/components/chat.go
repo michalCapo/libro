@@ -23,12 +23,12 @@ import (
 // ChatItem is one line of a chat: a message, a tool step or a notice.
 type ChatItem struct {
 	ID      string
-	Kind    string // user, assistant, tool, notice, error
-	Text    string // message text, or the tool's short description
-	Tool    string // tool name
-	Detail  string // the end of a tool's result
-	State   string // tool state: running, done, failed
-	Images  int    // images the user sent with the message
+	Kind    string   // user, assistant, tool, notice, error
+	Text    string   // message text, or the tool's short description
+	Tool    string   // tool name
+	Detail  string   // the end of a tool's result
+	State   string   // tool state: running, done, failed
+	Images  [][]byte // images the user sent with the message
 	At      time.Time
 	Version int // changes with the item, so unchanged items keep their rendering
 }
@@ -62,7 +62,8 @@ type ChatSnapshot struct {
 	Requests []ChatRequest
 	Status   string // idle, working, done, error
 	Running  bool
-	Dir      string // the folder Claude works in
+	Dir      string // the name of the folder Claude works in
+	Path     string // and its full path
 }
 
 // ChatAnswer answers a ChatRequest.
@@ -522,6 +523,9 @@ type claudeBlock struct {
 	ToolUseID string          `json:"tool_use_id"`
 	Content   json.RawMessage `json:"content"`
 	IsError   bool            `json:"is_error"`
+	Source    struct {
+		Data string `json:"data"`
+	} `json:"source"`
 }
 
 func (c *chatState) assistant(raw json.RawMessage) {
@@ -569,7 +573,7 @@ func (c *chatState) user(raw json.RawMessage, replay bool) {
 		return
 	}
 	var typed []string
-	images := 0
+	var images [][]byte
 	for _, block := range blocks {
 		switch block.Type {
 		case "tool_result":
@@ -584,11 +588,13 @@ func (c *chatState) user(raw json.RawMessage, replay bool) {
 		case "text":
 			typed = append(typed, block.Text)
 		case "image":
-			images++
+			if data, err := base64.StdEncoding.DecodeString(block.Source.Data); err == nil {
+				images = append(images, data)
+			}
 		}
 	}
 	text = strings.Join(typed, "\n")
-	if replay && (images > 0 && !strings.HasPrefix(strings.TrimSpace(text), "<") || userPrompt(text)) {
+	if replay && (len(images) > 0 && !strings.HasPrefix(strings.TrimSpace(text), "<") || userPrompt(text)) {
 		c.add(ChatItem{Kind: "user", Text: text, Images: images})
 	}
 }
@@ -771,7 +777,7 @@ func (tm *TerminalManager) ChatSend(appID, text string, images [][]byte) error {
 			break
 		}
 	}
-	c.add(ChatItem{Kind: "user", Text: text, Images: len(images)})
+	c.add(ChatItem{Kind: "user", Text: text, Images: images})
 	c.status = "working"
 	c.mu.Unlock()
 	if first && text != "" {
@@ -857,6 +863,7 @@ func (tm *TerminalManager) ChatSnapshot(appID string) (ChatSnapshot, bool) {
 		Status:   c.status,
 		Running:  !s.isClosed(),
 		Dir:      filepath.Base(s.Cwd),
+		Path:     s.Cwd,
 	}, true
 }
 

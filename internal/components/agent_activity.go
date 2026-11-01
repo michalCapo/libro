@@ -3,7 +3,6 @@ package components
 import (
 	"bufio"
 	"bytes"
-	"cmp"
 	"database/sql"
 	"encoding/json"
 	"io/fs"
@@ -698,21 +697,14 @@ func RecoverAgentSettings(command, sessionID string, environment map[string]stri
 	kind := filepath.Base(parts[1])
 	switch kind {
 	case "codex":
-		codexHome := environment["CODEX_HOME"]
-		if codexHome == "" {
-			codexHome = os.Getenv("CODEX_HOME")
-		}
-		if codexHome == "" {
-			home, _ := os.UserHomeDir()
-			codexHome = filepath.Join(home, ".codex")
-		}
+		home := codexHome(environment)
 		// Prefer Codex's exact index when available, then standard rollout names.
-		if db := openCodexStateDB(codexHome); db != nil {
+		if db := openCodexStateDB(home); db != nil {
 			_ = db.QueryRow("SELECT rollout_path FROM threads WHERE id = ?", sessionID).Scan(&path)
 			_ = db.Close()
 		}
 		if path == "" {
-			_ = filepath.WalkDir(filepath.Join(codexHome, "sessions"), func(candidate string, entry fs.DirEntry, err error) error {
+			_ = filepath.WalkDir(filepath.Join(home, "sessions"), func(candidate string, entry fs.DirEntry, err error) error {
 				if err == nil && !entry.IsDir() && strings.HasSuffix(entry.Name(), "-"+sessionID+".jsonl") {
 					path = candidate
 					return fs.SkipAll
@@ -721,12 +713,7 @@ func RecoverAgentSettings(command, sessionID string, environment map[string]stri
 			})
 		}
 	case "claude":
-		dir := cmp.Or(environment["CLAUDE_CONFIG_DIR"], os.Getenv("CLAUDE_CONFIG_DIR"))
-		if dir == "" {
-			home, _ := os.UserHomeDir()
-			dir = filepath.Join(home, ".claude")
-		}
-		paths, _ := filepath.Glob(filepath.Join(dir, "projects", "*", sessionID+".jsonl"))
+		paths, _ := filepath.Glob(filepath.Join(claudeConfigDir(environment), "projects", "*", sessionID+".jsonl"))
 		if len(paths) == 1 {
 			path = paths[0]
 		}

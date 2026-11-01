@@ -60,15 +60,16 @@ func setClaudeChatView(chat bool) error {
 	return err
 }
 
-// setAppChat makes a new agent panel a chat.
-func (sm *StateManager) setAppChat(sid, appID string) {
+// updateApp changes a panel of the active workspace, such as a new agent
+// panel that shows as a chat or resumes an earlier session.
+func (sm *StateManager) updateApp(sid, appID string, update func(*Application)) {
 	defer sm.scheduleLayoutSave(sid)
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if state := sm.states[sid]; state != nil {
 		for i := range state.Apps {
 			if state.Apps[i].ID == appID {
-				state.Apps[i].Chat = true
+				update(&state.Apps[i])
 			}
 		}
 	}
@@ -94,17 +95,17 @@ const (
 	chatCard          = "rounded-2xl bg-(--ws-raised) ring-1 ring-(--ws-line)"
 	chatEyebrow       = "font-mono text-[12px] uppercase tracking-[0.08em]"
 	chatMuted         = "text-(--ws-muted)"
-	chatText          = "mt-1 whitespace-pre-wrap text-[15px] leading-relaxed [overflow-wrap:anywhere]"
+	chatText          = "whitespace-pre-wrap text-[15px] leading-relaxed [overflow-wrap:anywhere]"
 	chatButton        = "inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-full border-0 px-4 text-[14px] font-medium transition-colors disabled:cursor-default disabled:opacity-50 " + chatFocus
 	chatSolid         = chatButton + " bg-(--ws-fg) text-(--ws-bg) hover:bg-(--ws-fg)/85"
 	chatOutline       = chatButton + " bg-transparent text-(--ws-fg) ring-1 ring-inset ring-(--ws-control-line) hover:bg-(--ws-hover)"
 	chatGhostIcon     = "flex shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--ws-muted) transition-colors hover:bg-(--ws-hover) hover:text-(--ws-fg) disabled:cursor-default disabled:opacity-50 " + chatFocus
 	chatRound         = "flex shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-(--ws-fg) text-(--ws-bg) transition-colors hover:bg-(--ws-fg)/85 disabled:cursor-default disabled:opacity-40 " + chatFocus
 	chatField         = "h-10 w-full min-w-0 rounded-full border-0 bg-(--ws-raised) px-4 text-[15px] text-(--ws-fg) outline-none ring-1 ring-inset ring-(--ws-control-line) placeholder:text-(--ws-muted) focus:ring-2 focus:ring-(--ws-accent)"
-	chatMarkdownClass = "ws-chat-markdown mt-1 text-[15px] leading-relaxed [overflow-wrap:anywhere] " +
+	chatMarkdownClass = "ws-chat-markdown text-[15px] leading-relaxed [overflow-wrap:anywhere] " +
 		"[&>:first-child]:mt-0 [&>:last-child]:mb-0 [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-0.5 " +
 		"[&_h1]:mb-1.5 [&_h1]:mt-4 [&_h1]:text-[18px] [&_h1]:font-semibold [&_h2]:mb-1.5 [&_h2]:mt-4 [&_h2]:text-[16px] [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:font-semibold [&_h4]:mt-3 [&_h4]:font-semibold [&_strong]:font-semibold " +
-		"[&_a]:text-(--ws-accent) [&_a]:underline [&_code]:rounded [&_code]:bg-(--ws-sunken) [&_code]:px-1 [&_code]:font-mono [&_code]:text-[13.5px] " +
+		"[&_a]:text-(--ws-accent) [&_a]:underline [&_[data-chat-path]]:cursor-pointer [&_[data-chat-path]]:text-(--ws-accent) [&_[data-chat-path]:hover]:underline [&_code]:rounded [&_code]:bg-(--ws-sunken) [&_code]:px-1 [&_code]:font-mono [&_code]:text-[13.5px] " +
 		"[&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-(--ws-sunken) [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 " +
 		"[&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[14px] [&_th]:border-b [&_th]:border-(--ws-line) [&_th]:py-1.5 [&_th]:pr-4 [&_th]:text-left [&_th]:align-bottom [&_th]:font-semibold " +
 		"[&_td]:border-b [&_td]:border-(--ws-line) [&_td]:py-1.5 [&_td]:pr-4 [&_td]:align-top [&_hr]:my-4 [&_hr]:border-(--ws-line) " +
@@ -196,13 +197,14 @@ func renderChat(app Application, sid string) *r.Node {
 		Attr("data-terminal-app", app.ID).
 		Attr("data-sid", sid).
 		Render(
-			r.Div("min-h-0 flex-1 overflow-auto [scrollbar-color:var(--ws-line)_transparent] [scrollbar-width:thin]").Attr("data-chat-scroll", "").Render(
-				r.Div("mx-auto w-full max-w-3xl px-4 pb-6 pt-5").Render(
+			r.Div("min-h-0 flex-1 overflow-auto [scrollbar-color:var(--ws-line)_transparent] [scrollbar-gutter:stable_both-edges] [scrollbar-width:thin]").Attr("data-chat-scroll", "").Render(
+				r.Div("w-full px-4 pb-6 pt-5").Render(
 					renderChatBody(app.ID, snapshot),
 					renderChatRequests(app.ID, snapshot.Requests),
 				),
 			),
-			r.Div("shrink-0 px-4 pb-4").Render(chatComposer()),
+			// The scroll gutter on both edges keeps messages lined up with this box.
+			r.Div("shrink-0 pb-4").Render(chatComposer()),
 		)
 }
 
@@ -216,7 +218,7 @@ func chatComposer() *r.Node {
 		Attr("data-chat-input", "")
 	pick := r.Input("sr-only").Attr("type", "file").Attr("accept", "image/*").Attr("multiple", "").
 		Attr("aria-label", "Add images").Attr("data-chat-pick", "")
-	return r.Form("mx-auto flex w-full max-w-3xl flex-col gap-2").Attr("data-chat-form", "").Render(
+	return r.Form("flex w-full flex-col gap-2 px-4").Attr("data-chat-form", "").Render(
 		r.P("px-5 text-[13px] text-red-700 empty:hidden dark:text-red-400").Attr("role", "alert").Attr("data-chat-error", ""),
 		r.Div("flex w-full min-w-0 flex-col gap-1 rounded-[28px] bg-(--ws-raised) p-2 shadow-sm ring-1 ring-(--ws-line) transition-shadow focus-within:ring-2 focus-within:ring-(--ws-accent) data-[drop]:ring-2 data-[drop]:ring-(--ws-accent)").Attr("data-chat-box", "").Render(
 			r.Div("flex flex-wrap gap-2 px-1.5 pt-1.5 empty:hidden").Attr("data-chat-tray", ""),
@@ -249,12 +251,11 @@ func renderChatBody(appID string, snapshot components.ChatSnapshot) *r.Node {
 	}
 	turns := []turn{{key: "turn-start"}}
 	seen := make(map[string]bool, len(snapshot.Items))
-	now := time.Now()
 	for _, item := range snapshot.Items {
 		seen[item.ID] = true
 		cached, ok := cache[item.ID]
 		if !ok || cached.version != item.Version {
-			cached = chatCached{item.Version, chatItem(item, now)}
+			cached = chatCached{item.Version, chatItem(item, snapshot.Path)}
 			cache[item.ID] = cached
 		}
 		if cached.node == nil {
@@ -282,19 +283,25 @@ func renderChatBody(appID string, snapshot components.ChatSnapshot) *r.Node {
 	}
 	for i, tn := range turns {
 		state := r.Span("w-4").Attr("aria-hidden", "true")
+		// Stop sits in the last window's bottom corner and stays in view while it scrolls.
+		var stop *r.Node
 		if i == len(turns)-1 {
 			state = chatState(snapshot)
+			if working {
+				stop = r.Div("pointer-events-none sticky bottom-3 z-10 -mt-11 mb-3 flex justify-end px-3").Render(
+					r.Button("pointer-events-auto flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-0 bg-red-600 text-white shadow-md transition-colors hover:bg-red-700 "+chatFocus+" dark:bg-red-500 dark:hover:bg-red-400").
+						Attr("type", "button").Attr("data-chat-stop", "").Attr("aria-label", "Stop Claude").Attr("title", "Stop Claude").
+						Render(chatIcon("stop", "text-[22px]")),
+				)
+			}
 		}
 		body.Render(r.Div(chatCard+" flex min-w-0 flex-col").Key(tn.key).Render(
 			chatWindowBar(snapshot.Dir, state),
 			r.Div("flex min-w-0 flex-col px-4 pt-5 sm:px-5").Render(tn.items...),
+			r.If(stop != nil, stop),
 		))
 	}
-	return body.Render(r.If(working, r.Div("pointer-events-none sticky bottom-3 z-10 -mt-11 flex justify-end px-4").Render(
-		r.Button("pointer-events-auto flex h-12 w-12 cursor-pointer items-center justify-center rounded-full border-0 bg-red-600 text-white shadow-md transition-colors hover:bg-red-700 "+chatFocus+" dark:bg-red-500 dark:hover:bg-red-400").
-			Attr("type", "button").Attr("data-chat-stop", "").Attr("aria-label", "Stop Claude").Attr("title", "Stop Claude").
-			Render(chatIcon("stop", "text-[24px]")),
-	)))
+	return body
 }
 
 // chatWindowBar is the title bar of a turn's window: three dots, the folder
@@ -368,54 +375,26 @@ func chatRow(id, dot string, content *r.Node) *r.Node {
 	)
 }
 
-// chatHead is who wrote a message and when.
-func chatHead(who string, at, now time.Time) *r.Node {
-	return r.Div("flex items-baseline justify-between gap-3").Render(
-		r.Strong("text-[15px] font-semibold").Text(who),
-		r.If(!at.IsZero(), r.El("time", "shrink-0 font-mono text-[12px] "+chatMuted).Attr("datetime", at.UTC().Format(time.RFC3339)).Text(chatTime(at, now))),
-	)
-}
-
-// chatTime is the clock for today, else the weekday or the date too.
-func chatTime(at, now time.Time) string {
-	at, now = at.Local(), now.Local()
-	switch {
-	case at.Year() == now.Year() && at.YearDay() == now.YearDay():
-		return at.Format("15:04")
-	case now.Sub(at) < 6*24*time.Hour && now.After(at):
-		return at.Format("Mon 15:04")
-	case at.Year() == now.Year():
-		return at.Format("2 Jan 15:04")
-	}
-	return at.Format("2 Jan 2006 15:04")
-}
-
 // chatItem draws a message, a tool step or a notice.
-func chatItem(item components.ChatItem, now time.Time) *r.Node {
+func chatItem(item components.ChatItem, dir string) *r.Node {
 	id := "chat-item-" + item.ID
 	switch item.Kind {
 	case "user":
-		images := ""
-		switch {
-		case item.Images == 1:
-			images = "1 image"
-		case item.Images > 1:
-			images = fmt.Sprintf("%d images", item.Images)
+		images := "1 image"
+		if len(item.Images) > 1 {
+			images = fmt.Sprintf("%d images", len(item.Images))
 		}
 		return chatRow(id, chatUserDot, r.Div("pb-6").Render(
-			chatHead("You", item.At, now),
 			r.If(item.Text != "", r.P(chatText).Text(item.Text)),
-			r.If(images != "", r.Span("mt-2 inline-flex h-7 items-center gap-1.5 rounded-full bg-(--ws-sunken) px-3 text-[13px] ring-1 ring-(--ws-line) "+chatMuted).
+			r.If(len(item.Images) > 0, r.Button("mt-2 inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-(--ws-sunken) px-3 text-[13px] ring-1 ring-(--ws-line) transition-colors hover:bg-(--ws-hover) hover:text-(--ws-fg) "+chatMuted+" "+chatFocus).
+				Attr("type", "button").Attr("data-chat-images", item.ID).Attr("title", "Show "+images).
 				Render(chatIcon("image", "text-[16px]"), r.Span("").Text(images))),
 		))
 	case "assistant":
 		if strings.TrimSpace(item.Text) == "" {
 			return nil
 		}
-		return chatRow(id, chatAgentDot, r.Div("pb-6").Render(
-			chatHead("Claude", item.At, now),
-			chatMarkdown(item.Text),
-		))
+		return chatRow(id, chatAgentDot, r.Div("pb-6").Render(chatMarkdown(item.Text, dir)))
 	case "tool":
 		dot, class, suffix := chatStepDot, chatMuted, ""
 		switch item.State {
@@ -451,6 +430,30 @@ func chatItem(item components.ChatItem, now time.Time) *r.Node {
 	return nil
 }
 
+// chatInlineCode is inline code in Claude's HTML; a code block starts with <pre>.
+var (
+	chatInlineCode = regexp.MustCompile(`(<pre>)?<code>([^<]{1,512})</code>`)
+	chatPathLike   = regexp.MustCompile(`^[\w./~@+-]+(:\d+){0,2}$`)
+)
+
+// chatFileLinks marks inline code that names an existing file, such as
+// internal/chat.go:12, so a click opens it in the viewer.
+func chatFileLinks(html, dir string) string {
+	if dir == "" {
+		return html
+	}
+	return chatInlineCode.ReplaceAllStringFunc(html, func(match string) string {
+		parts := chatInlineCode.FindStringSubmatch(match)
+		if parts[1] != "" || !chatPathLike.MatchString(parts[2]) {
+			return match
+		}
+		if info, err := os.Stat(chatViewPath(parts[2], dir)); err != nil || !info.Mode().IsRegular() {
+			return match
+		}
+		return `<code data-chat-path="` + parts[2] + `" role="link" tabindex="0">` + parts[2] + `</code>`
+	})
+}
+
 // markdownImage starts any image, also a reference one: ![a][r].
 var markdownImage = regexp.MustCompile(`!\[`)
 
@@ -460,14 +463,15 @@ var chatMarkdownRenderer = goldmark.New(goldmark.WithExtensions(extension.GFM))
 // load by itself. Raw HTML and unsafe links are left out by goldmark. The
 // text's hash keys the block and Preserve keeps a drawn block as it is, so
 // old answers are not laid out again on every update.
-func chatMarkdown(md string) *r.Node {
+// Inline code names a file that dir has opens it in the viewer.
+func chatMarkdown(md, dir string) *r.Node {
 	sum := sha256.Sum256([]byte(md))
 	var html bytes.Buffer
 	if err := chatMarkdownRenderer.Convert([]byte(markdownImage.ReplaceAllString(md, "[")), &html); err != nil {
 		return r.P(chatText).Text(md)
 	}
 	return r.Div(chatMarkdownClass).Key("md-"+hex.EncodeToString(sum[:8])).Preserve().
-		Attr("data-html", html.String()).
+		Attr("data-html", chatFileLinks(html.String(), dir)).
 		UnsafeJS("this.innerHTML=this.getAttribute('data-html');this.removeAttribute('data-html');")
 }
 
@@ -493,7 +497,7 @@ func chatRequestCard(request components.ChatRequest) *r.Node {
 	if request.Tool == "ExitPlanMode" {
 		return card.Attr("aria-label", "Claude's plan").Render(
 			eyebrow("Claude's plan"),
-			r.Div("max-h-[50vh] overflow-auto rounded-xl bg-(--ws-raised) px-4 py-3 ring-1 ring-(--ws-line)").Render(chatMarkdown(request.Plan)),
+			r.Div("max-h-[50vh] overflow-auto rounded-xl bg-(--ws-raised) px-4 py-3 ring-1 ring-(--ws-line)").Render(chatMarkdown(request.Plan, "")),
 			r.Div("flex flex-wrap gap-2").Render(
 				chatAction(chatSolid, "Approve plan", "allow"),
 				chatAction(chatOutline, "Keep planning", "deny"),

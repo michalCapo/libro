@@ -114,6 +114,7 @@ app opens a window or database.
 
 - Agents start in the thread you have open. Each project thread has its own browser and tool state. Use `Ctrl + Shift + A` to add another agent to the same thread, or `Ctrl + T` to create a new worktree thread. Applications can be shared or run separately in each thread. Standalone threads are unchanged.
 - Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
+- Resume an earlier Claude or Codex session of the open folder: Resume session… on the empty agent page, or Resume session in the command palette. It opens in a new agent panel.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
 - The agent panel fills the space the tools leave, at least 600px. When both do not fit, the tool covers the agent.

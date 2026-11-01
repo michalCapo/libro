@@ -679,6 +679,8 @@ func Run(assets embed.FS, desktop bool) error {
 
 	registerSettingsActions(app)
 	registerChatActions(app)
+	registerSessionActions(app)
+	registerChatView(app)
 	registerFilesActions(app)
 	registerReposActions(app)
 	registerReleasesActions(app)
@@ -808,6 +810,12 @@ func Run(assets embed.FS, desktop bool) error {
 				}
 			}
 		}
+		// Only an earlier session of this folder and agent can be resumed.
+		if in.Session != "" && !slices.ContainsFunc(resumableSessions(sid), func(session resumableSession) bool {
+			return session.ID == in.Session && session.Plugin == pluginID
+		}) {
+			return showToastJS("Session not found", "It may already be open or was removed.", "error"), nil
+		}
 		command := in.Command
 		threadState := sm.Get(sid)
 		candidate := Application{Type: AppType(appType), Command: command, PluginID: pluginID, Dock: dock}
@@ -891,9 +899,10 @@ func Run(assets embed.FS, desktop bool) error {
 			appID := sm.NextAppID()
 			sm.InsertTerminalPlaceholder(sid, appID, width, command, writable, name, iconURL, insertIdx)
 			sm.SetAppPlugin(sid, appID, pluginID, dock)
-			if dock == "center" && claudeChatView() && chatAgent(command) {
-				sm.setAppChat(sid, appID)
-			}
+			sm.updateApp(sid, appID, func(app *Application) {
+				app.Chat = dock == "center" && claudeChatView() && chatAgent(command)
+				app.SessionID = in.Session
+			})
 
 			state := sm.Get(sid)
 			newApp := &state.Apps[state.SelectedIndex]

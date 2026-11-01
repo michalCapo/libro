@@ -166,6 +166,12 @@
     scroll.addEventListener('load', follow, true);
     form.addEventListener('submit', event => { event.preventDefault(); submit(el, chat); });
     field.addEventListener('keydown', event => {
+      // Esc stops Claude at once while it works, like the stop button.
+      if (event.key === 'Escape' && !event.isComposing && el.querySelector('[data-chat-stop]')) {
+        event.preventDefault(); event.stopPropagation();
+        send(el, 'chat.stop', {});
+        return;
+      }
       if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return;
       event.preventDefault();
       form.requestSubmit();
@@ -193,9 +199,15 @@
       const link = event.target.closest('.ws-chat-markdown a[href]');
       if (link) {
         event.preventDefault();
-        if (/^https?:/i.test(link.href)) window.__libroOpenNewTab?.(link.href);
+        const path = localPath(link);
+        if (path === null) { if (/^https?:/i.test(link.href)) window.__libroOpenNewTab?.(link.href); }
+        else send(el, 'chat.view', {path});
         return;
       }
+      const path = event.target.closest('[data-chat-path]');
+      if (path) { send(el, 'chat.view', {path: path.dataset.chatPath}); return; }
+      const images = event.target.closest('[data-chat-images]');
+      if (images) { send(el, 'chat.view', {item: images.dataset.chatImages}); return; }
       if (event.target.closest('[data-chat-mic]')) { field.focus(); window.libroVoice?.toggle(); return; }
       if (event.target.closest('[data-chat-stop]')) { send(el, 'chat.stop', {}); return; }
       const button = event.target.closest('[data-chat-answer]');
@@ -206,6 +218,9 @@
       if (quick?.checked) answer(el, quick.closest('[data-chat-request]'), 'questions');
     });
     el.addEventListener('keydown', event => {
+      if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('[data-chat-path]')) {
+        event.preventDefault(); send(el, 'chat.view', {path: event.target.dataset.chatPath}); return;
+      }
       if (event.key !== 'Enter' || event.isComposing) return;
       const input = event.target.closest('[data-chat-request] input[type=text]');
       if (!input) return;
@@ -281,5 +296,94 @@
     return true;
   }
 
-  window.libroChat = {mount, dispose, focus, paste, reconnect};
+  // A link's file path, or null for a web or other link.
+  function localPath(link) {
+    const href = link.getAttribute('href');
+    if (/^(https?:)?\/\/|^#|^(mailto|tel):/i.test(href) || /^[a-z][a-z0-9+.-]*:\/\//i.test(href) && !/^file:/i.test(href)) return null;
+    const path = href.split('#')[0];
+    try { return decodeURIComponent(path); } catch { return path; }
+  }
+
+  // The viewer is a sheet from the right, as in Kodri: a file named in the
+  // chat or a message's images. The server picks what kind it is.
+  function view(sheet) {
+    document.getElementById('chat-view')?.remove();
+    const dialog = document.createElement('dialog');
+    dialog.id = 'chat-view';
+    dialog.className = 'm-0 h-dvh max-h-none w-full max-w-none overflow-hidden border-0 bg-transparent p-0 text-(--ws-fg) backdrop:bg-black/50';
+    dialog.setAttribute('aria-label', sheet.title);
+    const shade = document.createElement('div');
+    shade.className = 'absolute inset-0';
+    shade.addEventListener('click', () => dialog.close());
+    const panel = document.createElement('div');
+    panel.className = 'absolute inset-y-0 right-0 flex w-full flex-col bg-(--ws-sunken) shadow-2xl ring-1 ring-(--ws-line) md:w-[min(60rem,calc(100vw-6rem))]';
+    const head = document.createElement('div');
+    head.className = 'flex min-h-14 shrink-0 items-center gap-2 border-b border-(--ws-line) px-5';
+    const icon = {image: 'image', html: 'language', pdf: 'picture_as_pdf', markdown: 'article', text: 'description'}[sheet.kind] || 'draft';
+    head.innerHTML = `<i class="material-icons-round shrink-0 text-xl text-(--ws-muted)" aria-hidden="true">${icon}</i>`;
+    const title = document.createElement('h2');
+    title.className = 'min-w-0 flex-1 truncate font-mono text-[14px] font-medium';
+    title.textContent = title.title = sheet.title;
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = '-mr-2 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-(--ws-muted) transition-colors hover:bg-(--ws-hover) hover:text-(--ws-fg) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ws-accent)';
+    close.title = close.ariaLabel = 'Close';
+    close.innerHTML = '<i class="material-icons-round text-xl" aria-hidden="true">close</i>';
+    close.addEventListener('click', () => dialog.close());
+    head.append(title, close);
+    const body = document.createElement('div');
+    body.className = 'min-h-0 flex-1 overflow-auto';
+    const frame = (src, sandbox) => {
+      const iframe = document.createElement('iframe');
+      iframe.className = 'block h-full w-full border-0 bg-white';
+      if (sandbox) iframe.setAttribute('sandbox', 'allow-scripts');
+      iframe.src = src; iframe.title = sheet.title;
+      return iframe;
+    };
+    if (sheet.kind === 'image') {
+      body.className += ' flex flex-col items-center gap-4 p-5';
+      sheet.urls.forEach((url, index) => {
+        const img = document.createElement('img');
+        img.className = 'max-w-full rounded-lg ring-1 ring-(--ws-line)';
+        img.src = url; img.alt = sheet.urls.length > 1 ? `Image ${index + 1}` : sheet.title;
+        body.append(img);
+      });
+    } else if (sheet.kind === 'html') body.append(frame(sheet.urls[0], true));
+    else if (sheet.kind === 'pdf') body.append(frame(sheet.urls[0], false));
+    else if (sheet.kind === 'markdown') {
+      const md = document.createElement('div');
+      md.className = sheet.class + ' mx-auto max-w-3xl px-6 py-5';
+      md.innerHTML = sheet.html;
+      body.append(md);
+    } else if (sheet.kind === 'text') {
+      const pre = document.createElement('pre');
+      pre.className = 'm-0 min-h-full whitespace-pre p-5 font-mono text-[13px] leading-relaxed';
+      pre.textContent = 'Loading…';
+      fetch(sheet.urls[0]).then(response => response.ok ? response.text() : Promise.reject()).then(text => { pre.textContent = text; }, () => { pre.textContent = 'Could not read the file.'; });
+      body.append(pre);
+    } else {
+      const note = document.createElement('p');
+      note.className = 'p-10 text-center text-(--ws-muted)';
+      note.textContent = sheet.note || 'No preview for this file.';
+      body.append(note);
+    }
+    // Links in a Markdown file open in a browser tab or, for its own files,
+    // in the viewer; never in place of Libro.
+    body.addEventListener('click', event => {
+      const link = event.target.closest('a[href]');
+      if (!link) return;
+      event.preventDefault();
+      const path = localPath(link), chat = document.querySelector(`[data-chat="${CSS.escape(sheet.app)}"]`);
+      if (path === null) { if (/^https?:/i.test(link.href)) window.__libroOpenNewTab?.(link.href); }
+      else if (chat && path) send(chat, 'chat.view', {path: path.startsWith('/') || path.startsWith('~/') || !sheet.path ? path : sheet.path.replace(/[^/]*$/, '') + path});
+    });
+    panel.append(head, body);
+    dialog.append(shade, panel);
+    dialog.addEventListener('close', () => dialog.remove());
+    document.body.append(dialog);
+    dialog.showModal();
+    close.focus();
+  }
+
+  window.libroChat = {mount, dispose, focus, paste, reconnect, view};
 })();
