@@ -3,6 +3,7 @@ package components
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,8 +17,8 @@ import (
 )
 
 // Chat panels run Claude without a terminal. Claude reads and writes JSON
-// lines (stream-json); Libro shows them as messages and tool steps and
-// answers permission requests and questions from the panel.
+// lines (stream-json); Libro shows them as messages and tool steps. Tools
+// run without asking; Claude's questions and plans wait for the user.
 
 // ChatItem is one line of a chat: a message, a tool step or a notice.
 type ChatItem struct {
@@ -27,7 +28,9 @@ type ChatItem struct {
 	Tool    string // tool name
 	Detail  string // the end of a tool's result
 	State   string // tool state: running, done, failed
-	Version int    // changes with the item, so unchanged items keep their rendering
+	Images  int    // images the user sent with the message
+	At      time.Time
+	Version int // changes with the item, so unchanged items keep their rendering
 }
 
 // ChatOption is one choice of a question.
@@ -44,16 +47,13 @@ type ChatQuestion struct {
 	MultiSelect bool         `json:"multiSelect"`
 }
 
-// ChatRequest is a pending permission request or question.
+// ChatRequest is Claude's open question or plan.
 type ChatRequest struct {
-	ID          string
-	Tool        string
-	Summary     string // what the tool does, for permission requests
-	Plan        string // the plan of ExitPlanMode
-	Questions   []ChatQuestion
-	CanAlways   bool // Claude suggested rules that allow this from now on
-	input       json.RawMessage
-	suggestions json.RawMessage
+	ID        string
+	Tool      string
+	Plan      string // the plan of ExitPlanMode
+	Questions []ChatQuestion
+	input     json.RawMessage
 }
 
 // ChatSnapshot is the chat as the panel shows it.
@@ -62,12 +62,12 @@ type ChatSnapshot struct {
 	Requests []ChatRequest
 	Status   string // idle, working, done, error
 	Running  bool
+	Dir      string // the folder Claude works in
 }
 
 // ChatAnswer answers a ChatRequest.
 type ChatAnswer struct {
 	Allow   bool
-	Always  bool
 	Message string            // why the user declined
 	Answers map[string]string // question text -> chosen labels or own text
 }
@@ -88,6 +88,7 @@ type chatState struct {
 	stderr          bytes.Buffer
 	nextID          int
 	onChange        func()
+	replayAt        time.Time // the time of the transcript line being replayed
 }
 
 const (
@@ -271,6 +272,9 @@ func (c *chatState) write(message any) error {
 	if err != nil {
 		return err
 	}
+	if c.stdin == nil {
+		return io.ErrClosedPipe
+	}
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 	_, err = c.stdin.Write(append(data, '\n'))
@@ -295,6 +299,9 @@ func (c *chatState) add(item ChatItem) string {
 		return item.ID
 	}
 	item.Version = 1
+	if item.At.IsZero() {
+		item.At = cmpTime(c.replayAt, time.Now())
+	}
 	c.items = append(c.items, item)
 	if len(c.items) > chatMaxItems {
 		c.items = append([]ChatItem(nil), c.items[len(c.items)-chatMaxItems:]...)
@@ -332,11 +339,13 @@ func (c *chatState) replay(path string) {
 		line, err := reader.ReadBytes('\n')
 		if len(line) > 0 {
 			var entry struct {
-				Type        string `json:"type"`
-				IsSidechain bool   `json:"isSidechain"`
-				IsMeta      bool   `json:"isMeta"`
+				Type        string    `json:"type"`
+				IsSidechain bool      `json:"isSidechain"`
+				IsMeta      bool      `json:"isMeta"`
+				Timestamp   time.Time `json:"timestamp"`
 			}
 			if json.Unmarshal(line, &entry) == nil && !entry.IsSidechain && !entry.IsMeta && (entry.Type == "user" || entry.Type == "assistant") {
+				c.replayAt = entry.Timestamp
 				c.handle(line, true)
 			}
 		}
@@ -357,6 +366,16 @@ func (c *chatState) replay(path string) {
 		}
 	}
 	c.streamed = map[string][]string{}
+	c.replayAt = time.Time{}
+}
+
+func cmpTime(values ...time.Time) time.Time {
+	for _, value := range values {
+		if !value.IsZero() {
+			return value
+		}
+	}
+	return time.Time{}
 }
 
 func (s *TerminalSession) readChat(stdout io.Reader) {
@@ -550,6 +569,7 @@ func (c *chatState) user(raw json.RawMessage, replay bool) {
 		return
 	}
 	var typed []string
+	images := 0
 	for _, block := range blocks {
 		switch block.Type {
 		case "tool_result":
@@ -563,10 +583,13 @@ func (c *chatState) user(raw json.RawMessage, replay bool) {
 			})
 		case "text":
 			typed = append(typed, block.Text)
+		case "image":
+			images++
 		}
 	}
-	if replay && len(typed) > 0 && userPrompt(strings.Join(typed, "\n")) {
-		c.add(ChatItem{Kind: "user", Text: strings.Join(typed, "\n")})
+	text = strings.Join(typed, "\n")
+	if replay && (images > 0 && !strings.HasPrefix(strings.TrimSpace(text), "<") || userPrompt(text)) {
+		c.add(ChatItem{Kind: "user", Text: text, Images: images})
 	}
 }
 
@@ -659,11 +682,9 @@ func cmpString(values ...string) string {
 
 func (c *chatState) controlRequest(id string, raw json.RawMessage) string {
 	var request struct {
-		Subtype     string          `json:"subtype"`
-		ToolName    string          `json:"tool_name"`
-		Input       json.RawMessage `json:"input"`
-		Description string          `json:"description"`
-		Suggestions json.RawMessage `json:"permission_suggestions"`
+		Subtype  string          `json:"subtype"`
+		ToolName string          `json:"tool_name"`
+		Input    json.RawMessage `json:"input"`
 	}
 	if json.Unmarshal(raw, &request) != nil {
 		return ""
@@ -675,7 +696,7 @@ func (c *chatState) controlRequest(id string, raw json.RawMessage) string {
 		}()
 		return ""
 	}
-	pending := ChatRequest{ID: id, Tool: request.ToolName, input: request.Input, suggestions: request.Suggestions}
+	pending := ChatRequest{ID: id, Tool: request.ToolName, input: request.Input}
 	var input struct {
 		Questions []ChatQuestion `json:"questions"`
 		Plan      string         `json:"plan"`
@@ -687,12 +708,12 @@ func (c *chatState) controlRequest(id string, raw json.RawMessage) string {
 	case "ExitPlanMode":
 		pending.Plan = input.Plan
 	default:
-		pending.Summary = toolSummary(request.ToolName, request.Input)
-		if request.Description != "" && request.Description != pending.Summary {
-			pending.Summary = strings.TrimSpace(request.Description + "\n" + pending.Summary)
-		}
-		var suggestions []any
-		pending.CanAlways = json.Unmarshal(request.Suggestions, &suggestions) == nil && len(suggestions) > 0
+		// Other tools run without asking. Claude reads its output while
+		// Libro writes, so the answer must not wait here.
+		go func() {
+			_ = c.write(controlAllow(id, request.Input, nil))
+		}()
+		return ""
 	}
 	c.requests = append(c.requests, pending)
 	return "input"
@@ -717,18 +738,29 @@ func (tm *TerminalManager) chatSession(appID string) (*TerminalSession, error) {
 	return s, nil
 }
 
-// ChatSend sends the user's message to Claude.
-func (tm *TerminalManager) ChatSend(appID, text string) error {
+// ChatSend sends the user's message and PNG images to Claude.
+func (tm *TerminalManager) ChatSend(appID, text string, images [][]byte) error {
 	s, err := tm.chatSession(appID)
 	if err != nil {
 		return err
 	}
 	text = strings.TrimSpace(text)
-	if text == "" {
+	if text == "" && len(images) == 0 {
 		return nil
 	}
+	var content any = text
+	if len(images) > 0 {
+		blocks := make([]map[string]any, 0, len(images)+1)
+		for _, image := range images {
+			blocks = append(blocks, map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png", "data": base64.StdEncoding.EncodeToString(image)}})
+		}
+		if text != "" {
+			blocks = append(blocks, map[string]any{"type": "text", "text": text})
+		}
+		content = blocks
+	}
 	c := s.chat
-	if err = c.write(map[string]any{"type": "user", "session_id": "", "parent_tool_use_id": nil, "message": map[string]any{"role": "user", "content": text}}); err != nil {
+	if err = c.write(map[string]any{"type": "user", "session_id": "", "parent_tool_use_id": nil, "message": map[string]any{"role": "user", "content": content}}); err != nil {
 		return fmt.Errorf("claude is not running")
 	}
 	c.mu.Lock()
@@ -739,10 +771,10 @@ func (tm *TerminalManager) ChatSend(appID, text string) error {
 			break
 		}
 	}
-	c.add(ChatItem{Kind: "user", Text: text})
+	c.add(ChatItem{Kind: "user", Text: text, Images: len(images)})
 	c.status = "working"
 	c.mu.Unlock()
-	if first {
+	if first && text != "" {
 		s.agentMu.Lock()
 		s.setAgentTitle(text, 1)
 		s.agentMu.Unlock()
@@ -761,7 +793,7 @@ func (tm *TerminalManager) ChatInterrupt(appID string) error {
 	return s.chat.write(map[string]any{"type": "control_request", "request_id": fmt.Sprintf("libro-stop-%d", time.Now().UnixNano()), "request": map[string]any{"subtype": "interrupt"}})
 }
 
-// ChatAnswer answers a permission request or question.
+// ChatAnswer answers a question or a plan.
 func (tm *TerminalManager) ChatAnswer(appID, requestID string, answer ChatAnswer) error {
 	s, err := tm.chatSession(appID)
 	if err != nil {
@@ -778,27 +810,31 @@ func (tm *TerminalManager) ChatAnswer(appID, requestID string, answer ChatAnswer
 	if !ok {
 		return fmt.Errorf("this request is no longer open")
 	}
-	response := map[string]any{"behavior": "deny", "message": cmpString(strings.TrimSpace(answer.Message), "The user declined this.")}
+	message := map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": requestID,
+		"response": map[string]any{"behavior": "deny", "message": cmpString(strings.TrimSpace(answer.Message), "The user declined this.")}}}
 	if answer.Allow {
-		var input map[string]any
-		_ = json.Unmarshal(request.input, &input)
-		if input == nil {
-			input = map[string]any{}
-		}
-		if len(answer.Answers) > 0 {
-			input["answers"] = answer.Answers
-		}
-		response = map[string]any{"behavior": "allow", "updatedInput": input}
-		if answer.Always && request.CanAlways {
-			response["updatedPermissions"] = request.suggestions
-		}
+		message = controlAllow(requestID, request.input, answer.Answers)
 	}
-	err = c.write(map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": requestID, "response": response}})
+	err = c.write(message)
 	if left == 0 {
 		s.setAgentStatus("working")
 	}
 	c.changed()
 	return err
+}
+
+// controlAllow lets a tool run with its input and the user's answers.
+func controlAllow(requestID string, raw json.RawMessage, answers map[string]string) map[string]any {
+	var input map[string]any
+	_ = json.Unmarshal(raw, &input)
+	if input == nil {
+		input = map[string]any{}
+	}
+	if len(answers) > 0 {
+		input["answers"] = answers
+	}
+	return map[string]any{"type": "control_response", "response": map[string]any{"subtype": "success", "request_id": requestID,
+		"response": map[string]any{"behavior": "allow", "updatedInput": input}}}
 }
 
 // ChatSnapshot returns the chat of appID; ok is false without a chat session.
@@ -820,6 +856,7 @@ func (tm *TerminalManager) ChatSnapshot(appID string) (ChatSnapshot, bool) {
 		Requests: append([]ChatRequest(nil), c.requests...),
 		Status:   c.status,
 		Running:  !s.isClosed(),
+		Dir:      filepath.Base(s.Cwd),
 	}, true
 }
 

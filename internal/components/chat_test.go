@@ -23,6 +23,7 @@ var chatTurn = []string{
 	`{"type":"assistant","message":{"id":"m9","content":[{"type":"text","text":"subagent text"}]},"parent_tool_use_id":"tu1"}`,
 	`{"type":"user","message":{"role":"user","content":[{"tool_use_id":"tu1","type":"tool_result","content":"a.txt\nb.txt","is_error":false}]},"parent_tool_use_id":null}`,
 	`{"type":"assistant","message":{"id":"m2","content":[{"type":"text","text":"Two files."}]},"parent_tool_use_id":null}`,
+	`{"type":"control_request","request_id":"r2","request":{"subtype":"can_use_tool","tool_name":"AskUserQuestion","input":{"questions":[{"question":"Delete them?","options":[{"label":"Yes"},{"label":"No"}]}]}}}`,
 	`{"type":"result","subtype":"success","is_error":false,"result":"Two files.","session_id":"s1"}`,
 }
 
@@ -33,8 +34,9 @@ func TestChatTurn(t *testing.T) {
 		if status := c.handle([]byte(line), false); status != "" {
 			statuses = append(statuses, status)
 		}
-		if strings.Contains(line, "control_request") && len(c.requests) != 1 {
-			t.Fatalf("request not open: %+v", c.requests)
+		// Tools run without asking; only questions and plans wait.
+		if want := strings.Count(line, "AskUserQuestion"); strings.Contains(line, "control_request") && len(c.requests) != want {
+			t.Fatalf("requests = %+v after %s", c.requests, line)
 		}
 	}
 	if got := strings.Join(statuses, ","); got != "input,done" {

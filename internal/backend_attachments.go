@@ -11,7 +11,8 @@ import (
 	"path/filepath"
 )
 
-// Exact page pixels still come from Electron. The backend owns their storage.
+// Exact page pixels still come from Electron, pasted images from chat panels.
+// The backend owns their storage.
 func registerBackendAttachments(app interface {
 	POST(string, http.HandlerFunc)
 }) {
@@ -27,8 +28,8 @@ func saveBackendAttachments(w http.ResponseWriter, req *http.Request) {
 	backendActionMu.Lock()
 	panel, _, _, found := sm.workspaceApp(inputSID(req.URL.Query().Get("sid")), req.URL.Query().Get("id"))
 	backendActionMu.Unlock()
-	if !found || panel.Type != AppTypeURL {
-		http.Error(w, "select a browser panel", http.StatusForbidden)
+	if !found || panel.Type != AppTypeURL && !panel.Chat {
+		http.Error(w, "select a browser or chat panel", http.StatusForbidden)
 		return
 	}
 	req.Body = http.MaxBytesReader(w, req.Body, 128<<20)
