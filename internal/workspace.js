@@ -1698,6 +1698,10 @@
           }
           else select(id);
         };
+        // Middle click closes the panel, like a browser tab.
+        // Cancelling the press stops autoscroll, which would swallow the click.
+        tab.onmousedown = event => { if (event.button === 1) event.preventDefault(); };
+        tab.onauxclick = event => { if (event.button === 1) { event.preventDefault(); call('app.close', {id}); } };
         group.append(tab);
         if (dock === 'center' && center.length > 1) {
           const close = button('Close ' + name, 'close', () => call('app.close', {id}));
