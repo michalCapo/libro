@@ -385,6 +385,9 @@ func TestPerThreadApplicationIsolation(t *testing.T) {
 	if shared.ApplicationPath != root || shared.ApplicationPerThread {
 		t.Fatal("shared app must run from project root")
 	}
+	if shared.ApplicationPort == 0 || applicationBrowserURLs(state)[0] != applicationURL(shared.ApplicationPort) {
+		t.Fatal("shared app must receive PORT and offer its address")
+	}
 	if runtime.GOOS != "windows" {
 		if _, handled := hydrateProjectCommand("test", shared.ID); !handled {
 			t.Fatal("shared application not hydrated")

@@ -32,7 +32,7 @@ Quitting stops all terminals, agents, and applications. On start, Libro restores
 
 ## Application instances
 
-Project settings choose Application per thread (default) or Shared application. Per-thread applications inherit the project start command, run in their worktree, and receive an automatic PORT with an optional per-thread override. Settings and application status expose the localhost URL. Agent MCP accepts only an action and binds to its launch workspace; agent CLI uses LIBRO_APPLICATION_PATH and rejects other workspace paths. Stop and restart affect only the assigned application scope.
+Project settings choose Application per thread (default) or Shared application. Applications receive an automatic PORT. Per-thread applications inherit the project start command, run in their worktree, and allow an optional per-thread port override. Settings and application status expose the localhost URL. Agent MCP accepts only an action and binds to its launch workspace; agent CLI uses LIBRO_APPLICATION_PATH and rejects other workspace paths. Stop and restart affect only the assigned application scope.
 
 ## Finish threads
 
