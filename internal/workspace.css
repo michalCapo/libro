@@ -6,7 +6,6 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 #libro-workspace ::selection{background:#4873ef33}
 #libro-workspace button{cursor:pointer}
 #libro-workspace button:focus-visible,#libro-workspace input:focus-visible,#libro-workspace select:focus-visible{outline:2px solid var(--ws-accent)!important;outline-offset:-2px!important}
-#libro-workspace [data-chat] :is(input,textarea):focus-visible{outline:none!important}
 .ws-titlebar{height:56px;min-height:56px;display:flex;align-items:center;gap:12px;padding:0 16px 0 0;background:var(--ws-bg);-webkit-app-region:drag}
 .ws-titlebar button{-webkit-app-region:no-drag}
 .ws-titlebar-home{height:100%;width:var(--ws-projects);flex-shrink:0;display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--ws-chrome);border-right:1px solid var(--ws-line)}

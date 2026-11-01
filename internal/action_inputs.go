@@ -39,7 +39,6 @@ type actionAppStartInput struct {
 	Name              string  `json:"name"`
 	Plugin            string  `json:"plugin"`
 	ReplaceAgent      bool    `json:"replaceAgent"`
-	Session           string  `json:"session"` // earlier agent session to resume
 	SID               string  `json:"sid"`
 	Side              string  `json:"side"`
 	Type              string  `json:"type"`

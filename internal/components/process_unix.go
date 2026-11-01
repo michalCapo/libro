@@ -65,8 +65,3 @@ func killTerminalProcess(process *os.Process) {
 	_ = syscall.Kill(-process.Pid, syscall.SIGKILL)
 	_ = process.Kill()
 }
-
-// setChatProcessGroup lets killTerminalProcess stop a chat agent's jobs too.
-func setChatProcessGroup(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-}

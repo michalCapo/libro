@@ -22,8 +22,6 @@ these attachments in private instance storage for agents to read.
 ## What It Does
 
 - Runs multiple agents in one project, each in its own thread.
-- Shows Claude as a chat, with tool steps, approvals and questions, while Claude runs in the background.
-  Switch back to the terminal in **Settings → Claude view**.
 - Puts terminal and web applications in fixed-width tool panels beside the agent.
 - Includes Browser, Files, Terminal, and other tools, with support for your own commands and web addresses.
 - Keeps all your projects in one place. Switch between them with one click.
@@ -114,7 +112,6 @@ app opens a window or database.
 
 - Agents start in the thread you have open. Each project thread has its own browser and tool state. Use `Ctrl + Shift + A` to add another agent to the same thread, or `Ctrl + T` to create a new worktree thread. Applications can be shared or run separately in each thread. Standalone threads are unchanged.
 - Use whatever agent you like. Name it, add its start command, and it shows up next to the built-in ones.
-- Resume an earlier Claude or Codex session of the open folder: Resume session… on the empty agent page, or Resume session in the command palette. It opens in a new agent panel.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
 - The agent panel fills the space the tools leave, at least 600px. When both do not fit, the tool covers the agent.

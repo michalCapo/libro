@@ -91,7 +91,6 @@ function settingsHarness(valid = true) {
     call: (action, data) => { assert.ok(['settings.voice', 'settings.agent-updates'].includes(action)); calls.push({...data}) },
     saveThreadAgent: value => calls.push(value),
     savePageTools: () => calls.push('page-tools'),
-    saveClaudeView: () => calls.push('claude-view'),
     saveSettings: (value, tool) => calls.push(tool ? 'tool-width' : 'width'),
     saveTheme: () => { calls.push('theme'); return true },
     saveNotificationSound: () => { calls.push('sound'); return true },
@@ -109,8 +108,8 @@ test('one Save waits for every section before showing a toast and keeps settings
   assert.equal(h.get('workspace-settings').hidden, false)
   assert.equal(h.content.inert, true)
   assert.deepEqual(h.toasts, [])
-  for (let i = 0; i < 9; i++) h.run('settingsSaveFinished(true)')
-  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', {key:'openrouter-key', clearKey:false}, {enabled:false}, 'default-thread-agent', 'page-tools', 'claude-view', 'width', 'theme', 'sound', 'voice-typing', 'move-working-threads'])
+  for (let i = 0; i < 8; i++) h.run('settingsSaveFinished(true)')
+  assert.deepEqual(h.calls, ['agents', 'tools', 'environment', {key:'openrouter-key', clearKey:false}, {enabled:false}, 'default-thread-agent', 'page-tools', 'width', 'theme', 'sound', 'voice-typing', 'move-working-threads'])
   assert.equal(h.get('workspace-settings').hidden, false)
   assert.deepEqual(h.toasts, [['Settings saved', '', 'success']])
   assert.equal(h.get('settings-save').disabled, false)

@@ -685,10 +685,8 @@ func configString(value string) string {
 }
 
 // RecoverAgentSettings reads only model metadata from the exact agent session.
-// environment is Libro's agent environment; it can move CODEX_HOME and
-// CLAUDE_CONFIG_DIR. Missing files and unsupported agents leave the launch
-// command unchanged.
-func RecoverAgentSettings(command, sessionID string, environment map[string]string) (string, string) {
+// Missing files and unsupported agents leave the launch command unchanged.
+func RecoverAgentSettings(command, sessionID, codexHome string) (string, string) {
 	parts := agentCommandPattern.FindStringSubmatch(strings.TrimSpace(command))
 	if parts == nil || !agentSessionPattern.MatchString(sessionID) {
 		return "", ""
@@ -697,14 +695,20 @@ func RecoverAgentSettings(command, sessionID string, environment map[string]stri
 	kind := filepath.Base(parts[1])
 	switch kind {
 	case "codex":
-		home := codexHome(environment)
+		if codexHome == "" {
+			codexHome = os.Getenv("CODEX_HOME")
+		}
+		if codexHome == "" {
+			home, _ := os.UserHomeDir()
+			codexHome = filepath.Join(home, ".codex")
+		}
 		// Prefer Codex's exact index when available, then standard rollout names.
-		if db := openCodexStateDB(home); db != nil {
+		if db := openCodexStateDB(codexHome); db != nil {
 			_ = db.QueryRow("SELECT rollout_path FROM threads WHERE id = ?", sessionID).Scan(&path)
 			_ = db.Close()
 		}
 		if path == "" {
-			_ = filepath.WalkDir(filepath.Join(home, "sessions"), func(candidate string, entry fs.DirEntry, err error) error {
+			_ = filepath.WalkDir(filepath.Join(codexHome, "sessions"), func(candidate string, entry fs.DirEntry, err error) error {
 				if err == nil && !entry.IsDir() && strings.HasSuffix(entry.Name(), "-"+sessionID+".jsonl") {
 					path = candidate
 					return fs.SkipAll
@@ -713,7 +717,8 @@ func RecoverAgentSettings(command, sessionID string, environment map[string]stri
 			})
 		}
 	case "claude":
-		paths, _ := filepath.Glob(filepath.Join(claudeConfigDir(environment), "projects", "*", sessionID+".jsonl"))
+		home, _ := os.UserHomeDir()
+		paths, _ := filepath.Glob(filepath.Join(home, ".claude", "projects", "*", sessionID+".jsonl"))
 		if len(paths) == 1 {
 			path = paths[0]
 		}

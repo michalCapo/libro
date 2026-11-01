@@ -209,53 +209,30 @@
   };
   function launcher(dock, onLaunch, replace = false, add = false) {
     if (dock === 'bottom') { bottom(); return; }
-    const center = dock === 'center';
-    const plugins = window.__libroPlugins.filter(plugin => {
+    let dialog = document.getElementById('workspace-plugin-dialog');
+    if (dialog) dialog.remove();
+    dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-plugin-dialog'; dialog.setAttribute('aria-label', dock === 'center' ? (replace ? 'Replace agent' : add ? 'New agent panel' : 'New agent session') : 'Open an app');
+    const searchBar = node('div', 'ws-command-search');
+    const search = node('input', 'ws-palette-search'); search.placeholder = dock === 'center' ? 'Search agents…' : 'Search apps…'; search.setAttribute('aria-label', dock === 'center' ? 'Search agents' : 'Search apps'); search.autocomplete = 'off'; search.spellcheck = false;
+    const dismiss = node('button', 'ws-command-dismiss'); dismiss.append(node('i', 'material-icons-round', 'close')); dismiss.firstChild.setAttribute('aria-hidden', 'true'); dismiss.type = 'button'; dismiss.setAttribute('aria-label', 'Close app launcher'); dismiss.onclick = () => dialog.close();
+    searchBar.append(node('i', 'material-icons-round', 'search'), search, dismiss); dialog.append(searchBar);
+    const list = window.__libroPlugins.filter(plugin => {
       if (plugin.disabled || plugin.removed) return false;
-      if (center) return plugin.dock === 'center' && plugin.type === 'terminal';
+      if (dock === 'center') return plugin.dock === 'center' && plugin.type === 'terminal';
       if (dock === 'right') return plugin.dock !== 'center';
       return true;
     });
-    const dialog = picker(center ? (replace ? 'Replace agent' : add ? 'New agent panel' : 'New agent session') : 'Open an app', center ? 'agents' : 'apps', 'No matching apps', plugins.map(plugin => {
-      const entry = pickerEntry(plugin.type === 'url' ? 'language' : 'terminal', plugin.name, plugin.description || plugin.command || 'Browser app'); applyToolIcon(entry, plugin);
-      if (toolKeys[plugin.id]) { const key = node('kbd', 'ws-plugin-key', toolKeys[plugin.id]); key.setAttribute('aria-hidden', 'true'); entry.append(key); entry.setAttribute('aria-keyshortcuts', toolKeys[plugin.id].replace(/Ctrl/g, 'Control')); }
-      entry.onclick = () => { dialog.close(); openPlugin(plugin.id, dock, entry, replace, add); onLaunch?.(); };
-      return entry;
-    }));
-  }
-  function resumeSession() { call('session.list'); }
-  // Earlier agent sessions of this folder; the chosen one opens in a new agent panel.
-  function sessionPicker(sessions) {
-    const dialog = picker('Resume session', 'sessions', sessions.length ? 'No matching sessions' : 'No earlier sessions in this folder', sessions.map(session => {
-      const when = new Date(session.updated).toLocaleString([], {dateStyle:'medium', timeStyle:'short'});
-      const entry = pickerEntry('history', session.title, session.agent + ' · ' + when); entry.title = session.title;
-      entry.onclick = () => { dialog.close(); call('app.start', {type:'terminal', plugin:session.plugin, name:session.agent, dock:'center', writable:true, addAgent:true, session:session.id}); };
-      return entry;
-    }));
-  }
-  function pickerEntry(icon, name, detail) {
-    const entry = node('button', 'ws-plugin-entry'); entry.type = 'button';
-    const glyph = node('i', 'material-icons-round', icon); glyph.setAttribute('aria-hidden', 'true');
-    const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', name), node('small', '', detail));
-    entry.append(glyph, copy);
-    return entry;
-  }
-  // A searchable list dialog; Enter opens the highlighted entry.
-  function picker(label, things, emptyText, items) {
-    let dialog = document.getElementById('workspace-plugin-dialog');
-    if (dialog) dialog.remove();
-    dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-plugin-dialog'; dialog.setAttribute('aria-label', label);
-    const searchBar = node('div', 'ws-command-search');
-    const search = node('input', 'ws-palette-search'); search.placeholder = 'Search ' + things + '…'; search.setAttribute('aria-label', 'Search ' + things); search.autocomplete = 'off'; search.spellcheck = false;
-    const dismiss = node('button', 'ws-command-dismiss'); dismiss.append(node('i', 'material-icons-round', 'close')); dismiss.firstChild.setAttribute('aria-hidden', 'true'); dismiss.type = 'button'; dismiss.setAttribute('aria-label', 'Close ' + label.toLowerCase()); dismiss.onclick = () => dialog.close();
-    searchBar.append(node('i', 'material-icons-round', 'search'), search, dismiss); dialog.append(searchBar);
     const entries = node('div', 'ws-plugin-list');
-    entries.append(...items);
+    list.forEach(plugin => {
+      const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; const icon = node('i', 'material-icons-round', plugin.type === 'url' ? 'language' : 'terminal'); icon.setAttribute('aria-hidden', 'true'); const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', plugin.name), node('small', '', plugin.description || plugin.command || 'Browser app')); entry.append(icon, copy); applyToolIcon(entry, plugin);
+      if (toolKeys[plugin.id]) { const key = node('kbd', 'ws-plugin-key', toolKeys[plugin.id]); key.setAttribute('aria-hidden', 'true'); entry.append(key); entry.setAttribute('aria-keyshortcuts', toolKeys[plugin.id].replace(/Ctrl/g, 'Control')); }
+      entry.onclick = () => { dialog.close(); openPlugin(plugin.id, dock, entry, replace, add); onLaunch?.(); }; entries.append(entry);
+    });
     dialog.append(entries);
     let active = 0;
     const visibleEntries = () => [...entries.children].filter(entry => !entry.hidden);
     const highlight = () => { visibleEntries().forEach((entry, index) => entry.dataset.selected = String(index === active)); };
-    const noResults = node('p', 'ws-palette-empty', emptyText); noResults.hidden = items.length > 0; dialog.append(noResults);
+    const noResults = node('p', 'ws-palette-empty', 'No matching apps'); noResults.hidden = true; dialog.append(noResults);
     search.oninput = () => {
       const query = search.value.trim().toLowerCase();
       [...entries.children].forEach(entry => entry.hidden = !entry.querySelector('.ws-plugin-copy > span').textContent.toLowerCase().includes(query));
@@ -273,7 +250,6 @@
     // Page tool keys open this from a browser panel; DOM focus alone does not take native keyboard focus back from it.
     window.libroElectron?.focusWorkspace?.().then(() => { if (dialog.open) search.focus(); }).catch(() => {});
     dialog.addEventListener('click', e => { if (e.target === dialog) { const rect = dialog.getBoundingClientRect(); if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) dialog.close(); } });
-    return dialog;
   }
   function empty(zone, grid) {
     const el = node('section', 'ws-empty'); el.dataset.zone = zone;
@@ -304,9 +280,7 @@
       launch.onclick = () => openPlugin(id, zone, launch, center);
       actions.append(launch);
     });
-    const more = node('button', 'ws-launch', center ? 'Other agent…' : 'More…'); more.type = 'button'; more.onclick = () => launcher(zone, undefined, center); actions.append(more);
-    if (center) { const resume = node('button', 'ws-launch', 'Resume session…'); resume.type = 'button'; resume.onclick = resumeSession; actions.append(resume); }
-    el.append(actions);
+    const more = node('button', 'ws-launch', center ? 'Other agent…' : 'More…'); more.type = 'button'; more.onclick = () => launcher(zone, undefined, center); actions.append(more); el.append(actions);
     return el;
   }
   // The checked-out branch of a project's main folder.
@@ -1854,20 +1828,6 @@
     if (status) status.textContent = ok ? 'Saved.' : 'Could not save. Try again.';
     settingsSaveFinished(ok);
   }
-  function saveClaudeView(chat) {
-    const select = document.getElementById('claude-view');
-    const status = document.getElementById('claude-view-status');
-    if (select) select.disabled = true;
-    if (status) status.textContent = 'Saving…';
-    call('settings.claude-view', {chat: !!chat});
-  }
-  function claudeViewSaved(ok, chat) {
-    const select = document.getElementById('claude-view');
-    const status = document.getElementById('claude-view-status');
-    if (select) { select.disabled = false; select.value = chat ? 'chat' : 'terminal'; }
-    if (status) status.textContent = ok ? 'Saved.' : 'Could not save. Try again.';
-    settingsSaveFinished(ok);
-  }
   function addAgentEnvironment(name = '', saved = false) {
     const row = node('div', 'ws-settings-row ws-agent-command-row ws-environment-row');
     const key = node('input', 'ws-agent-command');
@@ -1922,7 +1882,7 @@
     const key = document.getElementById('openrouter-key');
     key.value = ''; key.dataset.clear = '1'; key.placeholder = 'Key will be removed on Save';
   }
-  function showSettings(width, commands = {}, bindings = toolKeys, threadAgent = '', pageToolsAutoExecute = false, environment = [], voice = {savedKey:false}, agentUpdates = window.__libroAgentAutoUpdate, claudeChat = true) {
+  function showSettings(width, commands = {}, bindings = toolKeys, threadAgent = '', pageToolsAutoExecute = false, environment = [], voice = {savedKey:false}, agentUpdates = window.__libroAgentAutoUpdate) {
     window.__libroAgentAutoUpdate = agentUpdates;
     window.__libroPageToolsAutoExecute = !!pageToolsAutoExecute;
     savedThreadAgent = threadAgent;
@@ -1937,8 +1897,6 @@
     document.getElementById('agent-auto-update').value = agentUpdates === false ? 'off' : 'on';
     document.getElementById('agent-auto-update-status').textContent = '';
     document.getElementById('page-tools-autoexecute').value = pageToolsAutoExecute ? 'on' : 'off';
-    document.getElementById('claude-view').value = claudeChat ? 'chat' : 'terminal';
-    document.getElementById('claude-view-status').textContent = '';
     document.getElementById('page-tools-autoexecute-status').textContent = '';
     document.getElementById('workspace-theme').value = themePreference();
     document.getElementById('workspace-theme-status').textContent = '';
@@ -1987,7 +1945,6 @@
       () => settingsSaveFinished(saveAgentAutoUpdate(value('agent-auto-update')), 'Could not save automatic updates. Please try again.'),
       () => saveThreadAgent(agent),
       () => savePageTools(pageTools),
-      () => saveClaudeView(value('claude-view') === 'chat'),
       () => saveSettings(width),
       () => {
         const ok = saveTheme(theme) && saveNotificationSound(sound) && saveVoiceTyping(voiceTyping) && saveMoveWorkingThreads(moveWorkingThreads);
@@ -2189,7 +2146,7 @@
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects')) delete root.dataset.sidebar; });
   narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, resumeSession, sessionPicker, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, claudeViewSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name})};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name})};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }
@@ -2218,8 +2175,7 @@
   window.addEventListener('resize', schedule);
   root.addEventListener('pointerdown', event => {
     const frame = event.target.closest('[data-app-id]');
-    // Clicks in a chat's history select text; they leave the message box alone.
-    if (frame?.querySelector('[data-terminal-app]') && !event.target.closest('[data-app-toolbar], button, a, input, select, textarea, [contenteditable=true], [data-chat-scroll]')) {
+    if (frame?.querySelector('[data-terminal-app]') && !event.target.closest('[data-app-toolbar], button, a, input, select, [contenteditable=true]')) {
       requestAnimationFrame(() => {
         if (window.__libroSelectedApp === frame.dataset.appId) window.__libroFocusTerminalFrame?.(frame.dataset.appId);
       });

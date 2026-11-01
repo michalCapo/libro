@@ -383,7 +383,7 @@ func registerSettingsActions(app *r.App) {
 				commands[plugin.ID] = agentCommand(plugin)
 			}
 		}
-		return clientScript("window.__libroPlugins=props[0];libroWorkspace.showSettings(props[1],props[2],props[3],props[4],props[5],props[6],props[7],props[8],props[9]);", plugins(), string(DBDefaultPanelWidth()), commands, toolKeybindings(), defaultThreadAgent(), browserPageToolsAutoExecute(), agentEnvironmentNames(), voiceSettingsState(), agentAutoUpdate(), claudeChatView()), nil
+		return clientScript("window.__libroPlugins=props[0];libroWorkspace.showSettings(props[1],props[2],props[3],props[4],props[5],props[6],props[7],props[8]);", plugins(), string(DBDefaultPanelWidth()), commands, toolKeybindings(), defaultThreadAgent(), browserPageToolsAutoExecute(), agentEnvironmentNames(), voiceSettingsState(), agentAutoUpdate()), nil
 	})
 	registerWorkspaceAction(app, "settings.width", func(_ *r.Context, in actionSettingsWidthInput) (r.Result, error) {
 		if err := DBSetDefaultPanelWidth(Width(in.Width)); err != nil {
@@ -448,19 +448,6 @@ func renderWorkspaceSettings() *r.Node {
 				),
 			),
 			r.P("ws-settings-status").ID("agent-auto-update-status").Attr("role", "status"),
-			r.Div("ws-settings-group").Render(
-				r.Div("ws-settings-row").Render(
-					r.Div("ws-settings-copy").Render(
-						r.El("label", "").Attr("for", "claude-view").Text("Claude view"),
-						r.P("").ID("claude-view-help").Text("Chat runs Claude in the background and shows its messages, tool steps and questions. Terminal shows Claude's own screen. Applies to new Claude panels."),
-					),
-					r.El("select", "ws-settings-select").ID("claude-view").Attr("aria-describedby", "claude-view-help").Render(
-						r.El("option", "").Attr("value", "chat").Text("Chat"),
-						r.El("option", "").Attr("value", "terminal").Text("Terminal"),
-					),
-				),
-			),
-			r.P("ws-settings-status").ID("claude-view-status").Attr("role", "status"),
 			r.El("h2", "ws-shortcut-heading").Text("Page tools"),
 			r.Div("ws-settings-group").Render(
 				r.Div("ws-settings-row").Render(

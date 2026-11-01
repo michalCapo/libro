@@ -15,6 +15,3 @@ func killTerminalProcess(process *os.Process) {
 	_ = exec.Command("taskkill", "/PID", strconv.Itoa(process.Pid), "/T", "/F").Run()
 	_ = process.Kill()
 }
-
-// setChatProcessGroup is not needed: taskkill /T stops the whole tree.
-func setChatProcessGroup(*exec.Cmd) {}
