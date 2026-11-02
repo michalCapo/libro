@@ -664,6 +664,9 @@ func Run(assets embed.FS, desktop bool) error {
 	backendSessionID()
 	app := r.NewApp()
 	app.Title = "Libro"
+	// Libro may itself be shown in a frame (e.g. Libro's own browser preview
+	// while developing Libro), so send no X-Frame-Options.
+	app.FrameOptions = "-"
 	// Files saves send whole text files up to the 1 MB preview limit.
 	app.MessageLimit = func(*http.Request) int64 { return 8 << 20 }
 	if name := os.Getenv("LIBRO_INSTANCE"); name != "" {
