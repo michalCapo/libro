@@ -1318,7 +1318,7 @@
     if (event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey &&
         ['d', 'u'].includes(event.key.toLowerCase()) &&
         event.target.closest?.('[data-files] .cm-content')) return;
-    if(event.ctrlKey && !event.altKey && !event.metaKey && ['n','p','e','d','u'].includes(event.key.toLowerCase()) && event.target.closest?.('[data-files] .ws-file-navigation .ws-file-results, [data-files] .ws-file-symbol-dialog')) return;
+    if(event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && ['n','p','e','d','u'].includes(event.key.toLowerCase()) && event.target.closest?.('[data-files] .ws-file-navigation .ws-file-results, [data-files] .ws-file-symbol-dialog')) return;
     const binding = shortcut(event);
     const zoomAction = binding && ['zoom-in', 'zoom-out', 'zoom-reset'].find(id => toolKeys[id] === binding);
     if (zoomAction) {
@@ -1387,6 +1387,16 @@
     if (binding && binding === toolKeys['panel-full']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat && window.__libroSelectedApp) maximize(window.__libroSelectedApp);
+      return;
+    }
+    if (binding && binding === toolKeys['sidebar']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      // Narrow windows keep the sidebar folded, so the key opens or closes its list over the panels.
+      // A full screen panel hides the sidebar, so the key leaves full screen and shows it.
+      if (event.repeat) return;
+      const full = root.hasAttribute('data-panel-full');
+      if (full) maximize(maximized);
+      if (narrowWindow.matches) projectMenu(full || undefined); else foldSidebar(full ? false : undefined);
       return;
     }
     if (binding && binding === toolKeys['command-palette']) {
