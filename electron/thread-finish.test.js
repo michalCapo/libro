@@ -13,9 +13,10 @@ function harness(discard = false, method = 'merge') {
   const flatten = el => [el, ...el.children.flatMap(flatten)]
   function node(tag, cls = '', text = '') {
     const el = { tag, className:cls, classList:{toggle() {}}, textContent:text, value:'', children:[], events:{}, disabled:false,
-      setAttribute() {}, focus() {}, remove() {}, showModal() {}, click() { this.onclick?.() },
+      setAttribute() {}, focus() {}, remove() {}, showModal() { this.open = true }, click() { this.onclick?.() },
+      requestSubmit() { this.onsubmit?.({preventDefault() {}}) },
       addEventListener(name, fn) { this.events[name] = fn },
-      close() { this.events.close?.() },
+      close() { if (!this.open) return; this.open = false; this.events.close?.() },
       append(...children) { this.children.push(...children) },
       replaceChildren(...children) { this.children = children },
       querySelectorAll(selector) { return flatten(this).filter(child => selector.split(',').includes(child.tag)) },
@@ -39,7 +40,8 @@ function harness(discard = false, method = 'merge') {
     context.request = request
     vm.runInContext('finishThreadPreview(request, reply)', context)
   }
-  return {calls, field, button, form, preview, context}
+  const dialog = all.find(el => el.tag === 'dialog')
+  return {calls, field, button, form, preview, context, dialog}
 }
 
 test('finish preview never mutates Git; submit sends only the reviewed heads and selected method', () => {
@@ -79,6 +81,25 @@ test('discard removes the branch without typed confirmation', () => {
   h.form.onsubmit({preventDefault(){}})
   assert.equal(h.calls.at(-1).data.method, 'discard')
   assert.equal(Object.hasOwn(h.calls.at(-1).data, 'deleteBranch'), false)
+})
+
+test('discard with nothing to lose runs without showing the dialog', () => {
+  const h = harness(true)
+  assert.equal(h.dialog.open, undefined)
+  h.preview({summary:''})
+  assert.equal(h.dialog.open, undefined)
+  assert.equal(h.calls.at(-1).action, 'thread.finish')
+  assert.equal(h.calls.at(-1).data.method, 'discard')
+  vm.runInContext(`finishThreadResult('repo/feature', {error:'Branch changed'})`, h.context)
+  assert.equal(h.dialog.open, true)
+  h.preview({summary:''})
+  assert.equal(h.calls.at(-1).action, 'thread.finish.preview')
+  for (const override of [{summary:'1 file changed'}, {dirty:'?? new.txt', summary:''}, {targetHead:'', summary:''}]) {
+    const asked = harness(true)
+    asked.preview(override)
+    assert.equal(asked.dialog.open, true)
+    assert.equal(asked.calls.at(-1).action, 'thread.finish.preview')
+  }
 })
 
 test('failed finish automatically reloads its preview before retry', () => {

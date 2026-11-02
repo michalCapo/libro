@@ -369,6 +369,34 @@ func TestNewThreadAgentShortcutMigration(t *testing.T) {
 	}
 }
 
+func TestThreadShortcutMigrationRunsOnce(t *testing.T) {
+	original := db
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(t.TempDir(), "settings.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close(); db = original })
+	createTables()
+	saved := defaultToolKeybindings()
+	saved["finish-thread"] = "Ctrl+Shift+M"
+	saved["discard-thread"] = "Ctrl+Shift+D"
+	raw, _ := json.Marshal(saved)
+	if _, err := db.Exec(`INSERT INTO settings (key, value) VALUES ('tool_keybindings', ?)`, string(raw)); err != nil {
+		t.Fatal(err)
+	}
+	if got := toolKeybindings(); got["finish-thread"] != "" || got["discard-thread"] != "Ctrl+Shift+Q" {
+		t.Fatalf("migrated shortcuts = %v", got)
+	}
+	// The old keys chosen again later stay.
+	if err := setToolKeybindings(saved); err != nil {
+		t.Fatal(err)
+	}
+	if got := toolKeybindings(); got["finish-thread"] != "Ctrl+Shift+M" || got["discard-thread"] != "Ctrl+Shift+D" {
+		t.Fatalf("chosen shortcuts = %v", got)
+	}
+}
+
 func TestNewThreadCtrlTShortcutMigration(t *testing.T) {
 	original := db
 	var err error

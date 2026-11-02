@@ -3,7 +3,9 @@ package libro
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"strings"
 
 	r "github.com/michalCapo/g-sui/ui"
@@ -35,8 +37,8 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"new-agent", "New agent", ""},
 	{"new-agent-panel", "New agent panel", "Ctrl+Shift+A"},
 	{"new-thread", "New thread", "Ctrl+T"},
-	{"finish-thread", "Finish current thread…", "Ctrl+Shift+M"},
-	{"discard-thread", "Discard current thread…", "Ctrl+Shift+D"},
+	{"finish-thread", "Finish current thread…", ""},
+	{"discard-thread", "Discard current thread…", "Ctrl+Shift+Q"},
 	{"thread-actions", "Thread actions", "Ctrl+;"},
 	{"replace-agent", "Replace agent", ""},
 	{"previous-agent", "Previous panel", "Ctrl+H"},
@@ -101,6 +103,9 @@ func toolKeybindings() map[string]string {
 	defer dbMu.Unlock()
 	result := defaultToolKeybindings()
 	if db != nil {
+		defer func() {
+			_, _ = db.Exec(`INSERT INTO settings (key,value) VALUES ('tool_keybindings_shift_q','1') ON CONFLICT(key) DO NOTHING`)
+		}()
 		var raw string
 		var saved map[string]string
 		if db.QueryRow(`SELECT value FROM settings WHERE key = 'tool_keybindings'`).Scan(&raw) == nil && json.Unmarshal([]byte(raw), &saved) == nil {
@@ -140,13 +145,24 @@ func toolKeybindings() map[string]string {
 				delete(saved, "new-terminal")
 			}
 			// Releases joined Repositories, and Ctrl+Shift+D moved to
-			// discarding the current thread. Finishing the thread got
-			// Ctrl+Shift+M unless a shortcut was already set.
+			// discarding the current thread.
 			delete(saved, "releases")
 			// Notes was removed.
 			delete(saved, "notes")
-			if _, exists := saved["discard-thread"]; !exists && saved["finish-thread"] == "" {
-				delete(saved, "finish-thread")
+			// Ctrl+Shift+M never worked for finishing the thread, and discarding
+			// moved from Ctrl+Shift+D to Ctrl+Shift+Q unless that is taken. This
+			// runs once, so a later choice of either key stays.
+			var migrated string
+			if db.QueryRow(`SELECT value FROM settings WHERE key = 'tool_keybindings_shift_q'`).Scan(&migrated) != nil {
+				if saved["finish-thread"] == "Ctrl+Shift+M" {
+					saved["finish-thread"] = ""
+				}
+				if saved["discard-thread"] == "Ctrl+Shift+D" && !slices.Contains(slices.Collect(maps.Values(saved)), "Ctrl+Shift+Q") {
+					saved["discard-thread"] = "Ctrl+Shift+Q"
+				}
+				if raw, err := json.Marshal(saved); err == nil {
+					_, _ = db.Exec(`INSERT INTO settings (key,value) VALUES ('tool_keybindings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, string(raw))
+				}
 			}
 			// New shortcuts get their default unless the key is already taken.
 			for _, shortcut := range toolKeys {

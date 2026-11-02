@@ -224,8 +224,7 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 | `Ctrl + Shift + P` | Switch project |
 | `Ctrl + 1` – `Ctrl + 9` | Go to a numbered thread |
 | `Ctrl + ;` | Thread actions |
-| `Ctrl + Shift + M` | Merge the current thread (opens the review dialog) |
-| `Ctrl + Shift + D` | Discard the current thread (asks first) |
+| `Ctrl + Shift + Q` | Discard the current thread (asks first when there is something to lose) |
 | `Meta + ;` | Command palette |
 | `Caps Lock` | Voice typing |
 | `Alt + ,` / `Alt + .` | Lower / raise Claude effort for this session (Codex has this built in) |
@@ -279,9 +278,10 @@ You can also right-click a worktree thread or open its **⋯** menu, then choose
 **Merge thread…**, **Squash thread…**, or **Create draft PR…**. Each opens its
 own confirmation dialog. In Ctrl+;, search for “merge” and press Enter to open
 Merge thread. The command palette also has **Finish current thread…**, which
-opens Merge thread. Its shortcut is `Ctrl + Shift + M`; it opens the review
-dialog and never merges immediately. `Ctrl + Shift + D` opens Discard thread
-the same way.
+opens Merge thread. It has no default shortcut; you can set one in Settings. It
+opens the review dialog and never merges immediately. `Ctrl + Shift + Q` opens
+Discard thread. When the thread has no uncommitted changes and no commits beyond
+its destination, it is discarded without asking.
 
 The dialog shows the destination branch, recent commits, and changed-file
 summary. The original branch is preselected. Older worktrees without a recorded

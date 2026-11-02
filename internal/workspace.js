@@ -389,7 +389,8 @@
     const discardLabel = checkout ? 'Discard and close thread' : 'Discard and remove thread';
     const submit = node('button', 'ws-launch', discard ? discardLabel : 'Merge and remove thread'); submit.type = 'submit'; submit.disabled = true; submit.classList.toggle('ws-launch-danger', discard);
     actions.append(cancel, submit); form.append(note, status, actions); dialog.append(title, source, form); root.append(dialog);
-    const state = {name, dialog, form, base, method, summary, status, submit, cancel, info:null, busy:false, request:'', discard, checkout:!!checkout}; finishDialog = state;
+    // A discard first checks for changes; with nothing to lose it runs without asking.
+    const state = {name, dialog, form, base, method, summary, status, submit, cancel, info:null, busy:false, request:'', discard, checkout:!!checkout, quick:discard}; finishDialog = state;
     function update() {
       const pr = !discard && method === 'pr';
       base.hidden = baseLabel.hidden = discard;
@@ -408,7 +409,13 @@
       state.info = null; state.request = crypto.randomUUID(); update();
       call('thread.finish.preview', {name, base:base.value, request:state.request});
     }
-    state.update = update; state.preview = preview;
+    function show() {
+      if (dialog.open) return;
+      dialog.showModal();
+      // A browser panel can keep native keyboard focus; take it back so the keys reach the dialog.
+      window.libroElectron?.focusWorkspace?.().then(() => { if (dialog.open) (dialog.contains(document.activeElement) ? document.activeElement : submit).focus(); }).catch(() => {});
+    }
+    state.update = update; state.preview = preview; state.show = show;
     base.onchange = preview; message.oninput = update;
     dialog.addEventListener('cancel', event => { if (state.busy) event.preventDefault(); });
     dialog.addEventListener('close', () => { if (finishDialog === state) finishDialog = null; dialog.remove(); });
@@ -421,14 +428,18 @@
       call('thread.finish', {name, base:info.base, method:discard ? 'discard' : method, sourceHead:info.sourceHead, targetHead:info.targetHead, message:message.value, body:body.value});
     };
     dialogKeys(dialog, form, submit, cancel);
-    dialog.showModal(); preview();
-    // A browser panel can keep native keyboard focus; take it back so the keys reach the dialog.
-    window.libroElectron?.focusWorkspace?.().then(() => { if (dialog.open) (dialog.contains(document.activeElement) ? document.activeElement : submit).focus(); }).catch(() => {});
+    if (!discard) show();
+    preview();
   }
   function finishThreadPreview(request, reply) {
     const state = finishDialog; if (!state || state.request !== request || state.busy) return;
-    if (reply.error) { state.status.textContent = reply.error; state.summary.textContent = ''; return; }
+    if (reply.error) { state.status.textContent = reply.error; state.summary.textContent = ''; state.show(); return; }
     state.info = reply.info;
+    // Nothing would be lost: no uncommitted files and, for a worktree, no commits beyond its destination.
+    if (state.quick && !reply.info.dirty && (state.checkout || (reply.info.targetHead && !reply.info.summary))) {
+      state.quick = false; state.update(); state.form.requestSubmit(); return;
+    }
+    state.quick = false; state.show();
     state.base.replaceChildren();
     const placeholder = node('option', '', 'Choose a destination…'); placeholder.value = ''; state.base.append(placeholder);
     (reply.info.branches || []).forEach(branch => { const option = node('option', '', branch); option.value = branch; state.base.append(option); });
@@ -440,6 +451,7 @@
     const state = finishDialog; if (!state || state.name !== name) return;
     state.busy = false;
     if (reply.error) {
+      state.show();
       state.form.querySelectorAll('input,select,textarea,button').forEach(control => { control.disabled = false; });
       state.error = reply.error; state.focused = false; state.preview();
       if (reply.agentMerge) confirmAgentMerge(state, reply.agentMerge);
@@ -451,7 +463,8 @@
       if (url) { const link = node('a', '', 'Open pull request'); link.href = url; link.target = '_blank'; link.rel = 'noopener'; state.status.append(link); }
       state.cancel.disabled = false; state.cancel.textContent = 'Done'; state.cancel.focus(); return;
     }
-    state.dialog.close();
+    // A quick discard never opened its dialog, so closing it would not remove it.
+    if (state.dialog.open) state.dialog.close(); else { finishDialog = null; state.dialog.remove(); }
     threadRemoved();
     window.__libroShowToast?.(reply.warning || (state.checkout ? 'Changes discarded and thread closed' : 'Thread removed'), '', reply.warning ? 'error' : 'success');
   }
