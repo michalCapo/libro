@@ -565,9 +565,9 @@ var pageToolState = {}; // appID -> '' | 'annotate' | 'area'
 var mobileViewState = {}; // appID -> viewport preview styles and resize observer
 var mobileViewportOrientation = {}; // appID -> last sm/md/xl orientation until browser instance closes
 var mobileSizes = {
-	sm: {label: 'SM', width: 412, height: 892},
-	md: {label: 'MD', width: 640, height: 932},
-	xl: {label: 'XL', width: 720, height: 1280, tablet: true}
+	sm: {width: 412, height: 892},
+	md: {width: 640, height: 932},
+	xl: {width: 720, height: 1280, tablet: true}
 };
 
 function applyBrowserMode(appID, mode) {
@@ -893,15 +893,6 @@ window.__libroToggleSelectedBrowserMobile = function(appID) {
 				if (state && state.mode === next) applyMobileView(appID, next, state.orientation || orientation);
 			}, 80);
 		}
-		if (window.__libroShowToast) {
-			if (next === 'normal') window.__libroShowToast('Viewport off', 'Restored previous browser size', 'info');
-			else {
-				var size = mobileSizes[next];
-				var width = orientation === 'landscape' ? size.height : size.width;
-				var height = orientation === 'landscape' ? size.width : size.height;
-				window.__libroShowToast('Viewport ' + size.label, width + ' × ' + height, 'info');
-			}
-		}
 		var wv = window.__libroWebviews[appID];
 		if (wv) refocusWebview(appID, wv);
 	}, 0);
@@ -914,12 +905,6 @@ window.__libroRotateSelectedBrowserViewport = function(appID) {
 	var nextOrientation = state.orientation === 'landscape' ? 'portrait' : 'landscape';
 	mobileViewportOrientation[appID] = nextOrientation;
 	if (!applyMobileView(appID, state.mode, nextOrientation)) return;
-	if (window.__libroShowToast) {
-		var size = mobileSizes[state.mode];
-		var width = nextOrientation === 'landscape' ? size.height : size.width;
-		var height = nextOrientation === 'landscape' ? size.width : size.height;
-		window.__libroShowToast('Viewport ' + nextOrientation, width + ' × ' + height, 'info');
-	}
 	var wv = window.__libroWebviews[appID];
 	if (wv) refocusWebview(appID, wv);
 };
