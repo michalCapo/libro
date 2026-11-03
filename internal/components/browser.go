@@ -584,6 +584,13 @@ function applyBrowserMode(appID, mode) {
 				container.className = container.className.replace(/border-emerald-500/g, 'border-blue-500');
 			}
 		}
+		var modeButton = container.querySelector('[data-browser-mode-toggle]');
+		if (modeButton) {
+			var insert = mode === 'insert';
+			modeButton.setAttribute('aria-pressed', String(insert));
+			modeButton.textContent = insert ? 'Insert' : 'View';
+			modeButton.title = insert ? 'Insert mode: keys go to the page. Shift+Esc or click for view mode.' : 'View mode: keys run browser shortcuts. Press I or click to type in the page.';
+		}
 		var toolbar = container.querySelector('[data-app-toolbar]');
 		if (toolbar) {
 			// Only restyle the toolbar when the app is the selected one
@@ -624,11 +631,18 @@ window.__libroSetBrowserModeByWcId = function(wcId, mode) {
 	}
 };
 
-window.__libroGetBrowserMode = function(appID) {
-	return browserModeState[appID] || 'normal';
+window.__libroToggleBrowserMode = function(appID) {
+	var wv = window.__libroWebviews[appID];
+	var targetId = webviewContentsID(wv);
+	if (!targetId || !window.libroElectron || typeof window.libroElectron.setBrowserMode !== 'function') return;
+	window.libroElectron.setBrowserMode(targetId, browserModeState[appID] === 'insert' ? 'normal' : 'insert');
+	refocusWebview(appID, wv);
 };
 
-window.__libroApplyBrowserMode = applyBrowserMode;
+// Re-rendered toolbars start in view mode; show the remembered modes again.
+window.__libroApplyBrowserModes = function() {
+	for (var appID in browserModeState) applyBrowserMode(appID, browserModeState[appID]);
+};
 
 function pageToolButtonState(appID, mode) {
 	pageToolState[appID] = mode || '';

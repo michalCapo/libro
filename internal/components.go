@@ -450,9 +450,7 @@ func selectedAppID(state *AppState) string {
 func centerSelectedNode(state *AppState) *r.Node {
 	return clientScriptNode(`
 		window.__libroSelectedApp=props[0];
-		if (window.__libroSelectedApp && window.__libroApplyBrowserMode && window.__libroGetBrowserMode) {
-			window.__libroApplyBrowserMode(window.__libroSelectedApp, window.__libroGetBrowserMode(window.__libroSelectedApp));
-		}
+		if (window.__libroApplyBrowserModes) window.__libroApplyBrowserModes();
 		(function centerApp() {
 			requestAnimationFrame(function() {
 				requestAnimationFrame(function() {
@@ -889,6 +887,13 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			Attr("data-browser-app", app.ID).OnClick(r.UnsafeJS("window.__libroWvForward(el.dataset.browserApp);"))
 		forwardBtn.Render(r.I("material-icons-round text-sm").Text("arrow_forward"))
 
+		// Keyboard mode: View runs browser shortcuts, Insert sends keys to the page.
+		modeBtn := r.Button("ws-browser-mode").Attr("type", "button").
+			Attr("data-browser-mode-toggle", "").Attr("aria-pressed", "false").
+			Attr("title", "View mode: keys run browser shortcuts. Press I or click to type in the page.").
+			Attr("data-browser-app", app.ID).OnClick(r.UnsafeJS("window.__libroToggleBrowserMode(el.dataset.browserApp);")).
+			Text("View")
+
 		// Copy button
 		copyURL := func(buttonID string) *r.Action {
 			return r.Seq(r.CopyFrom(urlInputID), r.SetAttr(buttonID, "style", "color:rgb(20,184,166)"), r.Delay(800*time.Millisecond, r.RemoveAttr(buttonID, "style")))
@@ -961,7 +966,7 @@ func renderAppFrameBase(app Application, index int, selected bool, sid string, p
 			Attr("data-browser-app", app.ID).On("keydown", r.UnsafeJS("if(event.key==='Enter'){event.preventDefault();if(window.__libroNavigateAddress(el.dataset.browserApp,el.value))el.blur();}"))
 
 		leftSide = r.Div("flex-1 min-w-0 flex items-center gap-1").
-			Render(backBtn, forwardBtn, urlInput, copyBtn, consoleBtn, moreBtn, menu)
+			Render(backBtn, forwardBtn, modeBtn, urlInput, copyBtn, consoleBtn, moreBtn, menu)
 	} else if app.Type == AppTypeTerminal {
 		labelText := workspaceAppName(app)
 

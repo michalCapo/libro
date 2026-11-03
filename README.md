@@ -153,7 +153,7 @@ One layout is saved per Libro instance. Only the first window restores it. Reloa
 ### Browser
 
 - Open a browser panel with `Ctrl + B`, or a new separate one with `Ctrl + Shift + B`.
-- Browse with the keyboard: `o` opens a page, `r` reloads, `j` and `k` scroll, `i` lets you type in a page, `Esc` goes back.
+- Browse with the keyboard: `o` opens a page, `r` reloads, `j` and `k` scroll, `i` or the View/Insert button lets you type in a page (also in remote desktops like VNC), `Shift+Esc` goes back. `Esc` leaves a text field.
 - Preview a page on a device: `m` cycles SM (412×892), MD, and XL tablet sizes, then back to normal. `M` turns the device sideways. The page shows inside a phone or tablet frame.
 - Ask the agent about part of a page: press `a` and click an element, or `d` and draw a box around it. Type a short note and it is pasted into the agent, together with that part of the page.
 - Show an image, PDF, or HTML file from a Libro terminal with `libro open FILE`. It opens beside that terminal, and later files reuse the same panel. In Nvim, `o` in the file explorer, `gx`, and `Space b v` show files this way.

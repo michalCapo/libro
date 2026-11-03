@@ -487,6 +487,9 @@ function adjustMainWindowZoom(action) {
 const webviewInputFocused = new Map()
 const webviewBrowserMode = new Map()
 const webviewKeyboardPassthrough = new Map()
+// Insert mode the user chose (I key or toolbar button). It stays on when focus
+// leaves a text field, so canvas apps such as VNC get every key.
+const webviewExplicitInsert = new Map()
 const shortcutEventDedup = new Map()
 
 // Saved workspace bindings must win over shortcuts in guest pages.
@@ -500,6 +503,28 @@ function isWorkspaceShortcut(input) {
   return workspaceShortcuts.has(binding) || binding === 'Ctrl+A' ||
     (/^Ctrl\+[1-9]$/.test(binding) ||
       (!!input.control && !input.meta && !input.alt && !input.shift && /^Digit[1-9]$/.test(input.code || '')))
+}
+
+function setBrowserMode(contents, mode) {
+  webviewBrowserMode.set(contents.id, mode)
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.executeJavaScript(`
+      if (window.__libroSetBrowserModeByWcId) window.__libroSetBrowserModeByWcId(${contents.id}, ${JSON.stringify(mode)});
+    `).catch(() => {})
+  }
+}
+
+// Explicit modes come from the I key, Shift+Escape or the toolbar button.
+function setExplicitBrowserMode(contents, mode) {
+  if (mode === 'insert') {
+    webviewExplicitInsert.set(contents.id, true)
+  } else {
+    // Leave the text field too, so view mode keys run shortcuts again.
+    webviewExplicitInsert.delete(contents.id)
+    webviewInputFocused.set(contents.id, false)
+    contents.executeJavaScript('document.activeElement?.blur?.()').catch(() => {})
+  }
+  setBrowserMode(contents, mode)
 }
 
 // Find the Go binary — look next to the electron dir, or in PATH
@@ -734,6 +759,13 @@ function createWindow() {
 
   mainWindow.on('close', requestQuit)
 
+  ipcMain.on('libro-browser-mode', (event, targetId, mode) => {
+    if (event.sender !== mainWindow?.webContents || (mode !== 'insert' && mode !== 'normal')) return
+    const target = webContents.fromId(Number(targetId))
+    if (!target || target.isDestroyed() || target.getType() !== 'webview') return
+    setExplicitBrowserMode(target, mode)
+  })
+
   ipcMain.on('libro-workspace-shortcuts', (event, bindings) => {
     if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) return
     if (!Array.isArray(bindings) || !bindings.every(binding => typeof binding === 'string')) return
@@ -911,7 +943,7 @@ app.on('web-contents-created', (event, contents) => {
           setWebviewBrowserMode('insert')
         } else {
           webviewInputFocused.set(contents.id, false)
-          setWebviewBrowserMode('normal')
+          setWebviewBrowserMode(webviewExplicitInsert.get(contents.id) ? 'insert' : 'normal')
         }
       }
     })
@@ -922,12 +954,14 @@ app.on('web-contents-created', (event, contents) => {
       if (!isMainFrame || isInPlace) return
       webviewInputFocused.set(contents.id, false)
       webviewKeyboardPassthrough.delete(contents.id)
+      webviewExplicitInsert.delete(contents.id)
       setWebviewBrowserMode('normal')
     })
     contents.on('destroyed', () => {
       webviewInputFocused.delete(contents.id)
       webviewBrowserMode.delete(contents.id)
       webviewKeyboardPassthrough.delete(contents.id)
+      webviewExplicitInsert.delete(contents.id)
       destroyDevtoolsOverlay(contents.id)
     })
 
@@ -957,14 +991,7 @@ app.on('web-contents-created', (event, contents) => {
     })
   }
 
-  const setWebviewBrowserMode = (mode) => {
-    webviewBrowserMode.set(contents.id, mode)
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.executeJavaScript(`
-        if (window.__libroSetBrowserModeByWcId) window.__libroSetBrowserModeByWcId(${contents.id}, ${JSON.stringify(mode)});
-      `).catch(() => {})
-    }
-  }
+  const setWebviewBrowserMode = (mode) => setBrowserMode(contents, mode)
 
   contents.on('before-input-event', (e, input) => {
     if (input.type !== 'keyDown' && input.type !== 'rawKeyDown') return
@@ -1233,22 +1260,25 @@ app.on('web-contents-created', (event, contents) => {
       return
     }
 
-    // Vim-style mode toggle: 'i' enters insert mode, 'Esc' exits.
+    // Vim-style mode toggle: 'i' enters insert mode until the user leaves it.
+    // Escape leaves insert mode that a text field started. Insert mode the user
+    // chose sends Escape to the page, so it ends with Shift+Escape instead.
+    // Shift+Escape always returns to view mode.
     // Source of truth lives here in the main process so the swap happens
     // before any other intercept can fire on the same event loop tick.
-    if (isWebview && !input.meta && !input.control && !input.alt && !input.shift) {
+    if (isWebview && !input.meta && !input.control && !input.alt) {
       const currentMode = webviewBrowserMode.get(contents.id) || 'normal'
-      if (currentMode !== 'insert' && key === 'i' && !webviewInputFocused.get(contents.id)) {
+      if (!input.shift && currentMode !== 'insert' && key === 'i' && !webviewInputFocused.get(contents.id)) {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
-        setWebviewBrowserMode('insert')
+        setExplicitBrowserMode(contents, 'insert')
         return
       }
-      if (currentMode === 'insert' && key === 'escape') {
+      if (currentMode === 'insert' && key === 'escape' && (input.shift || !webviewExplicitInsert.get(contents.id))) {
         if (shouldSkipDuplicateShortcut()) return
         e.preventDefault()
         contents.executeJavaScript('window.__libroPageToolPromptClose?.()').catch(() => {})
-        setWebviewBrowserMode('normal')
+        setExplicitBrowserMode(contents, 'normal')
         return
       }
     }

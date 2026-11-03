@@ -28,6 +28,9 @@ contextBridge.exposeInMainWorld('libroElectron', {
   toggleMaximize: function () {
     ipcRenderer.send('libro-toggle-maximize')
   },
+  setBrowserMode: function (webContentsId, mode) {
+    ipcRenderer.send('libro-browser-mode', webContentsId, mode)
+  },
   openWebviewDevTools: function (webContentsId, bounds, panel) {
     ipcRenderer.send('libro-open-webview-devtools', webContentsId, bounds, panel)
   },
