@@ -470,12 +470,15 @@
     if (!view || !view.image.naturalWidth) return;
     const media = view.media, width = media.clientWidth, height = media.clientHeight;
     if (!width || !height) return;
+    // Size from the outer box, which scrollbars do not change. Sizing from the
+    // inner box lets a scrollbar shrink the image and remove itself, in a loop.
+    const box = media.getBoundingClientRect(), fitWidth = Math.floor(box.width), fitHeight = Math.floor(box.height);
     const old = {left:view.left || 0, top:view.top || 0, width:view.width || 0, height:view.height || 0};
-    const base = Math.min(1, width / view.image.naturalWidth, height / view.image.naturalHeight);
+    const base = Math.min(1, fitWidth / view.image.naturalWidth, fitHeight / view.image.naturalHeight);
     view.width = view.image.naturalWidth * base * view.zoom;
     view.height = view.image.naturalHeight * base * view.zoom;
-    view.stage.style.width = Math.max(width, view.width) + 'px';
-    view.stage.style.height = Math.max(height, view.height) + 'px';
+    view.stage.style.width = view.width + 'px';
+    view.stage.style.height = view.height + 'px';
     view.image.style.width = view.width + 'px';
     view.image.style.height = view.height + 'px';
     view.left = Math.max(0, (width - view.width) / 2);
