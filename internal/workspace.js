@@ -185,12 +185,19 @@
       if (window.__libroFocusAppByID) window.__libroFocusAppByID(id);
     });
   }
+  function pageToolAgent(grid) {
+    const agents = frames(grid).filter(frame => frame.dataset.dock === 'center' && frame.querySelector('[data-terminal-app]'));
+    return agents.find(frame => frame.dataset.appId === dockState(grid).agent) || agents[0];
+  }
+  window.__libroPageToolAgent = browserID => {
+    const grid = document.getElementById('frame-' + browserID)?.parentElement;
+    return grid ? pageToolAgent(grid)?.dataset.appId || '' : '';
+  };
   window.__libroEnsurePageToolAgent = function(browserID, mode) {
     const browser = document.getElementById('frame-' + browserID);
     const grid = browser?.parentElement;
     if (!grid) return false;
-    const agents = frames(grid).filter(frame => frame.dataset.dock === 'center' && frame.querySelector('[data-terminal-app]'));
-    const agent = agents.find(frame => frame.dataset.appId === dockState(grid).agent) || agents[0];
+    const agent = pageToolAgent(grid);
     if (agent) { window.__libroActiveAgentID = agent.dataset.appId; return true; }
     // Page Tools need the agent beside this browser, so it starts in this checkout.
     launcher('center', () => {

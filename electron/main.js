@@ -1307,7 +1307,7 @@ app.on('web-contents-created', (event, contents) => {
         contents.executeJavaScript(browserKeyActions[key]).catch(() => {})
         return
       }
-      // Bare 'a' annotates an element, 'd' draws a page area, 'p' annotates the whole page, 'o' opens URL popup,
+      // Bare 'a' annotates an element, 'd' draws a page area, 'p' opens the whole page for drawing and sending, 'o' opens URL popup,
       // 'r' reloads, 'm' cycles viewport size, and -/= /0 control page zoom.
       // Shift+M rotates the viewport.
       if ((!input.shift && (key === 'a' || key === 'd' || key === 'p' || key === 'o' || key === 'r' || key === 'm' || key === '-' || key === '=' || key === '0')) || (input.shift && key === 'm')) {

@@ -32,6 +32,7 @@ var browserShortcutsScript = '(' + function(){
 	var pageToolFrameSheet = null;
 	var pageToolFrameRoots = [];
 	var pageToolKeys = {};
+	var pageToolHeld = false;
 
 	function pageToolMessage(kind, payload) {
 		try { console.log('__libro:page-tool:' + kind + ':' + JSON.stringify(payload)); } catch (err) {}
@@ -122,8 +123,10 @@ var browserShortcutsScript = '(' + function(){
 	function pageToolFrozen() {
 		// A page update can remove the prompt; do not stay frozen without it.
 		if (pageToolPrompt && !pageToolPrompt.isConnected) pageToolPromptClose();
-		return !!(pageToolMode || pageToolPending || pageToolPrompt);
+		return !!(pageToolMode || pageToolPending || pageToolPrompt || pageToolHeld);
 	}
+	// The page stays frozen behind a drawing, as it does behind a prompt.
+	window.__libroPageToolHold = function(held) { pageToolHeld = !!held; pageToolSync(); };
 	window.__libroPageToolFrozen = pageToolFrozen;
 	function pageToolRoots(root, roots) {
 		roots.push(root);
@@ -165,7 +168,7 @@ var browserShortcutsScript = '(' + function(){
 		var panel = document.createElement('div');
 		panel.setAttribute('popover', 'manual');
 		panel.setAttribute('role', 'dialog');
-		panel.setAttribute('aria-label', payload && payload.kind === 'page' ? 'Describe whole page' : payload && payload.kind === 'area' ? 'Describe selected page area' : 'Describe selected page element');
+		panel.setAttribute('aria-label', payload && payload.kind === 'area' ? 'Describe selected page area' : 'Describe selected page element');
 		panel.style.position = 'fixed';
 		panel.style.inset = 'auto';
 		panel.style.margin = '0';
@@ -198,11 +201,10 @@ var browserShortcutsScript = '(' + function(){
 		root.appendChild(style);
 		var card = document.createElement('div'); card.className = 'card';
 		var header = document.createElement('div'); header.className = 'header';
-		var title = document.createElement('span'); title.textContent = payload && payload.kind === 'page' ? 'Describe this page' : payload && payload.kind === 'area' ? 'Describe this page area' : 'Describe this element';
+		var title = document.createElement('span'); title.textContent = payload && payload.kind === 'area' ? 'Describe this page area' : 'Describe this element';
 		var close = document.createElement('button'); close.type = 'button'; close.className = 'close'; close.textContent = '×'; close.setAttribute('aria-label', 'Close prompt');
 		var summary = document.createElement('div'); summary.className = 'summary';
-		if (payload && payload.kind === 'page') summary.textContent = 'Whole page · Screenshot attached';
-		else if (payload && payload.kind === 'area') summary.textContent = 'Selected rectangle · Screenshot attached';
+		if (payload && payload.kind === 'area') summary.textContent = 'Selected rectangle · Screenshot attached';
 		else if (payload && payload.element) summary.textContent = 'Selected ' + (payload.element.selector || 'element') + (payload.screenshot ? ' · Screenshot attached' : '');
 		else summary.textContent = appURL || 'Selected page element';
 		var input = document.createElement('textarea'); input.rows = 3; input.placeholder = 'What should the agent do with this?'; input.setAttribute('aria-label', 'Page tool prompt'); input.autocomplete = 'off';
@@ -297,12 +299,6 @@ var browserShortcutsScript = '(' + function(){
 		pageToolSync();
 	}
 	function pageToolSetMode(mode) {
-		if (mode === 'page') {
-			pageToolStop(pageToolMode);
-			pageToolPromptClose();
-			pageToolCapture({kind: 'page', url: window.location.href});
-			return;
-		}
 		if (mode !== 'annotate' && mode !== 'area') mode = '';
 		if (pageToolMode === mode) return;
 		if (pageToolMode) pageToolStop(pageToolMode);
@@ -561,7 +557,8 @@ window.__libroCloseConsole = function(appID) {
 var devtoolsPanelObservers = {};
 var devtoolsPanelSyncers = {};
 var browserModeState = {}; // appID -> 'normal' | 'insert'
-var pageToolState = {}; // appID -> '' | 'annotate' | 'area'
+var pageToolState = {}; // appID -> '' | 'annotate' | 'area' | 'page'
+var pageDrawStarts = {}; // appID -> the picture being taken for a drawing
 var mobileViewState = {}; // appID -> viewport preview styles and resize observer
 var mobileViewportOrientation = {}; // appID -> last sm/md/xl orientation until browser instance closes
 var mobileSizes = {
@@ -705,11 +702,20 @@ function executePageToolMode(appID, mode) {
 window.__libroTogglePageTool = function(appID, mode) {
 	appID = appID || window.__libroSelectedApp || '';
 	if (!appID || !mode) return;
+	// The drawing covers the page, so no other page tool can start under it.
+	if (pageToolState[appID] === 'page' && mode !== 'page') return;
 	var next = pageToolState[appID] === mode ? '' : mode;
 	if (next && window.__libroEnsurePageToolAgent && !window.__libroEnsurePageToolAgent(appID, mode)) return;
+	if (mode === 'page') {
+		if (next) return startPageDrawing(appID);
+		if (!pageDrawStarts[appID]) return window.__libroPageDraw.cancel(appID);
+		delete pageDrawStarts[appID];
+		pageToolButtonState(appID, '');
+		return;
+	}
 	pageToolButtonState(appID, next);
 	return executePageToolMode(appID, next).then(function() {
-		if (next === 'page' || pageToolState[appID] !== next) return;
+		if (pageToolState[appID] !== next) return;
 		var label = next === 'annotate' ? 'Annotate mode' : next === 'area' ? 'Area select mode' : 'Page tool off';
 		var hint = next === 'annotate' ? 'Hover and click an element' : next === 'area' ? 'Drag a rectangle over the page' : 'Ready';
 		if (window.__libroShowToast) window.__libroShowToast(label, hint, 'info');
@@ -719,6 +725,44 @@ window.__libroTogglePageTool = function(appID, mode) {
 	});
 };
 
+
+function holdPage(guest, held) {
+	try { Promise.resolve(guest.executeJavaScript('window.__libroPageToolHold&&window.__libroPageToolHold(' + held + ')', true)).catch(function() {}); } catch (err) {}
+}
+
+async function takePagePicture(appID, guest) {
+	// Marks from another page tool must leave the page before the picture.
+	await executePageToolMode(appID, '');
+	await guest.executeJavaScript('window.__libroPageToolPromptClose();new Promise(function(done){requestAnimationFrame(function(){requestAnimationFrame(done);});setTimeout(done,200);})');
+	return window.libroElectron.capturePageArea(guest.getWebContentsId(), {viewport:true});
+}
+
+// P: the picture is taken before anything on screen changes, then placed
+// exactly over the page.
+async function startPageDrawing(appID) {
+	var guest = pageToolWebview(appID), start = pageDrawStarts[appID] = {};
+	function wanted() { return pageDrawStarts[appID] === start; }
+	pageToolButtonState(appID, 'page');
+	try {
+		if (!guest || !guest.executeJavaScript || !window.libroElectron || !window.libroElectron.capturePageArea) throw new Error('Open Libro desktop to draw on the page.');
+		var picture = await Promise.race([takePagePicture(appID, guest), new Promise(function(_, reject) {
+			setTimeout(function() { reject(new Error('The page did not respond. Reload it and try again.')); }, 10000);
+		})]);
+		// The panel may have closed or moved out of view while the picture was taken.
+		var opened = wanted() && guest.isConnected && browserIsVisible(guest) && await window.__libroPageDraw.open({appID:appID, guest:guest, picture:picture, url:pageToolURL(appID, {url:guest.getURL()}), wanted:wanted, onClose:function() {
+			holdPage(guest, false);
+			pageToolButtonState(appID, '');
+		}});
+		if (opened) holdPage(guest, true);
+		else if (wanted()) pageToolButtonState(appID, '');
+	} catch (err) {
+		if (wanted()) {
+			pageToolButtonState(appID, '');
+			if (window.__libroShowToast) window.__libroShowToast('Screenshot failed', err.message || 'Reload the page and try again.', 'error');
+		}
+	}
+	if (wanted()) delete pageDrawStarts[appID];
+}
 
 function pageToolURL(appID, payload) {
 	var url = payload && payload.url ? String(payload.url) : '';
@@ -730,14 +774,14 @@ function pageToolURL(appID, payload) {
 function pageToolContext(payload, appID) {
 	var url = pageToolURL(appID, payload);
 	var lines = [
-		payload && payload.kind === 'page' ? 'Please make the requested change to the whole page below.' : 'Please make the requested change to the page element or region below.',
+		'Please make the requested change to the page element or region below.',
 		'',
 		'Page URL: ' + url
 	];
 	if (payload && payload.kind === 'element' && payload.element) {
 		lines.push('Target element path: ' + (payload.element.selector || '(none)'));
 	}
-	if (payload && payload.screenshot) lines.push((payload.kind === 'page' ? 'Whole-page screenshot: ' : payload.kind === 'element' ? 'Selected-element screenshot: ' : 'Selected-area screenshot: ') + JSON.stringify(payload.screenshot), 'Open this image and use it with the user request and page URL.');
+	if (payload && payload.screenshot) lines.push((payload.kind === 'element' ? 'Selected-element screenshot: ' : 'Selected-area screenshot: ') + JSON.stringify(payload.screenshot), 'Open this image and use it with the user request and page URL.');
 	if (payload && payload.attachments) payload.attachments.forEach(function(filename) { lines.push('Additional image: ' + JSON.stringify(filename)); });
 	return lines.join('\n');
 }
@@ -751,6 +795,7 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 		return;
 	}
 	if (kind === 'mode') {
+		if (pageToolState[appID] === 'page') return;
 		pageToolButtonState(appID, payload.mode || '');
 		return;
 	}
@@ -758,7 +803,7 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 		var guest = pageToolWebview(appID);
 		try {
 			if (!guest || !window.libroElectron || !window.libroElectron.capturePageArea) throw new Error('Open Libro desktop to capture page areas.');
-			var rect = payload.kind === 'page' ? {fullPage:true} : payload.kind === 'element' ? payload.element && payload.element.viewportRect : payload.area;
+			var rect = payload.kind === 'element' ? payload.element && payload.element.viewportRect : payload.area;
 			var screenshot = await window.libroElectron.capturePageArea(guest.getWebContentsId(), rect);
 			payload.screenshot = (await window.__libroSavePageToolImages(appID, [screenshot]))[0];
 			await guest.executeJavaScript('window.__libroPageToolPromptOpen(' + JSON.stringify(payload) + ', ' + JSON.stringify(payload.url) + ')');
@@ -772,7 +817,7 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 		pageToolButtonState(appID, '');
 		var request = String(payload.request || '').trim();
 		if (!request) return;
-		if ((payload.kind === 'area' || payload.kind === 'element' || payload.kind === 'page') && !payload.screenshot) return;
+		if ((payload.kind === 'area' || payload.kind === 'element') && !payload.screenshot) return;
 		if (payload.images && payload.images.length) {
 			try {
 				var images = await window.libroElectron.savePageToolImages(pageToolWebview(appID).getWebContentsId(), payload.images);
@@ -783,7 +828,7 @@ async function receivePageToolMessage(appID, kind, rawPayload) {
 				return;
 			}
 		}
-		var targetLabel = payload.kind === 'page' ? 'Whole page annotation' : payload.kind === 'area' ? 'Page area annotation' : 'HTML element annotation';
+		var targetLabel = payload.kind === 'area' ? 'Page area annotation' : 'HTML element annotation';
 		var prompt = '\n\n--- BEGIN ' + targetLabel + ' ---\nUser request: ' + request + '\n\n' + pageToolContext(payload, appID) + '\n--- END ' + targetLabel + ' ---\n\n';
 		var sent = window.__libroSendPageToolPrompt && window.__libroSendPageToolPrompt(prompt, !!window.__libroPageToolsAutoExecute);
 		var wv = pageToolWebview(appID);
@@ -1176,7 +1221,8 @@ function bindWebviewEvents(wv) {
 		if (e.url && !e.url.startsWith('data:')) __ws.call('app.url.set', {sid:wv.getAttribute('data-sid'), id:appID, url:e.url, observed:true});
 		// Full-page navigation discards page JS — reset to normal mode
 		applyBrowserMode(appID, 'normal');
-		pageToolButtonState(appID, '');
+		// A drawing stays open over its picture until it is sent or cancelled.
+		if (pageToolState[appID] !== 'page') pageToolButtonState(appID, '');
 	});
 	wv.addEventListener('did-navigate-in-page', function(e) {
 		if (!e.isMainFrame) return;
@@ -1307,6 +1353,8 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 						delete ready[id];
 						delete queued[id];
 						delete browserModeState[id];
+						delete pageDrawStarts[id];
+						if (window.__libroPageDraw) window.__libroPageDraw.close(id);
 						delete pageToolState[id];
 						delete mobileViewState[id];
 						delete mobileViewportOrientation[id];
@@ -1327,6 +1375,8 @@ var cleanupObserver = new MutationObserver(function(mutations) {
 					delete ready[id];
 					delete queued[id];
 					delete browserModeState[id];
+					delete pageDrawStarts[id];
+					if (window.__libroPageDraw) window.__libroPageDraw.close(id);
 					delete pageToolState[id];
 					delete mobileViewState[id];
 					delete mobileViewportOrientation[id];
@@ -1376,6 +1426,7 @@ function whenPageToolIdle(wv, navigate) {
 		if (frozen !== true) navigate();
 		else if (window.__libroShowToast) window.__libroShowToast('Annotation in progress', 'Send or cancel it first.', 'info');
 	}
+	if (pageToolState[currentAppID(wv)] === 'page') { go(true); return; }
 	setTimeout(go, 1000);
 	try {
 		Promise.resolve(wv.executeJavaScript('!!(window.__libroPageToolFrozen && window.__libroPageToolFrozen())')).then(go, go);

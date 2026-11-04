@@ -255,19 +255,7 @@ process.stdin.on('end', async () => {
   await context.receivePageToolMessage('app', 'selection', JSON.stringify(elementPayload));
   for (const text of [elementPayload.url, elementPayload.request, elementPayload.element.selector, elementPayload.screenshot]) assert.ok(sent.includes(text));
   for (const text of ['unwanted', 'Outer HTML', 'Attributes:', 'Viewport rectangle', '- Tag:', '- ID:', '- Classes:']) assert.ok(!sent.includes(text));
-  const pagePayload = {kind: 'page', url: payload.url, request: 'Improve the whole page'};
-  sent = undefined;
-  await context.receivePageToolMessage('app', 'selection', JSON.stringify(pagePayload));
-  assert.equal(sent, undefined, 'whole page annotation requires its screenshot');
-  context.window.libroElectron.capturePageArea = async (id, area) => {
-    assert.equal(id, 7); assert.equal(area.fullPage, true); return 'data:image/png;base64,cGFnZQ==';
-  };
-  await context.receivePageToolMessage('app', 'capture-area', JSON.stringify(pagePayload));
-  assert.ok(opened.includes('/tmp/page.png'));
-  pagePayload.screenshot = '/tmp/page.png';
-  await context.receivePageToolMessage('app', 'selection', JSON.stringify(pagePayload));
-  for (const text of [pagePayload.url, pagePayload.request, pagePayload.screenshot, 'Whole-page screenshot:']) assert.ok(sent.includes(text));
-  assert.ok(!sent.includes('Target element path:'));
+  const pagePayload = {...payload};
   pagePayload.images = ['data:image/png;base64,example'];
   context.window.libroElectron.savePageToolImages = async (id, images) => {
     assert.equal(id, 7); assert.equal(images.length, 1); return ['data:image/png;base64,cGFzdGVk'];

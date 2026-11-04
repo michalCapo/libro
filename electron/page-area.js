@@ -1,6 +1,10 @@
 async function capturePageArea(target, area) {
   let png
-  if (area?.fullPage === true) {
+  if (area?.viewport === true) {
+    const image = await target.capturePage()
+    if (image.isEmpty()) throw new Error('The page picture is empty')
+    png = image.toPNG()
+  } else if (area?.fullPage === true) {
     const ownsDebugger = !target.debugger.isAttached()
     if (ownsDebugger) target.debugger.attach('1.3')
     try {

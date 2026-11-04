@@ -20,7 +20,7 @@ app.whenReady().then(async () => {
       const frame = getComputedStyle(document.querySelector('iframe')).pointerEvents + getComputedStyle(host.shadowRoot.querySelector('iframe')).pointerEvents;
       document.body.dispatchEvent(new KeyboardEvent('keydown', {key:'x',bubbles:true,cancelable:true}));
       window.__libroSetPageToolMode('');
-      window.__libroPageToolPromptOpen({kind:'page',screenshot:'/tmp/a.png'},'http://example.test');
+      window.__libroPageToolPromptOpen({kind:'area',area:{x:0,y:0,width:50,height:50},screenshot:'/tmp/a.png'},'http://example.test');
       const panel = document.querySelector('[popover]');
       const input = panel.shadowRoot.querySelector('textarea');
       let sent;
@@ -32,7 +32,7 @@ app.whenReady().then(async () => {
       console.log = originalLog;
       input.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',code:'Escape',bubbles:true,cancelable:true,composed:true}));
       document.body.dispatchEvent(new KeyboardEvent('keyup', {key:'Escape',code:'Escape',bubbles:true}));
-      window.__libroPageToolPromptOpen({kind:'page',screenshot:'/tmp/a.png'},'http://example.test');
+      window.__libroPageToolPromptOpen({kind:'area',area:{x:0,y:0,width:50,height:50},screenshot:'/tmp/a.png'},'http://example.test');
       document.querySelector('[popover]').remove();
       document.body.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true}));
       return {frame, sent, seen: pageSeen.splice(0), detachedReleased: getComputedStyle(document.querySelector('iframe')).pointerEvents === 'auto'};
@@ -51,7 +51,7 @@ app.whenReady().then(async () => {
         window.__libroPageToolPromptOpen(payload, 'http://example.test');
         resolve(!document.querySelector('[popover]'));
       };
-      window.__libroSetPageToolMode('page');
+      const drag = () => { window.__libroSetPageToolMode('area'); for (const [type, x] of [['pointerdown', 10], ['pointermove', 60], ['pointerup', 60]]) document.body.dispatchEvent(new PointerEvent(type, {bubbles:true,button:0,clientX:x,clientY:x,pointerId:1})); }; drag();
     })`);
     assert.equal(stale, true, 'a cancelled capture does not reopen its prompt');
     for (const modal of [false,true]) {
@@ -121,23 +121,24 @@ app.whenReady().then(async () => {
           resolve({payload:JSON.parse(message.slice('__libro:page-tool:capture-area:'.length)), clean:!document.querySelector('[popover]')});
         } else originalLog.apply(console, arguments);
       };
-      window.__libroSetPageToolMode('page');
+      const drag = () => { window.__libroSetPageToolMode('area'); for (const [type, x] of [['pointerdown', 10], ['pointermove', 60], ['pointerup', 60]]) document.body.dispatchEvent(new PointerEvent(type, {bubbles:true,button:0,clientX:x,clientY:x,pointerId:1})); }; drag();
     })`);
-    assert.equal(pageSelection.payload.kind, 'page');
+    assert.equal(pageSelection.payload.kind, 'area');
     assert.equal(pageSelection.clean, true);
+    const scrolled = await win.webContents.executeJavaScript('scrollY');
     const filename = await require('./page-area').capturePageArea(win.webContents, {fullPage:true});
     {
       const image = require('electron').nativeImage.createFromDataURL(filename);
       assert.ok(image.getSize().height >= 1800, 'captures content below the viewport');
       const result = await win.webContents.executeJavaScript(`(() => {
-        window.__libroPageToolPromptOpen({kind:'page',screenshot:${JSON.stringify(filename)}},'http://example.test');
+        window.__libroPageToolPromptOpen({kind:'area',area:{x:0,y:0,width:50,height:50},screenshot:${JSON.stringify(filename)}},'http://example.test');
         const panel = document.querySelector('[popover]');
         return {label:panel.getAttribute('aria-label'), title:panel.shadowRoot.querySelector('.header span').textContent, focused:panel.shadowRoot.activeElement === panel.shadowRoot.querySelector('textarea'), scroll:scrollY};
       })()`);
-      assert.equal(result.label, 'Describe whole page');
-      assert.equal(result.title, 'Describe this page');
+      assert.equal(result.label, 'Describe selected page area');
+      assert.equal(result.title, 'Describe this page area');
       assert.equal(result.focused, true);
-      assert.equal(result.scroll, 300, 'capture preserves scroll position');
+      assert.equal(result.scroll, scrolled, 'capture preserves scroll position');
       const pasted = await win.webContents.executeJavaScript(`(async () => {
         const panel = document.querySelector('[popover]');
         const input = panel.shadowRoot.querySelector('textarea');
@@ -177,7 +178,7 @@ app.whenReady().then(async () => {
         return {selection, closed:!panel.isConnected, wraps, multiline:input.rows === 3};
       })()`);
       assert.equal(prompt.selection.request, 'First line\nSecond line');
-      assert.equal(prompt.selection.kind, 'page');
+      assert.equal(prompt.selection.kind, 'area');
       assert.equal(prompt.selection.images.length, 1);
       const saved = require('./page-area').pageToolImages(prompt.selection.images);
       assert.equal(require('electron').nativeImage.createFromDataURL(saved[0]).getSize().width, 20);
