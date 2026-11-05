@@ -19,8 +19,8 @@ const threadHelp = `Describe your own Libro thread in the sidebar, or finish it:
 Use this tool whenever the user asks to merge, squash, finish, close or discard this thread. Do not run git merge,
 git worktree remove or git branch -D yourself for that; Libro also closes the thread's panels and updates the sidebar.
 CLI: libro thread '<JSON command>'; MCP: thread with the same fields.
-Actions: preview (base), close, merge (base, sourceHead, targetHead, keepOpen), squash (base, sourceHead, targetHead,
-message, keepOpen), cleanup (sourceHead), discard (sourceHead), describe (description).
+Actions: preview (base), close, merge (base, sourceHead, targetHead), squash (base, sourceHead, targetHead, message),
+discard (sourceHead), describe (description).
 Describe sets the sidebar line for this conversation: what the work is, at most 60 characters. It replaces the title
 the agent CLI generated. Only the thread's first agent can set it. QA child threads keep the name their parent chose.
 Text the user typed in the sidebar stays; describe then changes nothing.
@@ -31,17 +31,18 @@ To merge or squash:
    Base defaults to the branch the thread was created from. Pass base only when the user names another branch.
 3. If blocker is set, fix it or report it to the user. Then call merge or squash with the sourceHead and
    targetHead from the latest preview. Merge is the default when the user does not say squash.
-To keep working after the merge, for example to push, install or release from the destination, pass keepOpen: true.
-The thread and this agent stay open, and the result names the destination checkout (targetPath). Work there, then
-call preview and cleanup with its sourceHead to remove the thread. Cleanup refuses a thread with commits made after
-that merge; merge again first.
+4. The thread and this agent stay open, and the result names the destination checkout (targetPath). To push, install
+   or release, work there. New commits in this thread need another merge. Preview reports mergedBase when the current
+   commit is already merged into that branch.
+5. Do not close or remove the thread afterwards; the user does that. End your last message with what was done and
+   that the user can remove this thread.
+Close or discard only when the user asks for exactly that.
 To discard, do not commit. Call preview, then discard with its sourceHead. The blocker does not apply to discard.
 Discard deletes the worktree, its uncommitted changes and its unmerged commits. Use it only when the user asks to
 discard, delete or throw away the thread. On the project's own checkout, discard only drops uncommitted changes;
 commits stay.
-A successful merge or squash without keepOpen, cleanup or discard removes the thread and stops its panels, including
-this agent.
-Report what you are about to do before the final call. If a merge fails with conflicts, the thread stays open:
+Close and discard stop the thread's panels, including this agent, so report what you are about to do before the
+final call. If a merge fails with conflicts, the thread stays open:
 abort the unfinished merge in the destination checkout (git merge --abort, or git reset --merge after a squash),
 merge the destination branch into this thread, resolve the conflicts, commit, then preview and merge again.
 `
@@ -52,7 +53,8 @@ type threadCommand struct {
 	SourceHead string `json:"sourceHead,omitempty"`
 	TargetHead string `json:"targetHead,omitempty"`
 	Message    string `json:"message,omitempty"`
-	KeepOpen   bool   `json:"keepOpen,omitempty"`
+	// KeepOpen is ignored. Agents started with the older tool description still send it.
+	KeepOpen bool `json:"keepOpen,omitempty"`
 	// Description is the sidebar line set by the describe action.
 	Description string `json:"description,omitempty"`
 }
@@ -62,8 +64,7 @@ func threadTool() map[string]any {
 	for _, key := range []string{"base", "sourceHead", "targetHead", "message", "description"} {
 		properties[key] = map[string]any{"type": "string"}
 	}
-	properties["keepOpen"] = map[string]any{"type": "boolean"}
-	properties["action"] = map[string]any{"type": "string", "enum": []string{"preview", "close", "merge", "squash", "cleanup", "discard", "describe"}}
+	properties["action"] = map[string]any{"type": "string", "enum": []string{"preview", "close", "merge", "squash", "discard", "describe"}}
 	return map[string]any{"name": "thread", "description": threadHelp, "inputSchema": map[string]any{"type": "object", "properties": properties, "required": []string{"action"}, "additionalProperties": false}}
 }
 
@@ -222,11 +223,12 @@ func describeThreadByHand(sid, workspace, description string) r.Result {
 
 // controlThread finishes only the thread whose checkout is the caller's workspace.
 func controlThread(sid, scope string, args threadCommand) (r.Result, any, error) {
-	if !slices.Contains([]string{"preview", "close", "merge", "squash", "cleanup", "discard"}, args.Action) {
-		return r.Result{}, nil, errors.New("unknown thread action")
+	// Agents started with the older instructions still try to clean up after a merge.
+	if args.Action == "cleanup" {
+		return r.Result{}, nil, errors.New("agents cannot remove a merged thread; tell the user the work is done and they can remove this thread")
 	}
-	if args.KeepOpen && args.Action != "merge" && args.Action != "squash" {
-		return r.Result{}, nil, errors.New("keepOpen works only with merge and squash")
+	if !slices.Contains([]string{"preview", "close", "merge", "squash", "discard"}, args.Action) {
+		return r.Result{}, nil, errors.New("unknown thread action")
 	}
 	worktreeFinishMu.Lock()
 	defer worktreeFinishMu.Unlock()
@@ -254,16 +256,22 @@ func controlThread(sid, scope string, args threadCommand) (r.Result, any, error)
 		return js, map[string]string{"result": "Thread closed"}, nil
 	}
 	active := state.ActiveProject
-	js, warning, _, _, err := finishThread(sid, info, args.Action, args.SourceHead, args.TargetHead, args.Message, "", args.KeepOpen)
-	if args.KeepOpen {
-		if err != nil {
-			return js, nil, err
+	if args.Action == "merge" || args.Action == "squash" {
+		// Only the user removes a merged thread. Repeating a squash could conflict with later destination commits.
+		if info.MergedBase != info.Base {
+			if _, _, _, _, err := finishThread(sid, info, args.Action, args.SourceHead, args.TargetHead, args.Message, "", true); err != nil {
+				return r.Result{}, nil, err
+			}
 		}
-		done := "Thread " + map[string]string{"merge": "merged", "squash": "squashed"}[args.Action] + " into " + info.Base + "; it stays open"
 		// The agent keeps working and reports to the user, so no toast.
-		return r.Result{}, map[string]string{"result": done, "base": info.Base, "targetPath": info.TargetPath}, nil
+		return r.Result{}, map[string]string{
+			"result":     "Thread is in " + info.Base + " and stays open. Do not close or remove it. End your last message with what was done and that the user can remove this thread.",
+			"base":       info.Base,
+			"targetPath": info.TargetPath,
+		}, nil
 	}
-	done := map[string]string{"merge": "Thread merged", "squash": "Thread squashed", "cleanup": "Thread removed", "discard": "Thread discarded"}[args.Action]
+	js, warning, _, _, err := finishThread(sid, info, args.Action, args.SourceHead, args.TargetHead, args.Message, "", false)
+	done := "Thread discarded"
 	if info.Checkout {
 		done = "Changes discarded and thread closed"
 	}

@@ -45,6 +45,9 @@ type worktreeFinishPreview struct {
 	Parent     string   `json:"-"`
 	// Checkout marks a thread on the project's own checkout; it can only discard changes.
 	Checkout bool `json:"checkout"`
+	// MergedBase names the branch holding this clean thread's current commit after
+	// an agent merged it; nothing is lost by removing the thread. Otherwise empty.
+	MergedBase string `json:"mergedBase"`
 }
 
 func inspectFinishThread(state *AppState, name, base string) (worktreeFinishPreview, error) {
@@ -138,6 +141,7 @@ func inspectFinishThread(state *AppState, name, base string) (worktreeFinishPrev
 	if len(info.Summary) > 16000 {
 		info.Summary = info.Summary[:16000] + "\n…"
 	}
+	info.MergedBase, _ = checkThreadMerged(info)
 	if info.Dirty != "" {
 		info.Blocker = "Commit or stash this thread's changes before finishing."
 	} else if info.TargetPath == "" {
@@ -361,8 +365,8 @@ func registerFinishThreadActions(app *r.App) {
 
 // finishThread runs a reviewed finish. Conflict reports a failed local merge,
 // which leaves the thread open. The caller holds worktreeFinishMu.
-// KeepOpen merges without cleanup, so the agent can push and deliver from the
-// destination; cleanup later removes the thread if it is still that commit.
+// KeepOpen merges without cleanup, for agents: the user later removes the thread
+// with method cleanup, which works only while it is still that commit.
 func finishThread(sid string, info worktreeFinishPreview, method, sourceHead, targetHead, message, body string, keepOpen bool) (js r.Result, warning, url string, conflict bool, err error) {
 	if sourceHead != info.SourceHead || method != "discard" && method != "cleanup" && targetHead != info.TargetHead {
 		return js, "", "", false, fmt.Errorf("the branches changed; refresh the preview and review again")
@@ -378,17 +382,15 @@ func finishThread(sid string, info worktreeFinishPreview, method, sourceHead, ta
 		url, err = createFinishPR(info, message, body)
 		return js, "", url, false, err
 	}
-	// Records "<thread commit> <destination commit after the merge>".
-	mergedKey := "branch." + info.Branch + ".libro-merged"
 	if method == "cleanup" {
-		merged, _ := worktreeGit(info.Root, "config", "--get", mergedKey)
-		source, result, _ := strings.Cut(merged, " ")
-		// The merge result must still be in the destination, or the thread holds the only copy.
-		if source != info.SourceHead || result == "" || info.Base == "" {
-			return js, "", "", false, fmt.Errorf("cleanup needs a thread merged with keepOpen and no commits since; merge it again first")
+		if _, err := checkThreadMerged(info); err != nil {
+			return js, "", "", false, err
 		}
-		if _, err := worktreeGit(info.Root, "merge-base", "--is-ancestor", result, "refs/heads/"+info.Base); err != nil {
-			return js, "", "", false, fmt.Errorf("the merge is no longer in %s; merge the thread again first", info.Base)
+		// Git refuses to remove a locked worktree, so report it while the panels still run.
+		if locked, err := worktreeGit(info.Path, "rev-parse", "--path-format=absolute", "--git-path", "locked"); err == nil {
+			if _, err := os.Stat(locked); err == nil {
+				return js, "", "", false, fmt.Errorf("this worktree is locked; unlock it with git worktree unlock first")
+			}
 		}
 	} else if method != "discard" {
 		if err = integrateFinishThread(info, method, message); err != nil {
@@ -397,13 +399,39 @@ func finishThread(sid string, info worktreeFinishPreview, method, sourceHead, ta
 		if keepOpen {
 			var result string
 			if result, err = worktreeGit(info.TargetPath, "rev-parse", "HEAD"); err == nil {
-				_, err = worktreeGit(info.Root, "config", mergedKey, info.SourceHead+" "+result)
+				_, err = worktreeGit(info.Root, "config", threadMergedKey(info), info.SourceHead+" "+result+" "+info.Base)
 			}
 			return js, "", "", false, err
 		}
 	}
 	js, warning, err = cleanupFinishedThread(sid, info, method == "discard")
 	return js, warning, "", false, err
+}
+
+// threadMergedKey records "<thread commit> <destination commit after the merge> <destination branch>".
+func threadMergedKey(info worktreeFinishPreview) string {
+	return "branch." + info.Branch + ".libro-merged"
+}
+
+// checkThreadMerged returns the branch holding this thread's work, or why removing it could lose work.
+func checkThreadMerged(info worktreeFinishPreview) (string, error) {
+	merged, _ := worktreeGit(info.Root, "config", "--get", threadMergedKey(info))
+	fields := strings.Fields(merged)
+	if len(fields) < 2 || fields[0] != info.SourceHead {
+		return "", fmt.Errorf("this thread has work that is not merged; merge it again first")
+	}
+	base := info.Base
+	if len(fields) > 2 {
+		base = fields[2]
+	}
+	if info.Dirty != "" {
+		return "", fmt.Errorf("this thread has uncommitted changes")
+	}
+	// The merge result must still be in the destination, or the thread holds the only copy.
+	if _, err := worktreeGit(info.Root, "merge-base", "--is-ancestor", fields[1], "refs/heads/"+base); err != nil {
+		return "", fmt.Errorf("the merge is no longer in %s; merge the thread again first", base)
+	}
+	return base, nil
 }
 
 func cleanupFinishedThread(sid string, info worktreeFinishPreview, discard bool) (r.Result, string, error) {

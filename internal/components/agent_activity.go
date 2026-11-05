@@ -36,10 +36,10 @@ Use the application managed by Libro for testing, following the application rule
 When finished, close only your session with agent-browser --session <name> close. If agent-browser is not installed, report that it is required for browser testing.
 
 When the user asks to merge, squash, finish, close or discard this thread, use the Libro thread tool (CLI: libro thread; see libro thread --help), not raw git merge or worktree commands. The user's request is the confirmation.
-Merge or squash: commit your work, call action preview, then merge or squash with the sourceHead and targetHead from that preview. Merge is the default.
-To keep working after a merge, for example to push, install or release from the destination branch, pass keepOpen: true. You keep running; work in the returned targetPath, then call preview and cleanup with its sourceHead to remove the thread.
-Close: call action close. It keeps files, branch and worktree. Discard: call preview, then discard with its sourceHead, without committing. Discard deletes work, so use it only when the user asks to discard, delete or throw away the thread.
-Merge or squash without keepOpen, cleanup, close and discard close the thread's panels, including this agent, so report what you are doing before the final call.
+Merge or squash: commit your work, call action preview, then merge or squash with the sourceHead and targetHead from that preview. Merge is the default. The thread and this agent stay open. To push, install or release afterwards, work in the returned targetPath.
+Never close or remove the thread after a merge, ship or install; the user does that. End your last message with what was done and that the user can remove this thread, for example "Code merged and installed. You can remove this thread."
+Close or discard only when the user asks for exactly that. Close: call action close. It keeps files, branch and worktree. Discard: call preview, then discard with its sourceHead, without committing. Discard deletes work.
+Close and discard close the thread's panels, including this agent, so report what you are doing before the final call.
 
 The Libro sidebar shows one line about this thread. Once you understand the task, after reading any link or file the user gave, call the Libro thread tool with action describe and a description of the work, at most 60 characters, in the user's language. Name the page or feature and the change, for example "Teams page: labels, counts, delete confirmation". Do not describe the link, the request or your progress. Call it again only when the task changes. If Libro says to try again, try once more shortly. If it refuses for another reason, carry on.
 

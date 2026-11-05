@@ -317,7 +317,17 @@ Agents can do the same with the `thread` tool on the `libro` MCP server, or
 `libro thread`. Ask the agent to merge, squash, close, or discard its thread.
 It previews first, then finishes with the reviewed commits. Close keeps files,
 branch, and worktree, like **Close thread**. The tool only acts on the agent's
-own thread, and every finishing action closes the thread, including the agent.
+own thread. Close and discard also close the agent.
+
+An agent's merge or squash never removes the thread. The merge lands in the
+destination branch, and the thread and its agent stay open. To push, install, or
+release, the agent works in the destination checkout. It ends by telling you that
+you can remove the thread. You can still ask it for more work and to merge again.
+
+To remove the thread, use **Discard thread…** or `Ctrl + Shift + Q`. While the
+thread has no uncommitted changes and no commits after that merge, and the merge
+is still in the destination branch, the dialog becomes **Remove merged thread**.
+Otherwise it stays a normal discard. **Close thread** keeps the worktree and branch.
 
 Agents also write the line under the thread's name with the `describe` action,
 once they know what the work is. That text stays until the agent changes it or a
@@ -325,16 +335,9 @@ new conversation starts, and the title the agent CLI generates is only a fallbac
 **Update description…** in the thread's menu sets that line by hand. Typed text
 stays until you change it, and clearing it hands the line back to the agent.
 
-To push, install, or release after a merge, the agent passes `keepOpen`. The
-merge lands in the destination branch, but the thread and its agent stay open.
-The agent works in the destination checkout, then calls `cleanup` to remove the
-thread. Cleanup refuses a thread with commits made after that merge.
-
 ```bash
 libro thread '{"action":"preview"}'
 libro thread '{"action":"merge","sourceHead":"<sourceHead>","targetHead":"<targetHead>"}'
-libro thread '{"action":"merge","sourceHead":"<sourceHead>","targetHead":"<targetHead>","keepOpen":true}'
-libro thread '{"action":"cleanup","sourceHead":"<sourceHead>"}'
 libro thread '{"action":"close"}'
 libro thread '{"action":"discard","sourceHead":"<sourceHead>"}'
 libro thread '{"action":"describe","description":"Teams page: labels, counts, delete confirmation"}'

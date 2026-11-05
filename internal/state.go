@@ -952,6 +952,17 @@ func (sm *StateManager) SwitchProject(sessionID, projectName string) bool {
 	return true
 }
 
+// sharesApp reports whether a panel can follow the user between two workspaces.
+func (s *AppState) sharesApp(app Application, workspace, target string) bool {
+	if !isSharedProjectApp(app) {
+		return false
+	}
+	if app.PluginID == "project-command" {
+		return applicationRoot(s, workspace) == applicationRoot(s, target)
+	}
+	return s.projectScope(workspace) == s.projectScope(target)
+}
+
 // MoveSharedProjectApps moves project-level panels into another workspace for
 // the same project. Agent, browser, and other tool panels stay with the thread.
 func (sm *StateManager) MoveSharedProjectApps(sessionID, target string) []Application {
@@ -962,8 +973,7 @@ func (sm *StateManager) MoveSharedProjectApps(sessionID, target string) []Applic
 	if s == nil || target == s.ActiveProject {
 		return nil
 	}
-	targetProject := s.projectScope(target)
-	if targetProject == "" {
+	if s.projectScope(target) == "" {
 		return nil
 	}
 	if s.snapshots == nil {
@@ -992,11 +1002,7 @@ func (sm *StateManager) MoveSharedProjectApps(sessionID, target string) []Applic
 		}
 		kept := make([]Application, 0, len(*apps))
 		for _, app := range *apps {
-			sameProject := s.projectScope(workspace) == targetProject
-			if app.PluginID == "project-command" {
-				sameProject = applicationRoot(s, workspace) == applicationRoot(s, target)
-			}
-			if sameProject && isSharedProjectApp(app) && !existing[sharedKey(app)] {
+			if s.sharesApp(app, workspace, target) && !existing[sharedKey(app)] {
 				moved = append(moved, app)
 				targetSnapshot.Apps = append(targetSnapshot.Apps, app)
 				existing[sharedKey(app)] = true

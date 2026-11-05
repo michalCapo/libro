@@ -1666,14 +1666,25 @@ func closeWorkspace(sid, name string) (r.Result, error) {
 	if name == "" {
 		name = state.ActiveProject
 	}
-	active := name == state.ActiveProject
+	viewing := state.ActiveProject
 	target := ""
-	if active {
+	if name == viewing {
 		target = state.adjacentProjectThread()
 	}
+	// Shared panels outlive the thread, so they move out before its panels stop.
+	moved := r.Result{}
+	home := state.projectScope(name)
+	if home == name {
+		home = state.parentProjectScope(name)
+	}
+	if home != "" && home != name && workspaceSharesApp(sid, name, home) {
+		// Through the thread, because shared panels cannot move into the active workspace.
+		moved = r.Merge(switchToProjectName(sid, name), switchToProjectName(sid, home))
+	}
+	active := name == sm.Get(sid).ActiveProject
 	apps, err := sm.CloseProject(sid, name)
 	if err != nil {
-		return r.Result{}, err
+		return moved, err
 	}
 	for _, a := range apps {
 		if a.Type == AppTypeTerminal {
@@ -1691,9 +1702,22 @@ func closeWorkspace(sid, name string) (r.Result, error) {
 			resp = resp.Add(removeAppJS(a.ID))
 		}
 	}
-	response := resp.Add(projectsJS(state))
+	response := r.Merge(moved, resp.Add(projectsJS(state)))
 	if target != "" {
 		response = r.Merge(response, switchToProjectName(sid, target))
+	} else if name != viewing && state.ActiveProject != viewing {
+		// Keep the user on the workspace they were viewing.
+		response = r.Merge(response, switchToProjectName(sid, viewing))
 	}
 	return response, nil
+}
+
+func workspaceSharesApp(sid, name, target string) bool {
+	state := sm.Get(sid)
+	for _, workspace := range sm.GetAllRunningApps(sid) {
+		if workspace.Name == name && slices.ContainsFunc(workspace.Apps, func(app Application) bool { return state.sharesApp(app, name, target) }) {
+			return true
+		}
+	}
+	return false
 }

@@ -102,6 +102,20 @@ test('discard with nothing to lose runs without showing the dialog', () => {
   }
 })
 
+test('removing a merged thread asks first and never force discards', () => {
+  const h = harness(true)
+  h.preview({mergedBase:'main', summary:''})
+  assert.equal(h.dialog.open, true)
+  assert.equal(h.calls.at(-1).action, 'thread.finish.preview')
+  assert.equal(h.button('Remove thread').disabled, false)
+  h.form.onsubmit({preventDefault(){}})
+  assert.equal(h.calls.at(-1).data.method, 'cleanup')
+  // The agent committed meanwhile: Enter must not now discard that work.
+  vm.runInContext(`finishThreadResult('repo/feature', {error:'Branch changed'})`, h.context)
+  h.preview({mergedBase:'', summary:'1 file changed'})
+  assert.equal(h.button('Discard and remove thread').disabled, true)
+})
+
 test('failed finish automatically reloads its preview before retry', () => {
   const h = harness()
   h.preview()

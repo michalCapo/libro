@@ -419,14 +419,18 @@
     const state = {name, dialog, form, base, method, summary, status, submit, cancel, info:null, busy:false, request:'', discard, checkout:!!checkout, quick:discard}; finishDialog = state;
     function update() {
       const pr = !discard && method === 'pr';
+      // An agent merged this thread, so removing it loses no commits and is not a discard.
+      const merged = discard && !!state.info?.mergedBase;
+      if (discard) title.textContent = merged ? 'Remove merged thread' : 'Discard thread';
+      submit.classList.toggle('ws-launch-danger', discard && !merged);
       base.hidden = baseLabel.hidden = discard;
       message.hidden = messageLabel.hidden = discard || method === 'merge'; messageLabel.textContent = pr ? 'Pull request title' : 'Commit message';
       body.hidden = bodyLabel.hidden = !pr;
-      note.textContent = pr ? 'Pushes this branch to origin and creates a draft PR using GitHub CLI. The thread and worktree stay open.' : checkout ? 'Permanently deletes uncommitted changes and new files in this folder. Stops its processes and closes the thread. The branch, its commits and ignored files stay.' : discard ? 'Permanently deletes this thread, its branch, and its worktree folder, including uncommitted and ignored files. Stops its processes. Shared applications stay running.' : 'After a successful merge, stops this thread’s processes and removes the thread, its branch, and its worktree folder, including ignored files. Shared applications stay running. Conflicts keep the thread open.';
+      note.textContent = merged ? 'Removes this thread, its branch, and its worktree folder, including ignored files. Stops its processes. Shared applications stay running.' : pr ? 'Pushes this branch to origin and creates a draft PR using GitHub CLI. The thread and worktree stay open.' : checkout ? 'Permanently deletes uncommitted changes and new files in this folder. Stops its processes and closes the thread. The branch, its commits and ignored files stay.' : discard ? 'Permanently deletes this thread, its branch, and its worktree folder, including uncommitted and ignored files. Stops its processes. Shared applications stay running.' : 'After a successful merge, stops this thread’s processes and removes the thread, its branch, and its worktree folder, including ignored files. Shared applications stay running. Conflicts keep the thread open.';
       const info = state.info;
-      const blocker = !info ? 'Loading changes…' : discard ? '' : pr ? (info.dirty ? 'Commit or stash this thread’s changes first.' : !info.targetHead ? 'Choose a destination branch.' : '') : info.blocker;
+      const blocker = !info ? 'Loading changes…' : discard ? (state.wasMerged && !merged ? 'This thread changed, so removing it could lose work. Cancel and open Discard thread again to review it.' : '') : pr ? (info.dirty ? 'Commit or stash this thread’s changes first.' : !info.targetHead ? 'Choose a destination branch.' : '') : info.blocker;
       status.textContent = [state.error, blocker].filter(Boolean).join(" ");
-      submit.textContent = discard ? discardLabel : pr ? 'Push branch and create draft PR' : method === 'squash' ? 'Squash and remove thread' : 'Merge and remove thread';
+      submit.textContent = merged ? 'Remove thread' : discard ? discardLabel : pr ? 'Push branch and create draft PR' : method === 'squash' ? 'Squash and remove thread' : 'Merge and remove thread';
       submit.disabled = state.busy || !info || !!blocker || (pr && !message.value.trim());
       // The action takes focus once the changes load, unless a text field has it.
       if (!submit.disabled && !state.focused && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) { state.focused = true; submit.focus(); }
@@ -451,7 +455,7 @@
       const info = state.info;
       form.querySelectorAll('input,select,textarea,button').forEach(control => { control.disabled = true; });
       status.textContent = checkout ? 'Discarding changes…' : discard ? 'Removing thread…' : method === 'pr' ? 'Pushing branch and creating draft PR…' : 'Merging and removing thread…';
-      call('thread.finish', {name, base:info.base, method:discard ? 'discard' : method, sourceHead:info.sourceHead, targetHead:info.targetHead, message:message.value, body:body.value});
+      call('thread.finish', {name, base:info.base, method:discard ? (info.mergedBase ? 'cleanup' : 'discard') : method, sourceHead:info.sourceHead, targetHead:info.targetHead, message:message.value, body:body.value});
     };
     dialogKeys(dialog, form, submit, cancel);
     if (!discard) show();
@@ -461,8 +465,10 @@
     const state = finishDialog; if (!state || state.request !== request || state.busy) return;
     if (reply.error) { state.status.textContent = reply.error; state.summary.textContent = ''; state.show(); return; }
     state.info = reply.info;
+    // A refused removal must never turn Enter into a discard of the new work.
+    if (reply.info.mergedBase) state.wasMerged = true;
     // Nothing would be lost: no uncommitted files and, for a worktree, no commits beyond its destination.
-    if (state.quick && !reply.info.dirty && (state.checkout || (reply.info.targetHead && !reply.info.summary))) {
+    if (state.quick && !reply.info.mergedBase && !reply.info.dirty && (state.checkout || (reply.info.targetHead && !reply.info.summary))) {
       state.quick = false; state.update(); state.form.requestSubmit(); return;
     }
     state.quick = false; state.show();
@@ -470,7 +476,7 @@
     const placeholder = node('option', '', 'Choose a destination…'); placeholder.value = ''; state.base.append(placeholder);
     (reply.info.branches || []).forEach(branch => { const option = node('option', '', branch); option.value = branch; state.base.append(option); });
     state.base.value = reply.info.base;
-    state.summary.textContent = state.discard ? (reply.info.dirty || (state.checkout ? 'No uncommitted changes.' : 'No uncommitted changes. Committed work will not be merged.')) : (reply.info.summary || 'No commits to merge.');
+    state.summary.textContent = reply.info.mergedBase && state.discard ? 'All commits are already in ' + reply.info.mergedBase + '.' : state.discard ? (reply.info.dirty || (state.checkout ? 'No uncommitted changes.' : 'No uncommitted changes. Committed work will not be merged.')) : (reply.info.summary || 'No commits to merge.');
     state.update();
   }
   function finishThreadResult(name, reply) {
@@ -551,7 +557,7 @@
       {label:'Create draft PR…', icon:'open_in_new', run:() => finishThread(name, false, 'pr')},
       {label:'Thread settings', icon:'settings', run:() => projectSettings(name)},
       {label:'Rename project…', icon:'edit', run:() => renameProject(project.name)},
-      {label:'Discard thread…', icon:'delete_outline', run:() => finishThread(name, true), danger:true},
+      {label:'Discard thread…', icon:'delete_outline', description:'Delete the thread; shows Remove instead when it is already merged', run:() => finishThread(name, true), danger:true},
     ];
   }
   // Agent threads are not projects; they get the actions that need no project.
