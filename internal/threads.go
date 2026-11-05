@@ -93,6 +93,38 @@ func (s *AppState) workspaceAgent(workspace, appID string) bool {
 	return id != "" && (appID == "" || appID == id)
 }
 
+// primaryAgentSession is the conversation that owns the workspace's description.
+// A thread's panel has no session of its own until a resumed agent reports it.
+func (s *AppState) primaryAgentSession(workspace string) string {
+	// Session reports arrive from terminal goroutines.
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	apps := s.workspaceApps(workspace)
+	index := slices.IndexFunc(apps, isAgentApp)
+	if index < 0 {
+		return ""
+	}
+	if apps[index].SessionID != "" {
+		return apps[index].SessionID
+	}
+	if thread := s.thread(workspace); thread != nil {
+		return thread.SessionID
+	}
+	return ""
+}
+
+// workspaceDescription tells whether the saved description belongs to the current
+// conversation, which generated titles and their replays must not replace, or to
+// an earlier one, which any title replaces. id is the threadDescriptionKey ID.
+func (s *AppState) workspaceDescription(workspace, id string) (current, stale bool) {
+	owner := threadDescriptionSession(id)
+	session := s.primaryAgentSession(workspace)
+	if owner == "" || session == "" {
+		return false, false
+	}
+	return owner == session, owner != session
+}
+
 // Empty checkouts must not display a description left by an earlier agent.
 func (s *AppState) workspaceTitle(workspace, path string) string {
 	if !s.workspaceAgent(workspace, "") {
@@ -241,61 +273,77 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string, stri
 		return response, nil
 	})
 	registerWorkspaceAction(app, "thread.rename", func(_ *r.Context, in actionThreadRenameInput) (r.Result, error) {
-		sid := inputSID(in.SID)
-		id := in.ID
-		name := strings.TrimSpace(in.Name)
-		if runes := []rune(name); len(runes) > 200 {
-			name = string(runes[:200])
-		}
-		state := sm.Get(sid)
-		thread := state.thread(id)
-		// Child threads keep the name their parent chose. A first prompt only
-		// names a new thread, so a resumed session keeps its saved description.
-		if in.AppID == "" || !state.workspaceAgent(id, in.AppID) || thread == nil || thread.Managed || in.Fallback && thread.Name != "New thread" {
-			return r.Result{}, nil
-		}
-		// A new agent session has no description yet.
-		if name == "" {
-			name = "New thread"
-		}
-		// Agent titles arrive on every status change; skip unchanged names.
-		if thread.Name == name {
-			return r.Result{}, nil
-		}
-		if _, err := db.Exec("UPDATE threads SET name = ? WHERE id = ?", name, id); err != nil {
-			return r.Result{}, nil
-		}
-		sm.mu.Lock()
-		thread.Name = name
-		sm.mu.Unlock()
-		return projectsJS(state), nil
+		return applyThreadTitle(sm.Get(inputSID(in.SID)), in), nil
 	})
 	registerWorkspaceAction(app, "worktree.title", func(_ *r.Context, in actionWorktreeTitleInput) (r.Result, error) {
-		sid := inputSID(in.SID)
-		name := strings.TrimSpace(in.Name)
-		if runes := []rune(name); len(runes) > 200 {
-			name = string(runes[:200])
-		}
-		state := sm.Get(sid)
-		if in.AppID == "" || !state.workspaceAgent(in.Project, in.AppID) {
-			return r.Result{}, nil
-		}
-		// The project's base checkout is saved by path, the same as a worktree.
-		for _, p := range state.Projects {
-			if p.Name != in.Project {
-				continue
-			}
-			// Agent titles arrive on every status change; skip unchanged names.
-			// A first prompt never replaces a saved description, and an empty
-			// name clears the description of a previous agent session.
-			saved := worktreeTitle(p.Path)
-			if saved == name || in.Fallback && saved != "" || saveWorktreeTitle(p.Path, name) != nil {
-				return r.Result{}, nil
-			}
-			return projectsJS(state), nil
-		}
-		return r.Result{}, nil
+		return applyWorktreeTitle(sm.Get(inputSID(in.SID)), in), nil
 	})
+}
+
+// applyThreadTitle saves a title reported by a thread's agent CLI.
+func applyThreadTitle(state *AppState, in actionThreadRenameInput) r.Result {
+	id := in.ID
+	name := strings.TrimSpace(in.Name)
+	if runes := []rune(name); len(runes) > 200 {
+		name = string(runes[:200])
+	}
+	thread := state.thread(id)
+	// Child threads keep the name their parent chose.
+	if in.AppID == "" || !state.workspaceAgent(id, in.AppID) || thread == nil || thread.Managed {
+		return r.Result{}
+	}
+	current, stale := state.workspaceDescription(id, id)
+	// A first prompt only names a new thread, so a resumed session keeps its
+	// saved description.
+	if current || !stale && in.Fallback && thread.Name != "New thread" {
+		return r.Result{}
+	}
+	// A new agent session has no description yet.
+	if name == "" {
+		name = "New thread"
+	}
+	// Agent titles arrive on every status change; skip unchanged names.
+	if !stale && thread.Name == name {
+		return r.Result{}
+	}
+	if _, err := db.Exec("UPDATE threads SET name = ? WHERE id = ?", name, id); err != nil {
+		return r.Result{}
+	}
+	_ = saveThreadDescriptionSession(id, "")
+	sm.mu.Lock()
+	thread.Name = name
+	sm.mu.Unlock()
+	return projectsJS(state)
+}
+
+// applyWorktreeTitle saves a title reported by the agent CLI of a checkout or worktree.
+func applyWorktreeTitle(state *AppState, in actionWorktreeTitleInput) r.Result {
+	name := strings.TrimSpace(in.Name)
+	if runes := []rune(name); len(runes) > 200 {
+		name = string(runes[:200])
+	}
+	if in.AppID == "" || !state.workspaceAgent(in.Project, in.AppID) {
+		return r.Result{}
+	}
+	// The project's base checkout is saved by path, the same as a worktree.
+	for _, p := range state.Projects {
+		if p.Name != in.Project {
+			continue
+		}
+		current, stale := state.workspaceDescription(in.Project, applicationPath(p.Path))
+		if current {
+			return r.Result{}
+		}
+		// Agent titles arrive on every status change; skip unchanged names.
+		// A first prompt never replaces a saved description, and an empty
+		// name clears the description of a previous agent session.
+		saved := worktreeTitle(p.Path)
+		if !stale && (saved == name || in.Fallback && saved != "") || saveWorktreeTitle(p.Path, name) != nil {
+			return r.Result{}
+		}
+		return projectsJS(state)
+	}
+	return r.Result{}
 }
 
 // adjacentProjectThread prefers the previous open thread in the same project.
@@ -471,6 +519,7 @@ func (sm *StateManager) DiscardThread(sessionID, id string) error {
 	if _, err := db.Exec("DELETE FROM threads WHERE id = ?", id); err != nil {
 		return err
 	}
+	_ = saveThreadDescriptionSession(id, "")
 	s.Threads = slices.DeleteFunc(s.Threads, func(thread Thread) bool { return thread.ID == id })
 	delete(s.snapshots, id)
 	delete(s.renderedProjects, id)

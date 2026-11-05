@@ -41,6 +41,8 @@ To keep working after a merge, for example to push, install or release from the 
 Close: call action close. It keeps files, branch and worktree. Discard: call preview, then discard with its sourceHead, without committing. Discard deletes work, so use it only when the user asks to discard, delete or throw away the thread.
 Merge or squash without keepOpen, cleanup, close and discard close the thread's panels, including this agent, so report what you are doing before the final call.
 
+The Libro sidebar shows one line about this thread. Once you understand the task, after reading any link or file the user gave, call the Libro thread tool with action describe and a description of the work, at most 60 characters, in the user's language. Name the page or feature and the change, for example "Teams page: labels, counts, delete confirmation". Do not describe the link, the request or your progress. Call it again only when the task changes. If Libro says to try again, try once more shortly. If it refuses for another reason, carry on.
+
 After you change Git state (commit, push, pull, merge, rebase, branch changes), call the Libro repositories tool (CLI: libro repositories) so the Repositories panel shows current status.`
 
 // Launch-local integrations never modify the user's agent settings. Only a
@@ -87,7 +89,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 	libroMCP := map[string]any{"command": executable, "args": []string{"mcp"}}
 	a := &agentActivity{kind: kind}
 	if kind == "codex" {
-		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","session-id","thread-name","activity"]'` + " -c " + shellQuote("mcp_servers.libro.command="+string(executableJSON)) + " -c " + shellQuote(`mcp_servers.libro.args=["mcp"]`) + " -c " + shellQuote(`mcp_servers.libro.env_vars=["LIBRO_INSTANCE","LIBRO_PORT","LIBRO_APPLICATION_PATH"]`) + " -c " + shellQuote("developer_instructions="+string(instructionsJSON)) + parts[2]), a, nil
+		return agentExitCommand(parts[1] + ` -c 'tui.terminal_title=["run-state","session-id","thread-name","activity"]'` + " -c " + shellQuote("mcp_servers.libro.command="+string(executableJSON)) + " -c " + shellQuote(`mcp_servers.libro.args=["mcp"]`) + " -c " + shellQuote(`mcp_servers.libro.env_vars=["LIBRO_INSTANCE","LIBRO_PORT","LIBRO_APPLICATION_PATH","LIBRO_PANEL_ID"]`) + " -c " + shellQuote("developer_instructions="+string(instructionsJSON)) + parts[2]), a, nil
 	}
 	dir, err := os.MkdirTemp("", "libro-agent-")
 	if err != nil {
@@ -353,6 +355,14 @@ func (s *TerminalSession) updateAgentSession(id string) {
 	s.agentSessionID = id
 	if s.reportSession != nil {
 		s.reportSession(id)
+	}
+	// The old session's description refused titles until this report. Send the
+	// current state again so a title or clear it refused takes effect now.
+	s.mu.Lock()
+	title, fallback, known := s.agentTitle, s.titlePriority == 1, s.agentTitle != "" || s.titleCleared
+	s.mu.Unlock()
+	if known {
+		s.broadcast(terminalWSMessage{Type: "agent-title", Data: title, Fallback: fallback})
 	}
 }
 

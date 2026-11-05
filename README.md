@@ -319,6 +319,10 @@ It previews first, then finishes with the reviewed commits. Close keeps files,
 branch, and worktree, like **Close thread**. The tool only acts on the agent's
 own thread, and every finishing action closes the thread, including the agent.
 
+Agents also write the line under the thread's name with the `describe` action,
+once they know what the work is. That text stays until the agent changes it or a
+new conversation starts, and the title the agent CLI generates is only a fallback.
+
 To push, install, or release after a merge, the agent passes `keepOpen`. The
 merge lands in the destination branch, but the thread and its agent stay open.
 The agent works in the destination checkout, then calls `cleanup` to remove the
@@ -331,6 +335,7 @@ libro thread '{"action":"merge","sourceHead":"<sourceHead>","targetHead":"<targe
 libro thread '{"action":"cleanup","sourceHead":"<sourceHead>"}'
 libro thread '{"action":"close"}'
 libro thread '{"action":"discard","sourceHead":"<sourceHead>"}'
+libro thread '{"action":"describe","description":"Teams page: labels, counts, delete confirmation"}'
 ```
 
 ### Agent application control

@@ -175,6 +175,9 @@ func dispatchBackendCommand(sid string, command backendCommand) (r.Result, any, 
 	case "children":
 		return controlChildren(sid, command.Project, command.Command)
 	case "thread":
+		if command.Thread.Action == "describe" {
+			return describeThread(sid, command.Panel, command.Thread.Description)
+		}
 		return controlThread(sid, command.Project, command.Thread)
 	case "open":
 		return openFilePanel(sid, command.Panel, command.URL)

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"golang.org/x/net/websocket"
@@ -37,7 +38,7 @@ func TestAgentWindowTitles(t *testing.T) {
 			t.Errorf("%s %q = %q, want %q", tt.kind, tt.input, got, tt.want)
 		}
 	}
-	if got := cleanAgentTitle(strings.Repeat("ž", 250)); !utf8.ValidString(got) || len([]rune(got)) != 200 {
+	if got := CleanAgentTitle(strings.Repeat("ž", 250)); !utf8.ValidString(got) || len([]rune(got)) != 200 {
 		t.Fatal("title truncation corrupted Unicode")
 	}
 }
@@ -214,4 +215,67 @@ func TestTitleBeforeSessionIDIsKept(t *testing.T) {
 	if s.titlePriority != 1 {
 		t.Fatal("first prompt was promoted over a saved description")
 	}
+}
+
+// A description from the old session refuses titles until the new session is
+// reported, so the current title or clear is sent again after that report.
+func TestSessionReportResendsTitleState(t *testing.T) {
+	received := make(chan terminalWSMessage, 8)
+	session := &TerminalSession{activity: &agentActivity{kind: "codex"}, clients: make(map[*terminalClient]bool)}
+	ready := make(chan struct{})
+	server := httptest.NewServer(websocket.Handler(func(conn *websocket.Conn) {
+		client := &terminalClient{conn: conn}
+		session.mu.Lock()
+		session.clients[client] = true
+		session.mu.Unlock()
+		close(ready)
+		var unused string
+		_ = websocket.Message.Receive(conn, &unused)
+	}))
+	defer server.Close()
+	conn, err := websocket.Dial("ws"+strings.TrimPrefix(server.URL, "http"), "", server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	go func() {
+		for {
+			var msg terminalWSMessage
+			if websocket.JSON.Receive(conn, &msg) != nil {
+				return
+			}
+			received <- msg
+		}
+	}()
+	<-ready
+	var reported string
+	session.reportSession = func(id string) { reported = id }
+	next := func(want string) {
+		t.Helper()
+		select {
+		case msg := <-received:
+			if msg.Type != "agent-title" || msg.Data != want {
+				t.Fatalf("message = %+v, want title %q", msg, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no title message, want %q", want)
+		}
+	}
+	session.setAgentStatus("session:one")
+	session.setAgentStatus("title:Old")
+	next("Old")
+	// /clear: the title clears, then clears again after the report.
+	session.setAgentStatus("session:two")
+	next("")
+	next("")
+	if reported != "two" {
+		t.Fatalf("reported = %q", reported)
+	}
+	// Codex /new: the title arrives before the full session ID.
+	session.setAgentStatus("session:")
+	next("")
+	session.setAgentStatus("title:New")
+	next("New")
+	session.setAgentStatus("session:three")
+	next("New")
 }

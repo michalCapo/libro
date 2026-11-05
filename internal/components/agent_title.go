@@ -15,7 +15,7 @@ var codexTitleState = regexp.MustCompile(`^(Working|Thinking|Waiting|Ready|Start
 // Codex also uses an abbreviated UUID (ending in "...") as its unnamed topic.
 var sessionUUID = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f.-]+(?:…)?(?:\s|$)`)
 
-func cleanAgentTitle(title string) string {
+func CleanAgentTitle(title string) string {
 	title = strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
 			return ' '
@@ -65,13 +65,13 @@ func agentWindowTitle(kind, title string) string {
 	default:
 		return ""
 	}
-	return cleanAgentTitle(title)
+	return CleanAgentTitle(title)
 }
 
 // setAgentTitle requires agentMu. A first prompt is a fallback (1); agent names
 // (2) and Codex's saved name (3) may replace it. Follow-up prompts may not.
 func (s *TerminalSession) setAgentTitle(title string, priority int) {
-	title = cleanAgentTitle(title)
+	title = CleanAgentTitle(title)
 	if title == "" {
 		return
 	}
@@ -159,13 +159,13 @@ func codexThreadTitle(home, hint string) (string, string, int) {
 	// Older Codex databases do not have the separate user-assigned name column.
 	_ = db.QueryRow(`SELECT COALESCE(name, '') FROM threads WHERE id = ?`, id).Scan(&name)
 	_ = db.QueryRow(`SELECT title, first_user_message FROM threads WHERE id = ?`, id).Scan(&title, &prompt)
-	if name = cleanAgentTitle(name); name != "" {
+	if name = CleanAgentTitle(name); name != "" {
 		return id, name, 3
 	}
-	if title = cleanAgentTitle(title); title != "" {
+	if title = CleanAgentTitle(title); title != "" {
 		return id, title, 1
 	}
-	return id, cleanAgentTitle(prompt), 1
+	return id, CleanAgentTitle(prompt), 1
 }
 
 // Read only the beginning of the exact transcript supplied by Claude's hook.
@@ -200,7 +200,7 @@ func claudeFirstPrompt(path string) string {
 				}
 			}
 		}
-		if title := cleanAgentTitle(text); title != "" && !strings.HasPrefix(title, "<") {
+		if title := CleanAgentTitle(text); title != "" && !strings.HasPrefix(title, "<") {
 			return title
 		}
 	}

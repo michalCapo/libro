@@ -81,7 +81,7 @@ func hydrateApp(sid, appID string, openURL bool) r.Result {
 	if panel.Type == AppTypeTerminal && !panel.TerminalReady {
 		var environment []string
 		if isAgentApp(panel) {
-			environment = append(agentEnvironmentList(), "LIBRO_APPLICATION_PATH="+pwd)
+			environment = append(agentEnvironmentList(), "LIBRO_APPLICATION_PATH="+pwd, "LIBRO_PANEL_ID="+panel.ID)
 		}
 		command, reportSession := agentLaunchInWorkspace(sid, workspace, panel)
 		session, err := tm.StartWithSessionReporter(generation, panel.ID, command, pwd, panel.Writable, environment, reportSession)
@@ -983,7 +983,7 @@ func Run(assets embed.FS, desktop bool) error {
 		pwd := sm.GetActiveProjectPath(sid)
 		var environment []string
 		if isAgentApp(*term) {
-			environment = append(agentEnvironmentList(), "LIBRO_APPLICATION_PATH="+pwd)
+			environment = append(agentEnvironmentList(), "LIBRO_APPLICATION_PATH="+pwd, "LIBRO_PANEL_ID="+term.ID)
 		}
 		// Stopping saves the final session ID, which the resume command needs.
 		tm.Stop(term.ID)

@@ -566,6 +566,18 @@ func (tm *TerminalManager) Resume() {
 }
 
 // IsRunning reports whether a terminal still has a live process session.
+// AgentSession returns the session a running terminal's agent reports now. It is
+// empty between sessions, when the panel still holds the previous session's ID.
+func (tm *TerminalManager) AgentSession(id string) (string, bool) {
+	s := tm.session(id)
+	if s == nil {
+		return "", false
+	}
+	s.agentMu.Lock()
+	defer s.agentMu.Unlock()
+	return s.agentSessionID, true
+}
+
 func (tm *TerminalManager) IsRunning(id string) bool {
 	s := tm.session(id)
 	return s != nil && !s.isClosed()

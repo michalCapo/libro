@@ -9,15 +9,19 @@ import (
 	"os"
 	"slices"
 
+	"libro/internal/components"
+
 	r "github.com/michalCapo/g-sui/ui"
 )
 
-const threadHelp = `Finish your own Libro thread: merge or squash it into its destination branch, close it, or discard it.
+const threadHelp = `Describe your own Libro thread in the sidebar, or finish it: merge or squash it into its destination branch, close it, or discard it.
 Use this tool whenever the user asks to merge, squash, finish, close or discard this thread. Do not run git merge,
 git worktree remove or git branch -D yourself for that; Libro also closes the thread's panels and updates the sidebar.
 CLI: libro thread '<JSON command>'; MCP: thread with the same fields.
 Actions: preview (base), close, merge (base, sourceHead, targetHead, keepOpen), squash (base, sourceHead, targetHead,
-message, keepOpen), cleanup (sourceHead), discard (sourceHead).
+message, keepOpen), cleanup (sourceHead), discard (sourceHead), describe (description).
+Describe sets the sidebar line for this conversation: what the work is, at most 60 characters. It replaces the title
+the agent CLI generated. Only the thread's first agent can set it. QA child threads keep the name their parent chose.
 Close only closes the thread's panels, including this agent. Files, branch and worktree stay; the user can reopen it.
 To merge or squash:
 1. Commit your work first. Merge and squash need a clean thread.
@@ -47,15 +51,17 @@ type threadCommand struct {
 	TargetHead string `json:"targetHead,omitempty"`
 	Message    string `json:"message,omitempty"`
 	KeepOpen   bool   `json:"keepOpen,omitempty"`
+	// Description is the sidebar line set by the describe action.
+	Description string `json:"description,omitempty"`
 }
 
 func threadTool() map[string]any {
 	properties := map[string]any{}
-	for _, key := range []string{"base", "sourceHead", "targetHead", "message"} {
+	for _, key := range []string{"base", "sourceHead", "targetHead", "message", "description"} {
 		properties[key] = map[string]any{"type": "string"}
 	}
 	properties["keepOpen"] = map[string]any{"type": "boolean"}
-	properties["action"] = map[string]any{"type": "string", "enum": []string{"preview", "close", "merge", "squash", "cleanup", "discard"}}
+	properties["action"] = map[string]any{"type": "string", "enum": []string{"preview", "close", "merge", "squash", "cleanup", "discard", "describe"}}
 	return map[string]any{"name": "thread", "description": threadHelp, "inputSchema": map[string]any{"type": "object", "properties": properties, "required": []string{"action"}, "additionalProperties": false}}
 }
 
@@ -81,7 +87,7 @@ func scopedThreadCommand(command json.RawMessage, scope string) (json.RawMessage
 	if scope == "" {
 		return nil, errors.New("thread workspace binding unavailable")
 	}
-	payload, err := json.Marshal(map[string]any{"action": "thread", "project": scope, "thread": args})
+	payload, err := json.Marshal(map[string]any{"action": "thread", "project": scope, "thread": args, "panel": os.Getenv("LIBRO_PANEL_ID")})
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +107,60 @@ func RunThreadCLI(args []string, out io.Writer) error {
 	}
 	_, err = fmt.Fprintln(out, string(result))
 	return err
+}
+
+// describeThread sets the sidebar line of the workspace that owns the calling panel.
+func describeThread(sid, panel, description string) (r.Result, any, error) {
+	description = components.CleanAgentTitle(description)
+	if description == "" {
+		return r.Result{}, nil, errors.New("a description is required")
+	}
+	if panel == "" {
+		return r.Result{}, nil, errors.New("only an agent panel started by Libro can describe a thread")
+	}
+	_, workspace, _, found := sm.workspaceApp(sid, panel)
+	if !found {
+		return r.Result{}, nil, errors.New("this agent panel is no longer open")
+	}
+	state := sm.Get(sid)
+	if !state.workspaceAgent(workspace, panel) {
+		return r.Result{}, nil, errors.New("only the thread's first agent can describe it")
+	}
+	session := state.primaryAgentSession(workspace)
+	// After Codex /new the panel still holds the old session until the new ID resolves.
+	if current, running := tm.AgentSession(panel); running {
+		session = current
+	}
+	if session == "" {
+		return r.Result{}, nil, errors.New("this agent's session is not known yet; try again shortly")
+	}
+	thread := state.thread(workspace)
+	if thread != nil && thread.Managed {
+		return r.Result{}, nil, errors.New("a QA child thread keeps the name its parent chose")
+	}
+	if thread != nil {
+		if _, err := db.Exec("UPDATE threads SET name = ? WHERE id = ?", description, thread.ID); err != nil {
+			return r.Result{}, nil, err
+		}
+		if err := saveThreadDescriptionSession(thread.ID, session); err != nil {
+			return r.Result{}, nil, err
+		}
+		sm.mu.Lock()
+		thread.Name = description
+		sm.mu.Unlock()
+		return projectsJS(state), map[string]string{"result": "Description set"}, nil
+	}
+	_, path := threadProjectContext(state, workspace)
+	if path == "" {
+		return r.Result{}, nil, errors.New("this workspace has no sidebar description")
+	}
+	if err := saveWorktreeTitle(path, description); err != nil {
+		return r.Result{}, nil, err
+	}
+	if err := saveThreadDescriptionSession(applicationPath(path), session); err != nil {
+		return r.Result{}, nil, err
+	}
+	return projectsJS(state), map[string]string{"result": "Description set"}, nil
 }
 
 // controlThread finishes only the thread whose checkout is the caller's workspace.

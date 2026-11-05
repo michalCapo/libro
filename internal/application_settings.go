@@ -224,6 +224,37 @@ func worktreeTitle(path string) string {
 	return title
 }
 
+// An agent's description outranks the titles its CLI generates. This entry names
+// the session that wrote it, so a new conversation gets its own title again.
+// Threads are keyed by ID, checkouts and worktrees by path.
+func threadDescriptionKey(id string) string {
+	return "thread-description:" + id
+}
+
+func saveThreadDescriptionSession(id, session string) error {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	if db == nil {
+		return fmt.Errorf("settings database is unavailable")
+	}
+	if session == "" {
+		_, err := db.Exec(`DELETE FROM settings WHERE key = ?`, threadDescriptionKey(id))
+		return err
+	}
+	_, err := db.Exec(`INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, threadDescriptionKey(id), session)
+	return err
+}
+
+func threadDescriptionSession(id string) string {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	var session string
+	if db != nil {
+		_ = db.QueryRow(`SELECT value FROM settings WHERE key = ?`, threadDescriptionKey(id)).Scan(&session)
+	}
+	return session
+}
+
 func saveWorktreeTitle(path, title string) error {
 	dbMu.Lock()
 	defer dbMu.Unlock()
@@ -231,6 +262,10 @@ func saveWorktreeTitle(path, title string) error {
 		return fmt.Errorf("settings database is unavailable")
 	}
 	key := "thread-title:" + applicationPath(path)
+	// Any other title ends a description the agent wrote.
+	if _, err := db.Exec(`DELETE FROM settings WHERE key = ?`, threadDescriptionKey(applicationPath(path))); err != nil {
+		return err
+	}
 	if title == "" {
 		_, err := db.Exec(`DELETE FROM settings WHERE key = ?`, key)
 		return err
