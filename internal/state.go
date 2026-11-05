@@ -404,7 +404,7 @@ func (sm *StateManager) RemoveAppByID(sessionID, appID string) *Application {
 func (s *AppState) clearWorkspaceTitle(workspace string) {
 	if s.thread(workspace) == nil {
 		if _, path := threadProjectContext(s, workspace); path != "" {
-			_ = saveWorktreeTitle(path, "")
+			_ = clearAgentTitle(path)
 		}
 	}
 }

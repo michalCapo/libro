@@ -2,6 +2,7 @@ package libro
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -104,6 +105,17 @@ INSERT INTO threads VALUES (?, 'Existing task description', '')`, id); err != ni
 	t.Setenv("CODEX_HOME", t.TempDir())
 	if loadThreads()[0].Name != "Existing task description" || worktreeTitle(path) != "Existing task description" {
 		t.Fatal("recovered descriptions were not saved")
+	}
+	// Typed text stays, even when it looks like a session ID.
+	t.Setenv("CODEX_HOME", home)
+	if _, err := db.Exec(`UPDATE threads SET name = ? WHERE id = 'thread:test'`, hint); err != nil {
+		t.Fatal(err)
+	}
+	if err := errors.Join(saveThreadDescriptionSession("thread:test", handDescription), saveWorktreeTitle(path, hint), saveThreadDescriptionSession(applicationPath(path), handDescription)); err != nil {
+		t.Fatal(err)
+	}
+	if loadThreads()[0].Name != hint || worktreeTitle(path) != hint {
+		t.Fatal("typed text was replaced by a session title")
 	}
 }
 

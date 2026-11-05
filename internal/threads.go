@@ -49,7 +49,7 @@ func loadThreads() []Thread {
 	_ = rows.Close()
 	codexHome := agentEnvironment()["CODEX_HOME"]
 	for i := range threads {
-		if title := components.RecoverCodexTitle(threads[i].Name, codexHome); title != threads[i].Name {
+		if title := components.RecoverCodexTitle(threads[i].Name, codexHome); title != threads[i].Name && threadDescriptionSession(threads[i].ID) != handDescription {
 			threads[i].Name = title
 			_, _ = db.Exec("UPDATE threads SET name = ? WHERE id = ?", title, threads[i].ID)
 		}
@@ -114,10 +114,14 @@ func (s *AppState) primaryAgentSession(workspace string) string {
 }
 
 // workspaceDescription tells whether the saved description belongs to the current
-// conversation, which generated titles and their replays must not replace, or to
-// an earlier one, which any title replaces. id is the threadDescriptionKey ID.
+// conversation or the user, which generated titles and their replays must not
+// replace, or to an earlier conversation, which any title replaces. id is the
+// threadDescriptionKey ID.
 func (s *AppState) workspaceDescription(workspace, id string) (current, stale bool) {
 	owner := threadDescriptionSession(id)
+	if owner == handDescription {
+		return true, false
+	}
 	session := s.primaryAgentSession(workspace)
 	if owner == "" || session == "" {
 		return false, false
@@ -127,7 +131,7 @@ func (s *AppState) workspaceDescription(workspace, id string) (current, stale bo
 
 // Empty checkouts must not display a description left by an earlier agent.
 func (s *AppState) workspaceTitle(workspace, path string) string {
-	if !s.workspaceAgent(workspace, "") {
+	if !s.workspaceAgent(workspace, "") && threadDescriptionSession(applicationPath(path)) != handDescription {
 		return ""
 	}
 	return worktreeTitle(path)
@@ -275,6 +279,9 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string, stri
 	registerWorkspaceAction(app, "thread.rename", func(_ *r.Context, in actionThreadRenameInput) (r.Result, error) {
 		return applyThreadTitle(sm.Get(inputSID(in.SID)), in), nil
 	})
+	registerWorkspaceAction(app, "thread.description", func(_ *r.Context, in actionThreadDescriptionInput) (r.Result, error) {
+		return describeThreadByHand(inputSID(in.SID), in.Name, in.Description), nil
+	})
 	registerWorkspaceAction(app, "worktree.title", func(_ *r.Context, in actionWorktreeTitleInput) (r.Result, error) {
 		return applyWorktreeTitle(sm.Get(inputSID(in.SID)), in), nil
 	})
@@ -418,9 +425,9 @@ func (sm *StateManager) ReplaceThreadAgent(sid, agentID, command string) ([]Appl
 		return nil, nil
 	}
 	// A fresh conversation gets a new description. Child threads keep the name
-	// their parent chose.
+	// their parent chose, and typed text stays.
 	name := thread.Name
-	if !thread.Managed {
+	if !thread.Managed && threadDescriptionSession(thread.ID) != handDescription {
 		name = "New thread"
 	}
 	if _, err := db.Exec("UPDATE threads SET name = ?, session_id = '', agent_id = ?, agent_command = ?, agent_model = '', agent_effort = '', archived = 0 WHERE id = ?", name, agentID, command, thread.ID); err != nil {

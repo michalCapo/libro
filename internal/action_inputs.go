@@ -281,6 +281,12 @@ type actionThreadRenameInput struct {
 	Fallback bool   `json:"fallback"`
 }
 
+type actionThreadDescriptionInput struct {
+	Description string `json:"description"`
+	Name        string `json:"name"`
+	SID         string `json:"sid"`
+}
+
 type actionWorktreeTitleInput struct {
 	AppID    string `json:"appId"`
 	Name     string `json:"name"`

@@ -828,7 +828,7 @@ func Run(assets embed.FS, desktop bool) error {
 		// conversation, so it drops the previous agent's description.
 		if !in.AddAgent && isAgentApp(candidate) && threadState.thread(threadState.ActiveProject) == nil {
 			if _, path := threadProjectContext(threadState, threadState.ActiveProject); path != "" {
-				_ = saveWorktreeTitle(path, "")
+				_ = clearAgentTitle(path)
 			}
 		}
 		if threadState.thread(threadState.ActiveProject) != nil {
@@ -993,7 +993,7 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 		// Keep a resumed project's description; only fresh agents clear it.
 		var js r.Result
-		if state.workspaceAgent(state.ActiveProject, term.ID) && term.SessionID == "" && state.thread(state.ActiveProject) == nil && saveWorktreeTitle(pwd, "") == nil {
+		if state.workspaceAgent(state.ActiveProject, term.ID) && term.SessionID == "" && state.thread(state.ActiveProject) == nil && clearAgentTitle(pwd) == nil {
 			js = projectsJS(state)
 		}
 		return r.Merge(js, clientScript("(function(){if(window.__libroRestartTerminal)window.__libroRestartTerminal(props[0]);})();", term.ID), settleAppFrameJS(term.ID), r.Result{}.Run(r.Notify("success", "Terminal restarted"))), nil

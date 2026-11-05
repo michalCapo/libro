@@ -195,3 +195,45 @@ func TestDescribeFollowsWorkspaceCleanup(t *testing.T) {
 		t.Fatalf("cleanup kept the session marker: %q", got)
 	}
 }
+
+// Typed text outranks titles, the agent and new conversations until the user clears it.
+func TestHandDescriptionStaysUntilCleared(t *testing.T) {
+	sid, path, state := descriptionFixture(t)
+	state.Apps[0].SessionID = "one"
+	describeOK(t, sid, "first", "Agent text")
+	describeThreadByHand(sid, "repo/branch", "  My\ntext ")
+	want := func(got, expected string) {
+		t.Helper()
+		if got != expected {
+			t.Fatalf("description = %q, want %q", got, expected)
+		}
+	}
+	want(worktreeTitle(path), "My text")
+	describeOK(t, sid, "first", "Agent text")
+	state.Apps[0].SessionID = "two"
+	applyWorktreeTitle(state, actionWorktreeTitleInput{AppID: "first", Project: "repo/branch", Name: "Generated"})
+	if err := clearAgentTitle(path); err != nil {
+		t.Fatal(err)
+	}
+	want(worktreeTitle(path), "My text")
+	apps := state.Apps
+	state.Apps = nil
+	want(state.workspaceTitle("repo/branch", path), "My text")
+	state.Apps = apps
+	describeThreadByHand(sid, "repo/branch", " ")
+	want(worktreeTitle(path), "")
+	applyWorktreeTitle(state, actionWorktreeTitleInput{AppID: "first", Project: "repo/branch", Name: "Generated"})
+	want(worktreeTitle(path), "Generated")
+
+	state.ActiveProject = "thread:plain"
+	state.Threads = []Thread{{ID: "thread:plain", Name: "New thread", Path: t.TempDir()}}
+	if _, err := db.Exec(`INSERT INTO threads (id, name) VALUES ('thread:plain', 'New thread')`); err != nil {
+		t.Fatal(err)
+	}
+	describeThreadByHand(sid, "thread:plain", "My text")
+	describeOK(t, sid, "first", "Agent text")
+	applyThreadTitle(state, actionThreadRenameInput{AppID: "first", ID: "thread:plain", Name: "Generated"})
+	want(state.thread("thread:plain").Name, "My text")
+	describeThreadByHand(sid, "thread:plain", "")
+	want(state.thread("thread:plain").Name, "New thread")
+}

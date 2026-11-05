@@ -217,7 +217,8 @@ func worktreeTitle(path string) string {
 		_ = db.QueryRow(`SELECT value FROM settings WHERE key = ?`, "thread-title:"+applicationPath(path)).Scan(&title)
 	}
 	dbMu.Unlock()
-	if recovered := components.RecoverCodexTitle(title, agentEnvironment()["CODEX_HOME"]); recovered != title {
+	// Text the user typed is never a saved session ID, whatever it looks like.
+	if recovered := components.RecoverCodexTitle(title, agentEnvironment()["CODEX_HOME"]); recovered != title && threadDescriptionSession(applicationPath(path)) != handDescription {
 		title = recovered
 		_ = saveWorktreeTitle(path, title)
 	}
@@ -227,6 +228,10 @@ func worktreeTitle(path string) string {
 // An agent's description outranks the titles its CLI generates. This entry names
 // the session that wrote it, so a new conversation gets its own title again.
 // Threads are keyed by ID, checkouts and worktrees by path.
+// handDescription replaces the session when the user typed the text. It stays
+// until they change it, whatever the agents do.
+const handDescription = "hand"
+
 func threadDescriptionKey(id string) string {
 	return "thread-description:" + id
 }
@@ -253,6 +258,15 @@ func threadDescriptionSession(id string) string {
 		_ = db.QueryRow(`SELECT value FROM settings WHERE key = ?`, threadDescriptionKey(id)).Scan(&session)
 	}
 	return session
+}
+
+// clearAgentTitle drops a checkout's description for a new conversation. Text
+// the user typed stays.
+func clearAgentTitle(path string) error {
+	if threadDescriptionSession(applicationPath(path)) == handDescription {
+		return nil
+	}
+	return saveWorktreeTitle(path, "")
 }
 
 func saveWorktreeTitle(path, title string) error {

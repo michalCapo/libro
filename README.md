@@ -322,6 +322,8 @@ own thread, and every finishing action closes the thread, including the agent.
 Agents also write the line under the thread's name with the `describe` action,
 once they know what the work is. That text stays until the agent changes it or a
 new conversation starts, and the title the agent CLI generates is only a fallback.
+**Update description…** in the thread's menu sets that line by hand. Typed text
+stays until you change it, and clearing it hands the line back to the agent.
 
 To push, install, or release after a merge, the agent passes `keepOpen`. The
 merge lands in the destination branch, but the thread and its agent stay open.

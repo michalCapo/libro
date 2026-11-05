@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strings"
 
 	"libro/internal/components"
 
@@ -22,6 +23,7 @@ Actions: preview (base), close, merge (base, sourceHead, targetHead, keepOpen), 
 message, keepOpen), cleanup (sourceHead), discard (sourceHead), describe (description).
 Describe sets the sidebar line for this conversation: what the work is, at most 60 characters. It replaces the title
 the agent CLI generated. Only the thread's first agent can set it. QA child threads keep the name their parent chose.
+Text the user typed in the sidebar stays; describe then changes nothing.
 Close only closes the thread's panels, including this agent. Files, branch and worktree stay; the user can reopen it.
 To merge or squash:
 1. Commit your work first. Merge and squash need a clean thread.
@@ -109,6 +111,8 @@ func RunThreadCLI(args []string, out io.Writer) error {
 	return err
 }
 
+var descriptionKept = map[string]string{"result": "Description not changed: the user wrote it by hand"}
+
 // describeThread sets the sidebar line of the workspace that owns the calling panel.
 func describeThread(sid, panel, description string) (r.Result, any, error) {
 	description = components.CleanAgentTitle(description)
@@ -139,6 +143,9 @@ func describeThread(sid, panel, description string) (r.Result, any, error) {
 		return r.Result{}, nil, errors.New("a QA child thread keeps the name its parent chose")
 	}
 	if thread != nil {
+		if threadDescriptionSession(thread.ID) == handDescription {
+			return r.Result{}, descriptionKept, nil
+		}
 		if _, err := db.Exec("UPDATE threads SET name = ? WHERE id = ?", description, thread.ID); err != nil {
 			return r.Result{}, nil, err
 		}
@@ -154,6 +161,9 @@ func describeThread(sid, panel, description string) (r.Result, any, error) {
 	if path == "" {
 		return r.Result{}, nil, errors.New("this workspace has no sidebar description")
 	}
+	if threadDescriptionSession(applicationPath(path)) == handDescription {
+		return r.Result{}, descriptionKept, nil
+	}
 	if err := saveWorktreeTitle(path, description); err != nil {
 		return r.Result{}, nil, err
 	}
@@ -161,6 +171,53 @@ func describeThread(sid, panel, description string) (r.Result, any, error) {
 		return r.Result{}, nil, err
 	}
 	return projectsJS(state), map[string]string{"result": "Description set"}, nil
+}
+
+// describeThreadByHand saves the sidebar line the user typed. Blank gives it back to the agent.
+func describeThreadByHand(sid, workspace, description string) r.Result {
+	description = strings.Join(strings.Fields(description), " ")
+	if runes := []rune(description); len(runes) > 200 {
+		description = string(runes[:200])
+	}
+	owner := handDescription
+	if description == "" {
+		owner = ""
+	}
+	failed := func(message string) r.Result { return r.Result{}.Run(r.Notify("error", message)) }
+	restoreWorktreeProject(sm, sid, workspace)
+	state := sm.Get(sid)
+	if thread := state.thread(workspace); thread != nil {
+		if thread.Managed {
+			return failed("A QA child thread keeps the name its parent chose")
+		}
+		name := description
+		if name == "" {
+			name = "New thread"
+		}
+		_, err := db.Exec("UPDATE threads SET name = ? WHERE id = ?", name, thread.ID)
+		if err == nil {
+			err = saveThreadDescriptionSession(thread.ID, owner)
+		}
+		if err != nil {
+			return failed("Could not save the description")
+		}
+		sm.mu.Lock()
+		thread.Name = name
+		sm.mu.Unlock()
+		return projectsJS(state)
+	}
+	_, path := threadProjectContext(state, workspace)
+	if path == "" {
+		return failed("Thread not found")
+	}
+	err := saveWorktreeTitle(path, description)
+	if err == nil {
+		err = saveThreadDescriptionSession(applicationPath(path), owner)
+	}
+	if err != nil {
+		return failed("Could not save the description")
+	}
+	return projectsJS(state)
 }
 
 // controlThread finishes only the thread whose checkout is the caller's workspace.

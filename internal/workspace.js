@@ -360,6 +360,25 @@
     dialogKeys(dialog, form, submit, cancel);
     dialog.append(heading, form); root.append(dialog); dialog.showModal(); input.select();
   }
+  // Typed text stays until the user changes it; blank hands the line back to the agent.
+  function updateDescription(workspace, current) {
+    document.getElementById('thread-description-dialog')?.remove();
+    const dialog = node('dialog', 'ws-plugin-dialog ws-project-command-dialog'); dialog.id = 'thread-description-dialog';
+    dialog.setAttribute('aria-labelledby', 'thread-description-title');
+    const heading = node('h2', '', 'Update description'); heading.id = 'thread-description-title';
+    const form = node('form', '');
+    const label = node('label', '', 'Description'); label.htmlFor = 'thread-description-input';
+    const input = node('input', 'ws-agent-command'); input.id = 'thread-description-input'; input.value = current; input.autocomplete = 'off';
+    const help = node('p', 'ws-settings-status', 'The agent will not change this text. Leave blank to let the agent write it again.'); help.id = 'thread-description-help'; input.setAttribute('aria-describedby', help.id);
+    const actions = node('div', 'ws-agent-actions');
+    const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
+    const submit = node('button', 'ws-launch', 'Update'); submit.type = 'submit';
+    actions.append(cancel, submit); form.append(label, input, help, actions);
+    form.onsubmit = event => { event.preventDefault(); dialog.close(); call('thread.description', {name:workspace, description:input.value}); };
+    dialog.addEventListener('close', () => dialog.remove());
+    dialogKeys(dialog, form, submit, cancel);
+    dialog.append(heading, form); root.append(dialog); dialog.showModal(); input.select();
+  }
   let finishDialog = null;
   // A removed thread lands on its project. That project row stays hidden until the project is opened again.
   function closedWorkspace(id) {
@@ -525,6 +544,7 @@
   function threadActions(project) {
     const name = project.name + '/' + project.branch;
     return [
+      {label:'Update description…', icon:'edit', run:() => updateDescription(name, project.title || '')},
       {label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep files, branch and worktree', run:() => call('project.close', {name})},
       {label:'Merge thread…', icon:'merge', run:() => finishThread(name)},
       {label:'Squash thread…', icon:'compress', run:() => finishThread(name, false, 'squash')},
@@ -537,6 +557,8 @@
   // Agent threads are not projects; they get the actions that need no project.
   function agentThreadActions(thread) {
     return [
+      // Child threads keep the name their parent chose.
+      ...(thread.managed ? [] : [{label:'Update description…', icon:'edit', run:() => updateDescription(thread.id, thread.name === 'New thread' ? '' : thread.name)}]),
       {label:'Close thread', icon:'close', description:'Stop processes and close all panels; keep it in the list', run:() => call('project.close', {name:thread.id})},
       // Child threads belong to a project and leave with it.
       ...(thread.project ? [] : [{label:'Discard thread…', icon:'delete_outline', description:'Remove it from the list for good', run:() => confirmDiscardThread(thread), danger:true}]),
@@ -566,7 +588,7 @@
     const project = (window.__libroProjects || []).find(p => (p.kind === 'worktree' ? p.name + '/' + p.branch : p.name) === window.__libroActiveProject);
     const thread = !project && (window.__libroThreads || []).find(thread => thread.id === window.__libroActiveProject);
     if (!project && !thread) { window.__libroShowToast?.('Select a thread first', '', 'error'); return; }
-    const actions = thread ? agentThreadActions(thread) : project.kind === 'worktree' ? threadActions(project) : [{label:'Thread settings', icon:'settings', run:() => projectSettings(project.name)}, {label:'Rename project…', icon:'edit', run:() => renameProject(project.name)}];
+    const actions = thread ? agentThreadActions(thread) : project.kind === 'worktree' ? threadActions(project) : [{label:'Update description…', icon:'edit', run:() => updateDescription(project.name, project.title || '')}, {label:'Thread settings', icon:'settings', run:() => projectSettings(project.name)}, {label:'Rename project…', icon:'edit', run:() => renameProject(project.name)}];
     const name = project ? project.name : thread.project;
     actions.unshift({label:'New thread', icon:'add', description:name ? 'Create a new thread in ' + name : 'Create a new thread', run:() => newThread(name || undefined)});
     if (project && project.kind !== 'worktree') {
@@ -666,6 +688,7 @@
       item.onclick = () => { menu.hidePopover(); run(); }; menu.append(item);
     };
     const actions = worktree ? threadActions(project) : thread ? agentThreadActions(project) : [
+      {label:'Update description…', run:() => updateDescription(project.name, project.title || '')},
       {label:'Close thread', run:() => call('project.close', {name:project.name})},
       {label:'New thread', run:() => newThread(project.name)},
       {label:'Thread settings', run:() => projectSettings(project.name)},
@@ -673,7 +696,7 @@
       ...(project.isGit && project.currentBranch ? [{label:'Discard thread…', run:() => finishThread(project.name, true), danger:true}] : []),
     ];
     actions.forEach(action => add(action.label, action.run, action.danger));
-    if (!worktree && !thread && (!project.isGit || !project.currentBranch)) menu.children[1].disabled = true;
+    if (!worktree && !thread && (!project.isGit || !project.currentBranch)) menu.children[2].disabled = true;
     root.append(menu); menu.showPopover();
     const rect = trigger.getBoundingClientRect();
     menu.style.left = Math.max(8, Math.min(point?.x ?? rect.left, innerWidth - menu.offsetWidth - 8)) + 'px';

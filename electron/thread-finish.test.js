@@ -173,8 +173,9 @@ test('thread menu and palette share actions bound to the chosen worktree', () =>
     finishThread:(name, discard = false, method = 'merge') => calls.push([discard ? 'discard' : method, name]),
     projectSettings:name => calls.push(['settings', name]),
     renameProject:name => calls.push(['rename', name]),
+    updateDescription:name => calls.push(['describe', name]),
   })
-  assert.deepEqual(calls, [['project.close','repo/feature'], ['merge','repo/feature'], ['squash','repo/feature'], ['pr','repo/feature'], ['settings','repo/feature'], ['rename','repo'], ['discard','repo/feature']])
+  assert.deepEqual(calls, [['describe','repo/feature'], ['project.close','repo/feature'], ['merge','repo/feature'], ['squash','repo/feature'], ['pr','repo/feature'], ['settings','repo/feature'], ['rename','repo'], ['discard','repo/feature']])
 })
 
 
@@ -259,18 +260,20 @@ test('branch menu targets its own workspace and disables new threads without a c
       call:(action, data) => calls.push([action, data.name]),
       newThread:name => calls.push(['thread.create', name]),
       projectSettings:name => calls.push(['settings', name]),
+      updateDescription:name => calls.push(['describe', name]),
       window:{__libroActiveProject:'other'},
     })
     const menu = root.children[0]
     assert.equal(menu.attributes['aria-label'], 'Thread actions')
-    assert.deepEqual(menu.children.map(item => item.textContent), ['Close thread', 'New thread', 'Thread settings', 'Rename project…', ...(isGit ? ['Discard thread…'] : [])])
-    assert.equal(!!menu.children[1].disabled, !isGit)
+    assert.deepEqual(menu.children.map(item => item.textContent), ['Update description…', 'Close thread', 'New thread', 'Thread settings', 'Rename project…', ...(isGit ? ['Discard thread…'] : [])])
+    assert.equal(!!menu.children[2].disabled, !isGit)
     menu.children[0].onclick()
-    if (isGit) menu.children[1].onclick()
-    menu.children[2].onclick()
+    menu.children[1].onclick()
+    if (isGit) menu.children[2].onclick()
+    menu.children[3].onclick()
     assert.deepEqual(calls, isGit
-      ? [['project.close', 'repo'], ['thread.create', 'repo'], ['settings', 'repo']]
-      : [['project.close', 'repo'], ['settings', 'repo']])
+      ? [['describe', 'repo'], ['project.close', 'repo'], ['thread.create', 'repo'], ['settings', 'repo']]
+      : [['describe', 'repo'], ['project.close', 'repo'], ['settings', 'repo']])
   }
 })
 
