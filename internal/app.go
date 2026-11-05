@@ -664,6 +664,8 @@ func Run(assets embed.FS, desktop bool) error {
 	backendSessionID()
 	app := r.NewApp()
 	app.Title = "Libro"
+	// Slow work shows its own busy state; see beginSwitch in workspace.js.
+	app.Loader = r.LoaderNone
 	// Libro may itself be shown in a frame (e.g. Libro's own browser preview
 	// while developing Libro), so send no X-Frame-Options.
 	app.FrameOptions = "-"
@@ -1241,7 +1243,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return r.Result{}.Run(r.Hide(ProjectDialogID)), nil
 	})
 	// Create a new project
-	registerWorkspaceAction(app, "project.create", func(_ *r.Context, in actionProjectCreateInput) (r.Result, error) {
+	registerSwitchAction(app, "project.create", func(_ *r.Context, in actionProjectCreateInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		path := in.ProjectPath
 		path = strings.TrimSpace(path)
@@ -1290,7 +1292,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return finalizeProjectCreate(sid, path, name, true), nil
 	})
 	// Confirm creating a missing project folder, then create the project.
-	registerWorkspaceAction(app, "project.create.confirm", func(_ *r.Context, in actionProjectCreateConfirmInput) (r.Result, error) {
+	registerSwitchAction(app, "project.create.confirm", func(_ *r.Context, in actionProjectCreateConfirmInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		path := in.Path
 		path = strings.TrimSpace(path)
@@ -1350,7 +1352,7 @@ func Run(assets embed.FS, desktop bool) error {
 	registerThreadActions(app, switchToProjectWithAgent)
 	registerFinishThreadActions(app)
 	// Switch active project
-	registerWorkspaceAction(app, "project.switch", func(_ *r.Context, in actionProjectSwitchInput) (r.Result, error) {
+	registerSwitchAction(app, "project.switch", func(_ *r.Context, in actionProjectSwitchInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		name := in.Name
 		resp, ok := switchToProjectWithAgent(sid, name, "")
@@ -1472,7 +1474,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return trustedResponse(`if(window.libroElectron)window.libroElectron.forceClose();else window.close();`), nil
 	})
 	// Switch to a worktree (creates virtual project if needed)
-	registerWorkspaceAction(app, "worktree.switch", func(_ *r.Context, in actionWorktreeSwitchInput) (r.Result, error) {
+	registerSwitchAction(app, "worktree.switch", func(_ *r.Context, in actionWorktreeSwitchInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		parentProject := in.Project
 		wtPath := in.Path
@@ -1508,7 +1510,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return resp, nil
 	})
 	// Create a new worktree from the active project's current branch and switch to it.
-	registerWorkspaceAction(app, "worktree.create", func(_ *r.Context, in actionWorktreeCreateInput) (r.Result, error) {
+	registerSwitchAction(app, "worktree.create", func(_ *r.Context, in actionWorktreeCreateInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		branch := in.Branch
 		branch = strings.TrimSpace(branch)
@@ -1582,8 +1584,9 @@ func Run(assets embed.FS, desktop bool) error {
 	}
 	defer cleanup()
 	stopUpdates := startAgentUpdates(app)
+	stopGitRefresh := startProjectGitRefresh(app)
 	backendCleanupMu.Lock()
-	backendCleanup = func() { cleanup(); stopUpdates() }
+	backendCleanup = func() { cleanup(); stopUpdates(); stopGitRefresh() }
 	backendCleanupMu.Unlock()
 	defer stopBackend()
 	backendActionMu.Lock()

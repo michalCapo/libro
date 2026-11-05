@@ -26,6 +26,8 @@ func workspaceJS() string {
 
 // registerStyles serves the compiled Tailwind CSS and the icon font with the
 // app, so pages need no CDN. Rebuild them with npm run build:css.
+const switchSkeletonID = "workspace-switch-skeleton"
+
 func registerStyles(app *r.App) {
 	css, _ := workspaceAssets.ReadFile("tailwind.min.css")
 	app.TailwindCSS(css)
@@ -98,6 +100,13 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 			),
 		),
 	)
+}
+
+// renderSwitchSkeleton covers the main area when opening a thread is slow; see beginSwitch in workspace.js.
+func renderSwitchSkeleton() *r.Node {
+	style := r.SkeletonStyle{BarClass: "ws-skeleton-bar", RoundClass: "rounded-md"}
+	return r.SkeletonBlock("ws-switch-skeleton", style.Bar("h-8 w-24"), style.Bar("flex-1 w-full")).
+		ID(switchSkeletonID).Attr("hidden", "").Attr("role", "status").Attr("aria-label", "Loading")
 }
 
 func renderWorkspaceEmpty(state *AppState, sid string) *r.Node {

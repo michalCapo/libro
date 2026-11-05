@@ -242,6 +242,7 @@ func removeFinishedWorktree(info worktreeFinishPreview, discard bool) (string, e
 			return "", fmt.Errorf("the thread gained uncommitted changes; it was kept")
 		}
 	}
+	defer forgetProjectGitInfo()
 	args := []string{"worktree", "remove"}
 	if discard {
 		args = append(args, "--force")

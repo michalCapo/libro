@@ -966,6 +966,7 @@ test('project groups contain the original branch first and number every worktree
     },
     node, button: (label, icon, onclick) => Object.assign(node('button', '', label), { onclick }),
     call: (action, data) => calls.push([action, data]), closeSettings() {}, innerWidth:1000, leftProject:'',
+    switching: { shown: null }, isCurrentProject: project => !!project.isActive,
     newThread() {}, projectSettings() {}, root: { dataset: { allProjects: 'true' } },
     threadMenu: (project, trigger) => calls.push(['menu', project.name, trigger.textContent]),
   }

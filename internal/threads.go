@@ -219,6 +219,7 @@ func (sm *StateManager) createProjectWorktree(sid, projectID, branch string) (st
 			branch = string(base[:min(len(base), 64)]) + "-" + hex.EncodeToString(random[:])
 		}
 		path := filepath.Join(filepath.Dir(p.Path), filepath.Base(p.Path)+"-"+strings.ReplaceAll(branch, "/", "-"))
+		defer forgetProjectGitInfo()
 		if err := GitCreateWorktree(p.Path, branch, path); err != nil {
 			return "", err
 		}
@@ -230,7 +231,7 @@ func (sm *StateManager) createProjectWorktree(sid, projectID, branch string) (st
 }
 
 func registerThreadActions(app *r.App, switchWorkspace func(string, string, string) (r.Result, bool)) {
-	registerWorkspaceAction(app, "thread.create", func(_ *r.Context, in actionThreadCreateInput) (r.Result, error) {
+	registerSwitchAction(app, "thread.create", func(_ *r.Context, in actionThreadCreateInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		name := in.Name
 		name = strings.TrimSpace(name)

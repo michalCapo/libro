@@ -30,6 +30,15 @@ func registerWorkspaceAction[T any](app *r.App, name string, handler func(*r.Con
 	})
 }
 
+// registerSwitchAction registers an action that opens a workspace. The browser
+// shows it at once, and every reply confirms or corrects that; see switchSettled in workspace.js.
+func registerSwitchAction[T any](app *r.App, name string, handler func(*r.Context, T) (r.Result, error)) r.ActionRef[T] {
+	return registerWorkspaceAction(app, name, func(ctx *r.Context, in T) (r.Result, error) {
+		resp, err := handler(ctx, in)
+		return resp.Add(clientScript("if(window.libroWorkspace)libroWorkspace.switchSettled(props[0]);", sm.Get(backendSessionID()).ActiveProject)), err
+	})
+}
+
 func backendSessionID() string {
 	return sm.backendSessionID()
 }

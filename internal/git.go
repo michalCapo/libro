@@ -6,22 +6,15 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
-// gitAvailable caches whether the git binary is in $PATH.
-var gitAvailable *bool
-
 // GitAvailable returns true if the git command is available on this system.
-func GitAvailable() bool {
-	if gitAvailable != nil {
-		return *gitAvailable
-	}
+var GitAvailable = sync.OnceValue(func() bool {
 	_, err := exec.LookPath("git")
-	result := err == nil
-	gitAvailable = &result
-	return result
-}
+	return err == nil
+})
 
 // Worktree represents a single git worktree.
 type Worktree struct {

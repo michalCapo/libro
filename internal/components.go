@@ -387,6 +387,7 @@ func renderMainAreaWrapper(state *AppState, sid string) *r.Node {
 		r.Div("flex-1 flex flex-col overflow-hidden relative").ID(MainAreaID).Render(
 			renderMainArea(state, sid),
 			renderWorkspaceSettings(),
+			renderSwitchSkeleton(),
 		),
 	)
 }
@@ -1742,7 +1743,7 @@ func worktreeCreatePopupJS(sid string) string {
 		var name=(inp.value||'').trim();
 		if(!name)return;
 		closePopup();
-		__ws.call('worktree.create',{sid:'%s',branch:name});
+		if(window.libroWorkspace)libroWorkspace.createWorktree(name);else __ws.call('worktree.create',{sid:'%s',branch:name});
 	}
 
 	var inp=getInp();
@@ -2329,7 +2330,7 @@ func projectDialogJS(sid string) string {
 		var item=filtered[selectedIdx];
 		closePopup();
 		if(item.kind==='worktree'){
-			__ws.call('worktree.switch',{sid:'%s',project:item.name,path:item.path,branch:item.branch});
+			if(window.libroWorkspace)libroWorkspace.openWorktree(item.name,item.path,item.branch);else __ws.call('worktree.switch',{sid:'%s',project:item.name,path:item.path,branch:item.branch});
 		}else{
 			history.replaceState(null,'','#'+item.name);
 			// The workspace reopens a project whose row hid after its thread was removed.
@@ -2360,9 +2361,10 @@ func projectDialogJS(sid string) string {
 		if(q.indexOf('./')===0||q.indexOf('../')===0)return q;
 		return homeDir()?homeDir()+'/'+q:q;
 	}
+	function openingProject(sent){if(sent&&window.libroWorkspace)libroWorkspace.beginOpening();}
 	function confirmCreateProject(path){
 		if(!path)return;
-		var run=function(){closePopup();__ws.call('project.create.confirm',{sid:'%s',path:path});};
+		var run=function(){closePopup();openingProject(__ws.call('project.create.confirm',{sid:'%s',path:path}));};
 		if(window.__libroConfirmAction){window.__libroConfirmAction('Create folder?', 'Create this folder and open it as a new Libro project?\n\n'+path, run);}else{run();}
 	}
 	function openSelectedDirectory(fromClick){
@@ -2370,14 +2372,14 @@ func projectDialogJS(sid string) string {
 		if(typed){
 			if(dirMatches.length===0){confirmCreateProject(typed);}else{
 				closePopup();
-				__ws.call('project.create',{sid:'%s','project-path':typed});
+				openingProject(__ws.call('project.create',{sid:'%s','project-path':typed}));
 			}
 			return;
 		}
 		var item=selectedDirectory();
 		if(!item){confirmCreateProject(newProjectPathFromQuery());return;}
 		closePopup();
-		__ws.call('project.create',{sid:'%s','project-path':item.path});
+		openingProject(__ws.call('project.create',{sid:'%s','project-path':item.path}));
 	}
 	function completeSelectedDirectory(){
 		var item=selectedDirectory();
@@ -2470,7 +2472,7 @@ func projectDialogJS(sid string) string {
 				e.preventDefault();
 				var bar=document.getElementById('project-path-confirm');
 				var path=bar&&bar.dataset?bar.dataset.path:'';
-				if(path){hideCreateConfirm();closePopup();__ws.call('project.create.confirm',{sid:'%s',path:path});}
+				if(path){hideCreateConfirm();closePopup();openingProject(__ws.call('project.create.confirm',{sid:'%s',path:path}));}
 			});
 		}
 	}
@@ -2753,9 +2755,11 @@ type jsProject struct {
 	Order           int      `json:"order,omitempty"`
 }
 
-// projectsJS publishes the list of projects (and their worktrees) into
-// window.__libroProjects for the project dialog.
 func projectItems(state *AppState) []jsProject {
+	return projectItemsWith(state, readProjectGitInfo)
+}
+
+func projectItemsWith(state *AppState, gitInfo func(string) projectGitInfo) []jsProject {
 	displayProjectName := func(name, path string) string {
 		if path == "" {
 			return name
@@ -2783,11 +2787,11 @@ func projectItems(state *AppState) []jsProject {
 			Command:     projectCommand(p.Path),
 		}
 
+		var git projectGitInfo
 		if p.IsGitRepo && GitAvailable() {
-			if branches, err := GitListBranches(p.Path); err == nil {
-				entry.Branches = branches
-			}
-			entry.CurrentBranch = GitCurrentBranch(p.Path)
+			git = gitInfo(p.Path)
+			entry.Branches = git.Branches
+			entry.CurrentBranch = git.Current
 		}
 		// A main folder that branches into worktrees is a thread only while it is open or an agent works in it.
 		if entry.CurrentBranch != "" && state.ActiveProject != p.Name && !slices.Contains(panels, p.Name) && !state.workspaceAgent(p.Name, "") {
@@ -2800,13 +2804,10 @@ func projectItems(state *AppState) []jsProject {
 		entry.ApplicationURL = applicationLiveURL(state, p.Path)
 		all = append(all, entry)
 
-		if !p.IsGitRepo || !GitAvailable() {
+		if !p.IsGitRepo || !GitAvailable() || !git.WorktreesOK {
 			continue
 		}
-		wts, err := GitListWorktrees(p.Path)
-		if err != nil {
-			continue
-		}
+		wts := slices.Clone(git.Worktrees)
 		sm.mu.Lock()
 		if state.worktreeOrder == nil {
 			state.worktreeOrder = make(map[string]int)
@@ -2879,19 +2880,35 @@ func projectItems(state *AppState) []jsProject {
 	return all
 }
 
+// projectsJS publishes the list of projects (and their worktrees) into
+// window.__libroProjects for the project dialog. It uses saved Git info, so an
+// action never waits for Git. The refresh it requests corrects the sidebar if Git changed.
 func projectsJS(state *AppState) r.Result {
-	nodes := projectScriptNodes(state)
+	requestProjectGitRefresh()
+	return projectItemsJS(state, projectItemsWith(state, cachedProjectGitInfo))
+}
+
+// projectsVersionStart makes versions grow steadily and across restarts.
+var projectsVersionStart = time.Now()
+
+func projectItemsJS(state *AppState, all []jsProject) r.Result {
+	nodes := projectScriptNodesFor(state, all)
 	return r.Result{}.Append(ActionEffectsID, nodes[0]).Append(ActionEffectsID, nodes[1])
 }
 
 func projectScriptNodes(state *AppState) []*r.Node {
-	all := projectItems(state)
+	return projectScriptNodesFor(state, projectItems(state))
+}
+
+func projectScriptNodesFor(state *AppState, all []jsProject) []*r.Node {
 	path, _, settings := applicationConfiguration(state, state.ActiveProject)
 	url := applicationLiveURL(state, path)
 	if url == "" {
 		url = applicationURL(settings.Port)
 	}
-	return []*r.Node{clientScriptNode("window.__libroThreads=props[0];", state.Threads), clientScriptNode("window.__libroActiveProject=props[0];window.__libroApplicationURL=props[1];window.__libroProjects=props[2];window.__libroApplicationURLs=props[3];window.__libroPanels=props[4];window.__libroHistoryProject=props[5];if(window.libroWorkspace)libroWorkspace.refresh();", state.ActiveProject, url, all, applicationBrowserURLs(state), workspacesWithPanels(state), state.parentProjectScope(state.ActiveProject))}
+	// An action's reply can reach the browser after a newer background update.
+	version := projectsVersionStart.UnixMilli() + time.Since(projectsVersionStart).Microseconds()
+	return []*r.Node{clientScriptNode("if(!(props[1]<(window.__libroProjectsVersion||0)))window.__libroThreads=props[0];", state.Threads, version), clientScriptNode("if(!(props[6]<(window.__libroProjectsVersion||0))){window.__libroProjectsVersion=props[6];window.__libroActiveProject=props[0];window.__libroApplicationURL=props[1];window.__libroProjects=props[2];window.__libroApplicationURLs=props[3];window.__libroPanels=props[4];window.__libroHistoryProject=props[5];if(window.libroWorkspace)libroWorkspace.refresh();}", state.ActiveProject, url, all, applicationBrowserURLs(state), workspacesWithPanels(state), state.parentProjectScope(state.ActiveProject), version)}
 }
 
 // workspacesWithPanels lists open workspaces that have at least one panel.

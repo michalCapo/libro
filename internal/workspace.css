@@ -762,3 +762,4 @@ html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repo
 .ws-page-draw-box[hidden]{display:none}
 .ws-page-draw-box textarea{flex:1;min-width:0;min-height:32px;max-height:160px;box-sizing:border-box;padding:6px 8px;border:0;border-radius:7px;background:transparent;color:var(--ws-fg);caret-color:var(--ws-accent);font:inherit;font-size:13px;line-height:20px;resize:none;field-sizing:content;outline:0}
 @container (max-width:560px){.ws-page-draw-note{order:-1;flex-basis:100%;margin:0 0 4px}.ws-page-draw-images{order:-2}.ws-page-draw-bar>.ws-page-draw-action:not(.ws-page-draw-send){margin-left:auto}}
+.ws-switch-skeleton{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;gap:var(--ws-gap);padding:var(--ws-gap);background:var(--ws-chrome)}.ws-switch-skeleton[hidden]{display:none}.ws-skeleton-bar{background:var(--ws-raised)}

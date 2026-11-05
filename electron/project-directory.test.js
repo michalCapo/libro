@@ -26,6 +26,7 @@ function setup(query) {
     lookupLoading: false,
     hoverEnabled: false,
     escapeHtml: value => value,
+    window: {},
     closePopup() {},
     __ws: { call: (method, payload) => calls.push({ method, payload }) },
     res: { querySelectorAll: () => rows },

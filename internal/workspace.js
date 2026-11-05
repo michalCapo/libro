@@ -15,10 +15,61 @@
   let prefs = {};
   let leftProject = '';
   try { prefs = JSON.parse(localStorage.getItem('libro.workspace') || '{}') || {}; } catch (_) {}
+  // A switch shows at once. Each reply confirms or corrects it through switchSettled.
+  const switching = {count:0, shown:null, confirmed:'', selected:'', skeleton:0, expiry:0};
+  function setSwitchSkeleton(visible) {
+    clearTimeout(switching.skeleton);
+    const skeleton = document.getElementById('workspace-switch-skeleton');
+    if (skeleton) skeleton.hidden = !visible;
+  }
+  // Without a target, or for a workspace not on the page yet, the current one stays until the reply; only a slow reply shows the skeleton.
+  function beginSwitch(target) {
+    if (!switching.count++) { switching.confirmed = window.__libroActiveProject; switching.selected = window.__libroSelectedApp; }
+    clearTimeout(switching.expiry);
+    switching.expiry = setTimeout(() => { switching.count = 0; switchSettled(switching.confirmed); }, 20000);
+    setSwitchSkeleton(false);
+    if (target !== undefined && document.getElementById('project-main-' + target)) {
+      if (target !== window.__libroActiveProject) {
+        // An Electron console floats above the page, so hiding its project does not hide it.
+        const leaving = activeGrid();
+        if (leaving) frames(leaving).forEach(frame => window.__libroCloseConsole?.(frame.dataset.appId));
+        // Until the reply selects a panel here, panel commands must not act on the hidden project.
+        window.__libroSelectedApp = '';
+      }
+      switching.shown = target; refresh(); return;
+    }
+    switching.shown = null;
+    switching.skeleton = setTimeout(() => setSwitchSkeleton(true), 150);
+  }
+  function switchSettled(active) {
+    switching.count = Math.max(0, switching.count - 1);
+    switching.confirmed = active;
+    if (window.__libroSelectedApp) switching.selected = window.__libroSelectedApp;
+    // A newer switch is still on its way, so keep showing it.
+    if (switching.count) { refresh(); return; }
+    clearTimeout(switching.expiry);
+    setSwitchSkeleton(false);
+    switching.shown = null;
+    window.__libroActiveProject = active;
+    // A refused switch goes back to the panel it left.
+    if (!window.__libroSelectedApp && document.getElementById('project-main-' + active)?.contains(document.getElementById('frame-' + switching.selected))) window.__libroSelectedApp = switching.selected;
+    refresh();
+  }
+  function isCurrentProject(project) {
+    if (switching.shown === null) return !!project.isActive;
+    const scope = (window.__libroThreads || []).find(thread => thread.id === switching.shown)?.project ?? switching.shown;
+    return (project.kind === 'worktree' ? project.name + '/' + project.branch : project.name) === scope;
+  }
   const call = (action, data = {}) => {
     if (action === 'project.switch') { acknowledgeProjectActivity(data.name); if (leftProject && data.name === leftProject) leaveProject(''); }
     if (action === 'worktree.switch') acknowledgeProjectActivity(data.project + '/' + data.branch);
-    return __ws.call(action, {sid, ...data});
+    const sent = __ws.call(action, {sid, ...data});
+    if (sent) {
+      if (action === 'project.switch') beginSwitch(data.name);
+      else if (action === 'worktree.switch') beginSwitch(data.project + '/' + data.branch);
+      else if (action === 'thread.create' || action === 'worktree.create') beginSwitch();
+    }
+    return sent;
   };
   const applicationRequests = new Map();
   function applicationControl(command, action = 'project.command.agent') {
@@ -764,7 +815,7 @@
   }
   function renderProjects() {
     const list = document.getElementById('workspace-project-list'); if (!list) return;
-    const projects = window.__libroProjects || []; const signature = JSON.stringify(projects);
+    const projects = window.__libroProjects || []; const signature = JSON.stringify([projects, switching.shown]);
     if (list.dataset.signature === signature) return; list.dataset.signature = signature; list.replaceChildren();
     if (leftProject !== window.__libroActiveProject) leftProject = '';
     const count = document.getElementById('workspace-project-count');
@@ -774,7 +825,7 @@
       const item = node('div', 'ws-project-item'); item.dataset.kind = project.kind;
       const row = node('button', 'ws-project-row'); row.type = 'button'; row.dataset.kind = project.kind;
       row.dataset.projectKey = project.kind === 'worktree' ? project.name + '/' + project.branch : project.name;
-      row.setAttribute('aria-current', String(!!project.isActive));
+      row.setAttribute('aria-current', String(isCurrentProject(project)));
       const projectName = project.displayName || project.name;
       row.setAttribute('aria-label', projectName);
       row.title = projectName + (project.path ? '\n' + project.path : '');
@@ -810,7 +861,7 @@
         const baseList = node('div', 'ws-project-item');
         const base = node('button', 'ws-project-row ws-thread-row'); base.type = 'button';
         base.dataset.kind = 'base'; base.dataset.projectKey = project.name;
-        base.setAttribute('aria-current', String(!!project.isActive));
+        base.setAttribute('aria-current', String(isCurrentProject(project)));
         const branch = project.currentBranch || projectName;
         const baseLabel = project.title || branch;
         base.title = baseLabel + (project.title ? '\n' + branch : '') + ' — ' + project.path;
@@ -835,7 +886,7 @@
       const item = node('div', 'ws-project-item');
       const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button';
       row.dataset.kind = 'worktree'; row.dataset.closed = String(!!project.closed); row.dataset.projectKey = project.name + '/' + project.branch;
-      row.setAttribute('aria-current', String(!!project.isActive));
+      row.setAttribute('aria-current', String(isCurrentProject(project)));
       const label = project.title || project.branch;
       row.title = label + (project.title ? '\n' + project.branch : '') + ' — ' + project.path;
       const icon = node('i', 'material-icons-round', 'account_tree'); icon.setAttribute('aria-hidden', 'true');
@@ -1147,8 +1198,27 @@
     if (records.some(record => (record.type === 'attributes' && record.target.matches('[data-app-id]')) || [...record.addedNodes, ...record.removedNodes].some(n => n.nodeType === 1 && (n.matches('[data-app-id], [data-workspace-project], .ws-project, #top-bar') || n.querySelector('[data-app-id], [data-workspace-project]'))))) schedule();
   });
   function schedule() { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; refresh(); }); } }
+  // Replacing a project's DOM can reset its hidden styles. Always reconcile
+  // visibility with server state so inactive welcome screens cannot reappear.
+  function syncProjectVisibility() {
+    if (typeof window.__libroActiveProject !== 'string') return;
+    document.querySelectorAll('[data-workspace-project]').forEach(grid => {
+      const active = grid.dataset.workspaceProject === window.__libroActiveProject;
+      const project = grid.parentElement;
+      project.style.display = active ? 'flex' : 'none';
+      project.style.visibility = active ? 'visible' : 'hidden';
+      project.style.pointerEvents = active ? '' : 'none';
+      project.style.position = active ? '' : 'absolute';
+      project.style.inset = active ? '' : '0';
+      project.style.zIndex = active ? '' : '0';
+      if (active) project.removeAttribute('aria-hidden');
+      else project.setAttribute('aria-hidden', 'true');
+    });
+  }
   function refresh() {
     observer.disconnect();
+    if (switching.shown !== null) window.__libroActiveProject = switching.shown;
+    syncProjectVisibility();
     const sidebar = document.getElementById('workspace-projects');
     if (sidebar) resizeHandle(sidebar, 'sidebar');
     if (Number.isFinite(prefs.sidebarWidth)) root.style.setProperty('--ws-projects', Math.max(180, Math.min(prefs.sidebarWidth, 480, innerWidth - 48)) + 'px');
@@ -1172,20 +1242,6 @@
     const fullGrid = activeGrid();
     root.toggleAttribute('data-panel-full', !!fullGrid && frames(fullGrid).some(frame => frame.dataset.appId === maximized));
     document.querySelectorAll('[data-workspace-project]').forEach(grid => {
-      // Replacing a project's DOM can reset its hidden styles. Always reconcile
-      // visibility with server state so inactive welcome screens cannot reappear.
-      if (typeof window.__libroActiveProject === 'string') {
-        const active = grid.dataset.workspaceProject === window.__libroActiveProject;
-        const project = grid.parentElement;
-        project.style.display = active ? 'flex' : 'none';
-        project.style.visibility = active ? 'visible' : 'hidden';
-        project.style.pointerEvents = active ? '' : 'none';
-        project.style.position = active ? '' : 'absolute';
-        project.style.inset = active ? '' : '0';
-        project.style.zIndex = active ? '' : '0';
-        if (active) project.removeAttribute('aria-hidden');
-        else project.setAttribute('aria-hidden', 'true');
-      }
       const all = frames(grid);
       const full = all.find(frame => frame.dataset.appId === maximized);
       grid.dataset.maximized = full ? full.dataset.appId : '';
@@ -2218,7 +2274,7 @@
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects, .ws-rail-threads')) delete root.dataset.sidebar; });
   narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name})};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name}), openWorktree:(project, path, branch) => call('worktree.switch', {project, path, branch}), createWorktree:branch => call('worktree.create', {branch}), beginOpening:() => beginSwitch(), switchSettled};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }
