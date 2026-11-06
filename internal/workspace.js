@@ -728,13 +728,14 @@
     // DOM focus alone does not take native keyboard focus back from a browser panel.
     window.libroElectron?.focusWorkspace?.().then(() => { if (dialog.open) search.focus(); }).catch(() => {});
   }
-  // A row keeps its description on one full line. Branch, agent,
-  // and shortcut details move to the last line.
+  // A row leads with its description, up to two lines. The last line
+  // names the project and branch, then terminal, actions and status.
   function rowLabel(row, label, branch, projectName) {
     row.classList.add('ws-row-grid');
     const meta = node('small', 'ws-row-meta');
+    meta.append(node('span', 'ws-row-project', projectName));
     if (branch) meta.append(node('span', 'ws-row-branch', branch));
-    row.append(node('small', 'ws-row-project', projectName), node('span', '', label), meta);
+    row.append(node('span', '', label), meta);
   }
   function threadMenu(project, trigger, point) {
     document.getElementById('thread-actions-menu')?.remove();
@@ -1125,7 +1126,8 @@
       moved ||= row.dataset.agentStatus === 'working' || state === 'working';
       row.dataset.agentStatus = state;
       row.querySelector('i').textContent = state === 'working' ? 'sync' : state === 'done' ? 'check_circle_outline' : row.dataset.kind === 'worktree' ? 'account_tree' : 'chat_bubble_outline';
-      const label = row.querySelector('span').textContent;
+      // A card without a description goes by its branch.
+      const label = row.querySelector('span').textContent || row.querySelector('.ws-row-branch')?.textContent || '';
       row.setAttribute('aria-label', label + (state === 'working' ? ': agents working' : state === 'done' ? ': all agents done' : ''));
     });
     // A card that starts or stops working moves, so the numbers follow it.

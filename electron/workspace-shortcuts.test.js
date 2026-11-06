@@ -975,7 +975,7 @@ test('project groups contain the original branch first and number every worktree
   const group = list.children[0]
   assert.equal(group.classes, 'ws-project-group')
   const rows = flatten(group).filter(el => el.classes.split(' ').includes('ws-thread-row'))
-  assert.deepEqual(rows.map(row => row.children[3].children[0].textContent), ['main', 'feature'])
+  assert.deepEqual(rows.map(row => row.children[2].children[1].textContent), ['main', 'feature'])
   assert.deepEqual(rows.map(row => row.dataset.projectShortcut), ['1', '2'])
   rows[0].onclick()
   rows[1].onclick()
