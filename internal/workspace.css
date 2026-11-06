@@ -103,12 +103,15 @@ html.dark .ws-project-terminal{stroke:#4ade80}
 /* Thread rows lead with a tall shortcut number, then the description on up to two lines. The last line stays at the bottom with the project and branch, then the terminal, actions and status icon. */
 .ws-row-grid{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-rows:1fr auto;grid-template-areas:"badge title title title" "badge meta end icon";gap:2px 8px;align-items:center}
 .ws-row-grid>.material-icons-round{grid-area:icon;justify-self:end}
-.ws-row-grid>span{grid-area:title;align-self:start;font-size:18px;line-height:24px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
+.ws-row-grid>span{grid-area:title;align-self:start;font-size:13px;line-height:17px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow-wrap:anywhere}
 .ws-row-grid>span:empty{display:none}
 .ws-row-grid>.ws-project-terminal{grid-area:end;justify-self:end}
-.ws-row-meta{grid-area:meta;min-width:0;min-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:16px;color:var(--ws-muted)}
-.ws-row-project:not(:last-child){margin-right:6px}
-.ws-row-branch{font:11px/16px var(--ws-mono)}
+.ws-row-meta{grid-area:meta;display:flex;align-items:baseline;min-width:0;min-height:16px;font-size:11px;line-height:16px}
+/* The last line reads as a path, project/branch. The project stays in the primary text color on every card; a long name leaves room for the branch. */
+.ws-row-project,.ws-row-branch{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ws-row-project{flex:none;max-width:60%;font-size:12px;font-weight:600;color:var(--ws-fg)}
+.ws-row-branch{min-width:0;font:11px/16px var(--ws-mono)}
+.ws-row-project:not(:empty)+.ws-row-branch::before{content:"/"/"";margin:0 4px;color:var(--ws-muted);opacity:.7}
 /* Branch names show where a thread lives: the project's own checkout or a separate worktree. */
 .ws-thread-row[data-kind=base] .ws-row-branch{color:#b45309}
 .ws-thread-row[data-kind=worktree] .ws-row-branch{color:#7c3aed}
