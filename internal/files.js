@@ -643,7 +643,7 @@
     if (!s || s.el !== el) return;
     if (s.file && s.editor?.dirty()) drafts.set(draftKey(s,s.file.path),{text:s.editor.doc().toString(),version:s.file.version});
     if (s.url) URL.revokeObjectURL(s.url);
-    s.editor?.destroy();s.imageResizeObserver?.disconnect();
+    s.editor?.destroy();s.imageResizeObserver?.disconnect();s.previewObserver?.disconnect();
     clearInterval(s.refreshTimer);clearTimeout(s.indexTimer);clearTimeout(s.searchTimer);clearTimeout(s.leaderTimer);
     states.delete(s.id);
   }
@@ -773,8 +773,19 @@
       frame.title = 'Preview of ' + result.path;
       frame.setAttribute('sandbox', 'allow-scripts');
       const html = result.html || '';
-      frame.srcdoc = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, head => head + previewKeys) : previewKeys + html;
+      // A refresh of the same file keeps its scroll position.
+      const start = s.previewPosition?.path === result.path ? s.previewPosition.at : null, keys = previewKeys(start);
+      s.previewPosition = {path:result.path, at:start};
+      frame.srcdoc = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, head => head + keys) : keys + html;
       media.append(frame);
+      // Hiding the panel resets the preview's scroll position; restore it when the panel shows again.
+      s.previewFrame = frame;
+      s.previewObserver ??= new ResizeObserver(() => {
+        const shown = !!s.previewFrame?.getClientRects().length;
+        if (shown && s.previewHidden && s.previewPosition.at) s.previewFrame.contentWindow?.postMessage({libroFilesRestore:s.previewPosition.at}, '*');
+        s.previewHidden = !shown;
+      });
+      s.previewObserver.disconnect(); s.previewObserver.observe(frame); s.previewHidden = false;
       return;
     }
     if (!result.mime) { showText(s, result.path, result.text || ''); return; }
@@ -889,26 +900,39 @@
   // Runs inside the sandboxed preview, which cannot reach the workspace. It posts
   // shortcut and Vim keys, which are replayed on the iframe element for the
   // workspace handlers, and applies the scroll steps the workspace sends back.
-  function previewScript() {
+  function previewScript(start) {
     const typing=target=>!!target.closest?.('input,textarea,select,[contenteditable]');
     addEventListener('keydown',e=>{
       const editing=typing(e.target);
       if(editing && e.key==='Escape'){e.target.blur();return;}
       if(!e.ctrlKey && !e.metaKey && !e.altKey && (editing || e.key.length!==1 && e.key!=='Escape'))return;
-      if(e.key===' ')e.preventDefault();
+      // Ctrl+A selects the agent panel, so it must not also select the page text.
+      if(e.key===' ' || e.ctrlKey && e.key.toLowerCase()==='a')e.preventDefault();
       parent.postMessage({libroFilesKey:{key:e.key,code:e.code,ctrlKey:e.ctrlKey,metaKey:e.metaKey,altKey:e.altKey,shiftKey:e.shiftKey,repeat:e.repeat,typing:editing}},'*');
     },true);
     // Scroll the scrollable box under focus or at the centre, else the page.
     addEventListener('message',e=>{
+      const restore=e.source===parent && e.data?.libroFilesRestore;
+      if(restore){if(!scrollX && !scrollY)scrollTo(restore[0],restore[1]);return;}
       const step=e.source===parent && e.data?.libroFilesScroll;if(!step)return;
       let box=document.activeElement===document.body?document.elementFromPoint(innerWidth/2,innerHeight/2):document.activeElement;
       while(box && box!==document.body && box!==document.documentElement && !(box.scrollHeight>box.clientHeight && /auto|scroll/.test(getComputedStyle(box).overflowY)))box=box.parentElement;
       const page=!box || box===document.body || box===document.documentElement;
       (page?window:box).scrollBy(step[0],step[1]+step[2]*(page?innerHeight:box.clientHeight));
     });
+    // The workspace keeps the scroll position, so a reloaded file or a panel shown again returns to it.
+    if(start)addEventListener('load',()=>scrollTo(start[0],start[1]));
+    addEventListener('scroll',()=>parent.postMessage({libroFilesPosition:[scrollX,scrollY]},'*'));
   }
-  const previewKeys = '<script>('+previewScript+')();<\/script>';
+  const previewKeys = start => '<script>('+previewScript+')('+JSON.stringify(start)+');<\/script>';
   window.addEventListener('message', event => {
+    const at = event.data?.libroFilesPosition;
+    if (at) {
+      // A hidden panel resets the preview to the top; keep the position from before.
+      const s = [...states.values()].find(item => item.previewFrame?.contentWindow === event.source);
+      if (s?.previewFrame.getClientRects().length) s.previewPosition.at = [Number(at[0]) || 0, Number(at[1]) || 0];
+      return;
+    }
     const key = event.data?.libroFilesKey;
     if (!key) return;
     const frame = [...document.querySelectorAll('[data-files] .ws-file-media iframe')].find(item => item.contentWindow === event.source);

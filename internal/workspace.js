@@ -1437,14 +1437,16 @@
       return;
     }
     if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open], #libro-confirm-popover')) return;
+    // A held Ctrl+A goes on to the Ctrl+A handler below, which keeps it from the focused page (Vim's Ctrl+A changes a number).
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
-      if (event.repeat) return;
-      const now = performance.now();
-      const grid = activeGrid();
-      if (grid && grid === lastCtrlAGrid && lastCtrlA && now - lastCtrlA < 450) {
-        lastCtrlA = 0; event.preventDefault(); event.stopImmediatePropagation(); hideTools(); return;
+      if (!event.repeat) {
+        const now = performance.now();
+        const grid = activeGrid();
+        if (grid && grid === lastCtrlAGrid && lastCtrlA && now - lastCtrlA < 450) {
+          lastCtrlA = 0; event.preventDefault(); event.stopImmediatePropagation(); hideTools(); return;
+        }
+        lastCtrlA = now; lastCtrlAGrid = grid;
       }
-      lastCtrlA = now; lastCtrlAGrid = grid;
     } else if (!['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) lastCtrlA = 0;
     const number = /^[1-9]$/.test(event.key) ? event.key : /^Digit[1-9]$/.test(event.code || '') ? event.code.slice(-1) : '';
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && number) {

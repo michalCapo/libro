@@ -8,6 +8,7 @@ function fixture(t, scoped=false) {
   const w=dom.window,calls=[],copied=[];t.after(()=>w.close());
   let refresh;const interval=w.setInterval.bind(w);w.setInterval=(fn,ms)=>{if(ms===3000)refresh=fn;return interval(fn,ms);};
   w.HTMLElement.prototype.scrollIntoView=()=>{};
+  w.ResizeObserver=class{observe(){}disconnect(){}};
   w.Range.prototype.getClientRects=()=>[];
   w.Range.prototype.getBoundingClientRect=()=>({left:0,right:0,top:0,bottom:0,width:0,height:0});
   Object.defineProperty(w.navigator,'clipboard',{value:{writeText:async text=>copied.push(text)}});
