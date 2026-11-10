@@ -282,7 +282,8 @@ Merge thread. The command palette also has **Finish current thread…**, which
 opens Merge thread. It has no default shortcut; you can set one in Settings. It
 opens the review dialog and never merges immediately. `Ctrl + Shift + Q` opens
 Discard thread. When the thread has no uncommitted changes and no commits beyond
-its destination, it is discarded without asking.
+its destination, it is discarded without asking. A thread that an agent already
+merged opens **Remove merged thread** instead, so its removal is confirmed.
 
 The dialog shows the destination branch, recent commits, and changed-file
 summary. The original branch is preselected. Older worktrees without a recorded

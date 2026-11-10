@@ -46,12 +46,13 @@ func readProjectGitInfo(path string) projectGitInfo {
 	return info
 }
 
-// forgetProjectGitInfo makes the next read see a change Libro just made in Git.
-// A background read that was already running is repaired by the refresh that
-// the next projectsJS requests.
-func forgetProjectGitInfo() {
+// forgetProjectGitInfo makes the next read see a change Libro just made in the
+// project at path. Only that project waits for Git; the others keep their saved
+// info. A background read that was already running is repaired by the refresh
+// that the next projectsJS requests.
+func forgetProjectGitInfo(path string) {
 	projectGitInfoCache.Lock()
-	clear(projectGitInfoCache.items)
+	delete(projectGitInfoCache.items, path)
 	projectGitInfoCache.Unlock()
 }
 

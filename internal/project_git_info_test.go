@@ -40,7 +40,7 @@ func TestProjectListKeepsSavedGitInfoUntilRefresh(t *testing.T) {
 	if _, err := worktreeGit(repo, "branch", "other"); err != nil {
 		t.Fatal(err)
 	}
-	forgetProjectGitInfo()
+	forgetProjectGitInfo(repo)
 	if got := branches(); !slices.Equal(got, []string{"added", "main", "other"}) {
 		t.Fatalf("Libro's own Git change was not seen: %v", got)
 	}

@@ -2907,7 +2907,7 @@ func projectScriptNodesFor(state *AppState, all []jsProject) []*r.Node {
 		url = applicationURL(settings.Port)
 	}
 	// An action's reply can reach the browser after a newer background update.
-	version := projectsVersionStart.UnixMilli() + time.Since(projectsVersionStart).Microseconds()
+	version := projectsVersionStart.UnixMicro() + time.Since(projectsVersionStart).Microseconds()
 	return []*r.Node{clientScriptNode("if(!(props[1]<(window.__libroProjectsVersion||0)))window.__libroThreads=props[0];", state.Threads, version), clientScriptNode("if(!(props[6]<(window.__libroProjectsVersion||0))){window.__libroProjectsVersion=props[6];window.__libroActiveProject=props[0];window.__libroApplicationURL=props[1];window.__libroProjects=props[2];window.__libroApplicationURLs=props[3];window.__libroPanels=props[4];window.__libroHistoryProject=props[5];if(window.libroWorkspace)libroWorkspace.refresh();}", state.ActiveProject, url, all, applicationBrowserURLs(state), workspacesWithPanels(state), state.parentProjectScope(state.ActiveProject), version)}
 }
 

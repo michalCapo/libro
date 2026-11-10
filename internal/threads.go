@@ -219,7 +219,7 @@ func (sm *StateManager) createProjectWorktree(sid, projectID, branch string) (st
 			branch = string(base[:min(len(base), 64)]) + "-" + hex.EncodeToString(random[:])
 		}
 		path := filepath.Join(filepath.Dir(p.Path), filepath.Base(p.Path)+"-"+strings.ReplaceAll(branch, "/", "-"))
-		defer forgetProjectGitInfo()
+		defer forgetProjectGitInfo(p.Path)
 		if err := GitCreateWorktree(p.Path, branch, path); err != nil {
 			return "", err
 		}

@@ -45,8 +45,12 @@
     switching.count = Math.max(0, switching.count - 1);
     switching.confirmed = active;
     if (window.__libroSelectedApp) switching.selected = window.__libroSelectedApp;
-    // A newer switch is still on its way, so keep showing it.
-    if (switching.count) { refresh(); return; }
+    // A newer switch is still on its way, so keep showing it. An older reply must
+    // not leave panel commands pointed at a panel the user no longer sees.
+    if (switching.count) {
+      if (switching.shown !== null && !document.getElementById('project-main-' + switching.shown)?.contains(document.getElementById('frame-' + window.__libroSelectedApp))) window.__libroSelectedApp = '';
+      refresh(); return;
+    }
     clearTimeout(switching.expiry);
     setSwitchSkeleton(false);
     switching.shown = null;

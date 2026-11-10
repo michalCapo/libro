@@ -319,7 +319,7 @@ func createChild(sid, owner, workspace string, args childCommand) (r.Result, any
 	if err = saveChild(child); err != nil {
 		return r.Result{}, nil, err
 	}
-	defer forgetProjectGitInfo()
+	defer forgetProjectGitInfo(root)
 	if _, err = worktreeGit(root, "worktree", "add", "-b", child.Branch, child.Path, "refs/heads/"+args.Base); err != nil {
 		return r.Result{}, nil, err
 	}
@@ -561,7 +561,7 @@ func cleanupChild(sid string, child *childRecord) (r.Result, error) {
 	if err = saveChild(child); err != nil {
 		return js, err
 	}
-	defer forgetProjectGitInfo()
+	defer forgetProjectGitInfo(child.Root)
 	if exists {
 		if _, err = worktreeGit(child.Root, "worktree", "remove", "--force", child.Path); err != nil {
 			return js, err
