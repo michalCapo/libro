@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/creack/pty v1.1.24
-	github.com/michalCapo/g-sui v1.1.58
+	github.com/michalCapo/g-sui v1.1.59
 	github.com/sourcegraph/jsonrpc2 v0.2.3
 	github.com/yuin/goldmark v1.8.7
 	golang.org/x/net v0.62.0
