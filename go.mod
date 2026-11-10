@@ -4,11 +4,11 @@ go 1.26.0
 
 require (
 	github.com/creack/pty v1.1.24
-	github.com/michalCapo/g-sui v1.1.57
+	github.com/michalCapo/g-sui v1.1.58
 	github.com/sourcegraph/jsonrpc2 v0.2.3
-	github.com/yuin/goldmark v1.8.6
+	github.com/yuin/goldmark v1.8.7
 	golang.org/x/net v0.62.0
-	modernc.org/sqlite v1.61.0
+	modernc.org/sqlite v1.62.0
 )
 
 require (
@@ -18,8 +18,8 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	golang.org/x/sys v0.49.0 // indirect
-	modernc.org/libc v1.79.1 // indirect
+	golang.org/x/sys v0.50.0 // indirect
+	modernc.org/libc v1.81.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )

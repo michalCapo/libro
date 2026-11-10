@@ -1,7 +1,18 @@
 SHELL := /usr/bin/bash
+.SHELLFLAGS := -euo pipefail -c
 .DEFAULT_GOAL := help
 .ONESHELL:
-.PHONY: help dev check install release release-dry-run
+
+# Go module folders, relative to this file. Example: . app tools
+GO_MODULES := .
+# Target systems for vet, lint, dead code and build. Example: linux windows
+# Tests run only when this machine's system is in the list.
+GO_OSES := linux darwin windows
+# app: dead code fails check. lib: dead code is a warning, exported API can look unused.
+GO_KIND := app
+LINT_CONFIG := $(CURDIR)/.golangci.yml
+
+.PHONY: help dev check check-extra check-security tools install release release-dry-run
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -9,102 +20,143 @@ help: ## Show available commands
 dev: ## Run an isolated development instance on port 8101
 	go run . --dev
 
-check: ## Run all code checks
-	@set -uo pipefail
-	
-	ROOT_DIR="$(CURDIR)"
-	cd "$$ROOT_DIR"
-	
+check: ## Run all checks without changing files
+	@set +e
 	status=0
-	GO_FILES=()
-	while IFS= read -r -d '' file; do
-	  GO_FILES+=("$$file")
-	done < <(find . -name '*.go' -not -path './third_party/*' -print0)
-	
 	run() {
 	  echo "==> $$*"
-	  "$$@"
-	  local code=$$?
-	  if [[ $$code -ne 0 ]]; then
+	  if ! "$$@"; then
 	    status=1
 	    echo "!! failed: $$*" >&2
 	  fi
 	  echo
 	}
-	
-	# Keep checks non-mutating and fail when go fix would change sources.
-	run go fix -diff ./...
-	
-	echo "==> gofmt"
-	unformatted="$$(gofmt -l "$${GO_FILES[@]}")"
-	if [[ -n "$$unformatted" ]]; then
+
+	for tool in go gofmt staticcheck deadcode golangci-lint; do
+	  if ! command -v "$$tool" >/dev/null 2>&1; then
+	    status=1
+	    echo "!! missing tool: $$tool (run make tools)" >&2
+	  fi
+	done
+	[[ $$status -eq 0 ]] || exit 1
+
+	echo "==> gofmt -l"
+	go_files=()
+	while IFS= read -r -d '' file; do
+	  go_files+=("$$file")
+	done < <(find . -name '*.go' -not -path '*/vendor/*' -not -path '*/third_party/*' -not -path '*/node_modules/*' -not -path '*/testdata/*' -print0)
+	if ! unformatted=$$(gofmt -l "$${go_files[@]}"); then
 	  status=1
-	  echo "The following Go files are not formatted:" >&2
-	  echo "$$unformatted" >&2
+	  echo "!! failed: gofmt" >&2
+	fi
+	if [[ -n $$unformatted ]]; then
+	  status=1
+	  printf 'Not formatted:\n%s\n' "$$unformatted" >&2
 	fi
 	echo
-	
-	run go vet ./...
-	run staticcheck ./...
-	
-	echo "==> gopls check"
-	if command -v gopls >/dev/null 2>&1; then
-	  gopls check -severity=hint "$${GO_FILES[@]}"
-	  code=$$?
-	  if [[ $$code -ne 0 ]]; then
-	    status=1
-	    echo "!! failed: gopls check" >&2
-	  fi
-	else
-	  echo "gopls not found; skipping"
-	fi
-	echo
-	
-	echo "==> golangci-lint"
-	if command -v golangci-lint >/dev/null 2>&1; then
-	  golangci-lint run --max-issues-per-linter=0 --max-same-issues=0 ./...
-	  code=$$?
-	  if [[ $$code -ne 0 ]]; then
-	    status=1
-	    echo "!! failed: golangci-lint run" >&2
-	  fi
+
+	for mod in $(GO_MODULES); do
+	  pushd "$$mod" >/dev/null
+	  echo "### module $$mod"
 	  echo
-	
-	  echo "==> golangci-lint revive lsp-style diagnostics"
-	  revive_config="$$(mktemp --suffix=.yml)"
-	  cat > "$$revive_config" <<'YAML'
-	version: "2"
-	linters:
-	  default: none
-	  enable: [revive]
-	  settings:
-	    revive:
-	      rules: [{name: unused-parameter}, {name: package-comments}]
-	YAML
-	  golangci-lint run --config "$$revive_config" --max-issues-per-linter=0 --max-same-issues=0 ./...
-	  code=$$?
-	  rm -f "$$revive_config"
-	  if [[ $$code -ne 0 ]]; then
-	    status=1
-	    echo "!! failed: golangci-lint revive lsp-style diagnostics" >&2
+	  run go mod tidy -diff
+	  run go fix -diff ./...
+
+	  # Code is dead only when no target system uses it.
+	  dead=""
+	  first=1
+	  for os in $(GO_OSES); do
+	    run env GOOS="$$os" go vet ./...
+	    run env GOOS="$$os" staticcheck ./...
+	    run env GOOS="$$os" golangci-lint run --config "$(LINT_CONFIG)" ./...
+	    run env GOOS="$$os" go build -o /dev/null ./...
+
+	    echo "==> GOOS=$$os deadcode -test ./..."
+	    if ! found=$$(GOOS="$$os" deadcode -test ./...); then
+	      status=1
+	      echo "!! failed: deadcode" >&2
+	    fi
+	    echo
+	    if [[ $$first -eq 1 ]]; then
+	      dead=$$found
+	      first=0
+	    else
+	      dead=$$(comm -12 <(sort <<<"$$dead") <(sort <<<"$$found"))
+	    fi
+	  done
+	  if [[ -n $$dead ]]; then
+	    if [[ "$(GO_KIND)" == lib ]]; then
+	      printf 'Warning, unused code (check before removing public API):\n%s\n\n' "$$dead"
+	    else
+	      status=1
+	      printf 'Dead code:\n%s\n\n' "$$dead" >&2
+	    fi
 	  fi
-	else
-	  echo "golangci-lint not found; skipping"
-	fi
-	echo
-	
-	run deadcode -test ./...
-	run go build ./...
-	run go test ./...
-	run node --test electron/*.test.js electron/*.test.cjs
-	run node scripts/build-css.cjs --check
-	
+
+	  if [[ " $(GO_OSES) " == *" $$(go env GOOS) "* ]]; then
+	    run go test ./...
+	  else
+	    printf '==> go test skipped: %s is not in GO_OSES\n\n' "$$(go env GOOS)"
+	  fi
+	  popd >/dev/null
+	done
+
+	run "$(MAKE)" --no-print-directory check-extra
+
 	if [[ $$status -eq 0 ]]; then
 	  echo "All checks passed."
 	else
-	  echo "Checks finished with errors/warnings." >&2
+	  echo "Checks finished with errors." >&2
 	fi
 	exit "$$status"
+
+check-extra: ## Project-only checks, run by make check
+	@set +e
+	status=0
+	run() {
+	  echo "==> $$*"
+	  if ! "$$@"; then
+	    status=1
+	    echo "!! failed: $$*" >&2
+	  fi
+	  echo
+	}
+
+	if command -v gopls >/dev/null 2>&1; then
+	  go_files=()
+	  while IFS= read -r -d '' file; do
+	    go_files+=("$$file")
+	  done < <(find . -name '*.go' -not -path './third_party/*' -not -path '*/node_modules/*' -print0)
+	  echo "==> gopls check"
+	  if ! gopls check -severity=hint "$${go_files[@]}"; then
+	    status=1
+	    echo "!! failed: gopls check" >&2
+	  fi
+	  echo
+	else
+	  printf '==> gopls check skipped: gopls not found\n\n'
+	fi
+	run node --test electron/*.test.js electron/*.test.cjs
+	run node scripts/build-css.cjs --check
+	exit "$$status"
+
+check-security: ## Find known security problems in dependencies (needs internet)
+	@set +e
+	status=0
+	for mod in $(GO_MODULES); do
+	  for os in $(GO_OSES); do
+	    echo "==> $$mod GOOS=$$os govulncheck ./..."
+	    (cd "$$mod" && GOOS="$$os" govulncheck ./...) || status=1
+	    echo
+	  done
+	done
+	exit "$$status"
+
+tools: ## Install the check tools
+	go install honnef.co/go/tools/cmd/staticcheck@latest
+	go install golang.org/x/tools/cmd/deadcode@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+	go install golang.org/x/vuln/cmd/govulncheck@latest
 
 install: ## Build and install Libro locally
 	@set -euo pipefail

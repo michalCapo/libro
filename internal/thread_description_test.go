@@ -34,9 +34,9 @@ func descriptionFixture(t *testing.T) (sid, path string, state *AppState) {
 	return "test", path, state
 }
 
-func describeOK(t *testing.T, sid, panel, description string) {
+func describeOK(t *testing.T, sid, description string) {
 	t.Helper()
-	if _, _, err := dispatchBackendCommand(sid, backendCommand{Action: "thread", Panel: panel, Thread: threadCommand{Action: "describe", Description: description}}); err != nil {
+	if _, _, err := dispatchBackendCommand(sid, backendCommand{Action: "thread", Panel: "first", Thread: threadCommand{Action: "describe", Description: description}}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -47,7 +47,7 @@ func TestDescribeOutranksGeneratedTitlesInItsSession(t *testing.T) {
 		applyWorktreeTitle(state, actionWorktreeTitleInput{AppID: "first", Project: "repo/branch", Name: name})
 	}
 	title("Shared email link")
-	describeOK(t, sid, "first", "  Teams page:\nlabels ")
+	describeOK(t, sid, "  Teams page:\nlabels ")
 	if got := worktreeTitle(path); got != "Teams page: labels" {
 		t.Fatalf("description = %q", got)
 	}
@@ -58,7 +58,7 @@ func TestDescribeOutranksGeneratedTitlesInItsSession(t *testing.T) {
 			t.Fatalf("title %q replaced the description: %q", name, got)
 		}
 	}
-	describeOK(t, sid, "first", "Invoice page")
+	describeOK(t, sid, "Invoice page")
 	if got := worktreeTitle(path); got != "Invoice page" {
 		t.Fatalf("second description = %q", got)
 	}
@@ -80,7 +80,7 @@ func TestDescribeOutranksGeneratedTitlesInItsSession(t *testing.T) {
 // when it reconnects.
 func TestFallbackReplacesDescriptionOfEarlierSession(t *testing.T) {
 	sid, path, state := descriptionFixture(t)
-	describeOK(t, sid, "first", "Old work")
+	describeOK(t, sid, "Old work")
 	fallback := actionWorktreeTitleInput{AppID: "first", Project: "repo/branch", Name: "Fix login", Fallback: true}
 	applyWorktreeTitle(state, fallback)
 	if got := worktreeTitle(path); got != "Old work" {
@@ -96,7 +96,7 @@ func TestFallbackReplacesDescriptionOfEarlierSession(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO threads (id, name) VALUES ('thread:plain', 'New thread')`); err != nil {
 		t.Fatal(err)
 	}
-	describeOK(t, sid, "first", "Old work")
+	describeOK(t, sid, "Old work")
 	state.Apps[0].SessionID = "three"
 	applyThreadTitle(state, actionThreadRenameInput{AppID: "first", ID: "thread:plain", Name: "Fix login", Fallback: true})
 	if got := state.thread("thread:plain").Name; got != "Fix login" {
@@ -111,7 +111,7 @@ func TestDescribeKeepsThreadNameUntilNewSession(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO threads (id, name) VALUES ('thread:plain', 'New thread')`); err != nil {
 		t.Fatal(err)
 	}
-	describeOK(t, sid, "first", "Teams page")
+	describeOK(t, sid, "Teams page")
 	rename := func(name string) {
 		applyThreadTitle(state, actionThreadRenameInput{AppID: "first", ID: "thread:plain", Name: name})
 	}
@@ -187,7 +187,7 @@ func TestDescribeWaitsForTheRunningAgentsSession(t *testing.T) {
 
 func TestDescribeFollowsWorkspaceCleanup(t *testing.T) {
 	sid, path, _ := descriptionFixture(t)
-	describeOK(t, sid, "first", "Teams page")
+	describeOK(t, sid, "Teams page")
 	if err := saveWorktreeTitle(path, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestDescribeFollowsWorkspaceCleanup(t *testing.T) {
 func TestHandDescriptionStaysUntilCleared(t *testing.T) {
 	sid, path, state := descriptionFixture(t)
 	state.Apps[0].SessionID = "one"
-	describeOK(t, sid, "first", "Agent text")
+	describeOK(t, sid, "Agent text")
 	describeThreadByHand(sid, "repo/branch", "  My\ntext ")
 	want := func(got, expected string) {
 		t.Helper()
@@ -209,7 +209,7 @@ func TestHandDescriptionStaysUntilCleared(t *testing.T) {
 		}
 	}
 	want(worktreeTitle(path), "My text")
-	describeOK(t, sid, "first", "Agent text")
+	describeOK(t, sid, "Agent text")
 	state.Apps[0].SessionID = "two"
 	applyWorktreeTitle(state, actionWorktreeTitleInput{AppID: "first", Project: "repo/branch", Name: "Generated"})
 	if err := clearAgentTitle(path); err != nil {
@@ -231,7 +231,7 @@ func TestHandDescriptionStaysUntilCleared(t *testing.T) {
 		t.Fatal(err)
 	}
 	describeThreadByHand(sid, "thread:plain", "My text")
-	describeOK(t, sid, "first", "Agent text")
+	describeOK(t, sid, "Agent text")
 	applyThreadTitle(state, actionThreadRenameInput{AppID: "first", ID: "thread:plain", Name: "Generated"})
 	want(state.thread("thread:plain").Name, "My text")
 	describeThreadByHand(sid, "thread:plain", "")

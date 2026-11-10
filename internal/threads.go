@@ -255,20 +255,20 @@ func registerThreadActions(app *r.App, switchWorkspace func(string, string, stri
 		if project != "" {
 			workspace, err := sm.createProjectWorktree(sid, projectID, "")
 			if err != nil {
-				return r.Result{}.Run(r.Notify("error", "Could not create project thread: "+err.Error())), nil
+				return r.Result{}.Run(r.Notify("error", "Could not create project thread: "+err.Error())), nil //nolint:nilerr // the error is shown to the user
 			}
 			response, _ := switchWorkspace(sid, workspace, agentID)
 			return response, nil
 		}
 		var random [16]byte
 		if _, err := rand.Read(random[:]); err != nil {
-			return r.Result{}.Run(r.Notify("error", "Could not create thread")), nil
+			return r.Result{}.Run(r.Notify("error", "Could not create thread")), nil //nolint:nilerr // the error is shown to the user
 		}
 		thread := Thread{ID: "thread:" + hex.EncodeToString(random[:]), Name: name, Project: project, Path: path, AgentID: agentID}
 		// Project threads live only in the current session.
 		if thread.Project == "" {
 			if _, err := db.Exec("INSERT INTO threads (id, name, agent_id) VALUES (?, ?, ?)", thread.ID, thread.Name, thread.AgentID); err != nil {
-				return r.Result{}.Run(r.Notify("error", "Could not save thread")), nil
+				return r.Result{}.Run(r.Notify("error", "Could not save thread")), nil //nolint:nilerr // the error is shown to the user
 			}
 		}
 		sm.mu.Lock()

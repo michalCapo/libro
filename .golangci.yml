@@ -1,0 +1,27 @@
+version: "2"
+
+# vet and staticcheck run as separate steps in make check, so they are not repeated here.
+linters:
+  default: none
+  enable:
+    - errcheck # errors that are never checked
+    - ineffassign # values assigned and never read
+    - unparam # unused function parameters and results
+    - unconvert # type conversions that do nothing
+    - nilerr # returns nil after checking err != nil
+    - bodyclose # HTTP response body never closed
+    - misspell
+    - revive
+  settings:
+    revive:
+      rules:
+        - name: unused-parameter
+        - name: package-comments
+  exclusions:
+    generated: lax
+    paths:
+      - third_party
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

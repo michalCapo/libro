@@ -22,10 +22,7 @@ func prepareBundledDesktop() (string, string, error) {
 		return "", "", err
 	}
 
-	baseDir, err := bundledDesktopBaseDir(zipPath)
-	if err != nil {
-		return "", "", err
-	}
+	baseDir := bundledDesktopBaseDir(zipPath)
 	readyFile := filepath.Join(baseDir, ".ready")
 	if _, err := os.Stat(readyFile); err != nil {
 		if err := extractBundledDesktop(baseDir, zipPath); err != nil {
@@ -52,13 +49,13 @@ func findBundledElectronZip() (string, error) {
 	return entries[0], nil
 }
 
-func bundledDesktopBaseDir(zipPath string) (string, error) {
+func bundledDesktopBaseDir(zipPath string) string {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil || cacheDir == "" {
 		cacheDir = os.TempDir()
 	}
 	bundleID := strings.TrimSuffix(filepath.Base(zipPath), ".zip")
-	return filepath.Join(cacheDir, "libro", "desktop", version.Version, bundleID), nil
+	return filepath.Join(cacheDir, "libro", "desktop", version.Version, bundleID)
 }
 
 func extractBundledDesktop(baseDir, zipPath string) error {

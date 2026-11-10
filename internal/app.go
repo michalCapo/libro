@@ -537,7 +537,7 @@ func projectDirLookup(ctx context.Context, query string) []projectDirLookupMatch
 				return filepath.SkipAll
 			}
 			if err != nil {
-				return nil
+				return nil //nolint:nilerr // unreadable entries are skipped
 			}
 			name := d.Name()
 			if path != root && d.IsDir() {
@@ -693,7 +693,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return showToastJS(title, subtitle, variant), nil
 	})
 	// Open add dialog
-	registerWorkspaceAction(app, "app.dialog.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "app.dialog.open", func(_ *r.Context, _ sessionInput) (r.Result, error) {
 		return trustedResponse(`if(window.libroWorkspace)libroWorkspace.launcher();`), nil
 	})
 	// Quick browse - open URL or Google search
@@ -719,7 +719,7 @@ func Run(assets embed.FS, desktop bool) error {
 	registerWorkspaceAction(app, "app.pi.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		if _, err := exec.LookPath("pi"); err != nil {
-			return showToastJS("Pi agent not installed", "Install pi to use ⌘/Win+Y", "error"), nil
+			return showToastJS("Pi agent not installed", "Install pi to use ⌘/Win+Y", "error"), nil //nolint:nilerr // a missing command is shown to the user
 		}
 		return r.Result{}.Run(actionAppStart.Call(actionAppStartInput{SID: sid, Type: "terminal", Command: "pi", Writable: new(true), Name: "pi", Side: "right"})), nil
 	})
@@ -734,7 +734,7 @@ func Run(assets embed.FS, desktop bool) error {
 			p.Command = agentCommand(p)
 			if p.Command != "" {
 				if _, err := exec.LookPath(extractBaseCmd(p.Command)); err != nil {
-					return showToastJS(p.Name+" is not installed", "Install "+extractBaseCmd(p.Command)+" and try again.", "error"), nil
+					return showToastJS(p.Name+" is not installed", "Install "+extractBaseCmd(p.Command)+" and try again.", "error"), nil //nolint:nilerr // a missing command is shown to the user
 				}
 			}
 			if !validDock(dock) {
@@ -806,7 +806,7 @@ func Run(assets embed.FS, desktop bool) error {
 			}
 			if plugin.Command != "" {
 				if _, err := exec.LookPath(extractBaseCmd(plugin.Command)); err != nil {
-					return showToastJS(plugin.Name+" is not installed", "Install "+extractBaseCmd(plugin.Command)+" and try again.", "error"), nil
+					return showToastJS(plugin.Name+" is not installed", "Install "+extractBaseCmd(plugin.Command)+" and try again.", "error"), nil //nolint:nilerr // a missing command is shown to the user
 				}
 			}
 		}
@@ -819,7 +819,7 @@ func Run(assets embed.FS, desktop bool) error {
 		if !autolaunch && isAgentApp(candidate) && threadState.thread(threadState.ActiveProject) != nil && (replaceAgent || !slices.ContainsFunc(threadState.Apps, isAgentApp)) {
 			removed, err := sm.ReplaceThreadAgent(sid, pluginID, command)
 			if err != nil {
-				return r.Result{}.Run(r.Notify("error", "Could not replace agent")), nil
+				return r.Result{}.Run(r.Notify("error", "Could not replace agent")), nil //nolint:nilerr // the error is shown to the user
 			}
 			for _, existing := range removed {
 				tm.Stop(existing.ID)
@@ -991,7 +991,7 @@ func Run(assets embed.FS, desktop bool) error {
 		tm.Stop(term.ID)
 		command, reportSession := agentLaunch(sid, *term)
 		if _, err := tm.StartWithSessionReporter(generation, term.ID, command, pwd, term.Writable, environment, reportSession); err != nil {
-			return r.Result{}.Run(r.Notify("error", "Failed to restart terminal: "+err.Error())), nil
+			return r.Result{}.Run(r.Notify("error", "Failed to restart terminal: "+err.Error())), nil //nolint:nilerr // the error is shown to the user
 		}
 		// Keep a resumed project's description; only fresh agents clear it.
 		var js r.Result
@@ -1189,7 +1189,7 @@ func Run(assets embed.FS, desktop bool) error {
 		return insertURLPanel(sid, "", "New Tab", "", "", width, insertIdx), nil
 	})
 	// Quick open - show the app search dialog
-	registerWorkspaceAction(app, "plugin.launcher.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "plugin.launcher.open", func(_ *r.Context, _ sessionInput) (r.Result, error) {
 		return trustedResponse(`if(window.libroWorkspace)libroWorkspace.launcher();`), nil
 	})
 	// Execute a terminal command directly (called from search dialog)
@@ -1233,7 +1233,7 @@ func Run(assets embed.FS, desktop bool) error {
 		_ = json.NewEncoder(w).Encode(matches)
 	})
 	// Open the unified project dialog in folder-browse mode.
-	registerWorkspaceAction(app, "project.dialog.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "project.dialog.open", func(_ *r.Context, _ sessionInput) (r.Result, error) {
 		return trustedResponse(`if(window.__libroOpenProjectDialog)window.__libroOpenProjectDialog();`), nil
 	})
 	// Close project dialog
@@ -1263,7 +1263,7 @@ func Run(assets embed.FS, desktop bool) error {
 		// of failing — the user can either confirm creation or cancel.
 		if info, statErr := os.Stat(path); statErr != nil || !info.IsDir() {
 			msg := "Folder does not exist: " + path
-			return r.Result{}.Run(r.Seq(r.SetText("project-path-confirm-msg", msg+" — Create it?"), r.SetAttr("project-path-confirm", "data-path", path), r.Show("project-path-confirm"))), nil
+			return r.Result{}.Run(r.Seq(r.SetText("project-path-confirm-msg", msg+" — Create it?"), r.SetAttr("project-path-confirm", "data-path", path), r.Show("project-path-confirm"))), nil //nolint:nilerr // a missing folder is offered for creation
 
 		}
 		return finalizeProjectCreate(sid, path, name, false), nil
@@ -1283,7 +1283,7 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 		info, err := os.Stat(path)
 		if err != nil || !info.IsDir() {
-			return r.Result{}.Run(r.Notify("error", "Folder does not exist")), nil
+			return r.Result{}.Run(r.Notify("error", "Folder does not exist")), nil //nolint:nilerr // the error is shown to the user
 		}
 		name, ok := projectNameForPath(sid, path)
 		if !ok {
@@ -1304,7 +1304,7 @@ func Run(assets embed.FS, desktop bool) error {
 			return r.Result{}.Run(r.Notify("error", "Path must be absolute")), nil
 		}
 		if err := os.MkdirAll(path, 0o755); err != nil {
-			return r.Result{}.Run(r.Notify("error", "Failed to create folder: "+err.Error())), nil
+			return r.Result{}.Run(r.Notify("error", "Failed to create folder: "+err.Error())), nil //nolint:nilerr // the error is shown to the user
 		}
 		name, ok := projectNameForPath(sid, path)
 		if !ok {
@@ -1316,7 +1316,7 @@ func Run(assets embed.FS, desktop bool) error {
 	actionProjectClose = registerWorkspaceAction(app, "project.close", func(_ *r.Context, in actionProjectCloseInput) (r.Result, error) {
 		response, err := closeWorkspace(inputSID(in.SID), in.Name)
 		if err != nil {
-			return r.Result{}.Run(r.Notify("error", "Could not close workspace: "+err.Error())), nil
+			return r.Result{}.Run(r.Notify("error", "Could not close workspace: "+err.Error())), nil //nolint:nilerr // the error is shown to the user
 		}
 		return response, nil
 	})
@@ -1329,7 +1329,7 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 		js, err := closeWorkspace(sid, in.ID)
 		if err != nil {
-			return r.Merge(js, r.Result{}.Run(r.Notify("error", "Could not discard thread: "+err.Error()))), nil
+			return r.Merge(js, r.Result{}.Run(r.Notify("error", "Could not discard thread: "+err.Error()))), nil //nolint:nilerr // the error is shown to the user
 		}
 		// With no other open thread to land on, the first project takes over.
 		active := sm.Get(sid).ActiveProject == in.ID
@@ -1337,7 +1337,7 @@ func Run(assets embed.FS, desktop bool) error {
 			js = r.Merge(js, switchToProjectName(sid, projects[0].Name))
 		}
 		if err := sm.DiscardThread(sid, in.ID); err != nil {
-			return r.Merge(js, r.Result{}.Run(r.Notify("error", "Could not discard thread: "+err.Error()))), nil
+			return r.Merge(js, r.Result{}.Run(r.Notify("error", "Could not discard thread: "+err.Error()))), nil //nolint:nilerr // the error is shown to the user
 		}
 		js = r.Merge(js, r.Result{}.Run(r.Remove(projectMainID(in.ID))), projectsJS(sm.Get(sid)))
 		// Without any project left, the empty workspace takes the thread's place.
@@ -1461,7 +1461,7 @@ func Run(assets embed.FS, desktop bool) error {
 	})
 	// Finish cleanup before allowing the renderer to close the desktop window.
 	// Without a desktop process the server keeps running, so the next page restores again.
-	actionAppCloseAll = registerWorkspaceAction(app, "app.close.all", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	actionAppCloseAll = registerWorkspaceAction(app, "app.close.all", func(_ *r.Context, _ sessionInput) (r.Result, error) {
 		stopRuntime()
 		sm.backendMu.Lock()
 		sm.backendSID = ""
@@ -1526,7 +1526,7 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 		vtName, err := sm.createProjectWorktree(sid, state.ActiveProject, branch)
 		if err != nil {
-			return r.Result{}.Run(r.Notify("error", "Failed to create worktree: "+err.Error())), nil
+			return r.Result{}.Run(r.Notify("error", "Failed to create worktree: "+err.Error())), nil //nolint:nilerr // the error is shown to the user
 		}
 		prevState := sm.Get(sid)
 		closeDevtoolsJS := closeDevtoolsForAppsJS(prevState.Apps)

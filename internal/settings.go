@@ -376,7 +376,7 @@ func registerSettingsActions(app *r.App) {
 		}
 		return clientScript("libroWorkspace.agentCommandSaved(props[0],props[1],props[2]);", message, plugins(), err == nil), nil
 	})
-	registerWorkspaceAction(app, "settings.open", func(_ *r.Context, in sessionInput) (r.Result, error) {
+	registerWorkspaceAction(app, "settings.open", func(_ *r.Context, _ sessionInput) (r.Result, error) {
 		commands := map[string]string{}
 		for _, plugin := range plugins() {
 			if plugin.Dock == "center" && plugin.Type == AppTypeTerminal {
@@ -387,7 +387,7 @@ func registerSettingsActions(app *r.App) {
 	})
 	registerWorkspaceAction(app, "settings.width", func(_ *r.Context, in actionSettingsWidthInput) (r.Result, error) {
 		if err := DBSetDefaultPanelWidth(Width(in.Width)); err != nil {
-			return clientScript("libroWorkspace.settingsSaved(false);"), nil
+			return clientScript("libroWorkspace.settingsSaved(false);"), nil //nolint:nilerr // the failed save is shown to the user
 		}
 		return clientScript("libroWorkspace.settingsSaved(true);"), nil
 	})
