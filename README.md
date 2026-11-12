@@ -115,7 +115,7 @@ app opens a window or database.
 
 ![Agent commands in Settings: named agents with their start commands](demo/agents-settings.png)
 - The agent panel fills the space the tools leave, at least 600px. When both do not fit, the tool covers the agent.
-- All tool panels in a thread share one width. Pick it with the size button in the tab row, from XS (320px) to 2XL (1920px), or MAX. Press `Ctrl + M` to make a panel full width and back.
+- All tool panels in a thread share one width. Pick it with the size button in the tab row, from XS (320px) to 2XL (1920px), or MAX. Press `Ctrl + M` to make a panel full width and back. On windows up to 1920px wide, a MAX panel also covers the sidebar; `Ctrl + Shift + E` returns it to its previous size.
 - Hidden panels keep running. Switch away and come back without losing anything.
 
 ### Restore on start

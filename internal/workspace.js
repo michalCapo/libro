@@ -187,6 +187,10 @@
     button.setAttribute('aria-label', label);
     button.firstElementChild.textContent = fold ? 'push_pin' : 'keyboard_double_arrow_left';
   }
+  const fullHDWindow = matchMedia('(max-width:1920px)');
+  function maxPanel(grid = activeGrid()) {
+    return grid && frames(grid).find(frame => frame.dataset.dock === 'right' && frame.dataset.dockVisible === 'true' && frame.style.width.endsWith('%'));
+  }
   function activeGrid() { return [...document.querySelectorAll('[data-workspace-project]')].find(el => el.parentElement.style.display !== 'none'); }
   function frames(grid) { return [...grid.querySelectorAll(':scope > [data-app-id]')].sort((a, b) => Number(a.style.order) - Number(b.style.order)); }
   function isThread(grid = activeGrid()) { return grid?.dataset.thread === 'true'; }
@@ -1259,6 +1263,13 @@
       });
       layoutDocks(grid, all, full);
     });
+    // Up to Full HD, a tool panel at MAX also covers the sidebar and rail, so it uses the whole window width.
+    // Hiding them resizes the main area, whose observer lays the docks out again at the new width.
+    // Focus left in the hidden rail, such as on its size picker, moves to the panel so shortcuts keep working.
+    // Focusing scrolls the panel, which refreshes again, so it waits for the next frame.
+    const cover = fullHDWindow.matches && maxPanel();
+    root.toggleAttribute('data-panel-max', !!cover);
+    if (cover && document.activeElement?.closest('.ws-sidebar, .ws-tool-rail')) requestAnimationFrame(() => window.__libroFocusAppByID?.(cover.dataset.appId));
     observer.observe(document.getElementById('main-area'), {childList:true, subtree:true, attributes:true, attributeFilter:['style', 'data-dock', 'data-task-title', 'data-app-name']});
   }
   function restorePanelFocus() {
@@ -1496,6 +1507,13 @@
       if (event.repeat) return;
       const full = root.hasAttribute('data-panel-full');
       if (full) maximize(maximized);
+      // A tool panel at MAX covers the sidebar, so the key also returns that panel to its previous size.
+      const cover = root.hasAttribute('data-panel-max') && maxPanel();
+      if (cover) {
+        select(cover.dataset.appId);
+        call('app.resize.max.toggle', {maxPixel: window.__libroAppWidthMaxPixel()});
+        return;
+      }
       if (narrowWindow.matches) projectMenu(full || undefined); else foldSidebar(full ? false : undefined);
       return;
     }

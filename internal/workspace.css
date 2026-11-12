@@ -196,6 +196,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-grid[data-maximized]:not([data-maximized=""])>[data-maximized=true]{display:flex;width:100%!important;flex:0 0 100%!important}
 #libro-workspace[data-panel-full] :is(.ws-sidebar,.ws-tool-rail,.ws-tool-tabs){display:none!important}
 #libro-workspace[data-panel-full] .ws-project{padding-bottom:0}
+#libro-workspace[data-panel-max] :is(.ws-sidebar,.ws-tool-rail){display:none!important}
 #libro-workspace[data-panel-full] .ws-grid{margin-top:0!important}
 .ws-grid:has(>[data-app-id])>.ws-empty{display:none}
 .ws-grid>.ws-empty{flex:1}
