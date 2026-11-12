@@ -693,8 +693,11 @@ release: ## Bump, build, tag, push, and publish a release
 	    CGO_ENABLED=0 GOOS="$$OS" GOARCH="$$ARCH" \
 	        go build -ldflags "$$LDFLAGS" -o "$$OUTPUT" .
 	
-	    # Cleanup .syso files after Windows build
-	    [[ "$$OS" == "windows" ]] && rm -f "$$SCRIPT_DIR/"*.syso
+	    if [[ "$$OS" == "windows" ]]; then
+	        rm -f "$$SCRIPT_DIR/"*.syso
+	        # Windows then shows the publisher instead of "Unknown publisher"
+	        "$$SCRIPT_DIR/scripts/sign-windows.sh" "$$OUTPUT"
+	    fi
 	done
 	
 	reset_embedded_bundle_dirs
