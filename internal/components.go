@@ -3452,6 +3452,8 @@ func terminalFrameSetupJS() string {
 					}
 					if (term.attachCustomKeyEventHandler) {
 						term.attachCustomKeyEventHandler(function(ev) {
+							// In a plain browser tab, Alt+1..9 switches browser tabs.
+							if (ev && !window.libroElectron && ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && /^Digit[1-9]$/.test(ev.code || '')) return false;
 							if (!ev || ev.type !== 'keydown') return true;
 							var key = String(ev.key || '').toLowerCase();
 							var copyCombo = key === 'c' && ((ev.ctrlKey && ev.shiftKey) || ev.metaKey);
