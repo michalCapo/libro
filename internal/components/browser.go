@@ -1394,17 +1394,36 @@ function syncBrowserFallbackFrames(root) {
 	});
 	scope.querySelectorAll('iframe[data-browser-iframe-app]').forEach(function(frame) {
 		frame.style.display = useElectron ? 'none' : 'block';
-		if (!useElectron && !frame.hasAttribute('src')) frame.setAttribute('src', frame.getAttribute('data-browser-src') || 'about:blank');
-		if (!useElectron) updateBrowserFallbackUI(frame);
+		if (!useElectron && !frame.hasAttribute('data-browser-url')) loadBrowserFallbackFrame(frame, frame.getAttribute('data-browser-src'));
 	});
+}
+
+// Most websites refuse to be framed, so a plain browser shows only local
+// previews in the panel and opens other sites in a new tab.
+function isLocalPreviewURL(url) {
+	try {
+		var host = new URL(url).hostname.replace(/^\[|\]$/g, '').toLowerCase();
+		return /^https?:/i.test(url) && (host === 'localhost' || host.endsWith('.localhost') || host === '0.0.0.0' || host === '::1' || /^127\./.test(host));
+	} catch (_) { return false; }
+}
+
+function loadBrowserFallbackFrame(frame, url) {
+	url = url || 'about:blank';
+	var embed = url === 'about:blank' || isLocalPreviewURL(url);
+	frame.setAttribute('data-browser-url', url);
+	frame.setAttribute('src', embed ? url : 'about:blank');
+	frame.style.visibility = embed ? '' : 'hidden';
+	updateBrowserFallbackUI(frame);
 }
 
 function updateBrowserFallbackUI(frame) {
 	var appID = frame.getAttribute('data-browser-iframe-app');
-	var url = frame.getAttribute('src') || 'about:blank';
+	var url = frame.getAttribute('data-browser-url') || 'about:blank';
 	var hasURL = url !== 'about:blank';
 	var notice = document.querySelector('[data-browser-fallback-notice="' + appID + '"]');
 	if (notice) notice.style.display = hasURL ? 'block' : 'none';
+	var text = document.querySelector('[data-browser-fallback-text="' + appID + '"]');
+	if (text) text.textContent = isLocalPreviewURL(url) ? 'Some local pages block embedded previews. ' : 'This site opens in a new browser tab. ';
 	var link = document.querySelector('[data-browser-external-link="' + appID + '"]');
 	if (link) link.setAttribute('href', url);
 	var host = frame.closest('[data-app-content]');
@@ -1497,9 +1516,7 @@ window.__libroWvNavigate = function(appID, url) {
 		return;
 	}
 	var frame = getBrowserFallbackFrame(appID);
-	if (!frame) return;
-	frame.setAttribute('src', url || 'about:blank');
-	updateBrowserFallbackUI(frame);
+	if (frame) loadBrowserFallbackFrame(frame, url);
 };
 
 window.__libroNavigateAddress = function(appID, value) {
@@ -1512,6 +1529,7 @@ window.__libroNavigateAddress = function(appID, value) {
 	catch (_) { if (window.__libroShowToast) window.__libroShowToast('Invalid address', 'Enter a valid website or file URL.', 'error'); return false; }
 	var host = document.querySelector('[data-webview-app="'+appID+'"], [data-browser-iframe-app="'+appID+'"]');
 	if (!host) return false;
+	if (!window.libroElectron && !isLocalPreviewURL(url)) window.open(url, '_blank', 'noopener');
 	var input = document.getElementById('urlinput-'+appID); if (input) input.value = url;
 	if(window.__libroRememberURL)window.__libroRememberURL(url);
 	__ws.call('app.url.set', {sid:host.getAttribute('data-sid'), id:appID, url:url});

@@ -102,7 +102,7 @@ process.stdin.on('end', () => {
     };
     const window = { addEventListener() {}, focus() {} };
     if (electron) window.libroElectron = {};
-    const context = { window, document, setTimeout() {}, MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} } };
+    const context = { window, document, URL, setTimeout() {}, MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} } };
     vm.runInNewContext(script, context);
     assert.equal(notice.style.display, 'none');
     assert.ok(!loading.removed);

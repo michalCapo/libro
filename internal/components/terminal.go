@@ -813,8 +813,19 @@ func RegisterTerminalRoutes(app *r.App, tm *TerminalManager, allowed func(sid, t
 	})
 }
 
+// sameOriginHandshake rejects terminal sockets opened by other web pages:
+// a terminal accepts shell input, so only Libro's own page may connect.
+func sameOriginHandshake(config *websocket.Config, req *http.Request) error {
+	origin, err := websocket.Origin(config, req)
+	if err != nil || origin == nil || !strings.EqualFold(origin.Host, req.Host) {
+		return fmt.Errorf("terminal socket origin %q is not allowed", req.Header.Get("Origin"))
+	}
+	config.Origin = origin
+	return nil
+}
+
 func serveTerminalWS(w http.ResponseWriter, req *http.Request, s *TerminalSession) {
-	websocket.Handler(func(conn *websocket.Conn) {
+	websocket.Server{Handshake: sameOriginHandshake, Handler: func(conn *websocket.Conn) {
 		client := &terminalClient{conn: conn}
 		s.addClient(client)
 		defer s.removeClient(client)
@@ -835,7 +846,7 @@ func serveTerminalWS(w http.ResponseWriter, req *http.Request, s *TerminalSessio
 			}
 			s.handleMessage(msg)
 		}
-	}).ServeHTTP(w, req)
+	}}.ServeHTTP(w, req)
 }
 
 func terminalIDFromPath(path string) string {

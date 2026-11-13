@@ -1136,7 +1136,7 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			Attr("data-browser-fallback-notice", app.ID).
 			Attr("style", "display:none").
 			Render(
-				r.Span("").Text("Some sites block embedded previews. Use Libro desktop to browse inside this panel, or "),
+				r.Span("").Attr("data-browser-fallback-text", app.ID),
 				r.El("a", "underline").Text("Open in new tab").
 					Attr("data-browser-external-link", app.ID).
 					Attr("target", "_blank").Attr("rel", "noopener noreferrer"),

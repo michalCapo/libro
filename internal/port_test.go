@@ -3,6 +3,8 @@ package libro
 import (
 	"embed"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,5 +88,24 @@ func TestListensOnLoopbackOnly(t *testing.T) {
 	host, port, err := net.SplitHostPort(listenAddress())
 	if err != nil || port != "8102" || !net.ParseIP(host).IsLoopback() {
 		t.Fatalf("listen address = %q, want loopback on port 8102", listenAddress())
+	}
+}
+
+func TestRejectsNonLoopbackHost(t *testing.T) {
+	handler := loopbackHostOnly(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	for host, ok := range map[string]bool{
+		"localhost:8100":    true,
+		"127.0.0.1:8100":    true,
+		"[::1]:8100":        true,
+		"evil.example:8100": false,
+		"192.168.1.5:8100":  false,
+	} {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Host = host
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if (rec.Code == http.StatusOK) != ok {
+			t.Errorf("host %q status = %d, want allowed %v", host, rec.Code, ok)
+		}
 	}
 }

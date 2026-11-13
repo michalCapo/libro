@@ -646,6 +646,24 @@ func listenAddress() string {
 	return net.JoinHostPort("127.0.0.1", Port())
 }
 
+// loopbackHostOnly rejects requests addressed to another host name. A web
+// page that rebinds its own domain to 127.0.0.1 still sends that domain as
+// Host, so it cannot reach the workspace.
+func loopbackHostOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		host := req.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		host = strings.ToLower(strings.Trim(host, "[]"))
+		if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+			http.Error(w, "host not allowed", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, req)
+	})
+}
+
 // Run initializes and starts the Libro application server.
 func Run(assets embed.FS, desktop bool) error {
 	listener, err := net.Listen("tcp", listenAddress())
@@ -1601,7 +1619,7 @@ func Run(assets embed.FS, desktop bool) error {
 		}()
 	}
 	log.Printf("Libro listening on http://localhost:%s", Port())
-	return http.Serve(listener, app.Handler())
+	return http.Serve(listener, loopbackHostOnly(app.Handler()))
 }
 
 // ensureScheme adds http:// for local URLs and https:// for everything else.
