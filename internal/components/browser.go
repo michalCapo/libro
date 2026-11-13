@@ -1403,14 +1403,17 @@ function syncBrowserFallbackFrames(root) {
 function isLocalPreviewURL(url) {
 	try {
 		var host = new URL(url).hostname.replace(/^\[|\]$/g, '').toLowerCase();
-		return /^https?:/i.test(url) && (host === 'localhost' || host.endsWith('.localhost') || host === '0.0.0.0' || host === '::1' || /^127\./.test(host));
+		return /^https?:/i.test(url) && (host === 'localhost' || host.endsWith('.localhost') || host === '0.0.0.0' || host === '::1' || /^127(\.\d{1,3}){3}$/.test(host));
 	} catch (_) { return false; }
 }
+
+window.__libroIsLocalPreviewURL = isLocalPreviewURL;
 
 function loadBrowserFallbackFrame(frame, url) {
 	url = url || 'about:blank';
 	var embed = url === 'about:blank' || isLocalPreviewURL(url);
 	frame.setAttribute('data-browser-url', url);
+	if (embed && url !== 'about:blank') frame.setAttribute('data-browser-local-url', url);
 	frame.setAttribute('src', embed ? url : 'about:blank');
 	frame.style.visibility = embed ? '' : 'hidden';
 	updateBrowserFallbackUI(frame);
@@ -1461,6 +1464,12 @@ window.__libroWvBack = function(appID) {
 	}
 	var frame = getBrowserFallbackFrame(appID);
 	if (!frame) return;
+	// A site opened in a new tab left the panel hidden; Back returns to the last local preview.
+	if (frame.style.visibility === 'hidden') {
+		var local = frame.getAttribute('data-browser-local-url');
+		if (local) window.__libroNavigateAddress(appID, local);
+		return;
+	}
 	try { frame.contentWindow.history.back(); } catch (e) {}
 };
 window.__libroWvForward = function(appID) {
@@ -1470,7 +1479,7 @@ window.__libroWvForward = function(appID) {
 		return;
 	}
 	var frame = getBrowserFallbackFrame(appID);
-	if (!frame) return;
+	if (!frame || frame.style.visibility === 'hidden') return;
 	try { frame.contentWindow.history.forward(); } catch (e) {}
 };
 window.__libroWvReload = function(appID) {

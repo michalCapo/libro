@@ -201,6 +201,8 @@
       trigger.disabled = true;
       trigger.setAttribute('aria-busy', 'true');
     }
+    // A plain browser cannot embed most sites, so other sites also open in a new tab.
+    if (!window.libroElectron && plugin.type === 'url' && /^https?:\/\//i.test(plugin.url || '') && !window.__libroIsLocalPreviewURL?.(plugin.url)) window.open(plugin.url, '_blank', 'noopener');
     const targetDock = dock || plugin.dock;
     const grid = targetDock === 'center' && activeGrid();
     const hasAgent = grid && frames(grid).some(frame => frame.dataset.dock === 'center');
