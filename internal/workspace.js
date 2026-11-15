@@ -665,22 +665,41 @@
     const open = new Set(window.__libroPanels || []);
     const recent = projects.filter(p => p.name === current || p.baseOpened || open.has(p.name) || all.some(w => w.kind === 'worktree' && w.name === p.name && !w.closed))
       .sort((a, b) => (b.name === current) - (a.name === current));
-    const worktree = node('input'); worktree.type = 'checkbox'; worktree.checked = true;
-    const option = node('label', 'ws-palette-option'); option.append(worktree, node('span', '', 'Own worktree'), node('small', '', 'New branch from the current branch'));
-    const entry = p => ({label:p.displayName || p.name, icon:'folder_open', description:p.isGit && p.currentBranch ? p.currentBranch : 'No Git: opens the folder', run:() => {
-      if (worktree.checked && p.isGit && p.currentBranch) call('thread.create', {project:p.name});
-      else call('project.switch', {name:p.name});
-    }});
+    // Where the thread works is chosen under the search. Each Git row shows what that choice does there.
+    const choice = node('div', 'ws-palette-choice'); choice.setAttribute('role', 'radiogroup'); choice.setAttribute('aria-label', 'Where the thread works');
+    const [worktree] = ['Own worktree', 'Project folder'].map((label, index) => {
+      // Tab in the search switches the choice, so the radios stay out of the focus order and focus stays in the search.
+      const input = node('input', ''); input.type = 'radio'; input.name = 'thread-picker-place'; input.checked = !index; input.tabIndex = -1;
+      const item = node('label', ''); item.append(input, node('span', '', label)); choice.append(item); return input;
+    });
+    const key = node('kbd', 'ws-plugin-key', 'Tab'); key.setAttribute('aria-hidden', 'true'); choice.append(key);
+    const hints = [];
+    const hint = () => hints.forEach(item => { item.textContent = worktree.checked ? 'New worktree from ' : 'Opens folder on '; });
+    choice.addEventListener('change', hint);
+    const entry = p => {
+      const git = p.isGit && p.currentBranch;
+      const action = node('span', 'ws-palette-hint', git ? '' : 'Opens folder · ');
+      // A default branch name says little, so it shows only with the hint.
+      const detail = git ? node('code', /^(main|master)$/.test(p.currentBranch) ? 'ws-palette-hint' : '', p.currentBranch) : p.isGit ? 'No branch' : 'No Git';
+      if (git) hints.push(action);
+      return {label:p.displayName || p.name, icon:'folder_open', description:[action, detail], run:() => {
+        if (worktree.checked && git) call('thread.create', {project:p.name});
+        else call('project.switch', {name:p.name});
+      }};
+    };
     const rest = projects.filter(p => !recent.includes(p));
-    paletteDialog('thread-picker-dialog', 'New thread', 'Which project?', [
-      {label:'General', icon:'chat_bubble_outline', description:'Just chat, no folder', run:() => call('thread.create', {project:''})},
+    const actions = [
+      {label:'General', icon:'chat_bubble_outline', description:'Chat without a folder', run:() => call('thread.create', {project:''})},
       ...(recent.length ? [{heading:'Recent'}, ...recent.map(entry)] : []),
       ...(rest.length ? [{heading:'All projects'}, ...rest.map(entry)] : []),
-      {label:'Add project…', icon:'create_new_folder', description:'Open a folder as a new project', run:() => window.__libroOpenProjectDialogBrowse ? window.__libroOpenProjectDialogBrowse() : call('project.dialog.open')},
-    ], [option], recent.length ? 1 : 0);
+      {label:'Add project…', icon:'create_new_folder', description:'Open another folder', run:() => window.__libroOpenProjectDialogBrowse ? window.__libroOpenProjectDialogBrowse() : call('project.dialog.open')},
+    ];
+    hint();
+    paletteDialog('thread-picker-dialog', 'New thread', 'Which project?', actions, {header:[choice], active:recent.length ? 1 : 0});
   }
   // A searchable list dialog. Arrows move the selection and Enter opens it; headings hide while searching.
-  function paletteDialog(id, label, placeholder, actions, extra = [], active = 0) {
+  // Header nodes sit between the search and the list. A description is text or nodes.
+  function paletteDialog(id, label, placeholder, actions, {header = [], active = 0} = {}) {
     document.getElementById(id)?.remove();
     const dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = id; dialog.setAttribute('aria-label', label);
     const searchBar = node('div', 'ws-command-search');
@@ -695,14 +714,15 @@
       if (action.heading) { const heading = node('div', 'ws-palette-heading', action.heading); heading.setAttribute('role', 'presentation'); entries.append(heading); return; }
       const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; entry.id = id + '-' + index; entry.setAttribute('role', 'option'); entry.dataset.label = action.label.toLowerCase();
       const glyph = node('i', 'material-icons-round', action.icon); glyph.setAttribute('aria-hidden', 'true');
-      const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', action.label), node('small', '', action.description)); entry.append(glyph, copy);
+      const copy = node('span', 'ws-plugin-copy'), description = node('small', ''); description.append(...[action.description || ''].flat());
+      copy.append(node('span', '', action.label), description); entry.append(glyph, copy);
       entry.onclick = () => { dialog.close(); action.run(); }; entries.append(entry);
     });
     const empty = node('p', 'ws-palette-empty', 'No matches'); empty.hidden = true;
-    // Tab flips the dialog's checkbox, so the option changes without leaving the search.
-    const toggle = extra.map(item => item.querySelector('input[type=checkbox]')).find(Boolean);
-    toggle?.addEventListener('change', () => search.focus());
-    dialog.append(entries, empty, ...extra, node('div', 'ws-command-footer', '↑ ↓ Navigate · ' + (toggle ? 'Tab toggle · ' : '') + 'Enter open · Esc close'));
+    // Tab steps through the header's radio choices, so the option changes without leaving the search.
+    const choices = header.flatMap(item => [...item.querySelectorAll('input[type=radio]')]);
+    choices.forEach(choice => choice.addEventListener('change', () => search.focus()));
+    dialog.append(...header, entries, empty, node('div', 'ws-command-footer', '↑ ↓ Navigate · Enter open · Esc close'));
     const visible = () => [...entries.children].filter(entry => entry.dataset.label && !entry.hidden);
     const highlight = () => {
       visible().forEach((entry, index) => { entry.dataset.selected = String(index === active); entry.setAttribute('aria-selected', String(index === active)); });
@@ -720,7 +740,7 @@
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault(); active = Math.max(0, Math.min(rows.length - 1, active + (event.key === 'ArrowDown' ? 1 : -1))); highlight(); rows[active]?.scrollIntoView({block:'nearest'});
       } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) rows[active]?.click(); }
-      else if (event.key === 'Tab' && toggle && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) { event.preventDefault(); toggle.checked = !toggle.checked; }
+      else if (event.key === 'Tab' && choices.length && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) { event.preventDefault(); choices[(choices.findIndex(choice => choice.checked) + 1) % choices.length].click(); }
     };
     dialog.addEventListener('close', () => dialog.remove());
     highlight(); root.append(dialog); dialog.showModal(); search.focus();
@@ -1212,7 +1232,7 @@
     tabs.hidden = false;
     const rows = [...document.querySelectorAll('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])')].sort((a, b) => a.dataset.projectShortcut - b.dataset.projectShortcut);
     const text = (row, selector) => row.querySelector(selector)?.textContent || '';
-    const items = rows.map(row => [row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus || '', row.getAttribute('aria-current') === 'true', text(row, ':scope > span'), text(row, '.ws-row-project'), text(row, '.ws-row-branch')]);
+    const items = rows.map(row => [row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus || '', row.getAttribute('aria-current') === 'true', text(row, ':scope > span'), text(row, '.ws-row-project'), text(row, '.ws-row-branch'), !!row.querySelector('.ws-project-terminal')]);
     const signature = JSON.stringify(items);
     if (chips.dataset.signature === signature && chips.firstElementChild === threadList) return;
     // Redrawing keeps keyboard focus on the list button or the same thread's chip.
@@ -1221,9 +1241,15 @@
     chips.dataset.signature = signature;
     chips.replaceChildren(threadList);
     if (listFocused) threadList.focus({preventScroll:true});
-    items.forEach(([number, key, status, current, label, project, branch], i) => {
+    items.forEach(([number, key, status, current, label, project, branch, terminal], i) => {
       const chip = node('button', 'ws-thread-chip'); chip.type = 'button'; chip.dataset.projectKey = key;
-      chip.append(node('b', '', number), node('span', '', current && label || project || label));
+      const shown = current && label || project || label;
+      chip.append(node('b', '', number), node('span', '', shown));
+      // A working or done agent shows the same icon as its sidebar card, and so does a command running in its bottom terminal.
+      // The icons are hidden from screen readers; the chip's name says the same in words.
+      if (status) { const icon = node('i', 'material-icons-round', status === 'working' ? 'sync' : 'check_circle_outline'); icon.setAttribute('aria-hidden', 'true'); chip.append(icon); }
+      if (terminal) { const icon = rows[i].querySelector('.ws-project-terminal').cloneNode(true); icon.setAttribute('aria-hidden', 'true'); chip.append(icon); }
+      chip.setAttribute('aria-label', [number + ' ' + shown, status === 'working' ? 'agents working' : status === 'done' ? 'all agents done' : '', terminal ? 'command running in bottom terminal' : ''].filter(Boolean).join(', '));
       chip.title = [label, [project, branch].filter(Boolean).join(' / ')].filter(Boolean).join('\n') + ' (Ctrl+' + number + ')';
       chip.setAttribute('aria-current', String(current));
       if (status) chip.dataset.agentStatus = status;

@@ -18,7 +18,7 @@ Mockup: https://claude.ai/artifact/HirB3ocg1EmFNNfzPZk5CN
 
 - Large "New thread" button at the top of the sidebar.
 - Opens a project picker: search box, "General" first, then Recent, then All projects.
-- "Own worktree" checkbox, ticked by default: creates a new worktree with a branch from main.
+- Under the search, a choice between "Own worktree" (default: creates a new worktree with a branch from the current branch) and "Project folder" (opens the folder). Tab switches it.
 - Enter creates the thread. The current project is first in Recent, so Ctrl+T then Enter makes a thread in the current project.
 - The old behaviour (new thread in the current project with no question) is removed.
 

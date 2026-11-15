@@ -267,11 +267,21 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-plugin-entry[data-selected=true]{background:var(--ws-popup-row)}
 .ws-plugin-entry[hidden],.ws-shortcut-row[hidden]{display:none!important}
 .ws-palette-empty{padding:24px;text-align:center;color:var(--ws-muted)}
-/* The thread picker groups projects under quiet headings; its worktree option sits above the key hints. */
-.ws-palette-heading{padding:10px 10px 4px;color:var(--ws-popup-muted);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
-.ws-palette-option{display:flex;align-items:center;gap:8px;flex-shrink:0;padding:10px 18px 0;color:var(--ws-fg);font-size:13px}
-.ws-palette-option>input{margin:0;accent-color:var(--ws-accent)}
-.ws-palette-option>small{margin-left:auto;color:var(--ws-popup-muted);font-size:11px}
+/* The thread picker groups projects under quiet headings that stay in view while its list scrolls. */
+.ws-palette-heading{position:sticky;top:-6px;z-index:1;padding:10px 10px 4px;background:var(--ws-popup);color:var(--ws-popup-muted);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+/* A palette choice sits under the search as quiet tabs; the selected one takes the row fill. */
+.ws-palette-choice{display:flex;align-items:center;gap:2px;flex-shrink:0;margin:2px 8px 0;font-size:12px}
+.ws-palette-choice>label{position:relative;padding:4px 10px;border-radius:7px;color:var(--ws-popup-muted);line-height:18px;cursor:pointer}
+.ws-palette-choice>label:hover{background:var(--ws-hover)}
+.ws-palette-choice>label:has(:checked){background:var(--ws-popup-row);color:var(--ws-fg)}
+.ws-palette-choice input{position:absolute;opacity:0;pointer-events:none}
+.ws-palette-choice>kbd{margin:0 6px 0 auto}
+/* The picker stays short and scrolls. Details sit at the row end; hints show only on the selected or hovered row. */
+#thread-picker-dialog{max-height:min(480px,calc(100dvh - 48px))}
+#thread-picker-dialog .ws-plugin-list{scroll-padding-top:32px}
+#thread-picker-dialog .ws-plugin-copy>small{margin-left:auto}
+.ws-plugin-entry small>code{font:11px/18px var(--ws-mono)}
+.ws-plugin-entry:not([data-selected=true],:hover) .ws-palette-hint{display:none}
 :is(#project-results,#move-project-results){padding:6px;max-height:min(560px,calc(100dvh - 240px));overflow-x:hidden}
 :is(#project-results,#move-project-results)>div{border:0!important;border-radius:8px;padding:8px 10px;min-height:44px;box-sizing:border-box;margin:1px 0}
 :is(#project-results,#move-project-results) [class*=border-blue]{background:var(--ws-popup-row)!important}
@@ -488,6 +498,9 @@ html.dark .ws-thread-chip[aria-current=true]{background:#36363e;box-shadow:inset
 .ws-thread-chip>b{min-width:9px;font-size:14px;font-weight:600;color:var(--ws-status,var(--ws-muted))}
 .ws-thread-chip[aria-current=true]>b{color:var(--ws-status,var(--ws-fg))}
 .ws-thread-chip>span{overflow:hidden;text-overflow:ellipsis}
+.ws-thread-chip>.material-icons-round{flex:none;margin-left:-1px;font-size:16px;color:var(--ws-status)}
+.ws-thread-chip[data-agent-status=working]>.material-icons-round{animation:ws-agent-working 1.2s linear infinite}
+@media(prefers-reduced-motion:reduce){.ws-thread-chip>.material-icons-round{animation:none}}
 .ws-grid>[data-app-id]>[data-app-toolbar]{display:none}
 .ws-grid>[data-app-type=url]:not([data-plugin=files])>[data-app-toolbar]{display:flex}
 .ws-grid>[data-app-type=url]>[data-app-toolbar]>[data-size-badges],.ws-grid>[data-app-type=url]>[data-app-toolbar]>.ws-panel-close{display:none}
