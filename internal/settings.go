@@ -504,6 +504,16 @@ func renderWorkspaceSettings() *r.Node {
 						r.El("option", "").Attr("value", "off").Text("Off"),
 					),
 				),
+				r.Div("ws-settings-row").Render(
+					r.Div("ws-settings-copy").Render(
+						r.El("label", "").Attr("for", "thread-tabs").Text("Threads in the tab row"),
+						r.P("").ID("thread-tabs-help").Text("Show threads as short labels before the panel tabs and fold the sidebar. Narrow windows always show them this way."),
+					),
+					r.El("select", "ws-settings-select").ID("thread-tabs").Attr("aria-describedby", "thread-tabs-help").Render(
+						r.El("option", "").Attr("value", "off").Text("Narrow windows only"),
+						r.El("option", "").Attr("value", "on").Text("Always"),
+					),
+				),
 			),
 			r.P("ws-settings-status").ID("default-thread-agent-status").Attr("role", "status"),
 			r.El("h2", "ws-shortcut-heading").Text("Agent commands"),

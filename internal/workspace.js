@@ -171,7 +171,9 @@
   // Narrow windows always fold the sidebar into a rail; wide windows fold it when the user pins it closed.
   const narrowWindow = matchMedia('(max-width:1000px)');
   function foldState() {
-    const fold = narrowWindow.matches ? 'narrow' : prefs.sidebarFolded === true ? 'user' : '';
+    // Threads in the tab row fold the sidebar too; narrow windows always use them.
+    root.dataset.threadTabs = String(narrowWindow.matches || prefs.threadTabs === true);
+    const fold = narrowWindow.matches ? 'narrow' : prefs.sidebarFolded === true || prefs.threadTabs === true ? 'user' : '';
     if (fold) root.dataset.fold = fold; else delete root.dataset.fold;
     // The open sidebar holds the tools above its footer; a folded one hides its list, so the tools become the left rail.
     // Moving it drops focus from its buttons, so it moves only when the fold changes and then restores focus.
@@ -738,7 +740,7 @@
     // DOM focus alone does not take native keyboard focus back from a browser panel.
     window.libroElectron?.focusWorkspace?.().then(() => { if (dialog.open) search.focus(); }).catch(() => {});
   }
-  // A row leads with its description, up to two lines. The last line
+  // A row leads with its description, up to two lines (all of them in a narrow sidebar). The last line
   // names the project and branch, then terminal, actions and status.
   function rowLabel(row, label, branch, projectName) {
     row.classList.add('ws-row-grid');
@@ -1045,6 +1047,18 @@
     renderThreadShortcuts(); requestAnimationFrame(renderRailThreads);
     return true;
   }
+  function saveThreadTabs(value) {
+    try {
+      const updated = {...prefs, threadTabs:value === 'on'};
+      localStorage.setItem('libro.workspace', JSON.stringify(updated));
+      prefs = updated;
+    } catch (_) {
+      document.getElementById('thread-tabs').value = prefs.threadTabs === true ? 'on' : 'off';
+      return false;
+    }
+    refresh();
+    return true;
+  }
   function saveVoiceTyping(value) {
     const enabled = value === 'on';
     try {
@@ -1200,10 +1214,38 @@
     }
     // The rail keeps its tools below the digits, so the folded sidebar lifts its working cards to end where the digits end.
     const list = root.querySelector('.ws-thread-cards');
-    if (root.dataset.fold && bottom >= 0) list.style.marginBottom = Math.max(0, root.querySelector('.ws-sidebar-bottom').getBoundingClientRect().top - rail.getBoundingClientRect().bottom) + 'px';
+    // Threads in the tab row hide the digits, so the list keeps its place.
+    if (root.dataset.fold && root.dataset.threadTabs !== 'true' && bottom >= 0) list.style.marginBottom = Math.max(0, root.querySelector('.ws-sidebar-bottom').getBoundingClientRect().top - rail.getBoundingClientRect().bottom) + 'px';
     else list.style.marginBottom = '';
   }
-  new MutationObserver(() => requestAnimationFrame(renderRailThreads)).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current']});
+  // With threads in the tab row, the open thread's tabs start with one chip per numbered card: its digit in the status color
+  // and its project, or the description for the open thread. A chip opens its card; the tooltip names the whole thread.
+  function renderThreadChips() {
+    const tabs = activeGrid()?.parentElement.querySelector('.ws-tool-tabs');
+    let chips = document.getElementById('workspace-thread-chips');
+    if (root.dataset.threadTabs !== 'true' || !tabs) { chips?.remove(); if (tabs) tabs.hidden = !tabs.childElementCount; return; }
+    if (!chips) { chips = node('div', 'ws-thread-chips'); chips.id = 'workspace-thread-chips'; chips.setAttribute('role', 'group'); chips.setAttribute('aria-label', 'Threads'); }
+    if (tabs.firstElementChild !== chips) tabs.prepend(chips);
+    tabs.hidden = false;
+    const rows = [...document.querySelectorAll('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])')].sort((a, b) => a.dataset.projectShortcut - b.dataset.projectShortcut);
+    const text = (row, selector) => row.querySelector(selector)?.textContent || '';
+    const items = rows.map(row => [row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus || '', row.getAttribute('aria-current') === 'true', text(row, ':scope > span'), text(row, '.ws-row-project'), text(row, '.ws-row-branch')]);
+    const signature = JSON.stringify(items);
+    if (chips.dataset.signature === signature) return;
+    // Redrawing keeps keyboard focus on the same thread's chip.
+    const focused = chips.contains(document.activeElement) ? document.activeElement.dataset.projectKey : null;
+    chips.dataset.signature = signature; chips.replaceChildren();
+    items.forEach(([number, key, status, current, label, project, branch], i) => {
+      const chip = node('button', 'ws-thread-chip'); chip.type = 'button'; chip.dataset.projectKey = key;
+      chip.append(node('b', '', number), node('span', '', current && label || project || label));
+      chip.title = [label, [project, branch].filter(Boolean).join(' / ')].filter(Boolean).join('\n') + ' (Ctrl+' + number + ')';
+      chip.setAttribute('aria-current', String(current));
+      if (status) chip.dataset.agentStatus = status;
+      chip.onclick = () => rows[i].click(); chips.append(chip);
+      if (key === focused) chip.focus({preventScroll:true});
+    });
+  }
+  new MutationObserver(() => requestAnimationFrame(() => { renderRailThreads(); renderThreadChips(); })).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current']});
   new ResizeObserver(() => requestAnimationFrame(renderRailThreads)).observe(root.querySelector('.ws-thread-cards'));
   let queued = false;
   const observer = new MutationObserver(records => {
@@ -1233,7 +1275,7 @@
     syncProjectVisibility();
     const sidebar = document.getElementById('workspace-projects');
     if (sidebar) resizeHandle(sidebar, 'sidebar');
-    if (Number.isFinite(prefs.sidebarWidth)) root.style.setProperty('--ws-projects', Math.max(180, Math.min(prefs.sidebarWidth, 480, innerWidth - 48)) + 'px');
+    if (Number.isFinite(prefs.sidebarWidth)) root.style.setProperty('--ws-projects', Math.max(140, Math.min(prefs.sidebarWidth, 480, innerWidth - 48)) + 'px');
     root.dataset.thread = String(isThread());
     // Only open threads show until All projects lists every project with its closed and archived threads.
     root.dataset.allProjects = String(!!prefs.allProjects);
@@ -1504,7 +1546,7 @@
     }
     if (binding && binding === toolKeys['sidebar']) {
       event.preventDefault(); event.stopImmediatePropagation();
-      // Narrow windows keep the sidebar folded, so the key opens or closes its list over the panels.
+      // Narrow windows and threads in the tab row keep the sidebar folded, so the key opens or closes its list over the panels.
       // A full screen panel hides the sidebar, so the key leaves full screen and shows it.
       if (event.repeat) return;
       const full = root.hasAttribute('data-panel-full');
@@ -1516,7 +1558,7 @@
         call('app.resize.max.toggle', {maxPixel: window.__libroAppWidthMaxPixel()});
         return;
       }
-      if (narrowWindow.matches) projectMenu(full || undefined); else foldSidebar(full ? false : undefined);
+      if (root.dataset.threadTabs === 'true') projectMenu(full || undefined); else foldSidebar(full ? false : undefined);
       return;
     }
     if (binding && binding === toolKeys['command-palette']) {
@@ -1708,7 +1750,7 @@
     function size() { return horizontal ? host.offsetWidth : host.offsetHeight; }
     function apply(value) {
       if (sidebar) {
-        prefs.sidebarWidth = Math.round(Math.max(180, Math.min(value, Math.min(480, innerWidth - 48))));
+        prefs.sidebarWidth = Math.round(Math.max(140, Math.min(value, Math.min(480, innerWidth - 48))));
         root.style.setProperty('--ws-projects', prefs.sidebarWidth + 'px');
       } else if (tools) {
         // Side by side, the shared edge resizes the agent too, so keep its minimum width.
@@ -1866,7 +1908,7 @@
       });
     }
     tabs.hidden = signature.length === 0;
-    if (grid === activeGrid()) renderToolSize(grid, right[0] || toolFrames[0]);
+    if (grid === activeGrid()) { renderToolSize(grid, right[0] || toolFrames[0]); renderThreadChips(); }
     window.libroVoice?.refresh();
   }
   function renderToolSize(grid, sizeFrame) {
@@ -2048,6 +2090,7 @@
     fillVoice(voice);
     document.getElementById('voice-typing').value = prefs.voiceTyping === false ? 'off' : 'on';
     document.getElementById('move-working-threads').value = prefs.moveWorkingThreads === true ? 'on' : 'off';
+    document.getElementById('thread-tabs').value = prefs.threadTabs === true ? 'on' : 'off';
     document.getElementById('voice-status').textContent = '';
     document.getElementById('agent-auto-update').value = agentUpdates === false ? 'off' : 'on';
     document.getElementById('agent-auto-update-status').textContent = '';
@@ -2091,7 +2134,7 @@
     for (const form of page.querySelectorAll('form')) if (!form.reportValidity()) return;
     const value = id => document.getElementById(id).value;
     const agent = value('default-thread-agent'), width = value('default-panel-width');
-    const theme = value('workspace-theme'), sound = value('notification-sound'), voiceTyping = value('voice-typing'), moveWorkingThreads = value('move-working-threads'), pageTools = value('page-tools-autoexecute') === 'on';
+    const theme = value('workspace-theme'), sound = value('notification-sound'), voiceTyping = value('voice-typing'), moveWorkingThreads = value('move-working-threads'), threadTabs = value('thread-tabs'), pageTools = value('page-tools-autoexecute') === 'on';
     settingsSaveSteps = [
       () => saveAgentCommand(document.getElementById('agent-commands-form')),
       () => saveTools(document.getElementById('tool-commands-form')),
@@ -2102,8 +2145,8 @@
       () => savePageTools(pageTools),
       () => saveSettings(width),
       () => {
-        const ok = saveTheme(theme) && saveNotificationSound(sound) && saveVoiceTyping(voiceTyping) && saveMoveWorkingThreads(moveWorkingThreads);
-        settingsSaveFinished(ok, 'Could not save appearance, sound, voice typing, or thread order. Please try again.');
+        const ok = saveTheme(theme) && saveNotificationSound(sound) && saveVoiceTyping(voiceTyping) && saveMoveWorkingThreads(moveWorkingThreads) && saveThreadTabs(threadTabs);
+        settingsSaveFinished(ok, 'Could not save appearance, sound, voice typing, or thread layout. Please try again.');
       },
     ];
     page.querySelector('.ws-settings-content').inert = true;
@@ -2301,7 +2344,7 @@
   });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects, .ws-rail-threads')) delete root.dataset.sidebar; });
-  narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
+  narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); renderThreadChips(); });
   window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, foldSidebar, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name}), openWorktree:(project, path, branch) => call('worktree.switch', {project, path, branch}), createWorktree:branch => call('worktree.create', {branch}), beginOpening:() => beginSwitch(), switchSettled};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {

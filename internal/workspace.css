@@ -85,9 +85,9 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 html.dark .ws-project-remove:hover{color:#ff8a80}
 .ws-project-shortcut{flex:none;min-width:18px;height:18px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;margin-left:auto;border:1px solid var(--ws-status,transparent);border-radius:4px;background:var(--ws-raised);color:var(--ws-muted);font:500 10.5px/1 var(--ws-mono)}
 /* The shortcut badge border shows agent status; the selected badge fills with it. */
-.ws-project-row[data-agent-status=working],.ws-rail-thread[data-agent-status=working]{--ws-status:var(--ws-accent)}
-.ws-project-row[data-agent-status=done],.ws-rail-thread[data-agent-status=done]{--ws-status:#15803d}
-html.dark :is(.ws-project-row,.ws-rail-thread)[data-agent-status=done]{--ws-status:#4ade80}
+.ws-project-row[data-agent-status=working],.ws-rail-thread[data-agent-status=working],.ws-thread-chip[data-agent-status=working]{--ws-status:var(--ws-accent)}
+.ws-project-row[data-agent-status=done],.ws-rail-thread[data-agent-status=done],.ws-thread-chip[data-agent-status=done]{--ws-status:#15803d}
+html.dark :is(.ws-project-row,.ws-rail-thread,.ws-thread-chip)[data-agent-status=done]{--ws-status:#4ade80}
 .ws-project-row[aria-current=true] .ws-project-shortcut{background:var(--ws-status,var(--ws-accent));color:var(--ws-on-accent)}
 .ws-project-terminal{width:16px;height:16px;flex-shrink:0;fill:none;stroke:#15803d;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 html.dark .ws-project-terminal{stroke:#4ade80}
@@ -156,6 +156,19 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-project-item:is(:hover,:focus-within)>.ws-row-grid>.ws-row-meta{margin-right:12px}
 @media(hover:none){.ws-project-item>.ws-row-grid>.ws-project-terminal{margin-right:24px}.ws-project-item>.ws-row-grid>.ws-row-meta{margin-right:12px}}
 @media(prefers-reduced-motion:reduce){.ws-project-row[data-agent-status] .material-icons-round{animation:none}}
+/* A narrow sidebar keeps the whole card beside the tall number: the description on as many lines as it needs,
+   then the project and the branch on a line each. The status icon moves under the number to leave the text the width. */
+.ws-navigation{container:ws-navigation/inline-size}
+@container ws-navigation (max-width:180px){
+.ws-row-grid{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"badge title title" "icon meta end"}
+.ws-row-grid>.material-icons-round{justify-self:center}
+.ws-row-grid>span{-webkit-line-clamp:none}
+.ws-row-meta{flex-direction:column;align-items:flex-start}
+.ws-row-project,.ws-row-branch{max-width:100%}
+.ws-row-project:not(:empty)+.ws-row-branch::before{content:none}
+.ws-new-thread-key{display:none}
+.ws-sidebar-search{gap:6px}.ws-sidebar-search span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
 .ws-sidebar-search{display:flex;align-items:center;gap:10px;min-width:0;min-height:36px;flex:1;padding:6px 8px;color:var(--ws-muted);background:transparent;border:0;border-radius:8px;text-align:left;font:inherit}
 .ws-sidebar-search span{flex:1}.ws-sidebar-search:hover{background:var(--ws-hover)}
 .ws-sidebar-search .material-icons-round{font-size:17px;flex-shrink:0;color:var(--ws-muted)}
@@ -482,6 +495,16 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 /* One shared tab row: agents at the start, tools at the end. */
 .ws-tool-tabs{justify-content:flex-start}
 .ws-tool-tabs>[data-tab-dock=right]:not([data-tab-dock=right] + [data-tab-dock=right]){margin-left:auto}
+/* Threads in the tab row: one chip per thread before the panel tabs. The folded rail keeps its tools and drops its digits. */
+#libro-workspace[data-thread-tabs=true] :is(.ws-rail-numbers,[data-sidebar-fold]){display:none}
+.ws-thread-chips{display:flex;align-items:center;gap:2px;flex-shrink:0;align-self:center;margin:0 6px 0 2px;padding-right:6px;border-right:1px solid var(--ws-line)}
+.ws-thread-chip{display:inline-flex;align-items:center;gap:6px;max-width:320px;height:28px;padding:0 9px 0 7px;border:0;border-radius:8px;background:transparent;color:var(--ws-muted);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}
+.ws-thread-chip:is(:hover,:focus-visible){background:var(--ws-hover)}
+.ws-thread-chip[aria-current=true]{background:var(--ws-raised);box-shadow:var(--ws-shadow);color:var(--ws-fg)}
+html.dark .ws-thread-chip[aria-current=true]{background:#36363e;box-shadow:inset 0 0 0 1px #4a4a54}
+.ws-thread-chip>b{min-width:9px;font-size:14px;font-weight:600;color:var(--ws-status,var(--ws-muted))}
+.ws-thread-chip[aria-current=true]>b{color:var(--ws-status,var(--ws-fg))}
+.ws-thread-chip>span{overflow:hidden;text-overflow:ellipsis}
 .ws-grid>[data-app-id]>[data-app-toolbar]{display:none}
 .ws-grid>[data-app-type=url]:not([data-plugin=files])>[data-app-toolbar]{display:flex}
 .ws-grid>[data-app-type=url]>[data-app-toolbar]>[data-size-badges],.ws-grid>[data-app-type=url]>[data-app-toolbar]>.ws-panel-close{display:none}
