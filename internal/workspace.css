@@ -23,12 +23,8 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 .ws-sidebar{width:var(--ws-projects);flex-shrink:0;background:var(--ws-chrome);display:flex;flex-direction:column;padding:6px 8px 8px;gap:8px;overflow:hidden}
 .ws-navigation{display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto;padding:0 1px;scrollbar-width:thin;scrollbar-color:var(--ws-line) transparent}
 .ws-navigation>*{flex-shrink:0}
-/* Narrow windows, or the fold button, fold the sidebar into a rail; its new thread and thread cards show the project list beside it, over the panels.
-   The list shadow falls only on the panel side, so the rail and list read as one surface. */
-#libro-workspace[data-fold] .ws-sidebar{width:var(--ws-rail-width);box-sizing:border-box;align-items:center;padding:6px 0;overflow:visible}#libro-workspace[data-fold] .ws-sidebar>.ws-resizer-sidebar{display:none}#libro-workspace[data-fold] .ws-sidebar>.ws-navigation{visibility:hidden;opacity:0;transition:opacity .12s ease-out .3s,visibility 0s .42s;position:absolute;z-index:1;top:0;bottom:0;left:var(--ws-rail-width);width:min(var(--ws-projects),calc(100vw - 2 * var(--ws-rail-width)));box-sizing:border-box;padding:6px 8px 8px;background:var(--ws-chrome);box-shadow:0 8px 24px rgb(0 0 0 / 18%);clip-path:inset(0 -32px 0 0)}#libro-workspace[data-fold][data-sidebar=open] .ws-sidebar{z-index:60}#libro-workspace[data-fold][data-sidebar=open] .ws-navigation{visibility:visible;opacity:1;transition:none}#libro-workspace[data-fold][data-sidebar=closed] .ws-navigation{transition:none}#libro-workspace[data-fold] .ws-new-thread>.material-icons-round{display:none}#libro-workspace[data-fold][data-sidebar=open] .ws-sidebar::after{content:"";position:fixed;inset:0 0 0 var(--ws-rail-width);background:rgb(0 0 0 / 25%)}
-/* With a mouse, hovering the rail new thread or thread cards fades the project list in; it stays while the pointer or focus is in the list,
-   and for a moment after the pointer leaves, so it can cross to the list. The hidden list keeps its layout so the rail can match card heights. */
-@media(hover:hover){#libro-workspace[data-fold]:not([data-sidebar]) .ws-sidebar:is(:hover,:has(>.ws-navigation:focus-within)),#libro-workspace[data-fold]:not([data-sidebar]):has(.ws-rail-threads:hover) .ws-sidebar{z-index:60}#libro-workspace[data-fold]:not([data-sidebar]) .ws-sidebar:is(:hover,:has(>.ws-navigation:focus-within))>.ws-navigation,#libro-workspace[data-fold]:not([data-sidebar]):has(.ws-rail-threads:hover) .ws-sidebar>.ws-navigation{visibility:visible;opacity:1;transition:opacity .12s ease-out}}
+/* Threads in the tab row fold the sidebar away; the thread list button or the sidebar key shows the project list over the panels. */
+#libro-workspace[data-fold] .ws-sidebar{width:0;box-sizing:border-box;align-items:center;padding:0;overflow:visible}#libro-workspace[data-fold] .ws-sidebar>.ws-resizer-sidebar{display:none}#libro-workspace[data-fold] .ws-sidebar>.ws-navigation{visibility:hidden;opacity:0;transition:opacity .12s ease-out .3s,visibility 0s .42s;position:absolute;z-index:1;top:0;bottom:0;left:0;width:min(var(--ws-projects),calc(100vw - 48px));box-sizing:border-box;padding:6px 8px 8px;background:var(--ws-chrome);box-shadow:0 8px 24px rgb(0 0 0 / 18%);clip-path:inset(0 -32px 0 0)}#libro-workspace[data-fold][data-sidebar=open] .ws-sidebar{z-index:60}#libro-workspace[data-fold][data-sidebar=open] .ws-navigation{visibility:visible;opacity:1;transition:none}#libro-workspace[data-fold][data-sidebar=closed] .ws-navigation{transition:none}#libro-workspace[data-fold] .ws-new-thread>.material-icons-round{display:none}#libro-workspace[data-fold][data-sidebar=open] .ws-sidebar::after{content:"";position:fixed;inset:0;background:rgb(0 0 0 / 25%)}
 /* New thread is the main sidebar action; All projects and Add project sit at the bottom. */
 .ws-new-thread{display:flex;align-items:center;gap:8px;min-height:36px;margin:0 0 10px;padding:6px 8px 6px 10px;border:1px solid var(--ws-control-line);border-radius:8px;background:var(--ws-raised);color:var(--ws-fg);font:inherit;font-size:13px;font-weight:600;text-align:left;box-shadow:var(--ws-shadow)}
 .ws-new-thread:hover{background:var(--ws-hover)}
@@ -80,9 +76,9 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 html.dark .ws-project-remove:hover{color:#ff8a80}
 .ws-project-shortcut{flex:none;min-width:18px;height:18px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;margin-left:auto;border:1px solid var(--ws-status,transparent);border-radius:4px;background:var(--ws-raised);color:var(--ws-muted);font:500 10.5px/1 var(--ws-mono)}
 /* The shortcut badge border shows agent status; the selected badge fills with it. */
-.ws-project-row[data-agent-status=working],.ws-rail-thread[data-agent-status=working],.ws-thread-chip[data-agent-status=working]{--ws-status:var(--ws-accent)}
-.ws-project-row[data-agent-status=done],.ws-rail-thread[data-agent-status=done],.ws-thread-chip[data-agent-status=done]{--ws-status:#15803d}
-html.dark :is(.ws-project-row,.ws-rail-thread,.ws-thread-chip)[data-agent-status=done]{--ws-status:#4ade80}
+.ws-project-row[data-agent-status=working],.ws-thread-chip[data-agent-status=working]{--ws-status:var(--ws-accent)}
+.ws-project-row[data-agent-status=done],.ws-thread-chip[data-agent-status=done]{--ws-status:#15803d}
+html.dark :is(.ws-project-row,.ws-thread-chip)[data-agent-status=done]{--ws-status:#4ade80}
 .ws-project-row[aria-current=true] .ws-project-shortcut{background:var(--ws-status,var(--ws-accent));color:var(--ws-on-accent)}
 .ws-project-terminal{width:16px;height:16px;flex-shrink:0;fill:none;stroke:#15803d;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 html.dark .ws-project-terminal{stroke:#4ade80}
@@ -144,8 +140,6 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-project-item .ws-row-grid>.ws-project-shortcut{grid-area:badge;align-self:stretch;width:16px;height:auto;margin:0 0 0 -2px;padding:0;border:0;border-radius:0;background:none;color:var(--ws-muted);font-family:inherit;font-size:76px;font-weight:300;line-height:58px;transform:scaleX(.6)}
 .ws-project-item .ws-row-grid[aria-current=true]>.ws-project-shortcut{background:none;color:var(--ws-fg)}
 .ws-project-item .ws-row-grid:is([data-agent-status=working],[data-agent-status=done])>.ws-project-shortcut{color:var(--ws-status)}
-/* The folded rail shows the numbers, so folded list cards drop theirs but keep their height. */
-#libro-workspace[data-fold] .ws-project-item .ws-row-grid:has(>.ws-project-shortcut){min-height:58px;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"title title title" "meta end icon"}#libro-workspace[data-fold] .ws-project-item .ws-row-grid>.ws-project-shortcut{display:none}
 /* The running terminal and the branch text move aside for the thread actions button. */
 .ws-project-item:is(:hover,:focus-within)>.ws-row-grid>.ws-project-terminal{margin-right:24px}
 .ws-project-item:is(:hover,:focus-within)>.ws-row-grid>.ws-row-meta{margin-right:12px}
@@ -356,13 +350,6 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-tool-rail .ws-button{width:32px;height:32px}
 .ws-tool-rail .ws-button[aria-pressed=true]{background:var(--ws-raised);color:var(--ws-fg);box-shadow:var(--ws-shadow)}
 .ws-tool-rail .ws-tool-sizes:empty{display:none}
-/* The folded rail draws new thread and the thread cards as narrow cards at the same height as the sidebar ones; each card shows its big digit. */
-.ws-rail-threads,.ws-rail-numbers{display:flex;flex-direction:column;align-items:center;gap:8px}#libro-workspace[data-move-working=true]:not([data-all-projects=true]) .ws-tool-rail:has(.ws-rail-thread[data-agent-status=working]) :is(.ws-rail-threads,.ws-rail-numbers){flex:1 0 auto}#libro-workspace[data-move-working=true]:not([data-all-projects=true]) .ws-tool-rail:has(.ws-rail-thread[data-agent-status=working])>.ws-tool-spacer{display:none}.ws-rail-threads{margin-bottom:8px}.ws-rail-threads,.ws-rail-numbers:has(>[style]){gap:0}#libro-workspace:not([data-fold]) .ws-rail-threads{display:none}
-.ws-rail-threads>.ws-button{width:32px;height:36px;margin-bottom:10px;border:1px solid var(--ws-control-line);background:var(--ws-raised);box-shadow:var(--ws-shadow)}.ws-rail-threads>.ws-button:hover{background:var(--ws-hover)}.ws-rail-threads>.ws-button>.material-icons-round{font-size:18px;color:var(--ws-accent)}
-.ws-rail-thread{display:flex;flex-shrink:0;align-items:center;justify-content:center;width:32px;height:58px;padding:0;border:0;border-radius:8px;background:none;color:var(--ws-muted);font-family:inherit;font-size:76px;font-weight:300;line-height:58px;overflow:hidden;cursor:pointer}
-.ws-rail-thread>span{display:inline-block;transform:scaleX(.6)}
-.ws-rail-thread:is(:hover,:focus-visible){background:var(--ws-hover)}
-.ws-rail-thread[aria-current=true]{background:var(--ws-raised);box-shadow:var(--ws-shadow);color:var(--ws-fg)}html.dark .ws-rail-thread[aria-current=true]{background:#36363e;box-shadow:inset 0 0 0 1px #4a4a54}.ws-rail-thread:is([data-agent-status=working],[data-agent-status=done]){color:var(--ws-status)}
 .ws-tool-spacer{flex:1}
 .ws-tool-rail [data-size-trigger]{min-width:28px;height:22px;margin-top:2px;padding:0 6px;border:0;border-radius:5px;background:var(--ws-kbd);color:var(--ws-fg);font:600 10px/1 var(--ws-mono);cursor:pointer}
 .ws-tool-rail .ws-size-custom{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:9px}
@@ -490,8 +477,15 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 /* One shared tab row: agents at the start, tools at the end. */
 .ws-tool-tabs{justify-content:flex-start}
 .ws-tool-tabs>[data-tab-dock=right]:not([data-tab-dock=right] + [data-tab-dock=right]){margin-left:auto}
-/* Threads in the tab row: one chip per thread before the panel tabs. The folded rail keeps its tools and drops its digits. */
-#libro-workspace[data-thread-tabs=true] .ws-rail-numbers{display:none}
+/* Threads in the tab row: the thread list, new thread and one chip per thread before the panel tabs; the tools end the row. */
+.ws-tool-tabs>.ws-tool-rail{flex-direction:row;align-items:center;align-self:center;gap:2px;width:auto;padding:0 4px;overflow:visible;background:transparent}
+.ws-tool-tabs:not(:has(>[data-tab-dock=right]))>.ws-tool-rail{margin-left:auto}
+.ws-tool-tabs>.ws-tool-rail>.ws-tool-spacer{display:none}
+.ws-tool-tabs .ws-voice-status{top:52px!important;right:12px;left:auto;transform:none}
+.ws-thread-chips>.ws-button{width:30px;height:30px}
+.ws-thread-chips>.ws-thread-new{margin-right:4px;border:1px solid var(--ws-control-line);background:var(--ws-raised);box-shadow:var(--ws-shadow)}
+.ws-thread-chips>.ws-thread-new:hover{background:var(--ws-hover)}
+.ws-thread-chips>.ws-thread-new>.material-icons-round{font-size:18px;color:var(--ws-accent)}
 .ws-thread-chips{display:flex;align-items:center;gap:2px;flex-shrink:0;align-self:center;margin:0 6px 0 2px;padding-right:6px;border-right:1px solid var(--ws-line)}
 .ws-thread-chip{display:inline-flex;align-items:center;gap:6px;max-width:320px;height:28px;padding:0 9px 0 7px;border:0;border-radius:8px;background:transparent;color:var(--ws-muted);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}
 .ws-thread-chip:is(:hover,:focus-visible){background:var(--ws-hover)}
@@ -504,8 +498,7 @@ html.dark .ws-thread-chip[aria-current=true]{background:#36363e;box-shadow:inset
 .ws-grid>[data-app-type=url]:not([data-plugin=files])>[data-app-toolbar]{display:flex}
 .ws-grid>[data-app-type=url]>[data-app-toolbar]>[data-size-badges],.ws-grid>[data-app-type=url]>[data-app-toolbar]>.ws-panel-close{display:none}
 
-:root{--ws-rail-width:48px}
-.ws-tool-rail{width:var(--ws-rail-width);box-sizing:border-box;overflow-y:auto;scrollbar-width:none}
+.ws-tool-rail{box-sizing:border-box;scrollbar-width:none}
 .ws-tool-settings{margin-top:44px}
 .ws-agent-config-row[hidden]{display:none}
 
@@ -665,11 +658,9 @@ html.dark .ws-repos{--ws-repos-changed:#f0a347;--ws-repos-push:#8aa7ff;--ws-repo
 [data-voice-typing=false] .ws-voice-control{display:none}
 [data-voice-button]{touch-action:none;flex-shrink:0}
 [data-voice-button][data-state=recording]{color:var(--ws-accent);background:var(--ws-hover)}
-.ws-voice-status{position:fixed;inset:auto;right:calc(var(--ws-rail-width) + 12px);margin:0;transform:translateY(-50%);z-index:70;width:max-content;max-width:min(320px,calc(100vw - 64px));padding:8px 12px;border:0;border-radius:8px;background:var(--ws-popup);color:var(--ws-fg);box-shadow:0 12px 36px rgb(0 0 0 / 14%);font-size:12px;line-height:1.4;white-space:normal}
-/* A folded sidebar joins the tool rail on the left, so one rail holds the threads and the tools.
-   The sidebar floats over the rail. Its top strip keeps the list open while the pointer crosses
-   to it, and stays above the tools, which scroll below it. Only the strip, list, and backdrop take the pointer. */
-#libro-workspace[data-fold] .ws-body{position:relative}#libro-workspace[data-fold] .ws-tool-rail{order:-1;margin-top:34px}#libro-workspace[data-fold] .ws-sidebar{position:absolute;top:0;bottom:0;left:0;background:transparent;pointer-events:none}#libro-workspace[data-fold] .ws-sidebar::before{content:"";position:absolute;top:0;left:0;right:0;height:38px;background:var(--ws-chrome)}#libro-workspace[data-fold] .ws-sidebar::before,#libro-workspace[data-fold] .ws-sidebar>.ws-navigation,#libro-workspace[data-fold] .ws-sidebar::after{pointer-events:auto}#libro-workspace[data-fold] .ws-voice-status{right:auto;left:calc(var(--ws-rail-width) + 12px)}
+.ws-voice-status{position:fixed;inset:auto;right:12px;margin:0;transform:translateY(-50%);z-index:70;width:max-content;max-width:min(320px,calc(100vw - 64px));padding:8px 12px;border:0;border-radius:8px;background:var(--ws-popup);color:var(--ws-fg);box-shadow:0 12px 36px rgb(0 0 0 / 14%);font-size:12px;line-height:1.4;white-space:normal}
+/* A folded sidebar floats over the panels; only its list and backdrop take the pointer. */
+#libro-workspace[data-fold] .ws-body{position:relative}#libro-workspace[data-fold] .ws-sidebar{position:absolute;top:0;bottom:0;left:0;background:transparent;pointer-events:none}#libro-workspace[data-fold] .ws-sidebar>.ws-navigation,#libro-workspace[data-fold] .ws-sidebar::after{pointer-events:auto}
 /* The open sidebar shows one row of size, voice, bottom terminal, and app actions above its footer; tools live in Apps & plugins. */
 #libro-workspace:not([data-fold]) .ws-tool-rail{flex-direction:row;flex-wrap:wrap;justify-content:flex-start;gap:2px;width:auto;padding:8px 0 4px;overflow:visible}#libro-workspace:not([data-fold]) .ws-tool-spacer{display:none}#libro-workspace:not([data-fold]) .ws-tool-rail>.ws-button:last-child{margin-left:auto}#libro-workspace:not([data-fold]) .ws-tool-rail [data-size-trigger]{margin:0}#libro-workspace:not([data-fold]) .ws-voice-status{right:auto;left:calc(var(--ws-projects) + 12px)}
 

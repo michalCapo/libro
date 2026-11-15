@@ -147,11 +147,6 @@ func renderWorkspaceStrip(state *AppState, sid, placeholderID string) *r.Node {
 
 func renderWorkspaceTools() *r.Node {
 	return r.El("aside", "ws-tool-rail").Attr("aria-label", "Workspace tools").Render(
-		// Only the folded rail shows these: new thread, then one number per thread card.
-		r.Div("ws-rail-threads").Render(
-			workspaceButton("New thread", "add", r.UnsafeJS("libroWorkspace.newThread()")),
-			r.Div("ws-rail-numbers").ID("workspace-rail-threads"),
-		),
 		r.Div("ws-tool-sizes").ID("workspace-tool-size").Attr("data-size-badges", ""),
 		r.Div("ws-voice-control").Attr("data-voice-control", "").Render(
 			workspaceButton("Voice typing", "mic", r.UnsafeJS("void window.libroVoice?.toggle()")).Attr("data-voice-button", "global").Attr("aria-pressed", "false"),

@@ -168,19 +168,13 @@
     if (!event.target.closest?.('.ws-size-picker')) closeSizePicker();
   }, true);
   function save() { try { localStorage.setItem('libro.workspace', JSON.stringify(prefs)); } catch (_) {} }
-  // Threads in the tab row fold the sidebar into a rail; narrow windows always show them, wide ones when the user picks them.
+  // Threads in the tab row fold the sidebar away and show its list over the panels on demand.
+  // Narrow windows always show them; wide ones when the user picks them.
   const narrowWindow = matchMedia('(max-width:1000px)');
   function foldState() {
-    root.dataset.threadTabs = String(narrowWindow.matches || prefs.threadTabs === true);
     const fold = narrowWindow.matches ? 'narrow' : prefs.threadTabs === true ? 'tabs' : '';
     if (fold) root.dataset.fold = fold; else delete root.dataset.fold;
-    // The open sidebar holds the tools above its footer; a folded one hides its list, so the tools become the left rail.
-    // Moving it drops focus from its buttons, so it moves only when the fold changes and then restores focus.
-    const rail = root.querySelector('.ws-tool-rail'), body = root.querySelector('.ws-body'), footer = root.querySelector('.ws-sidebar-footer');
-    const focused = rail?.contains(document.activeElement) ? document.activeElement : null;
-    if (rail && fold && rail.parentElement !== body) body?.prepend(rail);
-    else if (rail && !fold && rail.nextElementSibling !== footer) footer?.before(rail);
-    if (focused && document.activeElement !== focused) focused.focus({preventScroll:true});
+    renderThreadChips();
   }
   const fullHDWindow = matchMedia('(max-width:1920px)');
   function maxPanel(grid = activeGrid()) {
@@ -1037,7 +1031,7 @@
       return false;
     }
     root.dataset.moveWorking = String(enabled);
-    renderThreadShortcuts(); requestAnimationFrame(renderRailThreads);
+    renderThreadShortcuts();
     return true;
   }
   function saveThreadTabs(value) {
@@ -1183,40 +1177,20 @@
       row.parentElement.dataset.panels = String(!card && open.has(row.dataset.projectKey));
     });
   }
-  // The folded rail repeats each numbered card as its digit, at the card's height and spacing; clicking it opens that card. It follows the card lists as they change.
-  // Digits follow the cards top to bottom, and working ones sit at the rail's bottom like their cards.
-  function renderRailThreads() {
-    const rail = document.getElementById('workspace-rail-threads'); if (!rail) return;
-    const cards = sidebarRows('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])')
-      .map(row => [row, row.parentElement.getBoundingClientRect()]).sort((a, b) => a[1].top - b[1].top);
-    const rows = cards.map(card => card[0]), boxes = cards.map(card => card[1]);
-    const bottom = root.dataset.allProjects === 'true' || root.dataset.moveWorking !== 'true' ? -1 : rows.findIndex(row => row.dataset.agentStatus === 'working');
-    const sizes = boxes.map((box, i) => [Math.round(box.height), i ? Math.round(box.top - boxes[i - 1].bottom) : 0]);
-    const signature = JSON.stringify(rows.map((row, i) => [...sizes[i], row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus, row.getAttribute('aria-current'), row.querySelector(':scope > span')?.textContent]));
-    if (rail.dataset.signature !== signature) {
-      rail.dataset.signature = signature; rail.replaceChildren();
-      rows.forEach((row, i) => {
-        const number = row.dataset.projectShortcut, label = row.querySelector(':scope > span')?.textContent || row.dataset.projectKey;
-        const entry = node('button', 'ws-rail-thread'); entry.type = 'button'; entry.append(node('span', '', number));
-        entry.title = label + ' (Ctrl+' + number + ')'; entry.setAttribute('aria-label', row.getAttribute('aria-label') || label);
-        entry.setAttribute('aria-current', row.getAttribute('aria-current') || 'false');
-        if (row.dataset.agentStatus) entry.dataset.agentStatus = row.dataset.agentStatus;
-        if (sizes[i][0]) { entry.style.height = sizes[i][0] + 'px'; entry.style.marginTop = i === bottom ? 'auto' : Math.max(0, sizes[i][1]) + 'px'; }
-        entry.onclick = () => row.click(); rail.append(entry);
-      });
-    }
-    // The rail keeps its tools below the digits, so the folded sidebar lifts its working cards to end where the digits end.
-    const list = root.querySelector('.ws-thread-cards');
-    // Threads in the tab row hide the digits, so the list keeps its place.
-    if (root.dataset.fold && root.dataset.threadTabs !== 'true' && bottom >= 0) list.style.marginBottom = Math.max(0, root.querySelector('.ws-sidebar-bottom').getBoundingClientRect().top - rail.getBoundingClientRect().bottom) + 'px';
-    else list.style.marginBottom = '';
-  }
-  // With threads in the tab row, the open thread's tabs start with one chip per numbered card: its digit in the status color
-  // and its project, or the description for the open thread. A chip opens its card; the tooltip names the whole thread.
+  // With threads in the tab row, the open thread's tabs start with the thread list, new thread and one chip per numbered card:
+  // its digit in the status color and its project, or the description for the open thread. A chip opens its card; the tooltip
+  // names the whole thread. The tools end the row. The open sidebar holds the tools above its footer instead.
+  // Moving the tools drops focus from their buttons, so they move only when their place changes and then restore focus.
   function renderThreadChips() {
     const tabs = activeGrid()?.parentElement.querySelector('.ws-tool-tabs');
+    const rail = root.querySelector('.ws-tool-rail'), footer = root.querySelector('.ws-sidebar-footer');
+    const focusedTool = rail?.contains(document.activeElement) ? document.activeElement : null;
+    const folded = !!root.dataset.fold && !!tabs;
+    if (rail && folded && tabs.lastElementChild !== rail) tabs.append(rail);
+    else if (rail && !folded && rail.nextElementSibling !== footer) footer?.before(rail);
+    if (focusedTool && document.activeElement !== focusedTool) focusedTool.focus({preventScroll:true});
     let chips = document.getElementById('workspace-thread-chips');
-    if (root.dataset.threadTabs !== 'true' || !tabs) { chips?.remove(); if (tabs) tabs.hidden = !tabs.childElementCount; return; }
+    if (!folded) { chips?.remove(); if (tabs) tabs.hidden = !tabs.childElementCount; return; }
     if (!chips) { chips = node('div', 'ws-thread-chips'); chips.id = 'workspace-thread-chips'; chips.setAttribute('role', 'group'); chips.setAttribute('aria-label', 'Threads'); }
     if (tabs.firstElementChild !== chips) tabs.prepend(chips);
     tabs.hidden = false;
@@ -1227,7 +1201,10 @@
     if (chips.dataset.signature === signature) return;
     // Redrawing keeps keyboard focus on the same thread's chip.
     const focused = chips.contains(document.activeElement) ? document.activeElement.dataset.projectKey : null;
-    chips.dataset.signature = signature; chips.replaceChildren();
+    chips.dataset.signature = signature;
+    const list = button('Threads and projects', 'menu', () => projectMenu()); list.classList.add('ws-thread-list');
+    const add = button('New thread', 'add', newThread); add.classList.add('ws-thread-new');
+    chips.replaceChildren(list, add);
     items.forEach(([number, key, status, current, label, project, branch], i) => {
       const chip = node('button', 'ws-thread-chip'); chip.type = 'button'; chip.dataset.projectKey = key;
       chip.append(node('b', '', number), node('span', '', current && label || project || label));
@@ -1238,8 +1215,7 @@
       if (key === focused) chip.focus({preventScroll:true});
     });
   }
-  new MutationObserver(() => requestAnimationFrame(() => { renderRailThreads(); renderThreadChips(); })).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current']});
-  new ResizeObserver(() => requestAnimationFrame(renderRailThreads)).observe(root.querySelector('.ws-thread-cards'));
+  new MutationObserver(() => requestAnimationFrame(renderThreadChips)).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current']});
   let queued = false;
   const observer = new MutationObserver(records => {
     if (records.some(record => (record.type === 'attributes' && record.target.matches('[data-app-id]')) || [...record.addedNodes, ...record.removedNodes].some(n => n.nodeType === 1 && (n.matches('[data-app-id], [data-workspace-project], .ws-project, #top-bar') || n.querySelector('[data-app-id], [data-workspace-project]'))))) schedule();
@@ -1902,7 +1878,8 @@
       });
     }
     tabs.hidden = signature.length === 0;
-    if (grid === activeGrid()) { renderToolSize(grid, right[0] || toolFrames[0]); renderThreadChips(); }
+    // The tools may sit in this tab row, so they return before the size button is drawn into them.
+    if (grid === activeGrid()) { renderThreadChips(); renderToolSize(grid, right[0] || toolFrames[0]); }
     window.libroVoice?.refresh();
   }
   function renderToolSize(grid, sizeFrame) {
@@ -2321,8 +2298,7 @@
     settingsSaveFinished(ok);
   }
   // A folded sidebar shows the project list over the panels; picking a row or tool, clicking outside, or Escape closes it.
-  // A closed list ignores hover until the pointer leaves the sidebar and the rail digits that open it, so it does not reopen under the mouse.
-  // Switching threads redraws the digits under the pointer, which must not count as leaving.
+  // A closed list ignores hover until the pointer leaves the sidebar and the thread list button that opens it, so it does not reopen under the mouse.
   function projectMenu(open = root.dataset.sidebar !== 'open') {
     root.dataset.sidebar = open ? 'open' : 'closed';
   }
@@ -2330,8 +2306,8 @@
     if (root.dataset.fold && (event.target.id === 'workspace-projects' || event.target.closest?.('.ws-project-row, .ws-tool-rail'))) projectMenu(false);
   });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
-  document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects, .ws-rail-threads')) delete root.dataset.sidebar; });
-  narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); renderThreadChips(); });
+  document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects, .ws-thread-list')) delete root.dataset.sidebar; });
+  narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
   window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name}), openWorktree:(project, path, branch) => call('worktree.switch', {project, path, branch}), createWorktree:branch => call('worktree.create', {branch}), beginOpening:() => beginSwitch(), switchSettled};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
