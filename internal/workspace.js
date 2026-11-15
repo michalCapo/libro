@@ -1177,7 +1177,7 @@
       row.parentElement.dataset.panels = String(!card && open.has(row.dataset.projectKey));
     });
   }
-  // With threads in the tab row, the open thread's tabs start with the thread list, new thread and one chip per numbered card:
+  // With threads in the tab row, the open thread's tabs start with the thread list and one chip per numbered card:
   // its digit in the status color and its project, or the description for the open thread. A chip opens its card; the tooltip
   // names the whole thread. The tools end the row. The open sidebar holds the tools above its footer instead.
   // Moving the tools drops focus from their buttons, so they move only when their place changes and then restore focus.
@@ -1203,8 +1203,7 @@
     const focused = chips.contains(document.activeElement) ? document.activeElement.dataset.projectKey : null;
     chips.dataset.signature = signature;
     const list = button('Threads and projects', 'menu', () => projectMenu()); list.classList.add('ws-thread-list');
-    const add = button('New thread', 'add', newThread); add.classList.add('ws-thread-new');
-    chips.replaceChildren(list, add);
+    chips.replaceChildren(list);
     items.forEach(([number, key, status, current, label, project, branch], i) => {
       const chip = node('button', 'ws-thread-chip'); chip.type = 'button'; chip.dataset.projectKey = key;
       chip.append(node('b', '', number), node('span', '', current && label || project || label));
