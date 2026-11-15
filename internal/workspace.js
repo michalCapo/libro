@@ -1177,33 +1177,41 @@
       row.parentElement.dataset.panels = String(!card && open.has(row.dataset.projectKey));
     });
   }
-  // With threads in the tab row, the open thread's tabs start with the thread list and one chip per numbered card:
+  // The open thread's tab row starts with the thread list button: wide windows switch between the sidebar and threads in the
+  // tab row with it, narrow ones open the list over the panels. With threads in the tab row, one chip per numbered card follows:
   // its digit in the status color and its project, or the description for the open thread. A chip opens its card; the tooltip
-  // names the whole thread. The tools end the row. The open sidebar holds the tools above its footer instead.
+  // names the whole thread. The tools then end the row; the sidebar, or its list over the panels, holds them above its footer.
   // Moving the tools drops focus from their buttons, so they move only when their place changes and then restore focus.
+  // Opening a thread can replace the tab row that holds the tools and the list button, so both are kept and put back.
+  let toolRail = null, threadList = null;
+  function toggleThreadList() {
+    if (narrowWindow.matches) projectMenu(); else saveThreadTabs(prefs.threadTabs === true ? 'off' : 'on');
+  }
   function renderThreadChips() {
     const tabs = activeGrid()?.parentElement.querySelector('.ws-tool-tabs');
-    const rail = root.querySelector('.ws-tool-rail'), footer = root.querySelector('.ws-sidebar-footer');
+    const rail = toolRail = root.querySelector('.ws-tool-rail') || toolRail, footer = root.querySelector('.ws-sidebar-footer');
     const focusedTool = rail?.contains(document.activeElement) ? document.activeElement : null;
-    const folded = !!root.dataset.fold && !!tabs;
-    if (rail && folded && tabs.lastElementChild !== rail) tabs.append(rail);
-    else if (rail && !folded && rail.nextElementSibling !== footer) footer?.before(rail);
+    const folded = !!root.dataset.fold && !!tabs, inRow = folded && root.dataset.sidebar !== 'open';
+    if (rail && inRow && tabs.lastElementChild !== rail) tabs.append(rail);
+    else if (rail && !inRow && rail.nextElementSibling !== footer) footer?.before(rail);
     if (focusedTool && document.activeElement !== focusedTool) focusedTool.focus({preventScroll:true});
+    if (!tabs) return;
     let chips = document.getElementById('workspace-thread-chips');
-    if (!folded) { chips?.remove(); if (tabs) tabs.hidden = !tabs.childElementCount; return; }
     if (!chips) { chips = node('div', 'ws-thread-chips'); chips.id = 'workspace-thread-chips'; chips.setAttribute('role', 'group'); chips.setAttribute('aria-label', 'Threads'); }
     if (tabs.firstElementChild !== chips) tabs.prepend(chips);
     tabs.hidden = false;
-    const rows = [...document.querySelectorAll('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])')].sort((a, b) => a.dataset.projectShortcut - b.dataset.projectShortcut);
+    if (!threadList) { threadList = button('', 'menu', toggleThreadList); threadList.classList.add('ws-thread-list'); }
+    const label = (narrowWindow.matches ? 'Threads and projects' : folded ? 'Show sidebar' : 'Threads in the tab row') + (toolKeys['sidebar'] ? ' (' + toolKeys['sidebar'] + ')' : '');
+    threadList.title = label; threadList.setAttribute('aria-label', label);
+    const rows = folded ? [...document.querySelectorAll('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])')].sort((a, b) => a.dataset.projectShortcut - b.dataset.projectShortcut) : [];
     const text = (row, selector) => row.querySelector(selector)?.textContent || '';
     const items = rows.map(row => [row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus || '', row.getAttribute('aria-current') === 'true', text(row, ':scope > span'), text(row, '.ws-row-project'), text(row, '.ws-row-branch')]);
     const signature = JSON.stringify(items);
-    if (chips.dataset.signature === signature) return;
+    if (chips.dataset.signature === signature && chips.firstElementChild === threadList) return;
     // Redrawing keeps keyboard focus on the same thread's chip.
     const focused = chips.contains(document.activeElement) ? document.activeElement.dataset.projectKey : null;
     chips.dataset.signature = signature;
-    const list = button('Threads and projects', 'menu', () => projectMenu()); list.classList.add('ws-thread-list');
-    chips.replaceChildren(list);
+    chips.replaceChildren(threadList);
     items.forEach(([number, key, status, current, label, project, branch], i) => {
       const chip = node('button', 'ws-thread-chip'); chip.type = 'button'; chip.dataset.projectKey = key;
       chip.append(node('b', '', number), node('span', '', current && label || project || label));
@@ -2300,6 +2308,7 @@
   // A closed list ignores hover until the pointer leaves the sidebar and the thread list button that opens it, so it does not reopen under the mouse.
   function projectMenu(open = root.dataset.sidebar !== 'open') {
     root.dataset.sidebar = open ? 'open' : 'closed';
+    renderThreadChips();
   }
   document.addEventListener('click', event => {
     if (root.dataset.fold && (event.target.id === 'workspace-projects' || event.target.closest?.('.ws-project-row, .ws-tool-rail'))) projectMenu(false);
