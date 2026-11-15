@@ -56,7 +56,8 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 #libro-workspace:not([data-all-projects=true]) #workspace-thread-list>.ws-project-item{order:100000}
 #libro-workspace[data-move-working=true]:not([data-all-projects=true]) .ws-project-item:has(>.ws-project-row[data-agent-status=working]){order:calc(var(--order,0) + 300000)}
 #libro-workspace[data-move-working=true]:not([data-all-projects=true]) #workspace-thread-list>.ws-project-item:has(>.ws-project-row[data-agent-status=working]){order:400000}
-.ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;min-height:28px;padding:0 2px 0 10px;margin:4px 0 2px;color:var(--ws-muted);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.ws-sidebar-heading{display:flex;align-items:center;min-height:28px;margin:2px 0 4px}
+.ws-sidebar-heading>.ws-button{width:30px;height:30px}
 .ws-project-list{display:flex;flex-direction:column;gap:2px}
 .ws-project-item{position:relative;display:flex;align-items:center;gap:1px;padding-right:3px;border-radius:8px}
 .ws-project-item:hover{background:var(--ws-hover)}
@@ -475,12 +476,9 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-tool-sizes .ws-size-picker button{padding:4px 6px;font-size:10px;border-radius:6px;color:var(--ws-fg)}
 .ws-tool-sizes .ws-size-picker button:hover,.ws-tool-sizes .ws-size-picker button[aria-pressed=true]{background:var(--ws-hover)}
 
-/* One shared tab row: the thread list and thread chips at the start, then the panel tabs and the tools at the end. */
+/* One shared tab row: the thread list and thread chips at the start, the panel tabs at the end. */
 .ws-tool-tabs{justify-content:flex-start}
 .ws-tool-tabs::before{content:"";order:-1;flex:1}
-.ws-tool-tabs>.ws-tool-rail{flex-direction:row;align-items:center;align-self:center;gap:2px;width:auto;padding:0 4px;overflow:visible;background:transparent}
-.ws-tool-tabs>.ws-tool-rail>.ws-tool-spacer{display:none}
-.ws-tool-tabs .ws-voice-status{top:52px!important;right:12px;left:auto;transform:none}
 .ws-thread-chips{order:-2;display:flex;align-items:center;gap:2px;flex-shrink:0;align-self:center;margin:0 0 0 2px;padding-right:12px}
 .ws-thread-chips>.ws-button{width:30px;height:30px}
 .ws-thread-chip{display:inline-flex;align-items:center;gap:6px;max-width:320px;height:28px;padding:0 9px 0 7px;border:0;border-radius:8px;background:transparent;color:var(--ws-muted);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}

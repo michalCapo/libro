@@ -71,8 +71,9 @@ func renderWorkspaceTopBar(_ *AppState, _ string) *r.Node {
 func renderWorkspaceSidebar(sid string) *r.Node {
 	return r.El("aside", "ws-sidebar").ID("workspace-projects").Attr("aria-label", "Projects").Render(
 		r.Div("ws-navigation").Render(
+			// The thread list button shows threads in the tab row; there, the same button leads the tab row. See renderThreadChips.
 			r.Div("ws-sidebar-heading").Render(
-				r.Span("").Text("Threads"),
+				workspaceButton("Threads in the tab row", "menu", r.UnsafeJS("libroWorkspace.toggleThreadList()")).Attr("data-thread-list", ""),
 			),
 			r.Button("ws-new-thread").Attr("type", "button").Attr("aria-label", "New thread").OnClick(r.UnsafeJS("libroWorkspace.newThread()")).Render(
 				r.I("material-icons-round").Attr("aria-hidden", "true").Text("add"),

@@ -1177,32 +1177,27 @@
       row.parentElement.dataset.panels = String(!card && open.has(row.dataset.projectKey));
     });
   }
-  // The open thread's tab row starts with the thread list button: wide windows switch between the sidebar and threads in the
-  // tab row with it, narrow ones open the list over the panels. With threads in the tab row, one chip per numbered card follows:
+  // The thread list button heads the sidebar and, with threads in the tab row, leads that row: wide windows switch between the
+  // sidebar and threads in the tab row with it, narrow ones open the list over the panels. One chip per numbered card follows it:
   // its digit in the status color and its project, or the description for the open thread. A chip opens its card; the tooltip
-  // names the whole thread. The tools then end the row; the sidebar, or its list over the panels, holds them above its footer.
-  // Moving the tools drops focus from their buttons, so they move only when their place changes and then restore focus.
-  // Opening a thread can replace the tab row that holds the tools and the list button, so both are kept and put back.
-  let toolRail = null, threadList = null;
+  // names the whole thread. The tools stay in the sidebar, or in its list over the panels.
+  // Opening a thread can replace the tab row that holds the list button, so it is kept and put back.
+  let threadList = null;
   function toggleThreadList() {
     if (narrowWindow.matches) projectMenu(); else saveThreadTabs(prefs.threadTabs === true ? 'off' : 'on');
   }
   function renderThreadChips() {
+    const folded = !!root.dataset.fold;
+    if (!threadList) { threadList = button('', 'menu', toggleThreadList); threadList.dataset.threadList = ''; }
+    const label = (narrowWindow.matches ? 'Threads and projects' : folded ? 'Show sidebar' : 'Threads in the tab row') + (toolKeys['sidebar'] ? ' (' + toolKeys['sidebar'] + ')' : '');
+    document.querySelectorAll('[data-thread-list]').forEach(list => { list.title = label; list.setAttribute('aria-label', label); });
+    threadList.title = label; threadList.setAttribute('aria-label', label);
     const tabs = activeGrid()?.parentElement.querySelector('.ws-tool-tabs');
-    const rail = toolRail = root.querySelector('.ws-tool-rail') || toolRail, footer = root.querySelector('.ws-sidebar-footer');
-    const focusedTool = rail?.contains(document.activeElement) ? document.activeElement : null;
-    const folded = !!root.dataset.fold && !!tabs, inRow = folded && root.dataset.sidebar !== 'open';
-    if (rail && inRow && tabs.lastElementChild !== rail) tabs.append(rail);
-    else if (rail && !inRow && rail.nextElementSibling !== footer) footer?.before(rail);
-    if (focusedTool && document.activeElement !== focusedTool) focusedTool.focus({preventScroll:true});
-    if (!tabs) return;
     let chips = document.getElementById('workspace-thread-chips');
+    if (!folded || !tabs) { chips?.remove(); if (tabs) tabs.hidden = !tabs.childElementCount; return; }
     if (!chips) { chips = node('div', 'ws-thread-chips'); chips.id = 'workspace-thread-chips'; chips.setAttribute('role', 'group'); chips.setAttribute('aria-label', 'Threads'); }
     if (tabs.firstElementChild !== chips) tabs.prepend(chips);
     tabs.hidden = false;
-    if (!threadList) { threadList = button('', 'menu', toggleThreadList); threadList.classList.add('ws-thread-list'); }
-    const label = (narrowWindow.matches ? 'Threads and projects' : folded ? 'Show sidebar' : 'Threads in the tab row') + (toolKeys['sidebar'] ? ' (' + toolKeys['sidebar'] + ')' : '');
-    threadList.title = label; threadList.setAttribute('aria-label', label);
     const rows = folded ? [...document.querySelectorAll('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])')].sort((a, b) => a.dataset.projectShortcut - b.dataset.projectShortcut) : [];
     const text = (row, selector) => row.querySelector(selector)?.textContent || '';
     const items = rows.map(row => [row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus || '', row.getAttribute('aria-current') === 'true', text(row, ':scope > span'), text(row, '.ws-row-project'), text(row, '.ws-row-branch')]);
@@ -1885,8 +1880,7 @@
       });
     }
     tabs.hidden = signature.length === 0;
-    // The tools may sit in this tab row, so they return before the size button is drawn into them.
-    if (grid === activeGrid()) { renderThreadChips(); renderToolSize(grid, right[0] || toolFrames[0]); }
+    if (grid === activeGrid()) { renderToolSize(grid, right[0] || toolFrames[0]); renderThreadChips(); }
     window.libroVoice?.refresh();
   }
   function renderToolSize(grid, sizeFrame) {
@@ -2308,15 +2302,14 @@
   // A closed list ignores hover until the pointer leaves the sidebar and the thread list button that opens it, so it does not reopen under the mouse.
   function projectMenu(open = root.dataset.sidebar !== 'open') {
     root.dataset.sidebar = open ? 'open' : 'closed';
-    renderThreadChips();
   }
   document.addEventListener('click', event => {
     if (root.dataset.fold && (event.target.id === 'workspace-projects' || event.target.closest?.('.ws-project-row, .ws-tool-rail'))) projectMenu(false);
   });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
-  document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects, .ws-thread-list')) delete root.dataset.sidebar; });
+  document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects, [data-thread-list]')) delete root.dataset.sidebar; });
   narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name}), openWorktree:(project, path, branch) => call('worktree.switch', {project, path, branch}), createWorktree:branch => call('worktree.create', {branch}), beginOpening:() => beginSwitch(), switchSettled};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, toggleThreadList, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name}), openWorktree:(project, path, branch) => call('worktree.switch', {project, path, branch}), createWorktree:branch => call('worktree.create', {branch}), beginOpening:() => beginSwitch(), switchSettled};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }
