@@ -31,7 +31,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"panel-size-up", "Increase panel size", "Ctrl+,"},
 	{"panel-size-max", "Toggle panel size to MAX", "Ctrl+M"},
 	{"panel-full", "Full screen panel (toggle)", "Ctrl+Shift+F"},
-	{"sidebar", "Open / close sidebar", "Ctrl+Shift+E"},
+	{"sidebar", "Sidebar or threads in the tab row", "Ctrl+Shift+E"},
 	{"settings", "Settings", "Ctrl+Shift+S"},
 	{"voice", "Voice typing (toggle)", "CapsLock"},
 	{"project-picker", "Switch project", "Ctrl+Shift+P"},

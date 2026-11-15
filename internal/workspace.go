@@ -73,7 +73,6 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 		r.Div("ws-navigation").Render(
 			r.Div("ws-sidebar-heading").Render(
 				r.Span("").Text("Threads"),
-				workspaceButton("Fold sidebar", "keyboard_double_arrow_left", r.UnsafeJS("libroWorkspace.foldSidebar()")).Attr("data-sidebar-fold", ""),
 			),
 			r.Button("ws-new-thread").Attr("type", "button").Attr("aria-label", "New thread").OnClick(r.UnsafeJS("libroWorkspace.newThread()")).Render(
 				r.I("material-icons-round").Attr("aria-hidden", "true").Text("add"),

@@ -61,11 +61,6 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 #libro-workspace[data-move-working=true]:not([data-all-projects=true]) .ws-project-item:has(>.ws-project-row[data-agent-status=working]){order:calc(var(--order,0) + 300000)}
 #libro-workspace[data-move-working=true]:not([data-all-projects=true]) #workspace-thread-list>.ws-project-item:has(>.ws-project-row[data-agent-status=working]){order:400000}
 .ws-sidebar-heading{display:flex;align-items:center;justify-content:space-between;min-height:28px;padding:0 2px 0 10px;margin:4px 0 2px;color:var(--ws-muted);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
-.ws-sidebar-heading>.ws-button{width:26px;height:26px}
-/* Narrow windows always fold, so they hide the fold button. */
-.ws-sidebar-heading>span{margin-right:auto}
-#libro-workspace[data-fold=narrow] [data-sidebar-fold]{display:none}
-.ws-sidebar-heading>.ws-button .material-icons-round{font-size:17px}
 .ws-project-list{display:flex;flex-direction:column;gap:2px}
 .ws-project-item{position:relative;display:flex;align-items:center;gap:1px;padding-right:3px;border-radius:8px}
 .ws-project-item:hover{background:var(--ws-hover)}
@@ -496,7 +491,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-tool-tabs{justify-content:flex-start}
 .ws-tool-tabs>[data-tab-dock=right]:not([data-tab-dock=right] + [data-tab-dock=right]){margin-left:auto}
 /* Threads in the tab row: one chip per thread before the panel tabs. The folded rail keeps its tools and drops its digits. */
-#libro-workspace[data-thread-tabs=true] :is(.ws-rail-numbers,[data-sidebar-fold]){display:none}
+#libro-workspace[data-thread-tabs=true] .ws-rail-numbers{display:none}
 .ws-thread-chips{display:flex;align-items:center;gap:2px;flex-shrink:0;align-self:center;margin:0 6px 0 2px;padding-right:6px;border-right:1px solid var(--ws-line)}
 .ws-thread-chip{display:inline-flex;align-items:center;gap:6px;max-width:320px;height:28px;padding:0 9px 0 7px;border:0;border-radius:8px;background:transparent;color:var(--ws-muted);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}
 .ws-thread-chip:is(:hover,:focus-visible){background:var(--ws-hover)}
