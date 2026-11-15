@@ -1183,8 +1183,20 @@
   // names the whole thread. The tools stay in the sidebar, or in its list over the panels.
   // Opening a thread can replace the tab row that holds the list button, so it is kept and put back.
   let threadList = null;
+  // Narrow windows keep the sidebar folded, so the button and the sidebar key open or close its list over the panels.
+  // Wide windows switch between the sidebar and threads in the tab row.
+  // A full screen panel hides the sidebar, so they leave full screen and show it.
   function toggleThreadList() {
-    if (narrowWindow.matches) projectMenu(); else saveThreadTabs(prefs.threadTabs === true ? 'off' : 'on');
+    const full = root.hasAttribute('data-panel-full');
+    if (full) maximize(maximized);
+    // A tool panel at MAX covers the sidebar, so they also return that panel to its previous size.
+    const cover = root.hasAttribute('data-panel-max') && maxPanel();
+    if (cover) {
+      select(cover.dataset.appId);
+      call('app.resize.max.toggle', {maxPixel: window.__libroAppWidthMaxPixel()});
+      return;
+    }
+    if (narrowWindow.matches) projectMenu(full || undefined); else if (!full || prefs.threadTabs === true) saveThreadTabs(!full && prefs.threadTabs !== true ? 'on' : 'off');
   }
   function renderThreadChips() {
     const folded = !!root.dataset.fold;
@@ -1198,15 +1210,17 @@
     if (!chips) { chips = node('div', 'ws-thread-chips'); chips.id = 'workspace-thread-chips'; chips.setAttribute('role', 'group'); chips.setAttribute('aria-label', 'Threads'); }
     if (tabs.firstElementChild !== chips) tabs.prepend(chips);
     tabs.hidden = false;
-    const rows = folded ? [...document.querySelectorAll('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])')].sort((a, b) => a.dataset.projectShortcut - b.dataset.projectShortcut) : [];
+    const rows = [...document.querySelectorAll('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])')].sort((a, b) => a.dataset.projectShortcut - b.dataset.projectShortcut);
     const text = (row, selector) => row.querySelector(selector)?.textContent || '';
     const items = rows.map(row => [row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus || '', row.getAttribute('aria-current') === 'true', text(row, ':scope > span'), text(row, '.ws-row-project'), text(row, '.ws-row-branch')]);
     const signature = JSON.stringify(items);
     if (chips.dataset.signature === signature && chips.firstElementChild === threadList) return;
-    // Redrawing keeps keyboard focus on the same thread's chip.
+    // Redrawing keeps keyboard focus on the list button or the same thread's chip.
     const focused = chips.contains(document.activeElement) ? document.activeElement.dataset.projectKey : null;
+    const listFocused = document.activeElement === threadList;
     chips.dataset.signature = signature;
     chips.replaceChildren(threadList);
+    if (listFocused) threadList.focus({preventScroll:true});
     items.forEach(([number, key, status, current, label, project, branch], i) => {
       const chip = node('button', 'ws-thread-chip'); chip.type = 'button'; chip.dataset.projectKey = key;
       chip.append(node('b', '', number), node('span', '', current && label || project || label));
@@ -1517,20 +1531,7 @@
     }
     if (binding && binding === toolKeys['sidebar']) {
       event.preventDefault(); event.stopImmediatePropagation();
-      // Narrow windows keep the sidebar folded, so the key opens or closes its list over the panels.
-      // Wide windows switch between the sidebar and threads in the tab row.
-      // A full screen panel hides the sidebar, so the key leaves full screen and shows it.
-      if (event.repeat) return;
-      const full = root.hasAttribute('data-panel-full');
-      if (full) maximize(maximized);
-      // A tool panel at MAX covers the sidebar, so the key also returns that panel to its previous size.
-      const cover = root.hasAttribute('data-panel-max') && maxPanel();
-      if (cover) {
-        select(cover.dataset.appId);
-        call('app.resize.max.toggle', {maxPixel: window.__libroAppWidthMaxPixel()});
-        return;
-      }
-      if (narrowWindow.matches) projectMenu(full || undefined); else if (!full || prefs.threadTabs === true) saveThreadTabs(!full && prefs.threadTabs !== true ? 'on' : 'off');
+      if (!event.repeat) toggleThreadList();
       return;
     }
     if (binding && binding === toolKeys['command-palette']) {
@@ -2299,12 +2300,13 @@
     settingsSaveFinished(ok);
   }
   // A folded sidebar shows the project list over the panels; picking a row or tool, clicking outside, or Escape closes it.
+  // Panel size and voice typing keep it open, since their popups live in it.
   // A closed list ignores hover until the pointer leaves the sidebar and the thread list button that opens it, so it does not reopen under the mouse.
   function projectMenu(open = root.dataset.sidebar !== 'open') {
     root.dataset.sidebar = open ? 'open' : 'closed';
   }
   document.addEventListener('click', event => {
-    if (root.dataset.fold && (event.target.id === 'workspace-projects' || event.target.closest?.('.ws-project-row, .ws-tool-rail'))) projectMenu(false);
+    if (root.dataset.fold && (event.target.id === 'workspace-projects' || event.target.closest?.('.ws-project-row, .ws-tool-rail') && !event.target.closest('[data-size-badges], [data-voice-control]'))) projectMenu(false);
   });
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects, [data-thread-list]')) delete root.dataset.sidebar; });
