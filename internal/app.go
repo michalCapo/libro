@@ -834,7 +834,53 @@ func Run(assets embed.FS, desktop bool) error {
 		var replacedJS r.Result
 		autolaunch := in.AutolaunchProject != nil
 		replaceAgent := in.ReplaceAgent
-		if !autolaunch && isAgentApp(candidate) && threadState.thread(threadState.ActiveProject) != nil && (replaceAgent || !slices.ContainsFunc(threadState.Apps, isAgentApp)) {
+		addAgent := in.AddAgent
+		replaceIndex := -1
+		thread := threadState.thread(threadState.ActiveProject)
+		inThread := thread != nil
+		keepTitle := false
+		if !autolaunch && isAgentApp(candidate) && replaceAgent {
+			if inThread && thread.Managed && slices.ContainsFunc(threadState.Apps, isAgentApp) {
+				return r.Result{}.Run(r.Notify("error", "The parent agent controls the agent in this child thread")), nil
+			}
+			// Replacing one of several agent panels, or an agent outside a
+			// thread, closes only that panel. A thread's only agent starts a
+			// fresh thread session below instead.
+			if in.ReplaceID != "" {
+				index := slices.IndexFunc(threadState.Apps, func(app Application) bool { return app.ID == in.ReplaceID && isAgentApp(app) })
+				if index < 0 {
+					return r.Result{}.Run(r.Notify("error", "That agent panel is no longer open")), nil
+				}
+				primary := slices.IndexFunc(threadState.Apps, isAgentApp) == index
+				others := slices.ContainsFunc(threadState.Apps, func(app Application) bool { return app.ID != in.ReplaceID && isAgentApp(app) })
+				if !inThread || others {
+					apps, _, err := sm.CloseThreadAgent(sid, in.ReplaceID)
+					if err != nil {
+						return r.Result{}.Run(r.Notify("error", "Could not replace agent")), nil //nolint:nilerr // the error is shown to the user
+					}
+					if apps == nil {
+						if removed := sm.RemoveAppByID(sid, in.ReplaceID); removed != nil {
+							apps = []Application{*removed}
+						}
+					}
+					for _, existing := range apps {
+						tm.Stop(existing.ID)
+						replacedJS = replacedJS.Add(removeAppJS(existing.ID))
+					}
+					// The new panel takes the old one's place. A thread's primary
+					// panel goes last instead, so the new agent does not resume the
+					// thread session that moved to the next agent.
+					if !inThread || !primary {
+						replaceIndex = index
+					}
+					// The primary agent's description stays with a replaced secondary.
+					keepTitle = !primary
+					addAgent = addAgent || inThread
+					replaceAgent = false
+				}
+			}
+		}
+		if !autolaunch && isAgentApp(candidate) && inThread && (replaceAgent || !slices.ContainsFunc(threadState.Apps, isAgentApp)) {
 			removed, err := sm.ReplaceThreadAgent(sid, pluginID, command)
 			if err != nil {
 				return r.Result{}.Run(r.Notify("error", "Could not replace agent")), nil //nolint:nilerr // the error is shown to the user
@@ -846,13 +892,13 @@ func Run(assets embed.FS, desktop bool) error {
 		}
 		// A new agent in a project checkout or worktree starts a fresh
 		// conversation, so it drops the previous agent's description.
-		if !in.AddAgent && isAgentApp(candidate) && threadState.thread(threadState.ActiveProject) == nil {
+		if !in.AddAgent && !keepTitle && isAgentApp(candidate) && !inThread {
 			if _, path := threadProjectContext(threadState, threadState.ActiveProject); path != "" {
 				_ = clearAgentTitle(path)
 			}
 		}
 		if threadState.thread(threadState.ActiveProject) != nil {
-			if !threadState.canStartThreadApp(candidate, in.AddAgent) {
+			if !threadState.canStartThreadApp(candidate, addAgent) {
 				return r.Result{}, nil
 			}
 		}
@@ -886,6 +932,9 @@ func Run(assets embed.FS, desktop bool) error {
 			insertIdx = sm.SelectedIndex(sid)
 		case "right":
 			insertIdx = sm.SelectedIndex(sid) + 1
+		}
+		if replaceIndex >= 0 {
+			insertIdx = replaceIndex
 		}
 		pwd := sm.GetActiveProjectPath(sid)
 		if appType == "terminal" {

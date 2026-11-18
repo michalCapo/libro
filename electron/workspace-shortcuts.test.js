@@ -40,7 +40,7 @@ for (const plugin of [...toolIDs, 'custom-tool']) test(plugin + ' focuses an ope
 test('hiding a tool restores actual focus to the last agent in the active project', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const select = source.slice(source.indexOf('  function select('), source.indexOf('  function launcher('))
-  const handlers = source.slice(source.indexOf('  function restoreAgentFocus('), source.indexOf('  function newBrowser('))
+  const handlers = source.slice(source.indexOf('  function currentAgent('), source.indexOf('  function newBrowser('))
   for (const remembered of ['agent-2', 'closed-agent', undefined]) for (const hasAgents of [true, false]) {
     const grid = {}
     const state = { agent: remembered, right: 'git', hidden: new Set() }
@@ -215,6 +215,11 @@ test('workspace syncs initial bindings and saved settings to Electron', () => {
   assert.deepEqual(calls, [['Ctrl+F'], ['Alt+F'], ['']])
 })
 
+const currentAgentSource = () => {
+  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
+  return source.slice(source.indexOf('  function currentAgent('), source.indexOf('  function restoreAgentFocus('))
+}
+
 for (const overlay of [false, true]) test('Ctrl+A selects the remembered agent with overlay=' + overlay, () => {
   const workspace = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = workspace.slice(workspace.indexOf("    if (binding === 'Ctrl+A')"), workspace.indexOf("    if (binding === 'Ctrl+D'"))
@@ -225,7 +230,7 @@ for (const overlay of [false, true]) test('Ctrl+A selects the remembered agent w
   ]
   const state = { agent: 'agent-2', hidden: new Set() }
   let selected
-  vm.runInNewContext('(function () {' + handler + '})()', {
+  vm.runInNewContext(currentAgentSource() + '(function () {' + handler + '})()', {
     binding: 'Ctrl+A', activeGrid: () => ({ querySelector: () => overlay }), frames: () => panels,
     dockState: () => state, select: id => { selected = id },
     event: { preventDefault() {}, stopImmediatePropagation() {} },
@@ -477,7 +482,7 @@ for (const thread of [false, true]) for (const occupied of [false, true]) for (c
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const launch = source.slice(source.indexOf('  function openPlugin('), source.indexOf('  function select('))
   const calls = []
-  vm.runInNewContext(launch + ';openPlugin("codex", "center", undefined, replace)', {
+  vm.runInNewContext(launch + ';openPlugin("codex", "center", undefined, replace, false, replace ? "agent" : "")', {
     replace,
     window: {
       __libroActiveProject: 'project',
@@ -499,6 +504,7 @@ for (const thread of [false, true]) for (const occupied of [false, true]) for (c
     assert.equal(calls[0][1].plugin, 'codex')
     assert.equal(calls[0][1].dock, 'center')
     assert.equal(calls[0][1].replaceAgent, replace)
+    assert.equal(calls[0][1].replaceID, replace ? 'agent' : '')
   }
 })
 
@@ -541,7 +547,7 @@ test('browser and side terminal navigation stops at the ends, includes hidden pa
 
 test('Ctrl+B hides all browsers when multiple browsers exist', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const handler = source.slice(source.indexOf('  function restoreAgentFocus('), source.indexOf('  function newBrowser'))
+  const handler = source.slice(source.indexOf('  function currentAgent('), source.indexOf('  function newBrowser'))
   const calls = []
   const state = { right: 'two', hidden: new Set() }
   vm.runInNewContext(handler + ";tool('browser')", {
@@ -609,39 +615,44 @@ test('browser cycling runs at capture phase from terminals and other focused pan
   }
 })
 
-test('double Ctrl+A hides all tools and the bottom terminal without closing them', () => {
+test('double Ctrl+A opens the agent picker that replaces the current agent', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('  let lastCtrlA'), source.indexOf("  window.addEventListener('keydown', event => {"))
   const detection = source.slice(source.indexOf("    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a')"), source.indexOf("    const number = /^[1-9]$/"))
-  const state = {hidden:new Set(), bottom:true}
-  let now = 100, focused = 0, grid = {}
+  const opened = []
+  let now = 100, grid = {}, agent = {}, popups = []
   const context = vm.createContext({
-    performance:{now:() => now}, activeGrid:() => grid, dockState:() => state,
-    frames:() => ['center', 'right', 'right', 'bottom'].map((dock, i) => ({dataset:{dock, appId:String(i)}})),
-    restoreAgentFocus:() => focused++, maximized:'tool',
+    performance:{now:() => now}, activeGrid:() => grid, currentAgent:() => agent,
+    document:{querySelectorAll:() => popups},
+    launcher:(...args) => opened.push(args),
     event:{ctrlKey:true, key:'a', preventDefault(){}, stopImmediatePropagation(){}},
   })
   vm.runInContext(handler + '\nfunction press(){' + detection + '}', context)
   vm.runInContext('press()', context)
-  assert.equal(focused, 0)
+  assert.equal(opened.length, 0)
   now = 300
   vm.runInContext('press()', context)
-  assert.equal(focused, 1)
-  assert.deepEqual([...state.hidden], ['1', '2'])
-  assert.equal(state.bottom, false)
-  assert.equal(context.maximized, '')
+  assert.deepEqual(opened, [['center', undefined, true]])
   now = 1000
   vm.runInContext('press()', context)
   now = 1500
   vm.runInContext('press()', context)
-  assert.equal(focused, 1)
+  assert.equal(opened.length, 1)
   now = 1600
   grid = {}
   vm.runInContext('press()', context)
-  assert.equal(focused, 1, 'presses in different threads must not hide tools')
+  assert.equal(opened.length, 1, 'presses in different threads must not open the picker')
   now = 1700
+  agent = undefined
   vm.runInContext('press()', context)
-  assert.equal(focused, 2)
+  assert.equal(opened.length, 1, 'a workspace without an agent has nothing to replace')
+  now = 1750
+  agent = {}
+  vm.runInContext('press()', context)
+  now = 1800
+  popups = [{getClientRects:() => [{}]}]
+  vm.runInContext('press()', context)
+  assert.equal(opened.length, 1, 'an open popup keeps the picker closed')
 })
 
 test('address popup reclaims native focus only for the workspace sender', () => {
@@ -1060,7 +1071,7 @@ test('Ctrl+A stays in the selected thread even when another thread has an agent'
     const selectedGrid = { querySelector: () => null }
     const otherGrid = {}
     const calls = []
-    vm.runInNewContext('(function(){' + handler + '})()', {
+    vm.runInNewContext(currentAgentSource() + '(function(){' + handler + '})()', {
       binding: 'Ctrl+A', activeGrid: () => selectedGrid,
       frames: grid => grid === otherGrid || occupied ? [{dataset:{appId:grid === otherGrid ? 'other-agent' : 'selected-agent', dock:'center'}}] : [],
       dockState: () => ({agent:'other-agent'}),

@@ -183,7 +183,7 @@
   function activeGrid() { return [...document.querySelectorAll('[data-workspace-project]')].find(el => el.parentElement.style.display !== 'none'); }
   function frames(grid) { return [...grid.querySelectorAll(':scope > [data-app-id]')].sort((a, b) => Number(a.style.order) - Number(b.style.order)); }
   function isThread(grid = activeGrid()) { return grid?.dataset.thread === 'true'; }
-  function openPlugin(id, dock, trigger, replace = false, add = false) {
+  function openPlugin(id, dock, trigger, replace = false, add = false, replaceID = '') {
     const plugin = window.__libroPlugins.find(candidate => candidate.id === id);
     if (!plugin || plugin.disabled || plugin.removed || trigger?.disabled) return;
     if (trigger) {
@@ -199,6 +199,7 @@
       call('thread.create', {agent:plugin.id, project:window.__libroActiveProject || ''});
     } else call('app.start', {
       replaceAgent: replace,
+      replaceID,
       addAgent: add,
       type: plugin.type,
       command: plugin.command || '',
@@ -269,6 +270,9 @@
     let dialog = document.getElementById('workspace-plugin-dialog');
     if (dialog) dialog.remove();
     dialog = node('dialog', 'ws-plugin-dialog'); dialog.id = 'workspace-plugin-dialog'; dialog.setAttribute('aria-label', dock === 'center' ? (replace ? 'Replace agent' : add ? 'New agent panel' : 'New agent session') : 'Open an app');
+    // Replace closes only the agent panel that was current when the picker opened.
+    const replaceGrid = replace && activeGrid();
+    const replaceID = replaceGrid ? currentAgent(replaceGrid)?.dataset.appId || '' : '';
     const searchBar = node('div', 'ws-command-search');
     const search = node('input', 'ws-palette-search'); search.placeholder = dock === 'center' ? 'Search agents…' : 'Search apps…'; search.setAttribute('aria-label', dock === 'center' ? 'Search agents' : 'Search apps'); search.autocomplete = 'off'; search.spellcheck = false;
     const dismiss = node('button', 'ws-command-dismiss'); dismiss.append(node('i', 'material-icons-round', 'close')); dismiss.firstChild.setAttribute('aria-hidden', 'true'); dismiss.type = 'button'; dismiss.setAttribute('aria-label', 'Close app launcher'); dismiss.onclick = () => dialog.close();
@@ -283,7 +287,7 @@
     list.forEach(plugin => {
       const entry = node('button', 'ws-plugin-entry'); entry.type = 'button'; const icon = node('i', 'material-icons-round', plugin.type === 'url' ? 'language' : 'terminal'); icon.setAttribute('aria-hidden', 'true'); const copy = node('span', 'ws-plugin-copy'); copy.append(node('span', '', plugin.name), node('small', '', plugin.description || plugin.command || 'Browser app')); entry.append(icon, copy); applyToolIcon(entry, plugin);
       if (toolKeys[plugin.id]) { const key = node('kbd', 'ws-plugin-key', toolKeys[plugin.id]); key.setAttribute('aria-hidden', 'true'); entry.append(key); entry.setAttribute('aria-keyshortcuts', toolKeys[plugin.id].replace(/Ctrl/g, 'Control')); }
-      entry.onclick = () => { dialog.close(); openPlugin(plugin.id, dock, entry, replace, add); onLaunch?.(); }; entries.append(entry);
+      entry.onclick = () => { dialog.close(); openPlugin(plugin.id, dock, entry, replace, add, replaceID); onLaunch?.(); }; entries.append(entry);
     });
     dialog.append(entries);
     let active = 0;
@@ -1337,9 +1341,12 @@
     if (frame) select(frame.dataset.appId);
     else window.__libroSelectedApp = '';
   }
-  function restoreAgentFocus(grid) {
+  function currentAgent(grid) {
     const agents = frames(grid).filter(frame => frame.dataset.dock === 'center');
-    const agent = agents.find(frame => frame.dataset.appId === dockState(grid).agent) || agents[0];
+    return agents.find(frame => frame.dataset.appId === dockState(grid).agent) || agents[0];
+  }
+  function restoreAgentFocus(grid) {
+    const agent = currentAgent(grid);
     if (agent) select(agent.dataset.appId); else refresh();
   }
   function tool(id) {
@@ -1458,14 +1465,6 @@
   let lastCtrlAGrid;
   let lastCtrlNumber = '';
   let lastCtrlNumberAt = 0;
-  function hideTools() {
-    const grid = activeGrid(); if (!grid) return;
-    maximized = '';
-    const state = dockState(grid);
-    frames(grid).forEach(frame => { if (frame.dataset.dock === 'right') state.hidden.add(frame.dataset.appId); });
-    state.bottom = false;
-    restoreAgentFocus(grid);
-  }
   function closeOtherPanels() {
     call('app.close.others', {id:window.__libroSelectedApp || ''});
   }
@@ -1502,14 +1501,18 @@
       if (!event.repeat) void window.libroVoice?.toggle();
       return;
     }
-    if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open], #libro-confirm-popover')) return;
+    if (!document.getElementById('workspace-settings').hidden || document.querySelector('dialog[open], #libro-confirm-popover')) { lastCtrlA = 0; return; }
     // A held Ctrl+A goes on to the Ctrl+A handler below, which keeps it from the focused page (Vim's Ctrl+A changes a number).
     if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
       if (!event.repeat) {
         const now = performance.now();
         const grid = activeGrid();
-        if (grid && grid === lastCtrlAGrid && lastCtrlA && now - lastCtrlA < 450) {
-          lastCtrlA = 0; event.preventDefault(); event.stopImmediatePropagation(); hideTools(); return;
+        const popup = [...document.querySelectorAll('[aria-modal="true"]')].some(modal => modal.getClientRects().length);
+        if (grid && !popup && grid === lastCtrlAGrid && lastCtrlA && now - lastCtrlA < 450) {
+          // A quick second press picks another agent for the current panel.
+          lastCtrlA = 0; event.preventDefault(); event.stopImmediatePropagation();
+          if (currentAgent(grid)) launcher('center', undefined, true);
+          return;
         }
         lastCtrlA = now; lastCtrlAGrid = grid;
       }
@@ -1684,8 +1687,7 @@
       if (grid.querySelector('[data-tool-overlay=true][data-dock-visible=true]')) {
         frames(grid).filter(frame => frame.dataset.dock === 'right').forEach(frame => state.hidden.add(frame.dataset.appId));
       }
-      const agent = agents.find(frame => frame.dataset.appId === state.agent) || agents[0];
-      select(agent.dataset.appId);
+      select(currentAgent(grid).dataset.appId);
       return;
     }
     if (binding === 'Ctrl+D' && event.target.closest?.('[data-terminal]')) return;

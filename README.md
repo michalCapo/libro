@@ -219,7 +219,7 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl + A` | Jump to the current agent (press twice to hide tools) |
+| `Ctrl + A` | Jump to the current agent (press twice to replace it with another agent) |
 | `Ctrl + Shift + A` | New agent panel in the current thread |
 | `Ctrl + T` | New thread in a new worktree |
 | `Ctrl + Shift + P` | Switch project |
@@ -230,7 +230,7 @@ Rebuild the bundled viewer after source changes with `npm run build:files`. Chec
 | `Caps Lock` | Voice typing |
 | `Alt + ,` / `Alt + .` | Lower / raise Claude effort for this session (Codex has this built in) |
 
-New agent, Replace agent, and Close project have no default shortcut. Find them in the command palette or set one in Settings.
+New agent, Replace agent, and Close project have no default shortcut. Find them in the command palette or set one in Settings. Pressing `Ctrl + A` twice also opens Replace agent.
 
 ### Panels and tools
 
