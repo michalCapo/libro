@@ -383,15 +383,30 @@
     const portLabel = node('label', '', 'Port for this thread'); portLabel.htmlFor = 'project-application-port';
     const port = node('input', 'ws-agent-command'); port.id = 'project-application-port'; port.type = 'number'; port.min = '1'; port.max = '65535'; port.placeholder = 'Automatic'; port.value = project.applicationPort || '';
     const syncMode = () => { portLabel.hidden = port.hidden = mode.value !== 'thread'; port.disabled = mode.value !== 'thread'; }; mode.onchange = syncMode; syncMode();
+    // A project can be renamed here too; the name only changes in Libro, never the folder.
+    const rename = project.kind === 'project' ? node('input', 'ws-agent-command') : null;
     const actions = node('div', 'ws-agent-actions');
     const cancel = node('button', 'ws-launch', 'Cancel'); cancel.type = 'button'; cancel.onclick = () => dialog.close();
     const submit = node('button', 'ws-launch', 'Save'); submit.type = 'submit';
-    actions.append(cancel, submit); form.append(modeLabel, mode, label, input, help, portLabel, port);
+    actions.append(cancel, submit);
+    if (rename) {
+      const renameLabel = node('label', '', 'Name'); renameLabel.htmlFor = 'project-name-input';
+      rename.id = 'project-name-input'; rename.value = project.displayName || project.name; rename.autocomplete = 'off'; rename.spellcheck = false;
+      const renameHelp = node('p', 'ws-settings-status', 'Only changes the name in Libro. The folder stays at ' + project.path + '. Leave blank to use the folder name.'); renameHelp.id = 'project-name-help'; rename.setAttribute('aria-describedby', renameHelp.id);
+      form.append(renameLabel, rename, renameHelp);
+    }
+    form.append(modeLabel, mode, label, input, help, portLabel, port);
     if (project.applicationURL) { const link = node('a', '', project.applicationURL); link.href = project.applicationURL; link.target = '_blank'; link.rel = 'noopener'; form.append(link); }
     form.append(actions);
-    form.onsubmit = event => { event.preventDefault(); call('project.command.save', {name, command:mode.value === 'thread' && inheritedCommand && input.value === inheritedCommand ? '' : input.value, mode:mode.value, port:port.value}); };
+    form.onsubmit = event => {
+      event.preventDefault();
+      // Compare with the saved name, which a rename from an earlier failed save may have changed.
+      const saved = (window.__libroProjects || []).find(p => p.kind === 'project' && p.name === project.name) || project;
+      if (rename && rename.value !== (saved.displayName || saved.name)) call('project.rename', {name, label:rename.value});
+      call('project.command.save', {name, command:mode.value === 'thread' && inheritedCommand && input.value === inheritedCommand ? '' : input.value, mode:mode.value, port:port.value});
+    };
     dialogKeys(dialog, form, submit, cancel);
-    dialog.append(heading, form); root.append(dialog); dialog.showModal(); input.focus();
+    dialog.append(heading, form); root.append(dialog); dialog.showModal(); (rename || input).focus();
   }
   // Renaming changes only the name Libro shows; the folder and its path stay the same.
   function renameProject(name) {

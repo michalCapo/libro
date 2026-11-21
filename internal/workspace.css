@@ -162,7 +162,7 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-sidebar-search{display:flex;align-items:center;gap:10px;min-width:0;min-height:36px;flex:1;padding:6px 8px;color:var(--ws-muted);background:transparent;border:0;border-radius:8px;text-align:left;font:inherit}
 .ws-sidebar-search span{flex:1}.ws-sidebar-search:hover{background:var(--ws-hover)}
 .ws-sidebar-search .material-icons-round{font-size:17px;flex-shrink:0;color:var(--ws-muted)}
-.ws-project-command-dialog[open]{padding:20px;gap:16px}
+.ws-project-command-dialog[open]{padding:20px;gap:16px;overflow-y:auto}
 .ws-project-command-dialog h2{margin:0;font-size:15px;font-weight:600;overflow-wrap:anywhere}
 .ws-project-command-dialog form{display:flex;flex-direction:column;gap:6px}
 .ws-project-command-dialog select.ws-agent-command{font:inherit;font-size:13px;padding:7px 10px}
