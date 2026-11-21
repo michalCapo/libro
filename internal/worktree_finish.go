@@ -2,6 +2,7 @@ package libro
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -40,9 +41,11 @@ type worktreeFinishPreview struct {
 	Summary    string   `json:"summary"`
 	Dirty      string   `json:"dirty"`
 	Blocker    string   `json:"blocker"`
-	Path       string   `json:"-"`
-	Root       string   `json:"-"`
-	Parent     string   `json:"-"`
+	// Conflicts lists the files a merge of the two heads would leave conflicted.
+	Conflicts []string `json:"conflicts,omitempty"`
+	Path      string   `json:"-"`
+	Root      string   `json:"-"`
+	Parent    string   `json:"-"`
 	// Checkout marks a thread on the project's own checkout; it can only discard changes.
 	Checkout bool `json:"checkout"`
 	// MergedBase names the branch holding this clean thread's current commit after
@@ -138,6 +141,11 @@ func inspectFinishThread(state *AppState, name, base string) (worktreeFinishPrev
 		return info, err
 	}
 	info.Summary = strings.TrimSpace(commits + "\n\n" + stats)
+	// A failed check leaves Conflicts empty; the merge itself still stops on a conflict.
+	info.Conflicts, _ = finishConflicts(info.Root, info.Base, info.TargetHead, info.SourceHead)
+	if len(info.Conflicts) > 0 {
+		info.Summary = "Merge conflict expected in: " + strings.Join(info.Conflicts, ", ") + "\n\n" + info.Summary
+	}
 	if len(info.Summary) > 16000 {
 		info.Summary = info.Summary[:16000] + "\n…"
 	}
@@ -150,6 +158,38 @@ func inspectFinishThread(state *AppState, name, base string) (worktreeFinishPrev
 		info.Blocker = err.Error()
 	}
 	return info, nil
+}
+
+// finishConflicts merges the two commits in memory, without touching any
+// worktree, and returns the conflicted paths. Git exits 1 when there are conflicts.
+// It returns nothing when it cannot predict the real merge: branch merge options
+// (e.g. -Xours) and custom merge drivers can resolve what the plain check cannot,
+// and Git before 2.38 lacks --write-tree. The merge itself still stops on a conflict.
+func finishConflicts(root, base, target, source string) ([]string, error) {
+	if options, _ := worktreeGit(root, "config", "--get", "branch."+base+".mergeoptions"); options != "" {
+		return nil, nil
+	}
+	if drivers, _ := worktreeGit(root, "config", "--get-regexp", `^merge\..*\.driver$`); drivers != "" {
+		return nil, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "git", "-C", root, "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", target, source).Output()
+	if err == nil {
+		return nil, nil
+	}
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+		return nil, err
+	}
+	// The tree of the merge result comes first; each conflicted path follows, unquoted and NUL-ended.
+	fields := strings.Split(string(out), "\x00")
+	paths := slices.Compact(slices.DeleteFunc(fields[1:], func(path string) bool { return path == "" }))
+	if len(paths) == 0 {
+		// Some conflicts, such as a directory rename, list no path.
+		paths = []string{"(paths not listed by Git)"}
+	}
+	return paths, nil
 }
 
 func cleanFinishTarget(path string) error {
@@ -199,6 +239,9 @@ func integrateFinishThread(info worktreeFinishPreview, method, message string) e
 	}
 	if err := cleanFinishTarget(info.Path); err != nil {
 		return err
+	}
+	if len(info.Conflicts) > 0 {
+		return fmt.Errorf("merging would conflict in %s; %s was not changed. Merge %s into the thread, resolve the conflicts, commit, and preview again", strings.Join(info.Conflicts, ", "), info.TargetPath, info.Base)
 	}
 	args := []string{"merge", "--no-edit", "--no-autostash"}
 	if method == "squash" {

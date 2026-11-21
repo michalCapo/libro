@@ -42,9 +42,10 @@ Discard deletes the worktree, its uncommitted changes and its unmerged commits. 
 discard, delete or throw away the thread. On the project's own checkout, discard only drops uncommitted changes;
 commits stay.
 Close and discard stop the thread's panels, including this agent, so report what you are about to do before the
-final call. If a merge fails with conflicts, the thread stays open:
-abort the unfinished merge in the destination checkout (git merge --abort, or git reset --merge after a squash),
-merge the destination branch into this thread, resolve the conflicts, commit, then preview and merge again.
+final call. If preview lists conflicts, merge leaves the destination unchanged and fails: first merge the
+destination branch into this thread, resolve the conflicts, commit, then preview and merge again.
+If a merge fails with conflicts and left an unfinished merge in the destination checkout, abort only that
+(git merge --abort, or git reset --merge after a squash), then do the same in this thread.
 `
 
 type threadCommand struct {

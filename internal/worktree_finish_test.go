@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -120,11 +121,39 @@ func TestFinishThreadDirtyAndConflictPreserveWorktree(t *testing.T) {
 				t.Fatal("thread removed on failure")
 			}
 			if kind == "conflict" {
-				if _, err := worktreeGit(root, "rev-parse", "--verify", "MERGE_HEAD"); err != nil {
-					t.Fatal("conflict was silently reset")
+				if !slices.Equal(info.Conflicts, []string{"file.txt"}) || !strings.HasPrefix(info.Summary, "Merge conflict expected in: file.txt") {
+					t.Fatalf("preview missed the conflict: %+v", info)
 				}
+				// The conflict is found before the merge, so the destination stays untouched.
+				if err := cleanFinishTarget(root); err != nil {
+					t.Fatal("destination changed:", err)
+				}
+			} else if len(info.Conflicts) > 0 {
+				t.Fatalf("unexpected conflicts: %v", info.Conflicts)
 			}
 		})
+	}
+}
+
+func TestFinishThreadConflictCheck(t *testing.T) {
+	state, root, branch := finishFixture(t)
+	name := "súbor ä.txt"
+	commitFinishFile(t, root, name, "base\n")
+	if _, err := worktreeGit(branch, "merge", "--no-edit", "main"); err != nil {
+		t.Fatal(err)
+	}
+	commitFinishFile(t, branch, name, "feature\n")
+	commitFinishFile(t, root, name, "main\n")
+	info, err := inspectFinishThread(state, "repo/feature", "")
+	if err != nil || !slices.Equal(info.Conflicts, []string{name}) {
+		t.Fatalf("conflicts %q: %v", info.Conflicts, err)
+	}
+	// A branch merge option can resolve the conflict, so the check steps aside.
+	if _, err := worktreeGit(root, "config", "branch.main.mergeoptions", "-Xtheirs"); err != nil {
+		t.Fatal(err)
+	}
+	if info, err = inspectFinishThread(state, "repo/feature", ""); err != nil || info.Conflicts != nil {
+		t.Fatalf("conflicts with merge options %q: %v", info.Conflicts, err)
 	}
 }
 
