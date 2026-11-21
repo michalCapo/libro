@@ -369,10 +369,14 @@ func registerFinishThreadActions(app *r.App) {
 		name := in.Name
 		base := in.Base
 		request := in.Request
-		info, err := inspectFinishThread(sm.Get(inputSID(in.SID)), name, base)
+		sid := inputSID(in.SID)
+		info, err := inspectFinishThread(sm.Get(sid), name, base)
 		reply := map[string]any{"info": info}
 		if err != nil {
 			reply["error"] = err.Error()
+		} else if len(info.Conflicts) > 0 && info.Blocker == "" {
+			// A known conflict is offered to the thread's agent before any merge is tried.
+			reply["agentMerge"] = mergeAgentRequest(sid, info, "")
 		}
 		return clientScript("libroWorkspace.finishThreadPreview(props[0],props[1]);", request, reply), nil
 	})
@@ -528,7 +532,8 @@ func discardCheckoutThread(sid string, info worktreeFinishPreview) (r.Result, er
 	return js, nil
 }
 
-// Only the failed thread's agent may receive this request.
+// Only the failed thread's agent may receive this request. An empty method
+// means the preview found the conflicts, so nothing was merged yet.
 func mergeAgentRequest(sid string, info worktreeFinishPreview, method string) map[string]string {
 	id := ""
 	for _, workspace := range sm.GetAllRunningApps(sid) {
@@ -543,6 +548,11 @@ func mergeAgentRequest(sid string, info worktreeFinishPreview, method string) ma
 		}
 	}
 	// Conflicts are resolved in the thread's worktree so the destination checkout stays clean.
+	if method == "" {
+		// File names stay out of the prompt: it is typed into a terminal, and Git shows the conflicts anyway.
+		prompt := fmt.Sprintf("The user confirmed that you should fix merge conflicts that Libro found before merging. Merging %q into %q would conflict. Nothing was merged, and the destination checkout %q was not changed; do not use Git there. In the source worktree %q, merge %q into %q, resolve the conflicts, and commit. Do not discard other changes or force push. Do not delete either branch or worktree, and do not stop shared applications. Do not merge into %q yourself: report the result so the user can finish the thread again in Libro.", info.Branch, info.Base, info.TargetPath, info.Path, info.Base, info.Branch, info.Base)
+		return map[string]string{"appID": id, "workspace": info.Name, "prompt": prompt}
+	}
 	prompt := fmt.Sprintf("The user confirmed that you should fix a failed %s. Source branch: %q in %q. Destination branch: %q in %q. Inspect the Git state of both checkouts first. If the failed %s left changes in the destination checkout, undo only that unfinished merge there (git merge --abort, or git reset --merge after a squash) and make no other changes there. Then, in the source worktree, merge %q into %q, resolve the conflicts, and commit. Do not discard other changes or force push. Do not delete either branch or worktree, and do not stop shared applications. Report the result so the user can finish the thread again in Libro.", method, info.Branch, info.Path, info.Base, info.TargetPath, method, info.Base, info.Branch)
 	return map[string]string{"appID": id, "workspace": info.Name, "prompt": prompt}
 }

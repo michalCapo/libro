@@ -157,6 +157,11 @@ test('dialog Enter submits and Escape cancels without repeats or disabled action
   press('Enter', {isComposing:true})
   press('Enter', {target:{tagName:'TEXTAREA'}})
   press('Enter', {target:{tagName:'SELECT'}})
+  // Enter on a focused Cancel cancels even while the action is enabled.
+  press('Enter', {target:cancel})
+  assert.equal(submitted, 1)
+  assert.equal(cancelled, 2)
+  cancelled = 1
   submit.disabled = cancel.disabled = true
   press('Enter')
   press('Escape')
@@ -225,6 +230,35 @@ test('failed merge asks before sending to the exact thread agent; Escape sends n
   }
 })
 
+
+test('known conflicts in the preview offer the agent fix instead of a merge', () => {
+  for (const method of ['merge', 'squash']) {
+    const h = harness(false, method)
+    const sent = []
+    h.context.window.__libroSendPageToolPrompt = (...args) => { sent.push(args); return true }
+    const agentMerge = {appID:'thread-agent', workspace:'repo/feature', prompt:'Fix the conflicts'}
+    h.context.reply = {info:{name:'repo/feature', branch:'feature', base:'main', branches:['main'], sourceHead:'source', targetHead:'target', summary:'Merge conflict expected in: a.txt', dirty:'', blocker:'', conflicts:['a.txt']}, agentMerge}
+    h.context.request = h.calls.at(-1).data.request
+    vm.runInContext('finishThreadPreview(request, reply)', h.context)
+    const submit = h.button('Ask agent to fix conflicts')
+    assert.equal(submit.disabled, false)
+    h.form.onsubmit({preventDefault(){}})
+    assert.deepEqual(sent, [['Fix the conflicts', true, 'thread-agent']])
+    assert.deepEqual(h.calls.map(c => c.action), ['thread.finish.preview', 'project.switch'])
+    assert.equal(h.dialog.open, false)
+  }
+  // Without a running agent the dialog stays open and nothing is merged.
+  const h = harness()
+  h.context.reply = {info:{name:'repo/feature', branch:'feature', base:'main', branches:['main'], sourceHead:'source', targetHead:'target', summary:'x', dirty:'', blocker:'', conflicts:['a.txt']}, agentMerge:{appID:'', workspace:'repo/feature', prompt:'p'}}
+  h.context.request = h.calls.at(-1).data.request
+  vm.runInContext('finishThreadPreview(request, reply)', h.context)
+  h.form.onsubmit({preventDefault(){}})
+  assert.deepEqual(h.calls.map(c => c.action), ['thread.finish.preview'])
+  assert.equal(h.dialog.open, true)
+  // A new destination clears the old offer until its preview arrives.
+  h.field('finish-thread-base').onchange()
+  assert.equal(h.button('Merge and remove thread').disabled, true)
+})
 
 test('thread palette closes base and worktree workspaces without a Git deletion action', () => {
   const code = source.slice(source.indexOf('  function threadActions('), source.indexOf('  function threadMenu('))

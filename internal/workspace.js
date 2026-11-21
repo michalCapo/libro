@@ -359,7 +359,8 @@
         event.preventDefault(); event.stopImmediatePropagation();
         // With the action finished, Enter closes through the focused Done button.
         if (event.repeat) return;
-        if (!submit.disabled) form.requestSubmit(submit); else if (event.target === cancel && !cancel.disabled) cancel.click();
+        // Enter on a focused Cancel cancels; it never runs the action.
+        if (event.target === cancel) { if (!cancel.disabled) cancel.click(); } else if (!submit.disabled) form.requestSubmit(submit);
       }
     }, true);
   }
@@ -496,16 +497,19 @@
       message.hidden = messageLabel.hidden = discard || method === 'merge'; messageLabel.textContent = pr ? 'Pull request title' : 'Commit message';
       body.hidden = bodyLabel.hidden = !pr;
       note.textContent = merged ? 'Removes this thread, its branch, and its worktree folder, including ignored files. Stops its processes. Shared applications stay running.' : pr ? 'Pushes this branch to origin and creates a draft PR using GitHub CLI. The thread and worktree stay open.' : checkout ? 'Permanently deletes uncommitted changes and new files in this folder. Stops its processes and closes the thread. The branch, its commits and ignored files stay.' : discard ? 'Permanently deletes this thread, its branch, and its worktree folder, including uncommitted and ignored files. Stops its processes. Shared applications stay running.' : 'After a successful merge, stops this thread’s processes and removes the thread, its branch, and its worktree folder, including ignored files. Shared applications stay running. Conflicts keep the thread open.';
+      // The preview found conflicts, so the action asks the thread's agent to fix them instead of merging.
+      const fix = !discard && !pr && !!state.agentMerge;
+      if (fix) note.textContent = 'Merging would conflict in the files listed above, so nothing is merged now. The thread’s agent merges the destination branch into this thread and resolves the conflicts; the destination stays unchanged. Then finish the thread again.';
       const info = state.info;
       const blocker = !info ? 'Loading changes…' : discard ? (state.wasMerged && !merged ? 'This thread changed, so removing it could lose work. Cancel and open Discard thread again to review it.' : '') : pr ? (info.dirty ? 'Commit or stash this thread’s changes first.' : !info.targetHead ? 'Choose a destination branch.' : '') : info.blocker;
       status.textContent = [state.error, blocker].filter(Boolean).join(" ");
-      submit.textContent = merged ? 'Remove thread' : discard ? discardLabel : pr ? 'Push branch and create draft PR' : method === 'squash' ? 'Squash and remove thread' : 'Merge and remove thread';
+      submit.textContent = merged ? 'Remove thread' : discard ? discardLabel : pr ? 'Push branch and create draft PR' : fix ? 'Ask agent to fix conflicts' : method === 'squash' ? 'Squash and remove thread' : 'Merge and remove thread';
       submit.disabled = state.busy || !info || !!blocker || (pr && !message.value.trim());
       // The action takes focus once the changes load, unless a text field has it.
       if (!submit.disabled && !state.focused && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) { state.focused = true; submit.focus(); }
     }
     function preview() {
-      state.info = null; state.request = crypto.randomUUID(); update();
+      state.info = null; state.agentMerge = null; state.request = crypto.randomUUID(); summary.textContent = 'Loading changes…'; update();
       call('thread.finish.preview', {name, base:base.value, request:state.request});
     }
     function show() {
@@ -515,11 +519,14 @@
       window.libroElectron?.focusWorkspace?.().then(() => { if (dialog.open) (dialog.contains(document.activeElement) ? document.activeElement : submit).focus(); }).catch(() => {});
     }
     state.update = update; state.preview = preview; state.show = show;
-    base.onchange = preview; message.oninput = update;
+    // An error from the previous destination does not apply to the new one.
+    base.onchange = () => { state.error = ''; preview(); }; message.oninput = update;
     dialog.addEventListener('cancel', event => { if (state.busy) event.preventDefault(); });
     dialog.addEventListener('close', () => { if (finishDialog === state) finishDialog = null; dialog.remove(); });
     form.onsubmit = event => {
       event.preventDefault(); if (submit.disabled || state.busy) return;
+      // Clicking the action is the confirmation, so the request goes to the agent without a second dialog.
+      if (!discard && method !== 'pr' && state.agentMerge) { sendAgentMerge(state, state.agentMerge, status); return; }
       state.busy = true; state.error = "";
       const info = state.info;
       form.querySelectorAll('input,select,textarea,button').forEach(control => { control.disabled = true; });
@@ -533,7 +540,7 @@
   function finishThreadPreview(request, reply) {
     const state = finishDialog; if (!state || state.request !== request || state.busy) return;
     if (reply.error) { state.status.textContent = reply.error; state.summary.textContent = ''; state.show(); return; }
-    state.info = reply.info;
+    state.info = reply.info; state.agentMerge = reply.agentMerge || null;
     // A refused removal must never turn Enter into a discard of the new work.
     if (reply.info.mergedBase) state.wasMerged = true;
     // Nothing would be lost: no uncommitted files and, for a worktree, no commits beyond its destination.
@@ -586,15 +593,21 @@
     actions.append(cancel, submit); form.append(status, actions); dialog.append(heading, description, form); root.append(dialog);
     form.onsubmit = event => {
       event.preventDefault(); if (submit.disabled) return;
-      if (!request.appID || !window.__libroSendPageToolPrompt?.(request.prompt, true, request.appID)) {
-        status.textContent = 'Start an agent in this thread, then retry the merge to send the request.'; return;
-      }
-      submit.disabled = true; dialog.close(); state.dialog.close();
-      call('project.switch', {name:request.workspace});
-      window.__libroShowToast?.('Merge request sent to the thread’s agent', '', 'success');
+      if (sendAgentMerge(state, request, status)) { submit.disabled = true; dialog.close(); }
     };
     dialog.addEventListener('close', () => dialog.remove());
     dialogKeys(dialog, form, submit, cancel); dialog.showModal(); submit.focus();
+  }
+  // Sends the conflict fix to the thread's own agent and closes the finish dialog.
+  function sendAgentMerge(state, request, status) {
+    if (!request.appID || !window.__libroSendPageToolPrompt?.(request.prompt, true, request.appID)) {
+      // The agent is looked up when the preview loads, so a new agent needs a new dialog.
+      status.textContent = 'Start an agent in this thread, then open this dialog again.'; return false;
+    }
+    state.dialog.close();
+    call('project.switch', {name:request.workspace});
+    window.__libroShowToast?.('Merge request sent to the thread’s agent', '', 'success');
+    return true;
   }
   // Ctrl+Q on a thread with nothing to close asks what to do with the thread itself.
   function confirmThreadQuit({name, source, note, discardLabel, discard}) {
