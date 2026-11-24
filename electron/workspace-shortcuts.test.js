@@ -434,7 +434,7 @@ test('redrawing thread buttons restores focus after the row is ready to scroll',
   const render = workspace.slice(workspace.indexOf('  function renderThreadChips()'), workspace.indexOf('  new MutationObserver(() => requestAnimationFrame(renderThreadChips)'))
   const node = (tag, className, text = '') => Object.assign(document.createElement(tag), { className, textContent: text })
   const renderChips = vm.runInNewContext('let threadList = null;\n' + render + '\nrenderThreadChips', {
-    document, node, button: () => node('button', 'ws-button'), toggleThreadList() {},
+    document, node, button: () => node('button', 'ws-button'), toggleThreadList() {}, dragToReorder() {}, reorderThreads() {},
     root: { dataset: { fold: 'narrow' } }, narrowWindow: { matches: true }, toolKeys: {},
     activeGrid: () => document.getElementById('grid'),
   })

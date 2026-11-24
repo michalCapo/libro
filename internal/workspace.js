@@ -956,36 +956,43 @@
   }
   function projectDrag(row, group, name) {
     group.dataset.projectName = name;
-    row.draggable = true;
-    row.ondragstart = event => {
-      // Threads orders cards by creation, so only All projects reorders projects.
-      if (root.dataset.allProjects !== 'true') { event.preventDefault(); return; }
+    // Threads orders cards on its own, so only All projects reorders projects.
+    dragToReorder(row, group, true, () => root.dataset.allProjects === 'true',
+      items => call('project.reorder', {names:items.map(item => item.dataset.projectName).filter(Boolean)}));
+  }
+  // Dragging the handle moves the item among its siblings, before or after the one it is dropped on; done gets the new order.
+  // allowed(source, target) says whether the item may move there.
+  function dragToReorder(handle, item, vertical, allowed, done) {
+    handle.draggable = true;
+    const dragged = () => item.parentElement?.querySelector(':scope > .ws-dragging');
+    const clear = () => item.parentElement?.querySelectorAll(':scope > [data-drop]').forEach(target => delete target.dataset.drop);
+    const before = event => {
+      const bounds = item.getBoundingClientRect();
+      return vertical ? event.clientY < bounds.top + bounds.height / 2 : event.clientX < bounds.left + bounds.width / 2;
+    };
+    handle.ondragstart = event => {
+      if (!allowed(item, item)) { event.preventDefault(); return; }
       event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', name);
-      group.classList.add('ws-project-dragging');
+      event.dataTransfer.setData('text/plain', handle.getAttribute('aria-label') || '');
+      item.classList.add('ws-dragging');
     };
-    row.ondragend = () => {
-      group.classList.remove('ws-project-dragging');
-      group.parentElement?.querySelectorAll('[data-project-drop]').forEach(target => delete target.dataset.projectDrop);
-    };
-    const dragged = () => group.parentElement?.querySelector(':scope > .ws-project-dragging');
-    const before = event => { const bounds = group.getBoundingClientRect(); return event.clientY < bounds.top + bounds.height / 2; };
-    group.ondragover = event => {
-      const source = dragged(); if (!source || source === group) return;
+    handle.ondragend = () => { clear(); item.classList.remove('ws-dragging'); };
+    item.ondragover = event => {
+      const source = dragged(); if (!source || source === item || !allowed(source, item)) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
-      group.parentElement.querySelectorAll('[data-project-drop]').forEach(target => delete target.dataset.projectDrop);
-      group.dataset.projectDrop = before(event) ? 'before' : 'after';
+      clear();
+      item.dataset.drop = before(event) ? 'before' : 'after';
     };
-    group.ondragleave = event => {
-      if (!group.contains(event.relatedTarget)) delete group.dataset.projectDrop;
+    item.ondragleave = event => {
+      if (!item.contains(event.relatedTarget)) delete item.dataset.drop;
     };
-    group.ondrop = event => {
-      const source = dragged(); if (!source || source === group) return;
+    item.ondrop = event => {
+      const source = dragged(); if (!source || source === item || !allowed(source, item)) return;
       event.preventDefault();
-      if (before(event)) group.before(source); else group.after(source);
-      delete group.dataset.projectDrop;
-      call('project.reorder', {names:[...group.parentElement.children].map(item => item.dataset.projectName).filter(Boolean)});
+      if (before(event)) item.before(source); else item.after(source);
+      clear();
+      done([...item.parentElement.children]);
     };
   }
   function toolOverlapsFrame(grid, frame) {
@@ -997,6 +1004,31 @@
     // Inactive threads have no layout, so they cannot establish an overlap.
     if (!toolRect.width || !frameRect.width) return false;
     return toolRect.left < frameRect.right && toolRect.right > frameRect.left;
+  }
+  // Dragging thread chips saves their order. Threads lists the ordered open cards first and numbers them in that order.
+  // The chips fill the places they held in the saved order, so hidden threads keep theirs.
+  function reorderThreads(keys) {
+    const known = key => document.querySelector('.ws-project-row[data-project-key="' + CSS.escape(key) + '"]');
+    let next = 0;
+    const order = (prefs.threadOrder || []).filter(known).map(key => keys.includes(key) ? keys[next++] : key);
+    prefs.threadOrder = [...order, ...keys.slice(next)];
+    save(); applyThreadOrder(); renderThreadShortcuts();
+    // A card with a working agent can stay below the others, so the numbers stay the same; redraw the chips anyway.
+    const chips = document.getElementById('workspace-thread-chips');
+    if (chips) delete chips.dataset.signature;
+    renderThreadChips();
+  }
+  function applyThreadOrder() {
+    const order = prefs.threadOrder || [];
+    document.querySelectorAll('.ws-project-row').forEach(row => {
+      const item = row.parentElement;
+      // Closed and archived cards keep their place after the open ones.
+      const index = row.dataset.closed === 'true' || item.dataset.archived === 'true' ? -1 : order.indexOf(row.dataset.projectKey);
+      if (index < 0) { delete item.dataset.threadOrder; item.style.removeProperty('--thread-order'); return; }
+      item.dataset.threadOrder = '';
+      // Working cards add 300000 and must still land after the spacer at 200000 (see .ws-thread-cards).
+      item.style.setProperty('--thread-order', String(index - 99999));
+    });
   }
   function renderThreadShortcuts() {
     let index = 0;
@@ -1017,12 +1049,17 @@
       row.setAttribute('aria-keyshortcuts', 'Control+' + number);
     });
   }
-  // Threads shows worktree cards in creation order; standalone threads follow in their own list.
+  // Threads shows the cards ordered by dragging chips first, then worktree cards in creation order; standalone threads follow in their own list.
   // With the setting on, cards with a working agent sit below the others (see .ws-thread-cards), so numbers follow what the user sees.
   function sidebarRows(selector) {
     const rows = [...document.querySelectorAll(selector)];
     if (root.dataset.allProjects === 'true') return rows;
-    const rank = row => (row.closest('#workspace-project-list') ? Number(row.parentElement.style.getPropertyValue('--order')) || 0 : 100000) + (root.dataset.moveWorking === 'true' && row.dataset.agentStatus === 'working' ? 300000 : 0);
+    const place = row => {
+      const ordered = row.parentElement.style.getPropertyValue('--thread-order');
+      if (ordered) return Number(ordered);
+      return row.closest('#workspace-project-list') ? Number(row.parentElement.style.getPropertyValue('--order')) || 0 : 100000;
+    };
+    const rank = row => place(row) + (root.dataset.moveWorking === 'true' && row.dataset.agentStatus === 'working' ? 300000 : 0);
     return rows.sort((a, b) => rank(a) - rank(b));
   }
   // Each sound gets a fresh context. A long-lived one can be missing after a
@@ -1270,6 +1307,8 @@
     const items = rows.map(row => [row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus || '', row.getAttribute('aria-current') === 'true', text(row, ':scope > span'), text(row, '.ws-row-project'), text(row, '.ws-row-branch'), !!row.querySelector('.ws-project-terminal')]);
     const signature = JSON.stringify(items);
     if (chips.dataset.signature === signature && chips.firstElementChild === threadList) return;
+    // Redrawing during a drag would drop the dragged chip; its drop or end redraws.
+    if (chips.querySelector(':scope > .ws-dragging')) return;
     // Redrawing keeps keyboard focus on the list button or the same thread's chip.
     const focused = chips.contains(document.activeElement) ? document.activeElement.dataset.projectKey : null;
     let focusTarget = document.activeElement === threadList ? threadList : null;
@@ -1288,6 +1327,11 @@
       chip.setAttribute('aria-current', String(current));
       if (status) chip.dataset.agentStatus = status;
       chip.onclick = () => rows[i].click(); chips.append(chip);
+      // All projects keeps cards in their projects, and moved working threads stay below the others.
+      const working = item => root.dataset.moveWorking === 'true' && item.dataset.agentStatus === 'working';
+      dragToReorder(chip, chip, false, (source, target) => root.dataset.allProjects !== 'true' && working(source) === working(target),
+        items => reorderThreads(items.map(item => item.dataset.projectKey).filter(Boolean)));
+      chip.addEventListener('dragend', () => requestAnimationFrame(renderThreadChips));
       if (key === focused) focusTarget = chip;
     });
     // Let the browser scroll to the focused button after the row has its final layout.
@@ -1335,7 +1379,8 @@
     renderProjectActivity();
     renderProjectTerminals();
     renderProjectPanels();
-    // Project numbers depend on the panel state set above.
+    applyThreadOrder();
+    // Project numbers depend on the panel state and order set above.
     renderThreadShortcuts();
     window.libroFiles?.init();
     window.libroRepos?.init();
