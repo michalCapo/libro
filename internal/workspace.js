@@ -960,7 +960,7 @@
     dragToReorder(row, group, true, () => root.dataset.allProjects === 'true',
       items => call('project.reorder', {names:items.map(item => item.dataset.projectName).filter(Boolean)}));
   }
-  // Dragging the handle moves the item among its siblings, before or after the one it is dropped on; done gets the new order.
+  // Dragging the handle moves the item among its siblings, before or after the one it is dropped on; done gets the new order and the moved item.
   // allowed(source, target) says whether the item may move there.
   function dragToReorder(handle, item, vertical, allowed, done) {
     handle.draggable = true;
@@ -992,7 +992,7 @@
       event.preventDefault();
       if (before(event)) item.before(source); else item.after(source);
       clear();
-      done([...item.parentElement.children]);
+      done([...item.parentElement.children], source);
     };
   }
   function toolOverlapsFrame(grid, frame) {
@@ -1330,7 +1330,8 @@
       // All projects keeps cards in their projects, and moved working threads stay below the others.
       const working = item => root.dataset.moveWorking === 'true' && item.dataset.agentStatus === 'working';
       dragToReorder(chip, chip, false, (source, target) => root.dataset.allProjects !== 'true' && working(source) === working(target),
-        items => reorderThreads(items.map(item => item.dataset.projectKey).filter(Boolean)));
+        // Only the moved chip's group is saved, so a working thread shown last keeps its saved place.
+        (items, source) => reorderThreads(items.filter(item => working(item) === working(source)).map(item => item.dataset.projectKey).filter(Boolean)));
       chip.addEventListener('dragend', () => requestAnimationFrame(renderThreadChips));
       if (key === focused) focusTarget = chip;
     });
@@ -1955,7 +1956,8 @@
     const signature = [...center, ...toolFrames, ...(terminals.length > 1 ? terminals : [])].map(frame => [frame.dataset.appId, label(frame), frame.dataset.selected, frame.dataset.dock, frame.dataset.dockVisible, frame.dataset.dock === 'center' && frame.dataset.taskTitle || label(frame)]);
     const addAgent = center.length > 0 && grid.dataset.managed !== 'true';
     if (tabs.dataset.signature !== JSON.stringify([signature, addAgent])) {
-      tabs.dataset.signature = JSON.stringify([signature, addAgent]); tabs.replaceChildren();
+      // The thread chips stay, so a chip being dragged survives the redraw.
+      tabs.dataset.signature = JSON.stringify([signature, addAgent]); tabs.replaceChildren(...tabs.querySelectorAll(':scope > #workspace-thread-chips'));
       signature.forEach(([id, name, shown, dock, visible, title]) => {
         const group = node('div', 'ws-agent-tab ws-tool-tab-group'); group.dataset.selected = shown; group.dataset.visible = visible; group.dataset.tabDock = dock;
         const tab = node('button', 'ws-tool-tab', name); tab.type = 'button'; tab.title = title; tab.setAttribute('aria-pressed', shown);

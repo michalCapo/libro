@@ -142,7 +142,10 @@ func inspectFinishThread(state *AppState, name, base string) (worktreeFinishPrev
 	}
 	info.Summary = strings.TrimSpace(commits + "\n\n" + stats)
 	// A failed check leaves Conflicts empty; the merge itself still stops on a conflict.
-	info.Conflicts, _ = finishConflicts(info.Root, info.Base, info.TargetHead, info.SourceHead)
+	// The merge runs in the destination checkout, so its config decides.
+	if info.TargetPath != "" {
+		info.Conflicts, _ = finishConflicts(info.TargetPath, info.Base, info.TargetHead, info.SourceHead)
+	}
 	if len(info.Conflicts) > 0 {
 		info.Summary = "Merge conflict expected in: " + strings.Join(info.Conflicts, ", ") + "\n\n" + info.Summary
 	}

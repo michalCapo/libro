@@ -1093,7 +1093,8 @@ func renderIframe(app Application, frameID, iframeSrc, sid string) *r.Node {
 			ID(fmt.Sprintf("webview-%s", app.ID)).
 			Attr("data-webview-app", app.ID).
 			Attr("data-sid", sid).
-			Attr("src", webviewSrc).
+			// g-sui blocks about: and file: URLs in src, so the address is set after insert.
+			UnsafeJS("this.setAttribute('src',"+components.JSString(webviewSrc)+")").
 			Attr("partition", "persist:libro-"+browserScope(sid, app.ID)).
 			Attr("allow", "microphone; camera; display-capture; speaker-selection; autoplay; clipboard-read; clipboard-write; fullscreen").
 			Attr("allowpopups", "").

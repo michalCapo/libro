@@ -120,7 +120,7 @@ func TestFinishThreadDirtyAndConflictPreserveWorktree(t *testing.T) {
 			if _, err := os.Stat(branch); err != nil {
 				t.Fatal("thread removed on failure")
 			}
-			if kind == "conflict" {
+			if kind == "conflict" && canMergeTree(root) {
 				if !slices.Equal(info.Conflicts, []string{"file.txt"}) || !strings.HasPrefix(info.Summary, "Merge conflict expected in: file.txt") {
 					t.Fatalf("preview missed the conflict: %+v", info)
 				}
@@ -135,8 +135,17 @@ func TestFinishThreadDirtyAndConflictPreserveWorktree(t *testing.T) {
 	}
 }
 
+// canMergeTree reports whether Git can check a merge in memory (Git 2.38+).
+func canMergeTree(root string) bool {
+	_, err := worktreeGit(root, "merge-tree", "--write-tree", "HEAD", "HEAD")
+	return err == nil
+}
+
 func TestFinishThreadConflictCheck(t *testing.T) {
 	state, root, branch := finishFixture(t)
+	if !canMergeTree(root) {
+		t.Skip("git merge-tree --write-tree needs Git 2.38")
+	}
 	name := "súbor ä.txt"
 	commitFinishFile(t, root, name, "base\n")
 	if _, err := worktreeGit(branch, "merge", "--no-edit", "main"); err != nil {
