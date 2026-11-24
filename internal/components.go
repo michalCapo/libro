@@ -3087,11 +3087,19 @@ func terminalFrameSetupJS() string {
 			}
 
 			function termTheme(dark) {
-				return dark ? {
-					background: '#1b1b1f', foreground: '#d4d4d4', cursor: '#d4d4d4', selectionBackground: '#264f78'
+				// xterm writes slider colors to one document-wide rule, so the last
+				// opened terminal sets them for all. Mid gray reads the same in both
+				// palettes and under the inversion filter.
+				var slider = {
+					scrollbarSliderBackground: 'rgba(128,128,128,0.4)',
+					scrollbarSliderHoverBackground: 'rgba(128,128,128,0.55)',
+					scrollbarSliderActiveBackground: 'rgba(128,128,128,0.7)'
+				};
+				return Object.assign(dark ? {
+					background: '#000000', foreground: '#d4d4d4', cursor: '#d4d4d4', selectionBackground: '#264f78'
 				} : {
 					background: '#ffffff', foreground: '#1f2328', cursor: '#1f2328', selectionBackground: '#b5d5ff'
-				};
+				}, slider);
 			}
 
 			function wsURL(id, sid) {

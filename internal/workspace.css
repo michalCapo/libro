@@ -17,7 +17,10 @@ html.dark{--ws-bg:#1b1b1f;--ws-chrome:#121214;--ws-raised:#27272d;--ws-sunken:#1
 .ws-button{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:8px;color:var(--ws-muted);background:transparent;border:0}
 .ws-button .material-icons-round{font-size:18px}.ws-button:hover{background:var(--ws-hover);color:var(--ws-fg)}
 .ws-grid button:disabled{opacity:.4;cursor:default!important}
-.ws-grid [data-terminal],.ws-grid .xterm,.ws-grid .xterm-viewport{background:var(--ws-bg)!important}
+/* Black in dark mode. Inner layers stay transparent so a terminal inverted after a
+   theme switch shows the current surface at its edges. */
+.ws-grid [data-terminal]{background:var(--ws-bg)!important}html.dark .ws-grid [data-terminal]{background:#000!important}
+.ws-grid .xterm,.ws-grid .xterm-viewport{background:transparent!important}
 .ws-body{display:flex;flex:1;min-height:0;overflow:hidden}
 /* Sidebar: quiet uppercase section labels and compact rows on the chrome surface. */
 .ws-sidebar{width:var(--ws-projects);flex-shrink:0;background:var(--ws-chrome);display:flex;flex-direction:column;padding:6px 8px 8px;gap:8px;overflow:hidden}
