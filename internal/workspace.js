@@ -1035,17 +1035,20 @@
     if (audio.state !== 'running') await Promise.race([audio.resume(), new Promise(resolve => setTimeout(resolve, 1000))]).catch(() => {});
     if (audio.state !== 'running' || prefs.notificationSound === false) { audio.close().catch(() => {}); return; }
     const start = audio.currentTime;
-    [660, 880].forEach((frequency, index) => {
+    // Strummed Gmaj7 triangle chord so it stands apart from rising sine chat chimes.
+    const chord = [[392.00, 0.13], [493.88, 0.11], [587.33, 0.10], [739.99, 0.085]];
+    chord.forEach(([frequency, peak], index) => {
       const tone = audio.createOscillator();
       const volume = audio.createGain();
-      const at = start + index * 0.14;
+      const at = start + index * 0.035;
+      tone.type = 'triangle';
       tone.frequency.value = frequency;
       volume.gain.setValueAtTime(0, at);
-      volume.gain.linearRampToValueAtTime(0.12, at + 0.015);
-      volume.gain.exponentialRampToValueAtTime(0.001, at + 0.3);
+      volume.gain.linearRampToValueAtTime(peak, at + 0.01);
+      volume.gain.exponentialRampToValueAtTime(0.001, at + 0.52);
       tone.connect(volume); volume.connect(audio.destination);
-      if (index === 1) tone.onended = () => { audio.close().catch(() => {}); };
-      tone.start(at); tone.stop(at + 0.32);
+      if (index === chord.length - 1) tone.onended = () => { audio.close().catch(() => {}); };
+      tone.start(at); tone.stop(at + 0.54);
     });
   }
   let previousAgentStatuses = {...window.__libroAgentStatuses};
