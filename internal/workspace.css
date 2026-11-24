@@ -366,9 +366,9 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-tool-rail .ws-size-custom{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:9px}
 .ws-tool-rail .ws-size-custom span:last-child{font-size:7px;opacity:.7}
 .ws-tool-rail [data-size-trigger]:hover,.ws-tool-rail [data-size-trigger][aria-expanded=true]{background:var(--ws-hover)}
-.ws-tool-tabs{display:flex;align-items:flex-end;gap:2px;min-height:44px;box-sizing:border-box;overflow-x:auto;padding:6px 0 0;background:var(--ws-chrome);flex-shrink:0;scrollbar-width:none}
+.ws-tool-tabs{display:flex;align-items:flex-end;gap:2px;min-height:44px;box-sizing:border-box;overflow-x:auto;padding:4px 0 0;background:var(--ws-chrome);flex-shrink:0;scrollbar-width:none}
 .ws-tool-tabs[hidden]{display:none}
-.ws-tool-tab{font:inherit;font-size:13px;line-height:20px;white-space:nowrap;padding:5px 10px;border:0;border-radius:8px;background:transparent;color:var(--ws-muted)}
+.ws-tool-tab{font:inherit;font-size:18px;line-height:26px;white-space:nowrap;padding:5px 10px;border:0;border-radius:8px;background:transparent;color:var(--ws-muted)}
 
 /* The shell spans the visible workspace, independent of fixed tool columns. */
 .ws-grid>[data-dock=bottom]{width:100cqw!important;max-width:100cqw;position:sticky;left:0}
@@ -470,17 +470,18 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-agent-tab{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%;padding:2px 6px;border:0;border-radius:8px;background:var(--ws-raised)}
 
 /* Tabs are quiet text on the chrome; the selected tab joins its panel's surface. */
-.ws-tool-tab-group{flex-shrink:0;align-items:stretch;gap:0;min-height:34px;box-sizing:border-box;padding:0;overflow:hidden;border-radius:8px 8px 0 0;background:transparent}
+.ws-tool-tab-group{flex-shrink:0;align-items:stretch;gap:0;min-height:40px;box-sizing:border-box;padding:0;overflow:hidden;border-radius:8px 8px 0 0;background:transparent}
 .ws-tool-tab-group:hover{background:var(--ws-hover)}
-.ws-tool-tab-group .ws-tool-tab{border-radius:0;min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;padding:7px 14px}
+.ws-tool-tab-group .ws-tool-tab{border-radius:0;min-width:0;max-width:240px;overflow:hidden;text-overflow:ellipsis;padding:7px 14px}
 .ws-tool-tab-group[data-visible=true] .ws-tool-tab{color:var(--ws-fg)}
 .ws-tool-tab-group[data-selected=true]{background:var(--ws-bg);box-shadow:inset 0 -1px 0 var(--ws-line)}
 .ws-tool-tab-group[data-selected=true] .ws-tool-tab{color:var(--ws-accent);font-weight:600}
-.ws-tool-tab-group .ws-agent-tab-close{align-self:center;width:24px;height:24px;margin-right:4px;border-radius:6px}
-.ws-tool-tab-group .ws-agent-tab-close .material-icons-round{font-size:15px}
+.ws-tool-tab-group .ws-agent-tab-close{align-self:center;width:28px;height:28px;margin-right:4px;border-radius:6px}
+.ws-tool-tab-group .ws-agent-tab-close .material-icons-round{font-size:18px}
 .ws-tool-tab-group:has(.ws-agent-tab-close) .ws-tool-tab{padding-right:4px}
 /* New agent panel leads the agent tabs. */
-.ws-tool-tabs>.ws-agent-add{order:-1;align-self:center;width:28px;height:28px;margin:0 2px}
+.ws-tool-tabs>.ws-agent-add{order:-1;align-self:center;width:40px;height:40px;margin:0 2px}
+.ws-tool-tabs>.ws-agent-add .material-icons-round{font-size:22px}
 /* Tabs sit on the panel edges, so panels under a tab row get square top corners. */
 .ws-tool-tabs:not([hidden])+.ws-grid>[data-app-id]{border-top-left-radius:0!important;border-top-right-radius:0!important}
 .ws-tool-sizes .ws-size-picker button{padding:4px 6px;font-size:10px;border-radius:6px;color:var(--ws-fg)}
@@ -488,7 +489,6 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 
 /* One shared tab row: the thread list and thread chips at the start, the panel tabs at the end. */
 .ws-tool-tabs{justify-content:flex-start}
-.ws-tool-tabs:has(>.ws-thread-chips){padding-top:3px}
 .ws-tool-tabs::before{content:"";order:-1;flex:1}
 .ws-thread-chips{order:-2;display:flex;align-items:center;gap:2px;flex-shrink:0;align-self:flex-start;margin:0 0 0 2px;padding-right:12px}
 .ws-thread-chips>.ws-button{width:40px;height:40px}
