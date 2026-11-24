@@ -3,6 +3,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 const { test } = require('node:test')
+const { JSDOM } = require('jsdom')
 
 const main = fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8')
 const forwarding = main.slice(main.indexOf('    // Keep workspace navigation'), main.indexOf('    const isZoomInKey'))
@@ -421,6 +422,37 @@ test('an open project is numbered only while it has no thread rows', () => {
   children.push(worktree); rows = [project, worktree, idle]
   vm.runInContext('renderThreadShortcuts()', context)
   assert.deepEqual(rows.map(item => item.dataset.projectShortcut), ['', '1', ''])
+})
+
+test('redrawing thread buttons restores focus after the row is ready to scroll', t => {
+  const { window } = new JSDOM(`
+    <button class="ws-project-row" data-project-shortcut="1" data-project-key="one"><span>One</span></button>
+    <button class="ws-project-row" data-project-shortcut="2" data-project-key="two"><span>Two</span></button>
+    <div><div class="ws-tool-tabs"></div><div id="grid"></div></div>`)
+  t.after(() => window.close())
+  const { document } = window
+  const render = workspace.slice(workspace.indexOf('  function renderThreadChips()'), workspace.indexOf('  new MutationObserver(() => requestAnimationFrame(renderThreadChips)'))
+  const node = (tag, className, text = '') => Object.assign(document.createElement(tag), { className, textContent: text })
+  const renderChips = vm.runInNewContext('let threadList = null;\n' + render + '\nrenderThreadChips', {
+    document, node, button: () => node('button', 'ws-button'), toggleThreadList() {},
+    root: { dataset: { fold: 'narrow' } }, narrowWindow: { matches: true }, toolKeys: {},
+    activeGrid: () => document.getElementById('grid'),
+  })
+  renderChips()
+  const original = document.querySelector('.ws-thread-chip[data-project-key="two"]')
+  original.focus()
+  const focus = window.HTMLElement.prototype.focus
+  window.HTMLElement.prototype.focus = function (options) {
+    assert.equal(document.querySelectorAll('.ws-thread-chip').length, 2)
+    assert.equal(options?.preventScroll ?? false, false)
+    focus.call(this, options)
+  }
+  const [one, two] = document.querySelectorAll('.ws-project-row')
+  one.dataset.projectShortcut = '2'
+  two.dataset.projectShortcut = '1'
+  renderChips()
+  assert.notEqual(document.activeElement, original)
+  assert.equal(document.activeElement.dataset.projectKey, 'two')
 })
 
 test('Ctrl+1–9 selects the numbered thread once', () => {

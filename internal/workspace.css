@@ -488,17 +488,20 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 
 /* One shared tab row: the thread list and thread chips at the start, the panel tabs at the end. */
 .ws-tool-tabs{justify-content:flex-start}
+.ws-tool-tabs:has(>.ws-thread-chips){padding-top:3px}
 .ws-tool-tabs::before{content:"";order:-1;flex:1}
-.ws-thread-chips{order:-2;display:flex;align-items:center;gap:2px;flex-shrink:0;align-self:center;margin:0 0 0 2px;padding-right:12px}
-.ws-thread-chips>.ws-button{width:30px;height:30px}
-.ws-thread-chip{display:inline-flex;align-items:center;gap:6px;max-width:320px;height:28px;padding:0 9px 0 7px;border:0;border-radius:8px;background:transparent;color:var(--ws-muted);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}
+.ws-thread-chips{order:-2;display:flex;align-items:center;gap:2px;flex-shrink:0;align-self:flex-start;margin:0 0 0 2px;padding-right:12px}
+.ws-thread-chips>.ws-button{width:40px;height:40px}
+.ws-thread-chips>.ws-button .material-icons-round{font-size:22px}
+.ws-thread-chip{display:inline-flex;align-items:center;gap:6px;max-width:320px;height:40px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:var(--ws-muted);font:inherit;font-size:18px;white-space:nowrap;cursor:pointer}
 .ws-thread-chip:is(:hover,:focus-visible){background:var(--ws-hover)}
 .ws-thread-chip[aria-current=true]{background:var(--ws-raised);box-shadow:var(--ws-shadow);color:var(--ws-fg)}
 html.dark .ws-thread-chip[aria-current=true]{background:#36363e;box-shadow:inset 0 0 0 1px #4a4a54}
-.ws-thread-chip>b{min-width:9px;font-size:14px;font-weight:600;color:var(--ws-status,var(--ws-muted))}
+.ws-thread-chip>b{font-weight:600;color:var(--ws-status,var(--ws-muted))}
 .ws-thread-chip[aria-current=true]>b{color:var(--ws-status,var(--ws-fg))}
 .ws-thread-chip>span{overflow:hidden;text-overflow:ellipsis}
-.ws-thread-chip>.material-icons-round{flex:none;margin-left:-1px;font-size:16px;color:var(--ws-status)}
+.ws-thread-chip>.material-icons-round{flex:none;margin-left:-1px;font-size:20px;color:var(--ws-status)}
+.ws-thread-chip>.ws-project-terminal{width:20px;height:20px}
 .ws-thread-chip[data-agent-status=working]>.material-icons-round{animation:ws-agent-working 1.2s linear infinite}
 @media(prefers-reduced-motion:reduce){.ws-thread-chip>.material-icons-round{animation:none}}
 .ws-grid>[data-app-id]>[data-app-toolbar]{display:none}

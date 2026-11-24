@@ -1272,10 +1272,9 @@
     if (chips.dataset.signature === signature && chips.firstElementChild === threadList) return;
     // Redrawing keeps keyboard focus on the list button or the same thread's chip.
     const focused = chips.contains(document.activeElement) ? document.activeElement.dataset.projectKey : null;
-    const listFocused = document.activeElement === threadList;
+    let focusTarget = document.activeElement === threadList ? threadList : null;
     chips.dataset.signature = signature;
     chips.replaceChildren(threadList);
-    if (listFocused) threadList.focus({preventScroll:true});
     items.forEach(([number, key, status, current, label, project, branch, terminal], i) => {
       const chip = node('button', 'ws-thread-chip'); chip.type = 'button'; chip.dataset.projectKey = key;
       const shown = current && label || project || label;
@@ -1289,8 +1288,10 @@
       chip.setAttribute('aria-current', String(current));
       if (status) chip.dataset.agentStatus = status;
       chip.onclick = () => rows[i].click(); chips.append(chip);
-      if (key === focused) chip.focus({preventScroll:true});
+      if (key === focused) focusTarget = chip;
     });
+    // Let the browser scroll to the focused button after the row has its final layout.
+    focusTarget?.focus();
   }
   new MutationObserver(() => requestAnimationFrame(renderThreadChips)).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current']});
   let queued = false;
