@@ -2,7 +2,6 @@ package components
 
 import (
 	"bufio"
-	"encoding/json"
 	"io"
 	"os"
 	"regexp"
@@ -179,33 +178,9 @@ func claudeFirstPrompt(path string) string {
 	scanner := bufio.NewScanner(io.LimitReader(f, 4<<20))
 	scanner.Buffer(make([]byte, 4096), 4<<20)
 	for scanner.Scan() {
-		var entry struct {
-			Type    string `json:"type"`
-			IsMeta  bool   `json:"isMeta"`
-			Message struct {
-				Role    string          `json:"role"`
-				Content json.RawMessage `json:"content"`
-			} `json:"message"`
-		}
-		if json.Unmarshal(scanner.Bytes(), &entry) != nil || entry.Type != "user" || entry.IsMeta || entry.Message.Role != "user" {
-			continue
-		}
-		var text string
-		if json.Unmarshal(entry.Message.Content, &text) != nil {
-			var parts []struct{ Type, Text string }
-			_ = json.Unmarshal(entry.Message.Content, &parts)
-			for _, part := range parts {
-				if part.Type == "text" {
-					text += " " + part.Text
-				}
-			}
-		}
-		if title := CleanAgentTitle(text); title != "" && !strings.HasPrefix(title, "<") {
+		if title := CleanAgentTitle(claudePrompt(scanner.Bytes())); title != "" {
 			return title
 		}
-	}
-	if scanner.Err() != nil {
-		return ""
 	}
 	return ""
 }

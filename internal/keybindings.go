@@ -42,6 +42,7 @@ var toolKeys = []struct{ ID, Name, Key string }{
 	{"discard-thread", "Discard current thread…", "Ctrl+Shift+Q"},
 	{"thread-actions", "Thread actions", "Ctrl+;"},
 	{"replace-agent", "Replace agent", ""},
+	{"agent-prompts", "Agent prompts", "Ctrl+Shift+H"},
 	{"previous-agent", "Previous panel", "Ctrl+H"},
 	{"next-agent", "Next panel", "Ctrl+L"},
 	{"command-palette", "Command palette", "Meta+;"},
@@ -221,7 +222,7 @@ func renderToolKeybindings() *r.Node {
 	}{
 		{"General", []string{"command-palette", "settings", "voice"}},
 		{"Projects & threads", []string{"project-picker", "close-project", "new-thread", "finish-thread", "discard-thread", "thread-actions", "run-project", "stop-project"}},
-		{"Agents", []string{"new-agent", "new-agent-panel", "replace-agent"}},
+		{"Agents", []string{"new-agent", "new-agent-panel", "replace-agent", "agent-prompts"}},
 		{"Tools", []string{"terminal", "browser", "new-browser", "new-terminal", "previous-browser", "next-browser", "files", "repos"}},
 		{"Panels", []string{"previous-agent", "next-agent", "close-panel", "panel-size-down", "panel-size-up", "panel-size-max", "panel-full", "sidebar"}},
 		{"Zoom", []string{"zoom-in", "zoom-out", "zoom-reset"}},

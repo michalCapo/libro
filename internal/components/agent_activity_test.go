@@ -260,6 +260,7 @@ import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 const plugin = (await import(pathToFileURL(process.argv[1]))).default;
 const check = expected => assert.equal(readFileSync(process.argv[2], 'utf8'), expected);
+const prompts = () => JSON.parse(readFileSync(process.argv[2].replace(/status$/, 'prompts.json'), 'utf8'));
 `
 			if kind == "pi" {
 				script += `const hooks = {};
@@ -283,6 +284,12 @@ hooks.session_start({reason:'resume'}, {sessionManager:{getSessionId:() => 'resu
 assert.equal(name, 'Restore title');
 assert.equal(metadata().title, 'Restore title');
 assert.equal(metadata().session_id, 'resumed');
+assert.deepEqual(prompts(), ['Restore title']);
+hooks.message_end({message:{role:'user', content:'Next\nstep'}});
+hooks.message_end({message:{role:'assistant', content:[{type:'text', text:'Answer'}]}});
+assert.deepEqual(prompts(), ['Restore title', 'Next\nstep']);
+hooks.session_tree({}, {sessionManager:{getBranch:() => []}});
+assert.deepEqual(prompts(), []);
 hooks.agent_start({}); check('working');
 hooks.agent_settled({aborted:false}); check('done');
 hooks.session_start({reason:'new'}, ctx); check('idle');
@@ -294,6 +301,24 @@ hooks.session_shutdown({}); check('idle');`
 await hooks.event({event:{type:'session.created',properties:{info:{id:'parent-session'}}}});
 await hooks.event({event:{type:'session.created',properties:{info:{id:'child-session',parentID:'parent-session'}}}});
 assert.equal(JSON.parse(readFileSync(process.argv[2].replace(/status$/, 'session'), 'utf8')).session_id, 'parent-session');
+const message = (sessionID, id, role) => hooks.event({event:{type:'message.updated',properties:{sessionID,info:{id,sessionID,role}}}});
+const part = (sessionID, messageID, id, text, extra) => hooks.event({event:{type:'message.part.updated',properties:{sessionID,part:{id,messageID,sessionID,type:'text',text,...extra}}}});
+await part('parent-session', 'm1', 'p1', 'Fix');
+await message('parent-session', 'm1', 'user');
+await part('parent-session', 'm1', 'p1', 'Fix login');
+await part('parent-session', 'm1', 'p2', 'Context', {synthetic:true});
+await message('parent-session', 'a1', 'assistant');
+await part('parent-session', 'a1', 'p3', 'Answer');
+await message('child-session', 'c1', 'user');
+await part('child-session', 'c1', 'p4', 'Subtask');
+assert.deepEqual(prompts(), ['Fix login']);
+// A prompt sent before the switch event belongs to its session; switching back keeps each list.
+await message('other-session', 'o1', 'user');
+await part('other-session', 'o1', 'p5', 'Other task');
+await hooks.event({event:{type:'session.updated',properties:{info:{id:'other-session'}}}});
+assert.deepEqual(prompts(), ['Other task']);
+await hooks.event({event:{type:'session.updated',properties:{info:{id:'parent-session'}}}});
+assert.deepEqual(prompts(), ['Fix login']);
 const send = (sessionID, type) => hooks.event({event:{type:'session.status',properties:{sessionID,status:{type}}}});
 await send('a','busy'); check('working');
 await send('b','busy'); check('working');

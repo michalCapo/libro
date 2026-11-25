@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//go:embed workspace.css workspace.js voice.js files.js file-editor.bundle.js repos.js page_attachments.js page_draw.js tailwind.min.css material-icons-round.woff2
+//go:embed workspace.css workspace.js voice.js prompts.js files.js file-editor.bundle.js repos.js page_attachments.js page_draw.js tailwind.min.css material-icons-round.woff2
 var workspaceAssets embed.FS
 
 func workspaceJS() string {
@@ -17,7 +17,7 @@ func workspaceJS() string {
 	code.WriteString(`window.__libroToolKeys=props.keys;window.__libroDefaultToolKeys=props.defaults;window.__libroPageToolsAutoExecute=props.autoexecute;window.__libroWorkspaceSID=props.sid;window.__libroPlugins=props.plugins;window.__libroAgentAutoUpdate=props.agentUpdates;`)
 	code.WriteString(`var wsStyle=document.createElement('style');wsStyle.textContent=props.css;document.head.appendChild(wsStyle);`)
 	code.WriteString(components.VoiceInputJS())
-	for _, name := range []string{"page_draw.js", "file-editor.bundle.js", "files.js", "repos.js", "voice.js", "page_attachments.js", "workspace.js"} {
+	for _, name := range []string{"page_draw.js", "file-editor.bundle.js", "files.js", "repos.js", "voice.js", "prompts.js", "page_attachments.js", "workspace.js"} {
 		data, _ := workspaceAssets.ReadFile(name)
 		code.Write(data)
 	}
@@ -40,6 +40,9 @@ func registerWidgets(app *r.App) {
 	app.Widget("terminal", "function(el){"+terminalFrameSetupJS()+`window.__libroMountTerminal(el);return function(){window.__libroDisposeTerminal(el);};}`)
 	app.Widget("files", `function(el){queueMicrotask(function(){if(el.isConnected)window.libroFiles.init();});return function(){window.libroFiles.dispose(el);};}`)
 	app.Widget("repos", `function(el){queueMicrotask(function(){if(el.isConnected)window.libroRepos.init();});return function(){window.libroRepos.dispose(el);};}`)
+	// Restored agent panels mount before the workspace widget loads prompts.js.
+	// Their prompts arrive later from the terminal socket and render then.
+	app.Widget("agent-prompts", `function(el){if(window.libroPrompts)window.libroPrompts.mount(el);}`)
 }
 
 func workspaceAppName(app Application) string {

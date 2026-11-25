@@ -1704,6 +1704,11 @@
       if (!event.repeat) newThread();
       return;
     }
+    if (binding && binding === toolKeys['agent-prompts']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat && !window.libroPrompts?.open(window.__libroActiveAgentID)) window.__libroShowToast?.('No prompts in this agent yet', '', 'info');
+      return;
+    }
     if (binding && binding === toolKeys['replace-agent']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) launcher('center', undefined, true);
@@ -2447,7 +2452,7 @@
   window.addEventListener('resize', schedule);
   root.addEventListener('pointerdown', event => {
     const frame = event.target.closest('[data-app-id]');
-    if (frame?.querySelector('[data-terminal-app]') && !event.target.closest('[data-app-toolbar], button, a, input, select, [contenteditable=true]')) {
+    if (frame?.querySelector('[data-terminal-app]') && !event.target.closest('[data-app-toolbar], [data-agent-prompts], button, a, input, select, [contenteditable=true]')) {
       requestAnimationFrame(() => {
         if (window.__libroSelectedApp === frame.dataset.appId) window.__libroFocusTerminalFrame?.(frame.dataset.appId);
       });

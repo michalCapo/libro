@@ -98,6 +98,7 @@ func prepareAgentActivity(command string) (string, *agentActivity, error) {
 	a.dir, a.path = dir, filepath.Join(dir, "status")
 	pathJSON, _ := json.Marshal(a.path)
 	sessionJSON, _ := json.Marshal(filepath.Join(dir, "session"))
+	promptsJSON, _ := json.Marshal(filepath.Join(dir, "prompts.json"))
 	var filename, content, args string
 	switch kind {
 	case "claude":
@@ -156,15 +157,24 @@ export default function (pi) {
     const name = text.replace(/[\x00-\x1f\x7f-\x9f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
     if (name) pi.setSessionName(name);
   };
+  // Prompts follow the session branch, so a resumed session lists its earlier prompts.
+  let prompts = [];
+  const savePrompts = () => { try { writeFileSync(` + string(promptsJSON) + `, JSON.stringify(prompts)); } catch {} };
+  const textOf = content => typeof content === 'string' ? content : content.filter(part => part.type === 'text').map(part => part.text).join('\n');
+  const loadPrompts = ctx => {
+    prompts = ctx.sessionManager.getBranch().filter(entry => entry.type === 'message' && entry.message.role === 'user').map(entry => textOf(entry.message.content));
+    savePrompts();
+  };
   pi.on('session_start', (_event, ctx) => {
     status('idle');
-    const entry = ctx.sessionManager.getBranch().find(entry => entry.type === 'message' && entry.message.role === 'user');
-    if (entry) {
-      const content = entry.message.content;
-      nameSession(typeof content === 'string' ? content : content.filter(part => part.type === 'text').map(part => part.text).join(' '));
-    }
+    loadPrompts(ctx);
+    if (prompts.length) nameSession(prompts[0]);
     reportSession(ctx);
   });
+  pi.on('session_tree', (_event, ctx) => loadPrompts(ctx));
+  pi.on('message_end', event => { if (event.message.role === 'user') { prompts.push(textOf(event.message.content)); savePrompts(); } });
+  // Extensions may replace a message after message_end; the saved branch is final.
+  pi.on('agent_end', (_event, ctx) => loadPrompts(ctx));
   pi.on('input', (event, ctx) => { if (event.source !== 'extension') { nameSession(event.text); reportSession(ctx); } });
   pi.on('session_info_changed', (_event, ctx) => reportSession(ctx));
   pi.on('agent_start', () => status('working'));
@@ -178,6 +188,16 @@ export default function (pi) {
 		content = `import { writeFileSync } from 'node:fs';
 export default async function () {
   const sessions = new Map();
+  // Prompts seen in this run: user message IDs per session in order, and their text parts.
+  // The main session shown in the TUI is written to prompts.json.
+  let root = '';
+  const users = new Map();
+  const texts = new Map();
+  const others = new Set();
+  const savePrompts = () => {
+    const prompts = (users.get(root) || []).map(id => [...(texts.get(id)?.values() || [])].join('\n'));
+    try { writeFileSync(` + string(promptsJSON) + `, JSON.stringify(prompts)); } catch {}
+  };
   const status = () => {
     const states = [...sessions.values()];
     const value = states.includes('working') ? 'working' : states.includes('error') ? 'error' : states.length ? 'done' : 'idle';
@@ -187,6 +207,20 @@ export default async function () {
     const p = event.properties;
     if ((event.type === 'session.created' || event.type === 'session.updated') && !p.info.parentID) {
       try { writeFileSync(` + string(sessionJSON) + `, JSON.stringify({session_id:p.info.id})); } catch {}
+      if (p.info.id !== root) { root = p.info.id; savePrompts(); }
+    }
+    const sessionID = p.sessionID || p.info?.sessionID || p.part?.sessionID;
+    if (event.type === 'message.updated' && p.info.role === 'user') {
+      if (!users.has(sessionID)) users.set(sessionID, []);
+      if (!users.get(sessionID).includes(p.info.id)) users.get(sessionID).push(p.info.id);
+      if (sessionID === root) savePrompts();
+    }
+    // Only user text is kept; assistant parts arrive in the same events.
+    if (event.type === 'message.updated' && p.info.role !== 'user') { others.add(p.info.id); texts.delete(p.info.id); }
+    if (event.type === 'message.part.updated' && p.part.type === 'text' && !p.part.synthetic && !others.has(p.part.messageID)) {
+      if (!texts.has(p.part.messageID)) texts.set(p.part.messageID, new Map());
+      texts.get(p.part.messageID).set(p.part.id, p.part.text);
+      if (users.get(root)?.includes(p.part.messageID)) savePrompts();
     }
     if (event.type === 'session.status') {
       if (p.status.type !== 'idle') sessions.set(p.sessionID, 'working');
@@ -264,8 +298,10 @@ func (s *TerminalSession) watchAgentActivity() {
 		s.readAgentSession()
 		if s.activity.kind == "codex" && !now.Before(nextTitleRead) {
 			s.readCodexTitle()
+			s.findCodexRollout()
 			nextTitleRead = now.Add(time.Second)
 		}
+		s.readAgentPrompts()
 		if data, err := os.ReadFile(s.activity.path); err == nil {
 			s.setAgentStatus(string(data))
 		}
@@ -287,6 +323,9 @@ func (s *TerminalSession) readAgentSession() {
 		s.setAgentStatus("session:" + payload.SessionID)
 		s.agentMu.Lock()
 		defer s.agentMu.Unlock()
+		if s.activity.kind == "claude" {
+			s.promptLog.source = payload.TranscriptPath
+		}
 		s.setAgentTitle(payload.Title, 2)
 		if s.activity.kind == "claude" {
 			s.mu.Lock()
@@ -380,8 +419,10 @@ func (s *TerminalSession) updateAgentStatus(status string) {
 		return
 	}
 	if status == "exited" {
-		s.agentEnded = true
+		// The PTY now runs a shell; Insert into agent must not paste there.
+		s.agentEnded, s.agentPrompts = true, nil
 		status = "idle"
+		defer s.broadcast(terminalWSMessage{Type: "agent-prompts"})
 	}
 	// A freshly opened prompt is idle, not a completed task.
 	if status == "done" && s.activity != nil && s.activity.kind == "codex" && !s.agentWorked {
@@ -502,6 +543,34 @@ func openCodexStateDB(home string) *sql.DB {
 		return nil
 	}
 	return db
+}
+
+// codexRolloutPath prefers Codex's exact index. Walking the standard rollout
+// names reads the whole sessions folder, so callers that repeat use the index only.
+func codexRolloutPath(home, sessionID string, walk bool) string {
+	var path string
+	if db := openCodexStateDB(home); db != nil {
+		_ = db.QueryRow("SELECT rollout_path FROM threads WHERE id = ?", sessionID).Scan(&path)
+		_ = db.Close()
+	}
+	if path != "" || !walk {
+		return path
+	}
+	if home == "" {
+		home = os.Getenv("CODEX_HOME")
+	}
+	if home == "" {
+		userHome, _ := os.UserHomeDir()
+		home = filepath.Join(userHome, ".codex")
+	}
+	_ = filepath.WalkDir(filepath.Join(home, "sessions"), func(candidate string, entry fs.DirEntry, err error) error {
+		if err == nil && !entry.IsDir() && strings.HasSuffix(entry.Name(), "-"+sessionID+".jsonl") {
+			path = candidate
+			return fs.SkipAll
+		}
+		return nil
+	})
+	return path
 }
 
 var codexStates = map[string]bool{"Working": true, "Thinking": true, "Waiting": true, "Ready": true, "Starting": true, "Action Required": true, "[ ! ] Action Required": true, "[ . ] Action Required": true, "": true}
@@ -705,27 +774,7 @@ func RecoverAgentSettings(command, sessionID, codexHome string) (string, string)
 	kind := filepath.Base(parts[1])
 	switch kind {
 	case "codex":
-		if codexHome == "" {
-			codexHome = os.Getenv("CODEX_HOME")
-		}
-		if codexHome == "" {
-			home, _ := os.UserHomeDir()
-			codexHome = filepath.Join(home, ".codex")
-		}
-		// Prefer Codex's exact index when available, then standard rollout names.
-		if db := openCodexStateDB(codexHome); db != nil {
-			_ = db.QueryRow("SELECT rollout_path FROM threads WHERE id = ?", sessionID).Scan(&path)
-			_ = db.Close()
-		}
-		if path == "" {
-			_ = filepath.WalkDir(filepath.Join(codexHome, "sessions"), func(candidate string, entry fs.DirEntry, err error) error {
-				if err == nil && !entry.IsDir() && strings.HasSuffix(entry.Name(), "-"+sessionID+".jsonl") {
-					path = candidate
-					return fs.SkipAll
-				}
-				return nil
-			})
-		}
+		path = codexRolloutPath(codexHome, sessionID, true)
 	case "claude":
 		home, _ := os.UserHomeDir()
 		paths, _ := filepath.Glob(filepath.Join(home, ".claude", "projects", "*", sessionID+".jsonl"))

@@ -124,6 +124,8 @@ type TerminalSession struct {
 	agentSessionID     string
 	codexSessionPrefix string
 	agentTitle         string
+	agentPrompts       []string
+	promptLog          promptLog
 	titlePriority      int
 	titleCleared       bool // replay the clear to clients that missed it
 	reportSession      func(string)
@@ -150,6 +152,8 @@ type terminalWSMessage struct {
 	Message string `json:"message,omitempty"`
 	// Fallback marks a first-prompt title that must not replace a saved name.
 	Fallback bool `json:"fallback,omitempty"`
+	// Prompts lists the user's prompts in the agent's current session.
+	Prompts []string `json:"prompts,omitempty"`
 }
 
 // terminalBinaryDataFrame prefixes binary WebSocket payloads that carry raw
@@ -653,6 +657,8 @@ func (s *TerminalSession) addClient(c *terminalClient) {
 	if s.agentTitle != "" || s.titleCleared {
 		_ = c.send(terminalWSMessage{Type: "agent-title", Data: s.agentTitle, Fallback: s.titlePriority == 1})
 	}
+	// Always sent, so a reconnected or replaced panel drops an older list.
+	_ = c.send(terminalWSMessage{Type: "agent-prompts", Prompts: s.agentPrompts})
 	s.mu.Unlock()
 	if cols > 0 && rows > 0 && s.ptyFile != nil {
 		_ = pty.Setsize(s.ptyFile, &pty.Winsize{Cols: cols, Rows: rows})
