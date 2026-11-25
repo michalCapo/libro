@@ -17,7 +17,7 @@ const rowLabel = workspace.slice(workspace.indexOf('  function rowLabel('), work
 const toolIDs = [...fs.readFileSync(path.join(__dirname, '../internal/plugins.go'), 'utf8')
   .matchAll(/ID: "([^"]+)"[^\n]+Dock: "right"/g)].map(match => match[1])
 
-for (const plugin of [...toolIDs, 'custom-tool']) test(plugin + ' focuses an open panel before toggling it closed', () => {
+for (const plugin of [...toolIDs, 'custom-tool']) test(plugin + ' shortcut shows and focuses its panel', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const handler = source.slice(source.indexOf('  function tool(id)'), source.indexOf('  let toolKeys'))
   for (const visible of [false, true]) for (const selected of ['agent', 'git']) {
@@ -32,13 +32,12 @@ for (const plugin of [...toolIDs, 'custom-tool']) test(plugin + ' focuses an ope
       refresh() { calls.push(['refresh']) },
       restoreAgentFocus() { calls.push(['restoreAgentFocus']) },
     })
-    const hide = visible && selected === 'git'
-    assert.equal(state.hidden.has('git'), hide)
-    assert.deepEqual(calls, hide ? [['restoreAgentFocus']] : [['select', 'git']])
+    assert.equal(state.hidden.has('git'), false)
+    assert.deepEqual(calls, [['select', 'git']])
   }
 })
 
-test('hiding a tool restores actual focus to the last agent in the active project', () => {
+test('restoring agent focus selects the last agent in the active project', () => {
   const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
   const select = source.slice(source.indexOf('  function select('), source.indexOf('  function launcher('))
   const handlers = source.slice(source.indexOf('  function currentAgent('), source.indexOf('  function newBrowser('))
@@ -51,8 +50,8 @@ test('hiding a tool restores actual focus to the last agent in the active projec
     panels.push({ dataset: { appId: 'git', dock: 'right', plugin: 'lazyrepo', dockVisible: 'true' }, parentElement: grid })
     const focused = [], calls = [], pending = []
     const window = { __libroSelectedApp: 'git', __libroScrollToApp() {}, __libroFocusAppByID(id) { focused.push(id) } }
-    vm.runInNewContext(select + handlers + ';tool("lazyrepo")', {
-      window, keepBottomHidden: false, maximized: '', activeGrid: () => grid,
+    vm.runInNewContext(select + handlers + ';restoreAgentFocus(grid)', {
+      window, grid, keepBottomHidden: false, maximized: '', activeGrid: () => grid,
       frames: () => panels, dockState: () => state,
       document: { getElementById(id) { return id === 'workspace-settings' ? { hidden: true } : panels.find(p => 'frame-' + p.dataset.appId === id) } },
       refresh() {}, call(action, data) { calls.push([action, data.index]) },
@@ -60,7 +59,6 @@ test('hiding a tool restores actual focus to the last agent in the active projec
     })
     pending.forEach(fn => fn())
     const expected = remembered === 'agent-2' ? 'agent-2' : 'agent-1'
-    assert.equal(state.hidden.has('git'), true)
     assert.deepEqual(focused, hasAgents ? [expected] : [])
     assert.equal(window.__libroSelectedApp, hasAgents ? expected : 'git')
     assert.deepEqual(calls, hasAgents ? [['app.select', expected === 'agent-2' ? 1 : 0]] : [])
@@ -575,21 +573,6 @@ test('browser and side terminal navigation stops at the ends, includes hidden pa
     })
     assert.deepEqual(calls, available.length ? ['one'] : [])
   }
-})
-
-test('Ctrl+B hides all browsers when multiple browsers exist', () => {
-  const source = fs.readFileSync(path.join(__dirname, '../internal/workspace.js'), 'utf8')
-  const handler = source.slice(source.indexOf('  function currentAgent('), source.indexOf('  function newBrowser'))
-  const calls = []
-  const state = { right: 'two', hidden: new Set() }
-  vm.runInNewContext(handler + ";tool('browser')", {
-    activeGrid: () => ({}), dockState: () => state,
-    frames: () => ['one', 'two'].map(appId => ({ dataset: { appId, plugin: 'browser', dock: 'right', dockVisible: String(appId === 'two') } })),
-    window: { __libroSelectedApp: 'two' }, select: id => calls.push(id), refresh() {},
-  })
-  assert.equal(state.hidden.has('two'), true)
-  assert.equal(state.hidden.has('one'), true)
-  assert.deepEqual(calls, [])
 })
 
 test('browser shortcuts accept brackets, custom bindings, and ignore repeat', () => {

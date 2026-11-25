@@ -23,9 +23,10 @@
     if (skeleton) skeleton.hidden = !visible;
   }
   // An Electron console floats above the page, so hiding its project or covering it does not hide it.
+  // Only open consoles close; closing also focuses the page, which would pull focus during the switch.
   function closeLeavingConsoles() {
     const leaving = activeGrid();
-    if (leaving) frames(leaving).forEach(frame => window.__libroCloseConsole?.(frame.dataset.appId));
+    if (leaving) frames(leaving).filter(frame => document.getElementById('devtools-panel-' + frame.dataset.appId)?.classList.contains('hidden') === false).forEach(frame => window.__libroCloseConsole?.(frame.dataset.appId));
   }
   // Without a target, or for a workspace not on the page yet, the current one stays until the reply; only a slow reply shows the skeleton.
   function beginSwitch(target) {
@@ -1436,11 +1437,7 @@
     const matches = frames(grid).filter(frame => frame.dataset.dock === 'right' && frame.dataset.plugin === id);
     const existing = matches.find(frame => frame.dataset.appId === window.__libroSelectedApp) ||
       matches.find(frame => frame.dataset.appId === state.right) || matches[0];
-    if (!existing) { openPlugin(id, 'right'); return; }
-    if (existing.dataset.dockVisible === 'true' && existing.dataset.appId === window.__libroSelectedApp) {
-      // Hide every panel of this tool so another one does not take its place.
-      matches.forEach(frame => state.hidden.add(frame.dataset.appId)); restoreAgentFocus(grid);
-    } else select(existing.dataset.appId);
+    if (existing) select(existing.dataset.appId); else openPlugin(id, 'right');
   }
   function newBrowser() { openPlugin('browser', 'right'); }
   function newTerminal() { openPlugin('terminal', 'right'); }
@@ -2421,7 +2418,7 @@
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && root.dataset.fold && root.dataset.sidebar !== 'closed') projectMenu(false); });
   document.addEventListener('pointerover', event => { if (root.dataset.sidebar === 'closed' && !event.target.closest?.('#workspace-projects, [data-thread-list]')) delete root.dataset.sidebar; });
   narrowWindow.addEventListener('change', () => { foldState(); projectMenu(false); });
-  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, toggleThreadList, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name}), openWorktree:(project, path, branch) => call('worktree.switch', {project, path, branch}), createWorktree:branch => call('worktree.create', {branch}), beginOpening:() => beginSwitch(), switchSettled};
+  window.libroWorkspace = {agentUpdatesSaved, voiceSaved, clearOpenRouterKey, saveAllSettings, setShortcutValue, threadActionPalette, finishThread, discardThread, finishThreadPreview, finishThreadResult, applicationControl, childrenControl:command => applicationControl(command, 'children.control'), applicationResult,saveThreadAgent, threadAgentSaved, newThread, newBrowser, newTerminal, navigateBrowser, newAgentPanel, restartProject, beginProjectRestart, endProjectRestart, projectSettings, saveNotificationSound, saveTheme, savePageTools, pageToolsSaved, saveAgentEnvironment, agentEnvironmentSaved, addAgentEnvironment, saveTools, toolsSaved, addCustomTool, zoom, shortcutFor:id => toolKeys[id] || '', bound:key => Object.values(toolKeys).includes(key), select, restorePanelFocus, refresh, launcher, maximize, navigate, settings, showSettings, closeSettings, saveSettings, settingsSaved, saveToolKeys, resetToolKeys, toolKeysSaved, saveAgentCommand, agentCommandSaved, addCustomAgent, tool, bottom, projectMenu, toggleThreadList, toggleProjects, terminalExited, closeOtherPanels, threadRemoved, openProject:name => call('project.switch', {name}), openWorktree:(project, path, branch) => call('worktree.switch', {project, path, branch}), createWorktree:branch => call('worktree.create', {branch}), beginOpening:target => beginSwitch(target), switchSettled};
   if (window.__libroAgentAutoUpdate == null) {
     const migrateUpdates = () => {
       if (typeof __ws === 'undefined' || !__ws.connected()) { setTimeout(migrateUpdates, 50); return; }
