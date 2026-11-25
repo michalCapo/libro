@@ -386,7 +386,7 @@ func (s *AppState) adjacentProjectThread() string {
 func (s *AppState) worktreeBase(id string) bool {
 	for _, p := range s.Projects {
 		if p.Name == id {
-			return !p.Virtual && p.IsGitRepo && GitCurrentBranch(p.Path) != ""
+			return !p.Virtual && (p.IsGitRepo || GitIsRepo(p.Path)) && GitCurrentBranch(p.Path) != ""
 		}
 	}
 	return false

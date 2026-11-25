@@ -45,3 +45,24 @@ func TestProjectListKeepsSavedGitInfoUntilRefresh(t *testing.T) {
 		t.Fatalf("Libro's own Git change was not seen: %v", got)
 	}
 }
+
+func TestProjectBecomesGitRepo(t *testing.T) {
+	if !GitAvailable() {
+		t.Skip("git not installed")
+	}
+	dir := t.TempDir()
+	state := &AppState{Projects: []Project{{Name: "plain", Path: dir}}}
+	if repos := newGitRepos(context.Background(), plainProjectPaths(state)); len(repos) != 0 {
+		t.Fatalf("plain folder seen as Git: %v", repos)
+	}
+	if _, err := worktreeGit(dir, "init", "-b", "main"); err != nil {
+		t.Fatal(err)
+	}
+	markGitRepos(state, newGitRepos(context.Background(), plainProjectPaths(state)))
+	if !state.Projects[0].IsGitRepo {
+		t.Fatal("new Git repository was not recorded")
+	}
+	if paths := plainProjectPaths(state); len(paths) != 0 {
+		t.Fatalf("recorded repository still checked: %v", paths)
+	}
+}
