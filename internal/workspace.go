@@ -103,9 +103,10 @@ func renderWorkspaceSidebar(sid string) *r.Node {
 }
 
 // renderSwitchSkeleton covers the main area when opening a thread is slow; see beginSwitch in workspace.js.
+// Only the bars pulse. A pulsing cover would let the page behind it fade in and out.
 func renderSwitchSkeleton() *r.Node {
-	style := r.SkeletonStyle{BarClass: "ws-skeleton-bar", RoundClass: "rounded-md"}
-	return r.SkeletonBlock("ws-switch-skeleton", style.Bar("h-8 w-24"), style.Bar("flex-1 w-full")).
+	style := r.SkeletonStyle{BarClass: "ws-skeleton-bar animate-pulse motion-reduce:animate-none", RoundClass: "rounded-md"}
+	return r.Div("ws-switch-skeleton").Render(style.Bar("h-8 w-24"), style.Bar("flex-1 w-full")).
 		ID(switchSkeletonID).Attr("hidden", "").Attr("role", "status").Attr("aria-label", "Loading")
 }
 

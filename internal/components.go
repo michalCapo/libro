@@ -2952,7 +2952,8 @@ addEventListener('beforeunload',function(){window.__libroLeaving=true;});
 	var hash=location.hash.replace('#','');
 	var proj=hash||window.__libroActiveProject||'';
 	if(proj){
-		setTimeout(function(){__ws.call('project.switch',{sid:'%[1]s',name:proj});},100);
+		// The workspace call also shows the skeleton when the reply is slow.
+		setTimeout(function(){if(window.libroWorkspace)libroWorkspace.openProject(proj);else __ws.call('project.switch',{sid:'%[1]s',name:proj});},100);
 	}
 	if(proj&&!hash){history.replaceState(null,'','#'+proj);}
 	document.title=proj?proj+' \u2014 Libro':'Libro';

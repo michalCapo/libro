@@ -22,6 +22,11 @@
     const skeleton = document.getElementById('workspace-switch-skeleton');
     if (skeleton) skeleton.hidden = !visible;
   }
+  // An Electron console floats above the page, so hiding its project or covering it does not hide it.
+  function closeLeavingConsoles() {
+    const leaving = activeGrid();
+    if (leaving) frames(leaving).forEach(frame => window.__libroCloseConsole?.(frame.dataset.appId));
+  }
   // Without a target, or for a workspace not on the page yet, the current one stays until the reply; only a slow reply shows the skeleton.
   function beginSwitch(target) {
     if (!switching.count++) { switching.confirmed = window.__libroActiveProject; switching.selected = window.__libroSelectedApp; }
@@ -30,16 +35,14 @@
     setSwitchSkeleton(false);
     if (target !== undefined && document.getElementById('project-main-' + target)) {
       if (target !== window.__libroActiveProject) {
-        // An Electron console floats above the page, so hiding its project does not hide it.
-        const leaving = activeGrid();
-        if (leaving) frames(leaving).forEach(frame => window.__libroCloseConsole?.(frame.dataset.appId));
+        closeLeavingConsoles();
         // Until the reply selects a panel here, panel commands must not act on the hidden project.
         window.__libroSelectedApp = '';
       }
       switching.shown = target; refresh(); return;
     }
     switching.shown = null;
-    switching.skeleton = setTimeout(() => setSwitchSkeleton(true), 150);
+    switching.skeleton = setTimeout(() => { closeLeavingConsoles(); setSwitchSkeleton(true); }, 300);
   }
   function switchSettled(active) {
     switching.count = Math.max(0, switching.count - 1);
