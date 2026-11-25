@@ -39,14 +39,21 @@
     const appID = el.dataset.agentPrompts;
     const trigger = node('button', 'ws-prompts-trigger'); trigger.type = 'button';
     trigger.setAttribute('aria-haspopup', 'dialog');
-    trigger.append(icon('history'), node('span', 'ws-prompts-first'), node('span', 'ws-prompts-count'));
+    trigger.append(icon('history'), node('span', 'ws-prompts-first'), node('span', 'ws-prompts-count'), icon('expand_more'));
     const popover = node('div', 'ws-prompts-popover');
     popover.id = 'agent-prompts-' + appID;
     popover.setAttribute('popover', 'auto'); popover.setAttribute('role', 'dialog'); popover.setAttribute('aria-label', 'Prompts');
     popover.tabIndex = -1;
     trigger.setAttribute('aria-controls', popover.id);
+    const head = node('div', 'ws-prompts-head');
+    const hints = node('span', 'ws-prompts-hints');
+    [['j', 'k', 'move'], ['Enter', 'open'], ['Esc', 'close']].forEach(hint => {
+      hint.slice(0, -1).forEach(key => hints.append(node('kbd', '', key)));
+      hints.append(node('span', '', hint.at(-1)));
+    });
+    head.append(node('span', '', 'Prompts'), node('span', 'ws-prompts-total'), hints);
     const list = node('ol', 'ws-prompts-list');
-    popover.append(list);
+    popover.append(head, list);
     el.append(trigger, popover);
     // Pressing the strip while the list is open closes it before the click; the click must not reopen it.
     let closedAt = 0;
@@ -106,6 +113,7 @@
   function fill(el) {
     const appID = el.dataset.agentPrompts;
     const prompts = lists.get(appID) || [];
+    el.querySelector('.ws-prompts-total').textContent = prompts.length;
     const list = el.querySelector('.ws-prompts-list');
     const open = new Set([...list.querySelectorAll('.ws-prompt[aria-expanded=true]')].map(item => item.dataset.index));
     const focused = list.contains(document.activeElement) ? document.activeElement.closest('.ws-prompts-item').querySelector('.ws-prompt').dataset.index : null;

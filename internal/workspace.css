@@ -475,28 +475,50 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 
 .ws-agent-tab{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%;padding:2px 6px;border:0;border-radius:8px;background:var(--ws-raised)}
 
-/* Prompts: a strip above the agent shows its first prompt and opens the list. */
+/* Prompts: a strip above the agent shows its first prompt and opens a timeline of all of them. */
 .ws-agent-prompts{display:flex;flex-shrink:0;padding:4px 6px;border-bottom:1px solid var(--ws-line);background:var(--ws-bg)}
 .ws-agent-prompts:empty{display:none}
-.ws-prompts-trigger{display:flex;flex:1;align-items:center;gap:8px;min-width:0;height:28px;padding:0 6px 0 8px;border:0;border-radius:8px;background:transparent;color:var(--ws-muted);font:inherit;font-size:12.5px;text-align:left}
-.ws-prompts-trigger:hover,.ws-prompts-trigger[aria-expanded=true]{background:var(--ws-hover);color:var(--ws-fg)}
-.ws-prompts-trigger>.material-icons-round{font-size:16px;flex-shrink:0}
+.ws-prompts-trigger{display:flex;flex:1;align-items:center;gap:9px;min-width:0;height:28px;padding:0 6px 0 4px;border:0;border-radius:8px;background:transparent;color:var(--ws-muted);font:inherit;font-size:12.5px;text-align:left;transition:background .12s,color .12s}
+.ws-prompts-trigger:hover{background:var(--ws-hover);color:var(--ws-fg)}
+.ws-prompts-trigger[aria-expanded=true]{background:color-mix(in srgb,var(--ws-accent) 12%,transparent);color:var(--ws-fg)}
+.ws-prompts-trigger>.material-icons-round{flex-shrink:0;font-size:15px}
+.ws-prompts-trigger>.material-icons-round:first-child{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:color-mix(in srgb,var(--ws-accent) 14%,transparent);color:var(--ws-accent)}
+.ws-prompts-trigger>.material-icons-round:last-child{font-size:18px;transition:transform .16s ease}
+.ws-prompts-trigger[aria-expanded=true]>.material-icons-round:last-child{transform:rotate(180deg)}
 .ws-prompts-first{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ws-prompts-count{flex-shrink:0;min-width:18px;padding:1px 5px;border-radius:9px;background:var(--ws-kbd);color:var(--ws-muted);font:500 10.5px/16px var(--ws-mono);text-align:center}
-.ws-prompts-popover{position:fixed;inset:auto;margin:0;padding:6px;box-sizing:border-box;flex-direction:column;border:0;border-top:1px solid var(--ws-line);border-radius:0 0 10px 10px;background:var(--ws-popup);color:var(--ws-fg);box-shadow:0 12px 24px rgb(0 0 0 / 12%);font-size:13px;line-height:1.45}
-.ws-prompts-popover:popover-open{display:flex}
-.ws-prompts-list{flex:1;min-height:0;margin:0;padding:0;list-style:none;overflow:auto;scrollbar-width:thin}
-.ws-prompts-item+.ws-prompts-item{margin-top:2px}
-.ws-prompt{display:flex;align-items:flex-start;gap:10px;width:100%;padding:7px 10px;border:0;border-radius:6px;background:transparent;color:var(--ws-fg);font:inherit;text-align:left}
-.ws-prompt:hover,.ws-prompt:focus,.ws-prompt[aria-expanded=true]{background:var(--ws-popup-row)}
-.ws-prompt-number{flex-shrink:0;min-width:18px;color:var(--ws-popup-muted);font:500 11px/19px var(--ws-mono);text-align:right}
+.ws-prompts-count{flex-shrink:0;min-width:20px;padding:0 6px;box-sizing:border-box;border-radius:9px;background:color-mix(in srgb,var(--ws-accent) 14%,transparent);color:var(--ws-accent);font:600 10.5px/18px var(--ws-mono);text-align:center}
+.ws-prompts-popover{position:fixed;inset:auto;margin:0;padding:0 6px 8px;box-sizing:border-box;flex-direction:column;border:0;border-top:1px solid var(--ws-line);border-radius:0 0 10px 10px;background:var(--ws-popup);color:var(--ws-fg);box-shadow:0 18px 40px rgb(0 0 0 / 16%);font-size:13px;line-height:1.45;container-type:inline-size}
+html.dark .ws-prompts-popover{box-shadow:0 18px 40px rgb(0 0 0 / 50%)}
+.ws-prompts-popover:popover-open{display:flex;animation:ws-prompts-in .16s ease-out}
+@keyframes ws-prompts-in{from{opacity:0;transform:translateY(-6px)}}
+.ws-prompts-head{display:flex;align-items:center;gap:8px;flex-shrink:0;min-width:0;padding:10px 10px 6px 12px;color:var(--ws-popup-muted);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.ws-prompts-total{color:var(--ws-accent);font:600 11px/1 var(--ws-mono);letter-spacing:0}
+.ws-prompts-hints{display:flex;align-items:center;gap:5px;margin-left:auto;overflow:hidden;font-weight:400;letter-spacing:0;text-transform:none;white-space:nowrap}
+.ws-prompts-hints kbd{padding:2px 5px;border-radius:4px;background:var(--ws-kbd);color:var(--ws-popup-muted);font:500 10px/1 var(--ws-mono)}
+.ws-prompts-hints kbd+span{margin-right:6px}
+@container (max-width:440px){.ws-prompts-hints{display:none}}
+.ws-prompts-list{flex:1;min-height:0;margin:0;padding:0;list-style:none;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--ws-control-line) transparent}
+/* A line joins the numbered nodes; the latest prompt's node is filled. */
+.ws-prompts-item{position:relative}
+.ws-prompts-item::before{content:"";position:absolute;left:21px;top:0;bottom:0;width:1px;background:var(--ws-control-line)}
+.ws-prompts-item:first-child::before{top:18px}
+.ws-prompts-item:last-child::before{bottom:auto;height:18px}
+.ws-prompts-item:only-child::before{display:none}
+.ws-prompt{position:relative;display:flex;align-items:flex-start;gap:12px;width:100%;padding:8px 12px 8px 10px;border:0;border-radius:8px;background:transparent;color:color-mix(in srgb,var(--ws-fg) 82%,transparent);font:inherit;text-align:left;transition:background .12s,color .12s}
+.ws-prompt:is(:hover,[aria-expanded=true]){background:color-mix(in srgb,var(--ws-accent) 6%,transparent);color:var(--ws-fg)}
+/* The focused prompt is a stronger accent fill, without a frame. */
+.ws-prompt:focus{background:color-mix(in srgb,var(--ws-accent) 16%,transparent);color:var(--ws-fg)}
+#libro-workspace .ws-prompt:focus-visible{outline:none!important}
+.ws-prompt-number{position:relative;flex-shrink:0;min-width:22px;height:22px;box-sizing:border-box;margin-top:-1.5px;padding:0 5px;border:1px solid var(--ws-control-line);border-radius:11px;background:var(--ws-popup);color:var(--ws-popup-muted);font:600 10px/20px var(--ws-mono);text-align:center;transition:border-color .12s,color .12s,background .12s}
+.ws-prompt:is(:hover,:focus,[aria-expanded=true]) .ws-prompt-number{border-color:var(--ws-accent);color:var(--ws-accent)}
+.ws-prompts-item:last-child .ws-prompt-number{border-color:var(--ws-accent);background:var(--ws-accent);color:var(--ws-on-accent)}
 .ws-prompt-text{flex:1;min-width:0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;white-space:pre-wrap;overflow-wrap:anywhere}
 .ws-prompt[aria-expanded=true] .ws-prompt-text{display:block}
-.ws-prompt-actions{display:flex;gap:6px;padding:4px 10px 8px 38px}
+.ws-prompt-actions{position:relative;display:flex;flex-wrap:wrap;gap:6px;padding:2px 12px 10px 44px}
 .ws-prompt-actions[hidden]{display:none}
-.ws-prompt-action{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--ws-control-line);border-radius:6px;background:var(--ws-raised);color:var(--ws-fg);font:inherit;font-size:12px}
-.ws-prompt-action:hover{background:var(--ws-hover)}
-.ws-prompt-action>.material-icons-round{font-size:15px;color:var(--ws-muted)}
+.ws-prompt-action{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--ws-control-line);border-radius:7px;background:var(--ws-raised);color:var(--ws-fg);font:inherit;font-size:12px;transition:background .12s,border-color .12s}
+.ws-prompt-action:hover{border-color:color-mix(in srgb,var(--ws-accent) 45%,transparent);background:color-mix(in srgb,var(--ws-accent) 10%,var(--ws-raised))}
+.ws-prompt-action>.material-icons-round{font-size:15px;color:var(--ws-accent)}
 
 /* Tabs are quiet text on the chrome; the selected tab joins its panel's surface. */
 .ws-tool-tab-group{flex-shrink:0;align-items:stretch;gap:0;min-height:40px;box-sizing:border-box;padding:0;overflow:hidden;border-radius:8px 8px 0 0;background:transparent}
