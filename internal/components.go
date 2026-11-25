@@ -3074,6 +3074,8 @@ func terminalFrameSetupJS() string {
 						var style = document.createElement('style');
 						style.id = 'libro-xterm-overrides';
 						style.textContent = '[data-terminal] .xterm,[data-terminal] .terminal{width:100%;height:100%;overflow:hidden!important}' +
+							// The fit addon subtracts this padding, so text keeps a gap from the panel edges.
+							'[data-terminal] .xterm{box-sizing:border-box;padding:6px 10px}' +
 							'[data-terminal] .xterm-viewport{scrollbar-width:none!important;-ms-overflow-style:none!important;scrollbar-gutter:stable!important}' +
 							'[data-terminal] .xterm-viewport::-webkit-scrollbar{width:0!important;height:0!important;display:none!important}' +
 							'[data-terminal] .xterm-screen{overflow:hidden!important}';
