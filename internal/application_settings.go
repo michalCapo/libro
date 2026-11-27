@@ -260,9 +260,10 @@ func threadDescriptionSession(id string) string {
 	return session
 }
 
-// clearAgentTitle drops a checkout's description for a new conversation. Text
-// the user typed stays.
+// clearAgentTitle drops a checkout's description and task for a new
+// conversation. Text the user typed stays.
 func clearAgentTitle(path string) error {
+	removeThreadTask(applicationPath(path))
 	if threadDescriptionSession(applicationPath(path)) == handDescription {
 		return nil
 	}

@@ -485,6 +485,10 @@ html.dark .ws-project-row[data-agent-status=done] .material-icons-round{color:#4
 .ws-prompts-trigger>.material-icons-round:first-child{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:color-mix(in srgb,var(--ws-accent) 14%,transparent);color:var(--ws-accent)}
 .ws-prompts-trigger>.material-icons-round:last-child{font-size:18px;transition:transform .16s ease}
 .ws-prompts-trigger[aria-expanded=true]>.material-icons-round:last-child{transform:rotate(180deg)}
+.ws-task-open{display:flex;flex-shrink:0;align-items:center;gap:6px;height:28px;margin-left:auto;padding:0 10px 0 8px;border:0;border-radius:8px;background:transparent;color:var(--ws-muted);font:inherit;font-size:12.5px;transition:background .12s,color .12s}
+.ws-task-open:hover{background:var(--ws-hover);color:var(--ws-fg)}
+.ws-task-open>.material-icons-round{font-size:16px}
+.ws-task-open[hidden],.ws-prompts-trigger[hidden]{display:none}
 .ws-prompts-first{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ws-prompts-count{flex-shrink:0;min-width:20px;padding:0 6px;box-sizing:border-box;border-radius:9px;background:color-mix(in srgb,var(--ws-accent) 14%,transparent);color:var(--ws-accent);font:600 10.5px/18px var(--ws-mono);text-align:center}
 .ws-prompts-popover{position:fixed;inset:auto;margin:0;padding:0 6px 8px;box-sizing:border-box;flex-direction:column;border:0;border-top:1px solid var(--ws-line);border-radius:0 0 10px 10px;background:var(--ws-popup);color:var(--ws-fg);box-shadow:0 18px 40px rgb(0 0 0 / 16%);font-size:13px;line-height:1.45;container-type:inline-size}

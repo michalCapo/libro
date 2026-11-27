@@ -43,6 +43,8 @@ Close and discard close the thread's panels, including this agent, so report wha
 
 The Libro sidebar shows one line about this thread. Once you understand the task, after reading any link or file the user gave, call the Libro thread tool with action describe and a description of the work, at most 60 characters, in the user's language. Name the page or feature and the change, for example "Teams page: labels, counts, delete confirmation". Do not describe the link, the request or your progress. Call it again only when the task changes. If Libro says to try again, try once more shortly. If it refuses for another reason, carry on.
 
+When the user links an email, card or issue that describes the task, download all of it, unchanged and not summarized: the page HTML as served when it holds the whole content, otherwise the full text with every comment, for example from the service's API. Then call the Libro thread tool with action task, file (the absolute path of the download) and url (the link). Libro keeps the copy with its images and shows it beside you. Call it again only for another task.
+
 After you change Git state (commit, push, pull, merge, rebase, branch changes), call the Libro repositories tool (CLI: libro repositories) so the Repositories panel shows current status.`
 
 // Launch-local integrations never modify the user's agent settings. Only a

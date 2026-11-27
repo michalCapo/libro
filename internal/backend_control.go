@@ -100,6 +100,10 @@ func backendControlHandler(app *r.App, token, sid string) http.Handler {
 			}
 		}
 		var result any
+		// A task downloads its images first, without holding up other commands.
+		if err == nil && command.Action == "thread" && command.Thread.Action == "task" {
+			command.task, err = prepareThreadTask(request.Context(), command.Thread.File, command.Thread.URL)
+		}
 		if err == nil {
 			backendActionMu.Lock()
 			var patch r.Result
@@ -131,6 +135,7 @@ type backendCommand struct {
 	Thread    threadCommand `json:"thread"`
 	Panel     string        `json:"panel,omitempty"`
 	URL       string        `json:"url,omitempty"`
+	task      *threadTask
 }
 
 // dispatchBackendCommand operates on the persistent backend workspace. It does not
@@ -177,6 +182,9 @@ func dispatchBackendCommand(sid string, command backendCommand) (r.Result, any, 
 	case "thread":
 		if command.Thread.Action == "describe" {
 			return describeThread(sid, command.Panel, command.Thread.Description)
+		}
+		if command.Thread.Action == "task" {
+			return saveThreadTask(sid, command.Panel, command.task)
 		}
 		return controlThread(sid, command.Project, command.Thread)
 	case "open":

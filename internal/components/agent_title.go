@@ -182,5 +182,7 @@ func claudeFirstPrompt(path string) string {
 			return title
 		}
 	}
+	// A read error or an overlong line ends the search without a title.
+	_ = scanner.Err()
 	return ""
 }

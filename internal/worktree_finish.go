@@ -294,10 +294,13 @@ func removeFinishedWorktree(info worktreeFinishPreview, discard bool) (string, e
 		args = append(args, "--force")
 	}
 	args = append(args, "--", info.Path)
+	// The key resolves symbolic links, so it is taken while the worktree exists.
+	task := applicationPath(info.Path)
 	if _, err := worktreeGit(info.Root, args...); err != nil {
 		return "", fmt.Errorf("worktree cleanup failed; the thread was kept: %w", err)
 	}
 	_ = saveWorktreeTitle(info.Path, "")
+	removeThreadTask(task)
 	trees, err := GitListWorktrees(info.Root)
 	if err != nil {
 		return "Worktree removed; branch kept because its worktree status could not be checked.", nil

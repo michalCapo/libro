@@ -528,6 +528,7 @@ func (sm *StateManager) DiscardThread(sessionID, id string) error {
 		return err
 	}
 	_ = saveThreadDescriptionSession(id, "")
+	removeThreadTask("thread:" + id)
 	s.Threads = slices.DeleteFunc(s.Threads, func(thread Thread) bool { return thread.ID == id })
 	delete(s.snapshots, id)
 	delete(s.renderedProjects, id)

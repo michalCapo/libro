@@ -34,6 +34,7 @@ func setProjectCommand(path, command string) error {
 
 func registerProjectCommandActions(app *r.App) {
 	registerApplicationControl(app)
+	registerThreadTask(app)
 	registerChildControl(app)
 	registerWorkspaceAction(app, "project.command.save", func(_ *r.Context, in actionProjectCommandSaveInput) (r.Result, error) {
 		applicationControlMu.Lock()

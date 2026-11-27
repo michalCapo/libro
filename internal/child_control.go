@@ -567,6 +567,7 @@ func cleanupChild(sid string, child *childRecord) (r.Result, error) {
 			return js, err
 		}
 	}
+	removeThreadTask("thread:" + child.ID)
 	branches, err := GitListBranches(child.Root)
 	if err != nil {
 		return js, err

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -20,10 +21,14 @@ Use this tool whenever the user asks to merge, squash, finish, close or discard 
 git worktree remove or git branch -D yourself for that; Libro also closes the thread's panels and updates the sidebar.
 CLI: libro thread '<JSON command>'; MCP: thread with the same fields.
 Actions: preview (base), close, merge (base, sourceHead, targetHead), squash (base, sourceHead, targetHead, message),
-discard (sourceHead), describe (description).
+discard (sourceHead), describe (description), task (file, url).
 Describe sets the sidebar line for this conversation: what the work is, at most 60 characters. It replaces the title
 the agent CLI generated. Only the thread's first agent can set it. QA child threads keep the name their parent chose.
 Text the user typed in the sidebar stays; describe then changes nothing.
+Task keeps the full email, card or issue the user linked and shows it beside the agent, with its images, after
+the link expires. Download all of it first, unchanged and not summarized: the page HTML as served when it holds the whole
+content, otherwise the full text with every comment, for example from the service's API. Pass file, the absolute path of that download, and url, the link the user gave. Calling it again
+replaces the task.
 Close only closes the thread's panels, including this agent. Files, branch and worktree stay; the user can reopen it.
 To merge or squash:
 1. Commit your work first. Merge and squash need a clean thread.
@@ -58,14 +63,17 @@ type threadCommand struct {
 	KeepOpen bool `json:"keepOpen,omitempty"`
 	// Description is the sidebar line set by the describe action.
 	Description string `json:"description,omitempty"`
+	// File and URL are the downloaded task and the link it came from.
+	File string `json:"file,omitempty"`
+	URL  string `json:"url,omitempty"`
 }
 
 func threadTool() map[string]any {
 	properties := map[string]any{}
-	for _, key := range []string{"base", "sourceHead", "targetHead", "message", "description"} {
+	for _, key := range []string{"base", "sourceHead", "targetHead", "message", "description", "file", "url"} {
 		properties[key] = map[string]any{"type": "string"}
 	}
-	properties["action"] = map[string]any{"type": "string", "enum": []string{"preview", "close", "merge", "squash", "discard", "describe"}}
+	properties["action"] = map[string]any{"type": "string", "enum": []string{"preview", "close", "merge", "squash", "discard", "describe", "task"}}
 	return map[string]any{"name": "thread", "description": threadHelp, "inputSchema": map[string]any{"type": "object", "properties": properties, "required": []string{"action"}, "additionalProperties": false}}
 }
 
@@ -90,6 +98,14 @@ func scopedThreadCommand(command json.RawMessage, scope string) (json.RawMessage
 	}
 	if scope == "" {
 		return nil, errors.New("thread workspace binding unavailable")
+	}
+	// Libro reads the file itself, so a relative path is the caller's.
+	if args.File != "" && !filepath.IsAbs(args.File) {
+		file, err := filepath.Abs(args.File)
+		if err != nil {
+			return nil, err
+		}
+		args.File = file
 	}
 	payload, err := json.Marshal(map[string]any{"action": "thread", "project": scope, "thread": args, "panel": os.Getenv("LIBRO_PANEL_ID")})
 	if err != nil {

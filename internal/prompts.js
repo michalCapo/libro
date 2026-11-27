@@ -2,7 +2,9 @@
   // The agent's terminal socket sends the prompts of its current session. The
   // strip above the agent shows the first one and opens a list of all of them
   // over the panel. j/k move between prompts, Enter expands one, Esc closes.
+  // The Task button opens the copy of the email, card or issue the agent saved.
   const lists = new Map();
+  const tasks = new Map();
   const node = (tag, cls, text) => {
     const el = document.createElement(tag); el.className = cls;
     if (text !== undefined) el.textContent = text;
@@ -19,14 +21,30 @@
     // A reconnect sends the same list again; the open list keeps its focus.
     if (current.length === prompts.length && current.every((text, index) => text === prompts[index])) return;
     lists.set(appID, prompts);
+    // A reloaded window mounts strips before this script; prompts arrive after it.
+    if (!tasks.has(appID)) window.libroWorkspace?.task(appID, false);
+    mounts(appID).forEach(render);
+  }
+
+  function setTask(appID, saved) {
+    if (tasks.get(appID) === Boolean(saved)) return;
+    tasks.set(appID, Boolean(saved));
     mounts(appID).forEach(render);
   }
 
   function render(el) {
     const prompts = lists.get(el.dataset.agentPrompts) || [];
-    if (!prompts.length) { el.replaceChildren(); return; }
+    const task = tasks.get(el.dataset.agentPrompts);
+    if (!prompts.length && !task) { el.replaceChildren(); return; }
     if (!el.firstChild) build(el);
+    el.querySelector('.ws-task-open').hidden = !task;
     const trigger = el.querySelector('.ws-prompts-trigger');
+    trigger.hidden = !prompts.length;
+    if (!prompts.length) {
+      const popover = el.querySelector('.ws-prompts-popover');
+      if (popover.matches(':popover-open')) popover.hidePopover();
+      return;
+    }
     trigger.querySelector('.ws-prompts-first').textContent = oneLine(prompts[0]);
     trigger.querySelector('.ws-prompts-count').textContent = prompts.length;
     trigger.title = 'Prompts' + shortcutHint();
@@ -54,7 +72,11 @@
     head.append(node('span', '', 'Prompts'), node('span', 'ws-prompts-total'), hints);
     const list = node('ol', 'ws-prompts-list');
     popover.append(head, list);
-    el.append(trigger, popover);
+    const task = node('button', 'ws-task-open'); task.type = 'button';
+    task.title = 'Open the task the agent saved';
+    task.append(icon('assignment'), node('span', '', 'Task'));
+    task.onclick = () => window.libroWorkspace?.task(appID, true);
+    el.append(trigger, task, popover);
     // Pressing the strip while the list is open closes it before the click; the click must not reopen it.
     let closedAt = 0;
     trigger.onclick = () => { if (performance.now() - closedAt > 300) toggle(el); };
@@ -161,9 +183,16 @@
 
   // The shortcut opens the list of the current agent panel.
   function open(appID) {
-    const el = mounts(appID || '').find(mount => mount.getClientRects().length && mount.firstChild);
+    if (!lists.get(appID || '')?.length) return false;
+    const el = mounts(appID).find(mount => mount.getClientRects().length && mount.firstChild);
     return el ? toggle(el) : false;
   }
 
-  window.libroPrompts = {set, open, mount: render};
+  // A mounted strip asks whether its thread has a task.
+  function mount(el) {
+    render(el);
+    window.libroWorkspace?.task(el.dataset.agentPrompts, false);
+  }
+
+  window.libroPrompts = {set, setTask, open, mount};
 })();
