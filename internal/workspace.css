@@ -558,6 +558,8 @@ html.dark .ws-prompts-popover{box-shadow:0 18px 40px rgb(0 0 0 / 50%)}
 .ws-thread-chip>b{font-weight:600;color:var(--ws-status,var(--ws-muted))}
 .ws-thread-chip[aria-current=true]>b{color:var(--ws-status,var(--ws-fg))}
 .ws-thread-chip>span{overflow:hidden;text-overflow:ellipsis}
+.ws-thread-chip[aria-current=true]{max-width:min(440px,60vw);scroll-margin-inline:8px}
+.ws-thread-chip>.ws-thread-chip-project{flex:none;max-width:160px;color:var(--ws-muted)}
 .ws-thread-chip>.material-icons-round{flex:none;margin-left:-1px;font-size:20px;color:var(--ws-status)}
 .ws-thread-chip>.ws-project-terminal{width:20px;height:20px}
 .ws-thread-chip[data-agent-status=working]>.material-icons-round{animation:ws-agent-working 1.2s linear infinite}

@@ -831,7 +831,8 @@
   }
   function renderThreadList(list, threads) {
     if (!list) return;
-    const signature = JSON.stringify([threads, window.__libroActiveProject]);
+    const projectLabel = thread => { const owner = (window.__libroProjects || []).find(p => p.kind === 'project' && p.name === thread.project); return owner?.displayName || thread.project || 'general'; };
+    const signature = JSON.stringify([threads, window.__libroActiveProject, threads.map(projectLabel)]);
     if (list.dataset.signature === signature) return;
     list.dataset.signature = signature; list.replaceChildren();
     const appendThread = thread => {
@@ -840,7 +841,7 @@
       const row = node('button', 'ws-project-row ws-thread-row'); row.type = 'button'; row.title = thread.name; row.dataset.projectKey = thread.id; row.dataset.kind = 'thread';
       row.setAttribute('aria-current', String(thread.id === window.__libroActiveProject));
       const icon = node('i', 'material-icons-round', 'chat_bubble_outline'); icon.setAttribute('aria-hidden', 'true');
-      row.append(icon); rowLabel(row, thread.name, '', thread.project || 'general');
+      row.append(icon); rowLabel(row, thread.name, '', projectLabel(thread));
       row.onclick = () => {
         closeSettings();
         // A closed thread can still be active, so it switches to reopen.
@@ -871,7 +872,7 @@
   }
   function renderProjects() {
     const list = document.getElementById('workspace-project-list'); if (!list) return;
-    const projects = window.__libroProjects || []; const signature = JSON.stringify([projects, switching.shown]);
+    const projects = window.__libroProjects || []; const signature = JSON.stringify([projects, switching.shown, window.__libroActiveProject]);
     if (list.dataset.signature === signature) return; list.dataset.signature = signature; list.replaceChildren();
     if (leftProject !== window.__libroActiveProject) leftProject = '';
     const count = document.getElementById('workspace-project-count');
@@ -917,7 +918,8 @@
         const baseList = node('div', 'ws-project-item');
         const base = node('button', 'ws-project-row ws-thread-row'); base.type = 'button';
         base.dataset.kind = 'base'; base.dataset.projectKey = project.name;
-        base.setAttribute('aria-current', String(isCurrentProject(project)));
+        // The checkout is current only when it is open itself, not one of the project's threads.
+        base.setAttribute('aria-current', String((switching.shown ?? window.__libroActiveProject) === project.name));
         const branch = project.currentBranch || projectName;
         const baseLabel = project.title || branch;
         base.title = baseLabel + (project.title ? '\n' + branch : '') + ' — ' + project.path;
@@ -1275,7 +1277,7 @@
   }
   // The thread list button heads the sidebar and, with threads in the tab row, leads that row: wide windows switch between the
   // sidebar and threads in the tab row with it, narrow ones open the list over the panels. One chip per numbered card follows it:
-  // its digit in the status color and its project, or the description for the open thread. A chip opens its card; the tooltip
+  // its digit in the status color and its project, or the project and description for the open thread. A chip opens its card; the tooltip
   // names the whole thread. The tools stay in the sidebar, or in its list over the panels.
   // Opening a thread can replace the tab row that holds the list button, so it is kept and put back.
   let threadList = null;
@@ -1307,8 +1309,11 @@
     if (tabs.firstElementChild !== chips) tabs.prepend(chips);
     tabs.hidden = false;
     const rows = [...document.querySelectorAll('.ws-project-row[data-project-shortcut]:not([data-project-shortcut=""])')].sort((a, b) => a.dataset.projectShortcut - b.dataset.projectShortcut);
+    // The open thread has a chip even without a number, after the numbered ones.
+    const openRow = document.querySelector('.ws-thread-row[aria-current=true]');
+    if (openRow && !rows.includes(openRow)) rows.push(openRow);
     const text = (row, selector) => row.querySelector(selector)?.textContent || '';
-    const items = rows.map(row => [row.dataset.projectShortcut, row.dataset.projectKey, row.dataset.agentStatus || '', row.getAttribute('aria-current') === 'true', text(row, ':scope > span'), text(row, '.ws-row-project'), text(row, '.ws-row-branch'), !!row.querySelector('.ws-project-terminal')]);
+    const items = rows.map(row => [row.dataset.projectShortcut || '', row.dataset.projectKey, row.dataset.agentStatus || '', row.getAttribute('aria-current') === 'true', text(row, ':scope > span'), text(row, '.ws-row-project'), text(row, '.ws-row-branch'), !!row.querySelector('.ws-project-terminal')]);
     const signature = JSON.stringify(items);
     if (chips.dataset.signature === signature && chips.firstElementChild === threadList) return;
     // Redrawing during a drag would drop the dragged chip; its drop or end redraws.
@@ -1320,17 +1325,24 @@
     chips.replaceChildren(threadList);
     items.forEach(([number, key, status, current, label, project, branch, terminal], i) => {
       const chip = node('button', 'ws-thread-chip'); chip.type = 'button'; chip.dataset.projectKey = key;
-      const shown = current && label || project || label;
-      chip.append(node('b', '', number), node('span', '', shown));
+      // The open thread shows its description, or a checkout its branch, after its project, so the row shows where the panels belong.
+      const detail = current && (label || branch);
+      const shown = detail || project || label;
+      const named = detail && project && detail !== project;
+      chip.append(node('b', '', number));
+      if (named) chip.append(node('span', 'ws-thread-chip-project', project));
+      chip.append(node('span', '', shown));
       // A working or done agent shows the same icon as its sidebar card, and so does a command running in its bottom terminal.
       // The icons are hidden from screen readers; the chip's name says the same in words.
       if (status) { const icon = node('i', 'material-icons-round', status === 'working' ? 'sync' : 'check_circle_outline'); icon.setAttribute('aria-hidden', 'true'); chip.append(icon); }
       if (terminal) { const icon = rows[i].querySelector('.ws-project-terminal').cloneNode(true); icon.setAttribute('aria-hidden', 'true'); chip.append(icon); }
-      chip.setAttribute('aria-label', [number + ' ' + shown, status === 'working' ? 'agents working' : status === 'done' ? 'all agents done' : '', terminal ? 'command running in bottom terminal' : ''].filter(Boolean).join(', '));
-      chip.title = [label, [project, branch].filter(Boolean).join(' / ')].filter(Boolean).join('\n') + ' (Ctrl+' + number + ')';
+      chip.setAttribute('aria-label', [(number + ' ' + (named ? project + ', ' : '') + shown).trim(), status === 'working' ? 'agents working' : status === 'done' ? 'all agents done' : '', terminal ? 'command running in bottom terminal' : ''].filter(Boolean).join(', '));
+      chip.title = [label, [project, branch].filter(Boolean).join(' / ')].filter(Boolean).join('\n') + (number ? ' (Ctrl+' + number + ')' : '');
       chip.setAttribute('aria-current', String(current));
       if (status) chip.dataset.agentStatus = status;
-      chip.onclick = () => rows[i].click(); chips.append(chip);
+      // The sidebar may have redrawn its row since, so the click finds the current one.
+      const kind = rows[i].dataset.kind;
+      chip.onclick = () => (document.querySelector('.ws-project-row[data-kind="' + CSS.escape(kind) + '"][data-project-key="' + CSS.escape(key) + '"]') || rows[i]).click(); chips.append(chip);
       // All projects keeps cards in their projects, and moved working threads stay below the others.
       const working = item => root.dataset.moveWorking === 'true' && item.dataset.agentStatus === 'working';
       dragToReorder(chip, chip, false, (source, target) => root.dataset.allProjects !== 'true' && working(source) === working(target),
@@ -1341,6 +1353,8 @@
     });
     // Let the browser scroll to the focused button after the row has its final layout.
     focusTarget?.focus();
+    // A thread opened from the sidebar or by its key stays visible in a narrow row.
+    chips.querySelector('.ws-thread-chip[aria-current=true]')?.scrollIntoView({block:'nearest', inline:'nearest'});
   }
   new MutationObserver(() => requestAnimationFrame(renderThreadChips)).observe(root.querySelector('.ws-navigation'), {childList:true, subtree:true, attributes:true, attributeFilter:['data-project-shortcut', 'data-agent-status', 'aria-current']});
   let queued = false;
