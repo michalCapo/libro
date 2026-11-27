@@ -49,6 +49,36 @@ func TestProjectDoesNotInheritParentRepository(t *testing.T) {
 	}
 }
 
+func TestAgentWorktreeIsNoThread(t *testing.T) {
+	if !GitAvailable() {
+		t.Skip("git not installed")
+	}
+	state, root, _ := finishFixture(t)
+	if err := GitCreateWorktree(root, "worktree-agent-a1", filepath.Join(root, ".claude", "worktrees", "agent-a1")); err != nil {
+		t.Fatal(err)
+	}
+	// A worktree the user names, like with claude --worktree review, stays a thread.
+	if err := GitCreateWorktree(root, "worktree-review", filepath.Join(root, ".claude", "worktrees", "review")); err != nil {
+		t.Fatal(err)
+	}
+	var branches []string
+	for _, item := range projectItems(state) {
+		branches = append(branches, item.Branch)
+	}
+	if slices.Contains(branches, "worktree-agent-a1") || !slices.Contains(branches, "worktree-review") {
+		t.Fatalf("threads: %v", branches)
+	}
+	manager := NewStateManager()
+	manager.states["test"] = state
+	restoreWorktreeProject(manager, "test", "repo/worktree-agent-a1")
+	if len(state.Projects) != 2 {
+		t.Fatal("subagent worktree restored as a thread")
+	}
+	if _, err := inspectFinishThread(state, "repo/worktree-agent-a1", ""); err == nil {
+		t.Fatal("subagent worktree can be finished as a thread")
+	}
+}
+
 func TestProjectRepositoryAliases(t *testing.T) {
 	if !GitAvailable() {
 		t.Skip("git not installed")

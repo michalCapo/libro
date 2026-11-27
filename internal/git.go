@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +37,14 @@ func GitIsRepo(path string) bool {
 		return false
 	}
 	return applicationPath(strings.TrimSpace(string(out))) == applicationPath(path)
+}
+
+// agentWorktree reports whether Claude Code made the worktree for a subagent,
+// in .claude/worktrees/agent-<id>. Such a worktree is no thread; one the user
+// names there, like with claude --worktree, still is.
+func agentWorktree(path string) bool {
+	parent := filepath.Dir(path)
+	return strings.HasPrefix(filepath.Base(path), "agent-") && filepath.Base(parent) == "worktrees" && filepath.Base(filepath.Dir(parent)) == ".claude"
 }
 
 // GitListWorktrees returns all worktrees for the repository at repoPath.

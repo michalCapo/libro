@@ -2815,7 +2815,14 @@ func projectItemsWith(state *AppState, gitInfo func(string) projectGitInfo) []js
 		if !p.IsGitRepo || !GitAvailable() || !git.WorktreesOK {
 			continue
 		}
-		wts := slices.Clone(git.Worktrees)
+		var refs []string
+		for _, wt := range git.Worktrees {
+			if wt.Branch != "" && wt.Branch != "(detached)" {
+				refs = append(refs, wt.Branch)
+			}
+		}
+		// Subagent worktrees are no threads, so they get no place in the thread order either.
+		wts := slices.DeleteFunc(slices.Clone(git.Worktrees), func(wt Worktree) bool { return agentWorktree(wt.Path) })
 		sm.mu.Lock()
 		if state.worktreeOrder == nil {
 			state.worktreeOrder = make(map[string]int)
@@ -2834,12 +2841,6 @@ func projectItemsWith(state *AppState, gitInfo func(string) projectGitInfo) []js
 			order[wt.Path] = state.worktreeOrder[applicationPath(wt.Path)] + 1
 		}
 		sm.mu.Unlock()
-		var refs []string
-		for _, wt := range wts {
-			if wt.Branch != "" && wt.Branch != "(detached)" {
-				refs = append(refs, wt.Branch)
-			}
-		}
 		// attach worktree refs back to the project entry
 		for i := range all {
 			if all[i].Name == p.Name && all[i].Kind == "project" {

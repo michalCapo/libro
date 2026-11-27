@@ -65,7 +65,7 @@ func inspectFinishThread(state *AppState, name, base string) (worktreeFinishPrev
 			continue
 		}
 		for _, tree := range trees {
-			if tree.IsBare || tree.Branch == "(detached)" || applicationPath(tree.Path) == applicationPath(project.Path) || project.Name+"/"+tree.Branch != name {
+			if tree.IsBare || tree.Branch == "(detached)" || agentWorktree(tree.Path) || applicationPath(tree.Path) == applicationPath(project.Path) || project.Name+"/"+tree.Branch != name {
 				continue
 			}
 			info.Branch, info.Path, info.Root, info.Parent = tree.Branch, tree.Path, project.Path, project.Name

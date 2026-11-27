@@ -1722,7 +1722,7 @@ func restoreWorktreeProject(manager *StateManager, sid, name string) {
 			continue
 		}
 		for _, worktree := range worktrees {
-			if !worktree.IsBare && project.Name+"/"+worktree.Branch == name {
+			if !worktree.IsBare && !agentWorktree(worktree.Path) && project.Name+"/"+worktree.Branch == name {
 				manager.AddVirtualProject(sid, name, worktree.Path, project.Name)
 				return
 			}
