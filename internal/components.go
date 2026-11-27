@@ -1401,6 +1401,7 @@ func commandPopupJS(sid string) string {
             {id:'new-agent-panel',label:'New agent panel',scope:'workspace',icon:'add',keywords:'agent tab panel same worktree branch',run:function(){closePalette();libroWorkspace.newAgentPanel();}},
             {id:'replace-agent',label:'Replace agent',scope:'workspace',icon:'swap_horiz',keywords:'agent switch swap restart fresh',run:function(){closePalette();libroWorkspace.launcher('center',undefined,true);}},
             {id:'agent-prompts',label:'Agent prompts',scope:'workspace',icon:'history',keywords:'prompt history first messages list',run:function(){closePalette();if(!window.libroPrompts||!window.libroPrompts.open(window.__libroActiveAgentID))window.__libroShowToast('No prompts in this agent yet','','info');}},
+            {id:'agent-task',label:'Agent task',scope:'workspace',icon:'assignment',keywords:'task email card issue',run:function(){closePalette();window.libroWorkspace.task(window.__libroActiveAgentID||'',true);}},
             {id:'open-tool',label:'Open tool',scope:'workspace',icon:'apps',keywords:'tools plugins browser files editor git',run:function(){closePalette();libroWorkspace.launcher('right');}},
             {id:'terminal',label:'Terminal tool',scope:'tools',icon:'terminal',keywords:'shell console',run:function(){closePalette();libroWorkspace.tool('terminal');}},
             {id:'browser',label:'Browser',scope:'tools',icon:'language',keywords:'web preview',run:function(){closePalette();libroWorkspace.tool('browser');}},

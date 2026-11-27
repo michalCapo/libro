@@ -1709,6 +1709,11 @@
       if (!event.repeat && !window.libroPrompts?.open(window.__libroActiveAgentID)) window.__libroShowToast?.('No prompts in this agent yet', '', 'info');
       return;
     }
+    if (binding && binding === toolKeys['agent-task']) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) window.libroWorkspace.task(window.__libroActiveAgentID || '', true);
+      return;
+    }
     if (binding && binding === toolKeys['replace-agent']) {
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) launcher('center', undefined, true);

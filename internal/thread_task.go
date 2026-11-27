@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -38,8 +39,21 @@ const (
 	taskImageTime = 15 * time.Second
 )
 
-// The copy loads nothing from the network and runs no scripts.
-const taskPolicy = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; form-action 'none'"
+// taskViewer fits the images to the panel and zooms them.
+//
+//go:embed task_viewer.js
+var taskViewerFile string
+
+// The HTML parser reads CRLF as LF, so the hash must cover LF only.
+var taskViewer = strings.ReplaceAll(taskViewerFile, "\r\n", "\n")
+
+// The copy loads nothing from the network and runs only the image viewer.
+var taskPolicy = "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; form-action 'none'; script-src 'sha256-" + taskViewerHash() + "'"
+
+func taskViewerHash() string {
+	sum := sha256.Sum256([]byte(taskViewer))
+	return base64.StdEncoding.EncodeToString(sum[:])
+}
 
 // Threads are keyed by ID, checkouts and worktrees by path, like their description.
 func threadTaskKey(state *AppState, workspace string) string {
@@ -107,7 +121,7 @@ func prepareThreadTask(ctx context.Context, file, source string) (*threadTask, e
 	}
 	ext := strings.ToLower(filepath.Ext(file))
 	if ext == ".html" || ext == ".htm" || strings.HasPrefix(http.DetectContentType(data), "text/html") {
-		return taskPage(ctx, data, base)
+		return taskPage(ctx, data, base, false)
 	}
 	if !utf8.Valid(data) {
 		return nil, errors.New("task file must be HTML or UTF-8 text")
@@ -151,8 +165,8 @@ func taskSource(base *url.URL) string {
 var taskDropped = map[atom.Atom]bool{atom.Script: true, atom.Noscript: true, atom.Iframe: true, atom.Frame: true, atom.Frameset: true, atom.Object: true, atom.Embed: true, atom.Applet: true, atom.Base: true, atom.Link: true}
 
 // taskPage removes scripts and embeds the page's images, so the copy shows
-// the same after its links expire.
-func taskPage(ctx context.Context, data []byte, base *url.URL) (*threadTask, error) {
+// the same after its links expire. A saved copy only gets the current viewer.
+func taskPage(ctx context.Context, data []byte, base *url.URL, saved bool) (*threadTask, error) {
 	doc, err := xhtml.Parse(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
@@ -213,7 +227,12 @@ func taskPage(ctx context.Context, data []byte, base *url.URL) (*threadTask, err
 		}
 	}
 	walk(doc)
-	task := &threadTask{images: len(images)}
+	task := &threadTask{}
+	if saved {
+		// The saved copy already has its images, charset and source line.
+		images = nil
+	}
+	task.images = len(images)
 	addresses := make([]string, 0, len(images))
 	for address := range images {
 		addresses = append(addresses, address)
@@ -232,7 +251,11 @@ func taskPage(ctx context.Context, data []byte, base *url.URL) (*threadTask, err
 	}
 	if head != nil {
 		// Inserted at the start in reverse, so the charset comes first.
-		for _, meta := range []string{`<meta http-equiv="Content-Security-Policy" content="` + taskPolicy + `">`, `<meta charset="utf-8">`} {
+		metas := []string{`<meta http-equiv="Content-Security-Policy" content="` + taskPolicy + `">`, `<meta charset="utf-8">`}
+		if saved {
+			metas = metas[:1]
+		}
+		for _, meta := range metas {
 			nodes, err := xhtml.ParseFragment(strings.NewReader(meta), head)
 			if err == nil && len(nodes) == 1 {
 				head.InsertBefore(nodes[0], head.FirstChild)
@@ -240,9 +263,12 @@ func taskPage(ctx context.Context, data []byte, base *url.URL) (*threadTask, err
 		}
 	}
 	if body != nil {
-		if nodes, err := xhtml.ParseFragment(strings.NewReader(taskSource(base)), body); err == nil && len(nodes) == 1 {
+		if nodes, err := xhtml.ParseFragment(strings.NewReader(taskSource(base)), body); !saved && err == nil && len(nodes) == 1 {
 			body.InsertBefore(nodes[0], body.FirstChild)
 		}
+		script := &xhtml.Node{Type: xhtml.ElementNode, Data: "script", DataAtom: atom.Script}
+		script.AppendChild(&xhtml.Node{Type: xhtml.TextNode, Data: taskViewer})
+		body.AppendChild(script)
 	}
 	var out bytes.Buffer
 	if err := xhtml.Render(&out, doc); err != nil {
@@ -443,6 +469,18 @@ func writeTaskFile(path string, data []byte) error {
 	return os.Rename(file.Name(), path)
 }
 
+// refreshThreadTask gives a copy saved by an older Libro the current image
+// viewer. Embedded images and the source line stay.
+func refreshThreadTask(path string) {
+	data, err := readTaskFile(path)
+	if err != nil || bytes.Contains(data, []byte(taskViewerHash())) {
+		return
+	}
+	if task, err := taskPage(context.Background(), data, nil, true); err == nil {
+		_ = writeTaskFile(path, task.page)
+	}
+}
+
 // openThreadTask shows the task; the query makes a reused panel load the new copy.
 func openThreadTask(sid, panel, path string) (r.Result, any, error) {
 	return openFilePanel(sid, panel, fileURL(path)+"?saved="+fmt.Sprint(time.Now().UnixMilli()))
@@ -459,14 +497,18 @@ func registerThreadTask(app *r.App) {
 	registerWorkspaceAction(app, "thread.task", func(_ *r.Context, in actionThreadTaskInput) (r.Result, error) {
 		sid := inputSID(in.SID)
 		_, workspace, _, found := sm.workspaceApp(sid, in.ID)
-		if !found {
-			return r.Result{}, nil
+		path := ""
+		if found {
+			path = savedThreadTask(threadTaskKey(sm.Get(sid), workspace))
 		}
-		path := savedThreadTask(threadTaskKey(sm.Get(sid), workspace))
 		js := clientScript("window.libroPrompts?.setTask(props[0],props[1]);", in.ID, path != "")
+		if path == "" && in.Open {
+			return r.Merge(js, r.Result{}.Run(r.Notify("info", "No task in this thread yet"))), nil
+		}
 		if path == "" || !in.Open {
 			return js, nil
 		}
+		refreshThreadTask(path)
 		opened, _, err := openThreadTask(sid, in.ID, path)
 		if err != nil {
 			return r.Merge(js, r.Result{}.Run(r.Notify("error", "Could not open the task: "+err.Error()))), nil //nolint:nilerr // the error is shown to the user

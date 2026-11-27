@@ -37,7 +37,10 @@
     const task = tasks.get(el.dataset.agentPrompts);
     if (!prompts.length && !task) { el.replaceChildren(); return; }
     if (!el.firstChild) build(el);
-    el.querySelector('.ws-task-open').hidden = !task;
+    const taskButton = el.querySelector('.ws-task-open');
+    taskButton.hidden = !task;
+    const taskKey = window.libroWorkspace?.shortcutFor('agent-task');
+    taskButton.title = 'Open the task the agent saved' + (taskKey ? ' (' + taskKey + ')' : '');
     const trigger = el.querySelector('.ws-prompts-trigger');
     trigger.hidden = !prompts.length;
     if (!prompts.length) {
@@ -73,7 +76,6 @@
     const list = node('ol', 'ws-prompts-list');
     popover.append(head, list);
     const task = node('button', 'ws-task-open'); task.type = 'button';
-    task.title = 'Open the task the agent saved';
     task.append(icon('assignment'), node('span', '', 'Task'));
     task.onclick = () => window.libroWorkspace?.task(appID, true);
     el.append(trigger, task, popover);

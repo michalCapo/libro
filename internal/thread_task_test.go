@@ -34,7 +34,10 @@ func TestPrepareThreadTaskKeepsImagesWithoutScripts(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := string(task.page)
-	for _, gone := range []string{"<script", "alert", "refresh", "srcset", "<iframe", "file:"} {
+	if strings.Count(out, "<script") != 1 || !strings.Contains(out, "<script>"+taskViewer+"</script>") {
+		t.Fatalf("page scripts kept or image viewer missing: %s", out)
+	}
+	for _, gone := range []string{"alert", "refresh", "srcset", "<iframe", "file:"} {
 		if strings.Contains(out, gone) {
 			t.Fatalf("kept %q: %s", gone, out)
 		}

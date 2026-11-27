@@ -409,6 +409,7 @@ func TestNewThreadCtrlTShortcutMigration(t *testing.T) {
 	// Older settings still hold the agent thread shortcut and no new thread key.
 	for _, legacy := range []bool{false, true} {
 		saved := defaultToolKeybindings()
+		delete(saved, "agent-task")
 		saved["terminal"] = "Ctrl+T"
 		saved["new-terminal"] = "Ctrl+Shift+T"
 		saved["new-thread"] = "Ctrl+Shift+N"
