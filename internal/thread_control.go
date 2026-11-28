@@ -25,8 +25,8 @@ discard (sourceHead), describe (description), task (file, url).
 Describe sets the sidebar line for this conversation: what the work is, at most 60 characters. It replaces the title
 the agent CLI generated. Only the thread's first agent can set it. QA child threads keep the name their parent chose.
 Text the user typed in the sidebar stays; describe then changes nothing.
-Task keeps the full email, card or issue the user linked and shows it beside the agent, with its images, after
-the link expires. Download all of it first, unchanged and not summarized: the page HTML as served when it holds the whole
+Task keeps the full email, card or issue the user linked, with its images, and it stays readable after the link
+expires. It does not open by itself; the user opens it beside the agent with the Task button. Download all of it first, unchanged and not summarized: the page HTML as served when it holds the whole
 content, otherwise the full text with every comment, for example from the service's API. Pass file, the absolute path of that download, and url, the link the user gave. Calling it again
 replaces the task.
 Close only closes the thread's panels, including this agent. Files, branch and worktree stay; the user can reopen it.

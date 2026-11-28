@@ -28,7 +28,7 @@ import (
 
 // A thread's task is the full copy of the email, card or issue the user linked.
 // The agent downloads it; Libro keeps it with its images, because shared links
-// expire, and shows it in a Browser panel beside the agent.
+// expire. The Task button shows it in a Browser panel beside the agent.
 
 const (
 	maxTaskFile   = 20 << 20
@@ -409,8 +409,8 @@ func fetchTaskImage(ctx context.Context, client *http.Client, address string) ([
 	return data, kind
 }
 
-// saveThreadTask keeps the prepared page for the calling agent's workspace and
-// shows it beside the agent.
+// saveThreadTask keeps the prepared page for the calling agent's workspace.
+// The user opens it with the Task button; a panel already showing it reloads.
 func saveThreadTask(sid, panel string, task *threadTask) (r.Result, any, error) {
 	if task == nil {
 		return r.Result{}, nil, errors.New("the task was not prepared")
@@ -446,11 +446,15 @@ func saveThreadTask(sid, panel string, task *threadTask) (r.Result, any, error) 
 		panels = append(panels, app.ID)
 	}
 	js := clientScript("props[0].forEach(function(id){window.libroPrompts?.setTask(id,true);});", panels)
-	opened, _, err := openThreadTask(sid, panel, path)
-	if err != nil {
-		message += ". It shows from the Task button above the agent: " + err.Error()
+	for _, app := range sm.Get(sid).Apps {
+		if strings.HasPrefix(app.URL, fileURL(path)+"?saved=") {
+			if opened, _, err := openThreadTask(sid, panel, path); err == nil {
+				js = r.Merge(js, opened)
+			}
+			break
+		}
 	}
-	return r.Merge(js, opened), map[string]string{"result": message}, nil
+	return js, map[string]string{"result": message + ". The user opens it with the Task button above the agent"}, nil
 }
 
 func writeTaskFile(path string, data []byte) error {

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPrepareThreadTaskKeepsImagesWithoutScripts(t *testing.T) {
@@ -71,7 +72,7 @@ func TestPrepareThreadTaskEscapesText(t *testing.T) {
 	}
 }
 
-func TestSaveThreadTaskBesideAgentAndForgetWithThread(t *testing.T) {
+func TestSaveThreadTaskOpenOnRequestAndForgetWithThread(t *testing.T) {
 	sid, _ := childFixture(t)
 	desktopWindow = true
 	t.Cleanup(func() { desktopWindow = false })
@@ -86,9 +87,23 @@ func TestSaveThreadTaskBesideAgentAndForgetWithThread(t *testing.T) {
 	if data, err := os.ReadFile(path); err != nil || string(data) != "<p>task</p>" {
 		t.Fatalf("task not saved: %q %v", data, err)
 	}
+	if len(sm.Get(sid).Apps) != 1 {
+		t.Fatalf("task opened without the user: %+v", sm.Get(sid).Apps)
+	}
+	if _, _, err := openThreadTask(sid, "app-1", path); err != nil {
+		t.Fatal(err)
+	}
 	state = sm.Get(sid)
 	if len(state.Apps) != 2 || !strings.HasPrefix(state.Apps[1].URL, fileURL(path)+"?saved=") {
 		t.Fatalf("task not shown beside the agent: %+v", state.Apps)
+	}
+	shown := state.Apps[1].URL
+	time.Sleep(2 * time.Millisecond)
+	if _, _, err := dispatchBackendCommand(sid, backendCommand{Action: "thread", Panel: "app-1", Thread: threadCommand{Action: "task"}, task: &threadTask{page: []byte("<p>new</p>")}}); err != nil {
+		t.Fatal(err)
+	}
+	if state = sm.Get(sid); len(state.Apps) != 2 || state.Apps[1].URL == shown {
+		t.Fatalf("open task not reloaded: %+v", state.Apps)
 	}
 	removeThreadTask(key)
 	if savedThreadTask(key) != "" {
